@@ -64,12 +64,12 @@ export function Navigation() {
                 Members
               </Link>
 
-              <a
-                href="#"
+              <Link
+                to="/organizations"
                 className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
               >
                 Organizations
-              </a>
+              </Link>
 
               <div className="relative">
                 <button
@@ -114,12 +114,12 @@ export function Navigation() {
                 )}
               </div>
 
-              <a
-                href="#"
+              <Link
+                to="/resources"
                 className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
               >
                 Resources
-              </a>
+              </Link>
             </div>
           </div>
 

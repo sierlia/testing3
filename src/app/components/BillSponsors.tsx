@@ -13,14 +13,20 @@ interface BillSponsorsProps {
   cosponsors: Sponsor[];
   isUserCosponsor: boolean;
   currentUserId: string;
+  onToggleCosponsor?: (next: boolean) => void;
 }
 
-export function BillSponsors({ sponsor, cosponsors, isUserCosponsor, currentUserId }: BillSponsorsProps) {
+export function BillSponsors({ sponsor, cosponsors, isUserCosponsor, currentUserId, onToggleCosponsor }: BillSponsorsProps) {
   const [hasCosponsored, setHasCosponsored] = useState(isUserCosponsor);
 
   const handleCosponsor = () => {
     setHasCosponsored(true);
-    console.log("User cosponsored the bill");
+    onToggleCosponsor?.(true);
+  };
+
+  const handleUncosponsor = () => {
+    setHasCosponsored(false);
+    onToggleCosponsor?.(false);
   };
 
   const isUserSponsor = sponsor.id === currentUserId;
@@ -42,9 +48,17 @@ export function BillSponsors({ sponsor, cosponsors, isUserCosponsor, currentUser
           </button>
         )}
         {hasCosponsored && !isUserSponsor && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-md border border-green-200 text-sm font-medium">
-            <UserPlus className="w-4 h-4" />
-            You are a cosponsor
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-4 py-2 bg-green-50 text-green-700 rounded-md border border-green-200 text-sm font-medium">
+              <UserPlus className="w-4 h-4" />
+              You are a cosponsor
+            </div>
+            <button
+              onClick={handleUncosponsor}
+              className="px-3 py-2 text-sm text-gray-600 hover:text-gray-900"
+            >
+              Undo
+            </button>
           </div>
         )}
       </div>

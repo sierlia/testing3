@@ -4,6 +4,8 @@ import { AlertTriangle, Info, FileText, Send } from "lucide-react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
+import { createBillForCurrentClass } from "../services/bills";
 
 export function CreateBill() {
   const navigate = useNavigate();
@@ -24,23 +26,32 @@ export function CreateBill() {
     "H. Res. (Simple Resolution)",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = "Title is required";
     if (!formData.legislativeText.trim()) newErrors.legislativeText = "Legislative text is required";
-    if (!formData.supportingText.trim()) newErrors.supportingText = "Supporting text is required";
+    // Supporting text is optional by default (teacher-configurable tabs can remove it)
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
       return;
     }
 
-    console.log("Submitting bill:", formData);
-    alert("Bill submitted successfully!");
-    navigate("/bills");
+    try {
+      const created = await createBillForCurrentClass({
+        title: formData.title.trim(),
+        legislativeText: formData.legislativeText,
+        supportingText: formData.supportingText.trim() ? formData.supportingText : null,
+        status: formData.placeHold ? "draft" : "submitted",
+      });
+      toast.success("Bill submitted");
+      navigate(`/bills/${created.id}`);
+    } catch (error: any) {
+      toast.error(error.message || "Could not submit bill");
+    }
   };
 
   return (
@@ -140,7 +151,7 @@ export function CreateBill() {
           {/* Supporting Text */}
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <label className="block text-sm font-semibold text-gray-900 mb-2">
-              Supporting Text *
+              Supporting Text
             </label>
             <p className="text-sm text-gray-600 mb-3">
               Explain the reasoning and purpose behind this legislation
