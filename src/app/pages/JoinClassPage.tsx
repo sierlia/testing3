@@ -31,7 +31,7 @@ export function JoinClassPage() {
       }).eq('user_id', user.id);
       if (profileError) throw profileError;
 
-      toast.success(`Joined ${row.class_name}`);
+      toast.success(`Joined ${row.joined_class_name}`);
       navigate('/dashboard');
     } catch (error: any) {
       toast.error(error.message || 'Could not join class');
