@@ -1,8 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { Settings, Save, Send, CheckSquare, Users, Scale } from "lucide-react";
+import { supabase } from "../utils/supabase";
+import { toast } from "sonner";
 
 export function TeacherSetup() {
+  const [loading, setLoading] = useState(true);
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
   const [settings, setSettings] = useState({
     // Party settings
     allowedParties: ["Democrat", "Republican"],
@@ -79,16 +83,91 @@ export function TeacherSetup() {
     setHasChanges(true);
   };
 
-  const handleSave = () => {
-    console.log("Saving settings:", settings);
-    alert("Settings saved!");
-    setHasChanges(false);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) return;
+        const { data: prof } = await supabase.from("profiles").select("class_id,role").eq("user_id", uid).maybeSingle();
+        const classId = (prof as any)?.class_id ?? null;
+        setActiveClassId(classId);
+        if (!classId) return;
+        const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
+        const s = (cls as any)?.settings ?? {};
+        const next = {
+          allowedParties: s?.parties?.allowed ?? settings.allowedParties,
+          allowStudentCreatedParties: s?.parties?.allowStudentCreated ?? settings.allowStudentCreatedParties,
+          autoApproveParties: s?.parties?.autoApprove ?? settings.autoApproveParties,
+          enabledCommittees: s?.committees?.enabled ?? settings.enabledCommittees,
+          chairElectionMode: s?.committees?.chairElectionMode ?? settings.chairElectionMode,
+          billAssignmentAuthority: s?.bills?.assignmentAuthority ?? settings.billAssignmentAuthority,
+          floorResultsBinding: s?.floor?.binding ?? settings.floorResultsBinding,
+        };
+        setSettings(next as any);
+      } catch (e: any) {
+        toast.error(e.message || "Could not load settings");
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const syncPartiesAndCommittees = async (classId: string) => {
+    // Parties: ensure allowed parties exist as approved rows
+    if (settings.allowedParties.length) {
+      await supabase
+        .from("parties")
+        .upsert(
+          settings.allowedParties.map((name) => ({ class_id: classId, name, approved: true })),
+          { onConflict: "class_id,name" },
+        );
+    }
+
+    // Committees: ensure enabled committees exist
+    const { data: existing } = await supabase.from("committees").select("id,name").eq("class_id", classId);
+    const existingNames = new Set((existing ?? []).map((c: any) => c.name));
+    const toInsert = settings.enabledCommittees.filter((n) => !existingNames.has(n)).map((name) => ({ class_id: classId, name, description: "" }));
+    if (toInsert.length) await supabase.from("committees").insert(toInsert);
+  };
+
+  const handleSave = async () => {
+    if (!activeClassId) return toast.error("Open a class first");
+    try {
+      const { data: cls, error: clsErr } = await supabase.from("classes").select("settings").eq("id", activeClassId).maybeSingle();
+      if (clsErr) throw clsErr;
+      const existing = ((cls as any)?.settings ?? {}) as any;
+
+      const nextSettings = {
+        ...existing,
+        parties: {
+          allowed: settings.allowedParties,
+          allowStudentCreated: settings.allowStudentCreatedParties,
+          autoApprove: settings.autoApproveParties,
+        },
+        committees: {
+          ...(existing?.committees ?? {}),
+          enabled: settings.enabledCommittees,
+          chairElectionMode: settings.chairElectionMode,
+        },
+        bills: { ...(existing?.bills ?? {}), assignmentAuthority: settings.billAssignmentAuthority },
+        floor: { ...(existing?.floor ?? {}), binding: settings.floorResultsBinding },
+      };
+      const { error } = await supabase.from("classes").update({ settings: nextSettings }).eq("id", activeClassId);
+      if (error) throw error;
+      await syncPartiesAndCommittees(activeClassId);
+      toast.success("Settings saved");
+      setHasChanges(false);
+    } catch (e: any) {
+      toast.error(e.message || "Could not save");
+    }
   };
 
   const handlePublish = () => {
-    console.log("Publishing to students:", settings);
-    alert("Settings published to students!");
-    setHasChanges(false);
+    void handleSave();
   };
 
   return (
@@ -96,6 +175,7 @@ export function TeacherSetup() {
       <Navigation />
       
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {loading && <div className="text-sm text-gray-600 mb-4">Loading settings…</div>}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Simulation Setup</h1>
           <p className="text-gray-600">

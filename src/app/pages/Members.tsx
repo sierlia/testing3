@@ -1,71 +1,61 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { Search, User, MapPin, Flag } from "lucide-react";
 import { Link } from "react-router";
+import { supabase } from "../utils/supabase";
+import { toast } from "sonner";
 
-interface Member {
-  id: string;
-  name: string;
-  party: string;
-  constituency: string;
-  leadershipRoles: string[];
-}
+type Member = {
+  user_id: string;
+  display_name: string | null;
+  party: string | null;
+  constituency_name: string | null;
+  avatar_url: string | null;
+  role: "teacher" | "student";
+};
 
 export function Members() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterParty, setFilterParty] = useState("all");
+  const [loading, setLoading] = useState(true);
+  const [members, setMembers] = useState<Member[]>([]);
 
-  const members: Member[] = [
-    {
-      id: "1",
-      name: "Alice Johnson",
-      party: "Democratic",
-      constituency: "District 1",
-      leadershipRoles: ["Committee Chair - Education", "Party Whip"],
-    },
-    {
-      id: "2",
-      name: "Bob Smith",
-      party: "Republican",
-      constituency: "District 5",
-      leadershipRoles: [],
-    },
-    {
-      id: "3",
-      name: "Carol Martinez",
-      party: "Democratic",
-      constituency: "District 3",
-      leadershipRoles: ["Party Leader"],
-    },
-    {
-      id: "4",
-      name: "David Lee",
-      party: "Republican",
-      constituency: "District 7",
-      leadershipRoles: [],
-    },
-    {
-      id: "5",
-      name: "Emma Davis",
-      party: "Green",
-      constituency: "District 2",
-      leadershipRoles: ["Committee Chair - Environment"],
-    },
-    {
-      id: "6",
-      name: "Tess Lin",
-      party: "Democratic Party",
-      constituency: "California's 22nd District",
-      leadershipRoles: [],
-    },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("user_id,display_name,party,constituency_name,avatar_url,role")
+          .order("role", { ascending: true })
+          .order("display_name", { ascending: true });
+        if (error) throw error;
+        setMembers((data ?? []) as any);
+      } catch (e: any) {
+        toast.error(e.message || "Could not load members");
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, []);
 
-  const filteredMembers = members.filter(member => {
-    const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         member.constituency.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesParty = filterParty === "all" || member.party === filterParty;
-    return matchesSearch && matchesParty;
-  });
+  const parties = useMemo(() => {
+    const set = new Set<string>();
+    for (const m of members) if (m.party) set.add(m.party);
+    return Array.from(set).sort();
+  }, [members]);
+
+  const filteredMembers = useMemo(() => {
+    return members.filter((member) => {
+      const name = member.display_name ?? "";
+      const constituency = member.constituency_name ?? "";
+      const matchesSearch =
+        name.toLowerCase().includes(searchQuery.toLowerCase()) || constituency.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesParty = filterParty === "all" || (member.party ?? "N/A") === filterParty;
+      return matchesSearch && matchesParty;
+    });
+  }, [members, searchQuery, filterParty]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -98,54 +88,51 @@ export function Members() {
               className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             >
               <option value="all">All Parties</option>
-              <option value="Democratic">Democratic</option>
-              <option value="Republican">Republican</option>
-              <option value="Green">Green</option>
+              {parties.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
             </select>
           </div>
         </div>
 
         {/* Members grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredMembers.map(member => (
+          {filteredMembers.map((member) => (
             <Link
-              key={member.id}
-              to={`/profile/${member.id}`}
+              key={member.user_id}
+              to={`/profile/${member.user_id}`}
               className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex items-start gap-4 mb-4">
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                  <User className="w-8 h-8 text-white" />
-                </div>
+                {member.avatar_url ? (
+                  <img src={member.avatar_url} alt={member.display_name ?? "Member"} className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                    <User className="w-8 h-8 text-white" />
+                  </div>
+                )}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 mb-1 truncate">{member.name}</h3>
+                  <h3 className="font-semibold text-gray-900 mb-1 truncate">{member.display_name ?? "Member"}</h3>
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <MapPin className="w-3 h-3" />
-                      <span className="truncate">{member.constituency}</span>
+                      <span className="truncate">{member.constituency_name ?? "N/A"}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Flag className="w-3 h-3" />
-                      <span>{member.party}</span>
+                      <span>{member.party ?? "N/A"}</span>
                     </div>
                   </div>
                 </div>
               </div>
-
-              {member.leadershipRoles.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 pt-3 border-t border-gray-200">
-                  {member.leadershipRoles.map(role => (
-                    <span key={role} className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded">
-                      {role}
-                    </span>
-                  ))}
-                </div>
-              )}
+              <div className="pt-3 border-t border-gray-200 text-xs text-gray-500">{member.role === "teacher" ? "Teacher" : "Student"}</div>
             </Link>
           ))}
         </div>
 
-        {filteredMembers.length === 0 && (
+        {!loading && filteredMembers.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             No members found
           </div>

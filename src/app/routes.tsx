@@ -47,6 +47,7 @@ import { JoinClassPage } from "./pages/JoinClassPage";
 import { PartiesPage } from "./pages/PartiesPage";
 import { CommitteesHome } from "./pages/CommitteesHome";
 import { CommitteeDashboard } from "./pages/CommitteeDashboard";
+import { ClassSimulationDashboard } from "./pages/ClassSimulationDashboard";
 
 export const router = createHashRouter([
   {
@@ -92,6 +93,10 @@ export const router = createHashRouter([
   {
     path: "/members",
     Component: Members,
+  },
+  {
+    path: "/class/:classId/dashboard",
+    Component: ClassSimulationDashboard,
   },
   {
     path: "/organizations",

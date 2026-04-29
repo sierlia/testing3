@@ -20,6 +20,49 @@ export function Dashboard() {
     setClasses((cls ?? []) as any); setLoading(false);
   })(); }, [navigate]);
 
+  const openClassDashboard = async (id: string) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return navigate('/signin');
+    await supabase.from("profiles").upsert({ user_id: user.id, class_id: id } as any);
+    navigate(`/class/${id}/dashboard`);
+  };
+
   if (loading) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
-  return <div className="min-h-screen bg-gray-50"><Navigation /><main className="max-w-5xl mx-auto p-8"><div className="flex justify-between items-center mb-4"><h2 className="text-2xl font-bold">Classes</h2><Button onClick={()=>navigate('/join-class')}>Join Class</Button></div>{classes.length===0 ? <Card><CardHeader><CardTitle>Join a Class to Continue</CardTitle></CardHeader><CardContent><Button onClick={()=>navigate('/join-class')}>Join Class</Button></CardContent></Card> : <div className="grid md:grid-cols-2 gap-4">{classes.map(c=><Card key={c.id}><CardHeader><CardTitle>{c.name}</CardTitle></CardHeader><CardContent><p className="text-sm text-gray-600 mb-3">Join code: <span className="font-mono font-semibold">{c.class_code}</span></p><Button onClick={() => navigate('/bills')}>Go to Dashboard</Button></CardContent></Card>)}</div>}</main></div>;
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      <main className="max-w-5xl mx-auto p-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-2xl font-bold">Classes</h2>
+          <Button onClick={() => navigate('/join-class')}>Join Class</Button>
+        </div>
+        {classes.length === 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Join a Class to Continue</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => navigate('/join-class')}>Join Class</Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-4">
+            {classes.map((c) => (
+              <Card key={c.id}>
+                <CardHeader>
+                  <CardTitle>{c.name}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-600 mb-3">
+                    Join code: <span className="font-mono font-semibold">{c.class_code}</span>
+                  </p>
+                  <Button onClick={() => void openClassDashboard(c.id)}>Go to Dashboard</Button>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
 }
