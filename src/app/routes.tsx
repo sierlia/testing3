@@ -36,6 +36,7 @@ import { DearColleagueInbox } from "./pages/DearColleagueInbox";
 import { CreateDearColleagueLetter } from "./pages/CreateDearColleagueLetter";
 import { Notifications } from "./pages/Notifications";
 import { NotificationSettings } from "./pages/NotificationSettings";
+import { SettingsNotifications } from "./pages/SettingsNotifications";
 import { TeacherProfileLayoutEditor } from "./pages/TeacherProfileLayoutEditor";
 import { TeacherStudentView } from "./pages/TeacherStudentView";
 import { TeacherCaucusManagement } from "./pages/TeacherCaucusManagement";
@@ -211,6 +212,10 @@ export const router = createHashRouter([
   {
     path: "/notifications",
     Component: Notifications,
+  },
+  {
+    path: "/settings/notifications",
+    Component: SettingsNotifications,
   },
   {
     path: "/notification-settings",

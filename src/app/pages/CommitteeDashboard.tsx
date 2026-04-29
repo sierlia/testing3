@@ -4,12 +4,14 @@ import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { Users, Send, User, Pencil, Save, X } from "lucide-react";
+import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
+import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
 
 type Announcement = { id: string; committee_id: string; author_user_id: string; title: string; body: string; created_at: string; author?: ProfileLite | null };
-type Comment = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; author?: ProfileLite | null };
+type Comment = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; parent_comment_id?: string | null; author?: ProfileLite | null };
 
 export function CommitteeDashboard() {
   const { id } = useParams();
@@ -29,8 +31,11 @@ export function CommitteeDashboard() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   const [newAnnouncement, setNewAnnouncement] = useState("");
-  const [commentsByAnnouncement, setCommentsByAnnouncement] = useState<Record<string, Comment[]>>({});
+  const [commentsByAnnouncement, setCommentsByAnnouncement] = useState<Record<string, ThreadComment[]>>({});
   const [newComment, setNewComment] = useState("");
+
+  const [announcementReactions, setAnnouncementReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
+  const [commentReactions, setCommentReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
 
   const isLeader = myRole === "chair" || myRole === "co_chair" || myRole === "ranking_member";
 
@@ -103,7 +108,7 @@ export function CommitteeDashboard() {
         if (announcementIds.length) {
           const { data: cRows, error: ccErr } = await supabase
             .from("committee_comments")
-            .select("id,announcement_id,author_user_id,body,created_at")
+            .select("id,announcement_id,author_user_id,body,created_at,parent_comment_id")
             .in("announcement_id", announcementIds)
             .order("created_at", { ascending: true });
           if (ccErr) throw ccErr;
@@ -115,12 +120,50 @@ export function CommitteeDashboard() {
             .in("user_id", commentAuthorIds.length ? commentAuthorIds : ["00000000-0000-0000-0000-000000000000"]);
           const cAuthorMap = new Map((cAuthors ?? []).map((p: any) => [p.user_id, p]));
 
-          const grouped: Record<string, Comment[]> = {};
+          const grouped: Record<string, ThreadComment[]> = {};
           for (const row of cRows ?? []) {
-            const comment: Comment = { ...(row as any), author: (cAuthorMap.get((row as any).author_user_id) as ProfileLite) ?? null };
+            const comment: ThreadComment = { ...(row as any), author: (cAuthorMap.get((row as any).author_user_id) as any) ?? null };
             grouped[comment.announcement_id] = [...(grouped[comment.announcement_id] ?? []), comment];
           }
           setCommentsByAnnouncement(grouped);
+
+          const { data: arRows, error: arErr } = await supabase
+            .from("committee_announcement_reactions")
+            .select("announcement_id,user_id,emoji")
+            .in("announcement_id", announcementIds);
+          if (arErr) throw arErr;
+
+          const announcementSummary: Record<string, ReactionsSummary> = {};
+          for (const r of arRows ?? []) {
+            const id = (r as any).announcement_id as string;
+            const emoji = (r as any).emoji as ReactionEmoji;
+            const uid = (r as any).user_id as string;
+            const prev = announcementSummary[id] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
+            prev.counts[emoji] = (prev.counts[emoji] ?? 0) + 1;
+            if (uid === me) prev.mine.add(emoji);
+            announcementSummary[id] = prev;
+          }
+          setAnnouncementReactions(announcementSummary);
+
+          const commentIds = (cRows ?? []).map((r: any) => r.id);
+          if (commentIds.length) {
+            const { data: crRows, error: crErr } = await supabase
+              .from("committee_comment_reactions")
+              .select("comment_id,user_id,emoji")
+              .in("comment_id", commentIds);
+            if (crErr) throw crErr;
+            const commentSummary: Record<string, ReactionsSummary> = {};
+            for (const r of crRows ?? []) {
+              const id = (r as any).comment_id as string;
+              const emoji = (r as any).emoji as ReactionEmoji;
+              const uid = (r as any).user_id as string;
+              const prev = commentSummary[id] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
+              prev.counts[emoji] = (prev.counts[emoji] ?? 0) + 1;
+              if (uid === me) prev.mine.add(emoji);
+              commentSummary[id] = prev;
+            }
+            setCommentReactions(commentSummary);
+          }
         }
       } catch (e: any) {
         toast.error(e.message || "Could not load committee");
@@ -161,11 +204,80 @@ export function CommitteeDashboard() {
             .select("user_id,display_name,party,constituency_name,avatar_url")
             .eq("user_id", row.author_user_id)
             .maybeSingle();
-          const comment: Comment = { ...(row as any), author: (author as any) ?? null };
+          const comment: ThreadComment = { ...(row as any), author: (author as any) ?? null };
           setCommentsByAnnouncement((prev) => ({
             ...prev,
             [comment.announcement_id]: [...(prev[comment.announcement_id] ?? []), comment],
           }));
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "committee_announcement_reactions", filter: `committee_id=eq.${committeeId}` },
+        (payload) => {
+          const row = payload.new as any;
+          const announcementId = row.announcement_id as string;
+          const emoji = row.emoji as ReactionEmoji;
+          const uid = row.user_id as string;
+          setAnnouncementReactions((prev) => {
+            const cur = prev[announcementId] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
+            const mine = new Set(cur.mine);
+            if (uid === meId) mine.add(emoji);
+            return { ...prev, [announcementId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "committee_announcement_reactions", filter: `committee_id=eq.${committeeId}` },
+        (payload) => {
+          const row = payload.old as any;
+          const announcementId = row.announcement_id as string;
+          const emoji = row.emoji as ReactionEmoji;
+          const uid = row.user_id as string;
+          setAnnouncementReactions((prev) => {
+            const cur = prev[announcementId];
+            if (!cur) return prev;
+            const mine = new Set(cur.mine);
+            if (uid === meId) mine.delete(emoji);
+            return {
+              ...prev,
+              [announcementId]: { counts: { ...cur.counts, [emoji]: Math.max(0, (cur.counts[emoji] ?? 0) - 1) }, mine },
+            };
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "committee_comment_reactions" },
+        (payload) => {
+          const row = payload.new as any;
+          const commentId = row.comment_id as string;
+          const emoji = row.emoji as ReactionEmoji;
+          const uid = row.user_id as string;
+          setCommentReactions((prev) => {
+            const cur = prev[commentId] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
+            const mine = new Set(cur.mine);
+            if (uid === meId) mine.add(emoji);
+            return { ...prev, [commentId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "committee_comment_reactions" },
+        (payload) => {
+          const row = payload.old as any;
+          const commentId = row.comment_id as string;
+          const emoji = row.emoji as ReactionEmoji;
+          const uid = row.user_id as string;
+          setCommentReactions((prev) => {
+            const cur = prev[commentId];
+            if (!cur) return prev;
+            const mine = new Set(cur.mine);
+            if (uid === meId) mine.delete(emoji);
+            return { ...prev, [commentId]: { counts: { ...cur.counts, [emoji]: Math.max(0, (cur.counts[emoji] ?? 0) - 1) }, mine } };
+          });
         },
       )
       .subscribe();
@@ -205,20 +317,75 @@ export function CommitteeDashboard() {
     }
   };
 
-  const postComment = async () => {
+  const submitComment = async (body: string, parentCommentId: string | null) => {
     if (!meId) return;
     if (!selectedAnnouncementId) return;
-    if (!newComment.trim()) return;
+    const trimmed = body.trim();
+    if (!trimmed) return;
     try {
       const { error } = await supabase.from("committee_comments").insert({
         announcement_id: selectedAnnouncementId,
         author_user_id: meId,
-        body: newComment.trim(),
+        body: trimmed,
+        parent_comment_id: parentCommentId,
       });
       if (error) throw error;
-      setNewComment("");
+      if (!parentCommentId) setNewComment("");
     } catch (e: any) {
       toast.error(e.message || "Could not post comment");
+    }
+  };
+
+  const postComment = async () => submitComment(newComment, null);
+
+  const toggleAnnouncementReaction = async (announcementId: string, emoji: ReactionEmoji) => {
+    if (!meId) return;
+    const mine = announcementReactions[announcementId]?.mine?.has(emoji) ?? false;
+    try {
+      if (mine) {
+        const { error } = await supabase
+          .from("committee_announcement_reactions")
+          .delete()
+          .eq("announcement_id", announcementId)
+          .eq("user_id", meId)
+          .eq("emoji", emoji);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("committee_announcement_reactions").insert({
+          committee_id: committeeId,
+          announcement_id: announcementId,
+          user_id: meId,
+          emoji,
+        });
+        if (error) throw error;
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Could not react");
+    }
+  };
+
+  const toggleCommentReaction = async (commentId: string, emoji: ReactionEmoji) => {
+    if (!meId) return;
+    const mine = commentReactions[commentId]?.mine?.has(emoji) ?? false;
+    try {
+      if (mine) {
+        const { error } = await supabase
+          .from("committee_comment_reactions")
+          .delete()
+          .eq("comment_id", commentId)
+          .eq("user_id", meId)
+          .eq("emoji", emoji);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("committee_comment_reactions").insert({
+          comment_id: commentId,
+          user_id: meId,
+          emoji,
+        });
+        if (error) throw error;
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Could not react");
     }
   };
 
@@ -358,40 +525,36 @@ export function CommitteeDashboard() {
                           </Link>{" "}
                           • {new Date(selectedAnnouncement.created_at).toLocaleString()}
                         </div>
+                        <div className="mt-3">
+                          <ReactionsBar
+                            size="md"
+                            summary={announcementReactions[selectedAnnouncement.id]}
+                            onToggle={(emoji) => void toggleAnnouncementReaction(selectedAnnouncement.id, emoji)}
+                          />
+                        </div>
                       </div>
 
                       <div className="space-y-3">
-                        <h3 className="text-sm font-semibold text-gray-900">Replies</h3>
-                        {visibleComments.length === 0 ? (
-                          <div className="text-sm text-gray-500">No replies yet.</div>
-                        ) : (
-                          visibleComments.map((c) => (
-                            <div key={c.id} className="flex items-start gap-3">
-                              {c.author?.avatar_url ? (
-                                <img src={c.author.avatar_url} className="w-8 h-8 rounded-full object-cover" />
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                                  <User className="w-4 h-4 text-blue-600" />
-                                </div>
-                              )}
-                              <div className="flex-1">
-                                <div className="text-sm text-gray-900">
-                                  <Link to={`/profile/${c.author_user_id}`} className="font-medium text-blue-600 hover:underline">
-                                    {c.author?.display_name ?? "Unknown"}
-                                  </Link>{" "}
-                                  <span className="text-xs text-gray-500">• {new Date(c.created_at).toLocaleString()}</span>
-                                </div>
-                                <div className="text-sm text-gray-700 whitespace-pre-line">{c.body}</div>
-                              </div>
-                            </div>
-                          ))
-                        )}
+                        <h3 className="text-sm font-semibold text-gray-900">Comments</h3>
+                        <ThreadedComments
+                          comments={visibleComments}
+                          meId={myRole ? meId : null}
+                          reactionsByCommentId={commentReactions}
+                          onToggleReaction={(commentId, emoji) => void toggleCommentReaction(commentId, emoji)}
+                          onSubmitComment={submitComment}
+                        />
                       </div>
 
                       {myRole && (
                         <div className="pt-2 border-t border-gray-200">
                           <div className="flex items-start gap-2">
-                            <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={2} placeholder="Write a reply..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md" />
+                            <textarea
+                              value={newComment}
+                              onChange={(e) => setNewComment(e.target.value)}
+                              rows={2}
+                              placeholder="Write a comment..."
+                              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                            />
                             <button onClick={() => void postComment()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50" disabled={!newComment.trim()}>
                               Send
                             </button>

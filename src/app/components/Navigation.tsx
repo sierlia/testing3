@@ -1,4 +1,4 @@
-import { ChevronDown, Building2, LogOut, User } from "lucide-react";
+import { ChevronDown, Building2, LogOut, Settings, User } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
@@ -167,6 +167,14 @@ export function Navigation() {
                   >
                     <User className="w-4 h-4" />
                     View Profile
+                  </Link>
+                  <Link
+                    to="/settings/notifications"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setUserMenuOpen(false)}
+                  >
+                    <Settings className="w-4 h-4" />
+                    Settings
                   </Link>
                   <button
                     onClick={handleSignOut}
