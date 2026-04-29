@@ -248,7 +248,6 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
     email: '',
     password: '',
     confirmPassword: '',
-    joinCode: '',
   });
   const [loading, setLoading] = useState(false);
 
@@ -271,7 +270,6 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
           data: {
             name: formData.name,
             role: 'student',
-            joinCode: formData.joinCode,
           },
         },
       });
@@ -280,8 +278,7 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
 
       toast.success('Account created successfully!');
       
-      // Redirect to onboarding
-      navigate('/onboarding');
+      navigate('/join-class');
     } catch (error: any) {
       console.error('Signup error:', error);
       toast.error(error.message || 'Failed to create account');
@@ -304,7 +301,7 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
             </div>
             <CardTitle>Create Student Account</CardTitle>
             <CardDescription>
-              Join your class with a code from your teacher
+              Create your account first, then join a class with a code
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -332,21 +329,6 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="joinCode">Class Join Code</Label>
-                <Input
-                  id="joinCode"
-                  placeholder="ABC123"
-                  value={formData.joinCode}
-                  onChange={(e) => setFormData({ ...formData, joinCode: e.target.value.toUpperCase() })}
-                  required
-                  maxLength={6}
-                  className="uppercase"
-                />
-                <p className="text-xs text-gray-500">
-                  Enter the 6-character code provided by your teacher
-                </p>
-              </div>
 
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>

@@ -5,14 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Gavel, Plus, Users, Settings, Copy, Check, KeyRound } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
-import { projectId, publicAnonKey } from '/utils/supabase/info';
 
 interface ClassData {
   id: string;
   name: string;
-  joinCode: string;
-  studentCount: number;
-  createdAt: string;
+  class_code: string;
+  student_count: number;
+  created_at: string;
 }
 
 export function TeacherDashboard() {
@@ -41,20 +40,18 @@ export function TeacherDashboard() {
         const { data: { user } } = await supabase.auth.getUser();
         setUserName(user?.user_metadata?.name || 'Teacher');
 
-        // Fetch classes from the server
-        const response = await fetch(
-          `https://${projectId}.supabase.co/functions/v1/make-server-a645ae66/classes`,
-          {
-            headers: {
-              'Authorization': `Bearer ${session.access_token}`,
-            },
-          }
-        );
+        const { data: classRows, error } = await supabase
+          .from('classes')
+          .select('id, name, class_code, created_at')
+          .eq('teacher_id', session.user.id)
+          .order('created_at', { ascending: false });
+        if (error) throw error;
 
-        if (response.ok) {
-          const data = await response.json();
-          setClasses(data.classes || []);
-        }
+        const normalized = await Promise.all((classRows ?? []).map(async (c) => {
+          const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('class_id', c.id).eq('role', 'student');
+          return { ...c, student_count: count ?? 0 };
+        }));
+        setClasses(normalized as any);
       } else if (bypassAuth) {
         setUserName('Teacher (Dev Mode)');
         // Mock classes for development
@@ -62,16 +59,16 @@ export function TeacherDashboard() {
           {
             id: '1',
             name: 'super amazing class',
-            joinCode: 'SAC123',
-            studentCount: 24,
-            createdAt: new Date('2026-01-15').toISOString(),
+            class_code: 'SAC123',
+            student_count: 24,
+            created_at: new Date('2026-01-15').toISOString(),
           },
           {
             id: '2',
             name: 'testing class 123',
-            joinCode: 'TEST99',
-            studentCount: 18,
-            createdAt: new Date('2026-02-20').toISOString(),
+            class_code: 'TEST99',
+            student_count: 18,
+            created_at: new Date('2026-02-20').toISOString(),
           },
         ]);
       }
@@ -174,7 +171,7 @@ export function TeacherDashboard() {
                 <CardHeader>
                   <CardTitle>{classItem.name}</CardTitle>
                   <CardDescription>
-                    Created {new Date(classItem.createdAt).toLocaleDateString()}
+                    Created {new Date(classItem.created_at).toLocaleDateString()}
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
@@ -183,15 +180,15 @@ export function TeacherDashboard() {
                       <div>
                         <p className="text-xs text-gray-600 mb-1">Join Code</p>
                         <p className="text-2xl font-bold text-blue-600 font-mono">
-                          {classItem.joinCode}
+                          {classItem.class_code}
                         </p>
                       </div>
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => copyJoinCode(classItem.joinCode)}
+                        onClick={() => copyJoinCode(classItem.class_code)}
                       >
-                        {copiedCode === classItem.joinCode ? (
+                        {copiedCode === classItem.class_code ? (
                           <Check className="w-4 h-4 text-green-600" />
                         ) : (
                           <Copy className="w-4 h-4" />
@@ -201,7 +198,7 @@ export function TeacherDashboard() {
 
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Users className="w-4 h-4" />
-                      <span>{classItem.studentCount} students enrolled</span>
+                      <span>{classItem.student_count} students enrolled</span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2">

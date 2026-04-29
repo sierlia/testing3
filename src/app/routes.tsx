@@ -42,6 +42,7 @@ import { TeacherCaucusManagement } from "./pages/TeacherCaucusManagement";
 import { CaucusChairVote } from "./pages/CaucusChairVote";
 import { TeacherBillSorting } from "./pages/TeacherBillSorting";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { JoinClassPage } from "./pages/JoinClassPage";
 
 export const router = createHashRouter([
   {
@@ -75,6 +76,10 @@ export const router = createHashRouter([
   {
     path: "/dashboard",
     Component: Dashboard,
+  },
+  {
+    path: "/join-class",
+    Component: JoinClassPage,
   },
   {
     path: "/onboarding",

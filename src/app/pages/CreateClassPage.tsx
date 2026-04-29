@@ -28,7 +28,6 @@ export function CreateClassPage() {
   const [formData, setFormData] = useState({
     name: '',
     description: '',
-    sessionLength: '90',
     classCode: generateClassCode(),
     allowedParties: ['Democrat', 'Republican'] as string[],
     allowStudentCreatedParties: false,
@@ -58,7 +57,6 @@ export function CreateClassPage() {
 
       const settings = {
         description: formData.description,
-        sessionLengthMinutes: Number(formData.sessionLength),
         parties: {
           allowed: formData.allowedParties,
           allowStudentCreated: formData.allowStudentCreatedParties,
@@ -100,10 +98,7 @@ export function CreateClassPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2"><Label htmlFor="name">Class Name *</Label><Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required /></div>
           <div className="space-y-2"><Label htmlFor="description">Description</Label><Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} /></div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2"><Label htmlFor="sessionLength">Session Length (minutes)</Label><Input id="sessionLength" type="number" min="30" max="180" value={formData.sessionLength} onChange={(e) => setFormData({ ...formData, sessionLength: e.target.value })} /></div>
-            <div className="space-y-2"><Label>Class Code</Label><div className="flex gap-2"><Input value={formData.classCode} onChange={(e) => setFormData({ ...formData, classCode: e.target.value.toUpperCase().slice(0, 6) })} /><Button type="button" variant="outline" onClick={() => setFormData({ ...formData, classCode: generateClassCode() })}><WandSparkles className="w-4 h-4 mr-2" />Regenerate</Button></div></div>
-          </div>
+          <div className="space-y-2"><Label>Class Code</Label><div className="flex gap-2"><Input value={formData.classCode} onChange={(e) => setFormData({ ...formData, classCode: e.target.value.toUpperCase().slice(0, 6) })} /><Button type="button" variant="outline" onClick={() => setFormData({ ...formData, classCode: generateClassCode() })}><WandSparkles className="w-4 h-4 mr-2" />Regenerate</Button></div></div>
 
           <div className="space-y-2"><Label>Allowed Parties (comma-separated)</Label><Input value={formData.allowedParties.join(', ')} onChange={(e) => setFormData({ ...formData, allowedParties: e.target.value.split(',').map(v => v.trim()).filter(Boolean) })} /></div>
 
