@@ -22,28 +22,11 @@ export function ReactionsBar({
   const mine = summary?.mine ?? new Set<ReactionEmoji>();
   const baseClass = size === "md" ? "px-3 py-1.5 text-sm" : "px-2 py-1 text-xs";
 
-  const total = useMemo(() => EMOJIS.reduce((acc, e) => acc + (counts[e] ?? 0), 0), [counts]);
-  if (total === 0) {
-    return (
-      <div className="flex items-center gap-2">
-        {EMOJIS.map((emoji) => (
-          <button
-            key={emoji}
-            type="button"
-            onClick={() => onToggle(emoji)}
-            className={`${baseClass} rounded-md border border-gray-200 hover:bg-gray-50 text-gray-700`}
-            title="React"
-          >
-            {emoji}
-          </button>
-        ))}
-      </div>
-    );
-  }
+  const shown = EMOJIS.filter((e) => (counts[e] ?? 0) > 0 || mine.has(e));
 
   return (
     <div className="flex items-center gap-2">
-      {EMOJIS.map((emoji) => {
+      {shown.map((emoji) => {
         const active = mine.has(emoji);
         const count = counts[emoji] ?? 0;
         return (
@@ -61,6 +44,31 @@ export function ReactionsBar({
           </button>
         );
       })}
+      <details className="relative">
+        <summary
+          className={`${baseClass} rounded-md border border-gray-200 hover:bg-gray-50 text-gray-700 cursor-pointer select-none`}
+          title="Add reaction"
+          style={{ listStyle: "none" }}
+        >
+          +
+        </summary>
+        <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg p-2 z-20 flex gap-1">
+          {EMOJIS.map((emoji) => (
+            <button
+              key={emoji}
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onToggle(emoji);
+              }}
+              className="px-2 py-1 rounded hover:bg-gray-100 text-sm"
+              title="React"
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

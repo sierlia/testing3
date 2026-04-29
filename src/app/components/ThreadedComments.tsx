@@ -21,7 +21,7 @@ export type ThreadComment = {
 
 function formatDate(dateStr: string) {
   const date = new Date(dateStr);
-  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
 export function ThreadedComments({
@@ -41,15 +41,17 @@ export function ThreadedComments({
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
-  const { roots, childrenByParent } = useMemo(() => {
+  const { roots, childrenByParent, byId } = useMemo(() => {
     const byParent: Record<string, ThreadComment[]> = {};
     const rootList: ThreadComment[] = [];
+    const idMap = new Map<string, ThreadComment>();
+    for (const c of comments) idMap.set(c.id, c);
     for (const c of comments) {
       const parent = c.parent_comment_id ?? null;
       if (!parent) rootList.push(c);
       else byParent[parent] = [...(byParent[parent] ?? []), c];
     }
-    return { roots: rootList, childrenByParent: byParent };
+    return { roots: rootList, childrenByParent: byParent, byId: idMap };
   }, [comments]);
 
   const renderNode = (comment: ThreadComment, depth: number) => {
@@ -58,9 +60,18 @@ export function ThreadedComments({
     const draft = replyDrafts[comment.id] ?? "";
     const canReply = !!meId;
 
+    const parent = comment.parent_comment_id ? byId.get(comment.parent_comment_id) ?? null : null;
+    const parentName = parent ? parent.author?.display_name ?? "Member" : null;
+
     return (
       <div key={comment.id} className="space-y-2">
-        <div className={`flex gap-3 ${depth > 0 ? "pl-6 border-l border-gray-200" : ""}`}>
+        <div
+          className="flex gap-3"
+          style={{
+            paddingLeft: depth > 0 ? depth * 16 : 0,
+            borderLeft: depth > 0 ? "1px solid rgb(229 231 235)" : undefined,
+          }}
+        >
           {comment.author?.avatar_url ? (
             <img
               src={comment.author.avatar_url}
@@ -79,7 +90,10 @@ export function ThreadedComments({
                 <span className="text-gray-500 text-xs ml-2">{formatDate(comment.created_at)}</span>
               </div>
             </div>
-            <div className="text-sm text-gray-700 whitespace-pre-wrap mt-1">{comment.body}</div>
+            <div className="text-sm text-gray-700 whitespace-pre-wrap mt-1">
+              {parentName ? <span className="text-blue-600 font-medium">@{parentName} </span> : null}
+              {comment.body}
+            </div>
             <div className="flex items-center gap-3 mt-2">
               <ReactionsBar summary={reactionsByCommentId[comment.id]} onToggle={(e) => onToggleReaction(comment.id, e)} />
               <button
@@ -154,4 +168,3 @@ export function ThreadedComments({
 
   return <div className="space-y-4">{roots.map((c) => renderNode(c, 0))}</div>;
 }
-

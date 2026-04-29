@@ -6,7 +6,6 @@ import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
-import { pushLocalNotification } from "../utils/notifications";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -44,6 +43,7 @@ export function TessCaucusDetail() {
 
   const [loading, setLoading] = useState(true);
   const [meId, setMeId] = useState<string | null>(null);
+  const [meProfile, setMeProfile] = useState<ProfileLite | null>(null);
 
   const [caucus, setCaucus] = useState<{ id: string; title: string; description: string; created_at: string } | null>(null);
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
@@ -62,7 +62,11 @@ export function TessCaucusDetail() {
   const [announcementReactions, setAnnouncementReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
   const [commentReactions, setCommentReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
 
+  const [announcementsSplitPct, setAnnouncementsSplitPct] = useState(40);
+  const [draggingSplit, setDraggingSplit] = useState(false);
+
   const isLeader = myRole === "chair" || myRole === "co_chair";
+  const isChair = myRole === "chair";
 
   const selectedAnnouncement = useMemo(
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
@@ -76,6 +80,16 @@ export function TessCaucusDetail() {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id ?? null;
         setMeId(me);
+        if (me) {
+          const { data: mp } = await supabase
+            .from("profiles")
+            .select("user_id,display_name,party,constituency_name,avatar_url")
+            .eq("user_id", me)
+            .maybeSingle();
+          setMeProfile((mp as any) ?? null);
+        } else {
+          setMeProfile(null);
+        }
 
         const { data: c, error: cErr } = await supabase
           .from("caucuses")
@@ -202,6 +216,24 @@ export function TessCaucusDetail() {
   }, [caucusId]);
 
   useEffect(() => {
+    if (!draggingSplit) return;
+    const onMove = (e: MouseEvent) => {
+      const container = document.getElementById("announcement-board-split");
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setAnnouncementsSplitPct(Math.min(70, Math.max(25, pct)));
+    };
+    const onUp = () => setDraggingSplit(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [draggingSplit]);
+
+  useEffect(() => {
     if (!caucusId) return;
 
     const channel = supabase
@@ -232,21 +264,12 @@ export function TessCaucusDetail() {
           const comment: ThreadComment = { ...(row as any), author: (author as any) ?? null };
           setCommentsByAnnouncement((prev) => ({
             ...prev,
-            [comment.announcement_id]: [...(prev[comment.announcement_id] ?? []), comment],
+            [comment.announcement_id]: (prev[comment.announcement_id] ?? []).some((c) => c.id === comment.id)
+              ? (prev[comment.announcement_id] ?? [])
+              : [...(prev[comment.announcement_id] ?? []), comment],
           }));
 
-          // local notifications: someone commented on my announcement
-          if (meId && row.author_user_id !== meId) {
-            const ann = announcements.find((a) => a.id === row.announcement_id);
-            if (ann?.author_user_id === meId) {
-              pushLocalNotification({
-                kind: "comment",
-                title: `New comment in ${caucus?.title ?? "caucus"}`,
-                message: `${(author as any)?.display_name ?? "Someone"} commented on your announcement`,
-                href: `/caucuses/${caucusId}`,
-              });
-            }
-          }
+          // notifications are handled server-side
         },
       )
       .on(
@@ -264,17 +287,7 @@ export function TessCaucusDetail() {
             return { ...prev, [announcementId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
           });
 
-          if (meId && row.user_id !== meId) {
-            const ann = announcements.find((a) => a.id === announcementId);
-            if (ann?.author_user_id === meId) {
-              pushLocalNotification({
-                kind: "reaction",
-                title: `Reaction in ${caucus?.title ?? "caucus"}`,
-                message: `Someone reacted ${row.emoji} to your announcement`,
-                href: `/caucuses/${caucusId}`,
-              });
-            }
-          }
+          // notifications are handled server-side
         },
       )
       .on(
@@ -312,18 +325,7 @@ export function TessCaucusDetail() {
             return { ...prev, [commentId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
           });
 
-          if (meId && row.user_id !== meId) {
-            const all = Object.values(commentsByAnnouncement).flat();
-            const target = all.find((c) => c.id === commentId);
-            if (target?.author_user_id === meId) {
-              pushLocalNotification({
-                kind: "reaction",
-                title: `Reaction in ${caucus?.title ?? "caucus"}`,
-                message: `Someone reacted ${row.emoji} to your comment`,
-                href: `/caucuses/${caucusId}`,
-              });
-            }
-          }
+          // notifications are handled server-side
         },
       )
       .on(
@@ -382,6 +384,16 @@ export function TessCaucusDetail() {
     }
   };
 
+  const setMemberRole = async (userId: string, role: MembershipRole) => {
+    try {
+      const { error } = await supabase.from("caucus_members").update({ role }).eq("caucus_id", caucusId).eq("user_id", userId);
+      if (error) throw error;
+      setMembers((prev) => prev.map((m) => (m.user_id === userId ? { ...m, role } : m)));
+    } catch (e: any) {
+      toast.error(e.message || "Could not update role");
+    }
+  };
+
   const postAnnouncement = async () => {
     if (!meId) return;
     if (!newAnnouncement.trim()) return;
@@ -406,13 +418,24 @@ export function TessCaucusDetail() {
     const trimmed = body.trim();
     if (!trimmed) return;
     try {
-      const { error } = await supabase.from("caucus_comments").insert({
+      const { data: inserted, error } = await supabase
+        .from("caucus_comments")
+        .insert({
         announcement_id: selectedAnnouncementId,
         author_user_id: meId,
         body: trimmed,
         parent_comment_id: parentCommentId,
-      });
+        })
+        .select("id,announcement_id,author_user_id,body,created_at,parent_comment_id")
+        .single();
       if (error) throw error;
+
+      const comment: ThreadComment = { ...(inserted as any), author: (meProfile as any) ?? null };
+      setCommentsByAnnouncement((prev) => {
+        const cur = prev[comment.announcement_id] ?? [];
+        if (cur.some((c) => c.id === comment.id)) return prev;
+        return { ...prev, [comment.announcement_id]: [...cur, comment] };
+      });
       if (!parentCommentId) setNewComment("");
     } catch (e: any) {
       toast.error(e.message || "Could not post comment");
@@ -652,8 +675,11 @@ export function TessCaucusDetail() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2">
-                <div className="border-r border-gray-200 max-h-[520px] overflow-y-auto">
+              <div id="announcement-board-split" className="flex flex-col md:flex-row">
+                <div
+                  className="border-r border-gray-200 max-h-[520px] overflow-y-auto md:block"
+                  style={{ width: `calc(${announcementsSplitPct}% - 4px)` }}
+                >
                   {announcements.length === 0 ? (
                     <div className="p-6 text-sm text-gray-500">No announcements yet.</div>
                   ) : (
@@ -677,7 +703,13 @@ export function TessCaucusDetail() {
                   )}
                 </div>
 
-                <div className="p-4 max-h-[520px] overflow-y-auto">
+                <div
+                  className="hidden md:block w-2 cursor-col-resize bg-gray-100 hover:bg-gray-200 active:bg-gray-300"
+                  onMouseDown={() => setDraggingSplit(true)}
+                  title="Drag to resize"
+                />
+
+                <div className="p-4 max-h-[520px] overflow-y-auto flex-1">
                   {selectedAnnouncement ? (
                     <div className="space-y-4">
                       <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
@@ -765,7 +797,19 @@ export function TessCaucusDetail() {
                         {m.profile?.constituency_name ?? "N/A"} • {m.profile?.party ?? "N/A"}
                       </div>
                     </div>
-                    <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>
+                      {isChair && m.role !== "chair" && (
+                        <button
+                          type="button"
+                          onClick={() => void setMemberRole(m.user_id, m.role === "co_chair" ? "member" : "co_chair")}
+                          className="text-xs px-2 py-1 rounded border border-gray-300 text-gray-700 hover:bg-gray-50"
+                          title={m.role === "co_chair" ? "Demote to member" : "Promote to co-chair"}
+                        >
+                          {m.role === "co_chair" ? "Demote" : "Promote"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
             </div>

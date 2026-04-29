@@ -6,7 +6,6 @@ import { supabase } from "../utils/supabase";
 import { Users, Send, User, Pencil, Save, X } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
-import { pushLocalNotification } from "../utils/notifications";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
@@ -20,6 +19,7 @@ export function CommitteeDashboard() {
 
   const [loading, setLoading] = useState(true);
   const [meId, setMeId] = useState<string | null>(null);
+  const [meProfile, setMeProfile] = useState<ProfileLite | null>(null);
   const [committee, setCommittee] = useState<{ id: string; name: string; description: string | null; created_at: string } | null>(null);
 
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
@@ -38,6 +38,9 @@ export function CommitteeDashboard() {
   const [announcementReactions, setAnnouncementReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
   const [commentReactions, setCommentReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
 
+  const [announcementsSplitPct, setAnnouncementsSplitPct] = useState(40);
+  const [draggingSplit, setDraggingSplit] = useState(false);
+
   const isLeader = myRole === "chair" || myRole === "co_chair" || myRole === "ranking_member";
 
   const selectedAnnouncement = useMemo(
@@ -52,6 +55,16 @@ export function CommitteeDashboard() {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id ?? null;
         setMeId(me);
+        if (me) {
+          const { data: mp } = await supabase
+            .from("profiles")
+            .select("user_id,display_name,party,constituency_name,avatar_url")
+            .eq("user_id", me)
+            .maybeSingle();
+          setMeProfile((mp as any) ?? null);
+        } else {
+          setMeProfile(null);
+        }
 
         const { data: c, error: cErr } = await supabase
           .from("committees")
@@ -178,6 +191,24 @@ export function CommitteeDashboard() {
   }, [committeeId]);
 
   useEffect(() => {
+    if (!draggingSplit) return;
+    const onMove = (e: MouseEvent) => {
+      const container = document.getElementById("committee-announcement-board-split");
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const pct = ((e.clientX - rect.left) / rect.width) * 100;
+      setAnnouncementsSplitPct(Math.min(70, Math.max(25, pct)));
+    };
+    const onUp = () => setDraggingSplit(false);
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [draggingSplit]);
+
+  useEffect(() => {
     if (!committeeId) return;
 
     const channel = supabase
@@ -208,20 +239,12 @@ export function CommitteeDashboard() {
           const comment: ThreadComment = { ...(row as any), author: (author as any) ?? null };
           setCommentsByAnnouncement((prev) => ({
             ...prev,
-            [comment.announcement_id]: [...(prev[comment.announcement_id] ?? []), comment],
+            [comment.announcement_id]: (prev[comment.announcement_id] ?? []).some((c) => c.id === comment.id)
+              ? (prev[comment.announcement_id] ?? [])
+              : [...(prev[comment.announcement_id] ?? []), comment],
           }));
 
-          if (meId && row.author_user_id !== meId) {
-            const ann = announcements.find((a) => a.id === row.announcement_id);
-            if (ann?.author_user_id === meId) {
-              pushLocalNotification({
-                kind: "comment",
-                title: `New comment in ${committee?.name ?? "committee"}`,
-                message: `${(author as any)?.display_name ?? "Someone"} commented on your announcement`,
-                href: `/committees/${committeeId}`,
-              });
-            }
-          }
+          // notifications are handled server-side
         },
       )
       .on(
@@ -239,17 +262,7 @@ export function CommitteeDashboard() {
             return { ...prev, [announcementId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
           });
 
-          if (meId && row.user_id !== meId) {
-            const ann = announcements.find((a) => a.id === announcementId);
-            if (ann?.author_user_id === meId) {
-              pushLocalNotification({
-                kind: "reaction",
-                title: `Reaction in ${committee?.name ?? "committee"}`,
-                message: `Someone reacted ${row.emoji} to your announcement`,
-                href: `/committees/${committeeId}`,
-              });
-            }
-          }
+          // notifications are handled server-side
         },
       )
       .on(
@@ -287,18 +300,7 @@ export function CommitteeDashboard() {
             return { ...prev, [commentId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
           });
 
-          if (meId && row.user_id !== meId) {
-            const all = Object.values(commentsByAnnouncement).flat();
-            const target = all.find((c) => c.id === commentId);
-            if (target?.author_user_id === meId) {
-              pushLocalNotification({
-                kind: "reaction",
-                title: `Reaction in ${committee?.name ?? "committee"}`,
-                message: `Someone reacted ${row.emoji} to your comment`,
-                href: `/committees/${committeeId}`,
-              });
-            }
-          }
+          // notifications are handled server-side
         },
       )
       .on(
@@ -361,13 +363,24 @@ export function CommitteeDashboard() {
     const trimmed = body.trim();
     if (!trimmed) return;
     try {
-      const { error } = await supabase.from("committee_comments").insert({
-        announcement_id: selectedAnnouncementId,
-        author_user_id: meId,
-        body: trimmed,
-        parent_comment_id: parentCommentId,
-      });
+      const { data: inserted, error } = await supabase
+        .from("committee_comments")
+        .insert({
+          announcement_id: selectedAnnouncementId,
+          author_user_id: meId,
+          body: trimmed,
+          parent_comment_id: parentCommentId,
+        })
+        .select("id,announcement_id,author_user_id,body,created_at,parent_comment_id")
+        .single();
       if (error) throw error;
+
+      const comment: ThreadComment = { ...(inserted as any), author: (meProfile as any) ?? null };
+      setCommentsByAnnouncement((prev) => {
+        const cur = prev[comment.announcement_id] ?? [];
+        if (cur.some((c) => c.id === comment.id)) return prev;
+        return { ...prev, [comment.announcement_id]: [...cur, comment] };
+      });
       if (!parentCommentId) setNewComment("");
     } catch (e: any) {
       toast.error(e.message || "Could not post comment");
@@ -585,8 +598,8 @@ export function CommitteeDashboard() {
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2">
-                <div className="border-r border-gray-200 max-h-[520px] overflow-y-auto">
+              <div id="committee-announcement-board-split" className="flex flex-col md:flex-row">
+                <div className="border-r border-gray-200 max-h-[520px] overflow-y-auto" style={{ width: `calc(${announcementsSplitPct}% - 4px)` }}>
                   {announcements.length === 0 ? (
                     <div className="p-6 text-sm text-gray-500">No announcements yet.</div>
                   ) : (
@@ -604,7 +617,13 @@ export function CommitteeDashboard() {
                   )}
                 </div>
 
-                <div className="p-4 max-h-[520px] overflow-y-auto">
+                <div
+                  className="hidden md:block w-2 cursor-col-resize bg-gray-100 hover:bg-gray-200 active:bg-gray-300"
+                  onMouseDown={() => setDraggingSplit(true)}
+                  title="Drag to resize"
+                />
+
+                <div className="p-4 max-h-[520px] overflow-y-auto flex-1">
                   {selectedAnnouncement ? (
                     <div className="space-y-4">
                       <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
