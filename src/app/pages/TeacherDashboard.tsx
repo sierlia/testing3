@@ -91,6 +91,21 @@ export function TeacherDashboard() {
     setTimeout(() => setCopiedCode(null), 2000);
   };
 
+  const setActiveClass = async (classId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      await supabase.from('profiles').upsert({
+        user_id: user.id,
+        class_id: classId,
+        role: 'teacher',
+        display_name: user.user_metadata?.name ?? null,
+      });
+    } catch {
+      // best-effort
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -205,14 +220,20 @@ export function TeacherDashboard() {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => navigate(`/teacher/class/${classItem.id}/manage`)}
+                        onClick={async () => {
+                          await setActiveClass(classItem.id);
+                          navigate(`/teacher/class/${classItem.id}/manage`);
+                        }}
                       >
                         <Settings className="w-4 h-4 mr-1" />
                         Manage
                       </Button>
                       <Button
                         size="sm"
-                        onClick={() => navigate(`/teacher/class/${classItem.id}`)}
+                        onClick={async () => {
+                          await setActiveClass(classItem.id);
+                          navigate(`/teacher/class/${classItem.id}`);
+                        }}
                       >
                         Open Class
                       </Button>

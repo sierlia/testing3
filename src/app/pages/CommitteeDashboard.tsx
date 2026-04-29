@@ -222,21 +222,16 @@ export function CommitteeDashboard() {
     }
   };
 
-  const joinLeave = async () => {
+  const join = async () => {
     if (!meId) return;
     setJoining(true);
     try {
-      if (myRole) {
-        const { error } = await supabase.from("committee_members").delete().eq("committee_id", committeeId).eq("user_id", meId);
-        if (error) throw error;
-        setMyRole(null);
-        setMembers((prev) => prev.filter((m) => m.user_id !== meId));
-      } else {
-        const { error } = await supabase.from("committee_members").insert({ committee_id: committeeId, user_id: meId, role: "member" });
-        if (error) throw error;
-        setMyRole("member");
-        setMembers((prev) => [...prev, { user_id: meId, role: "member", profile: null }]);
-      }
+      const { error } = await supabase
+        .from("committee_members")
+        .insert({ committee_id: committeeId, user_id: meId, role: "member" });
+      if (error) throw error;
+      setMyRole("member");
+      setMembers((prev) => [...prev, { user_id: meId, role: "member", profile: null }]);
     } catch (e: any) {
       toast.error(e.message || "Could not update membership");
     } finally {
@@ -265,15 +260,15 @@ export function CommitteeDashboard() {
             <div className="text-sm text-gray-600">{members.length} members</div>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => void joinLeave()}
-              disabled={joining}
-              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 ${
-                myRole ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-            >
-              {myRole ? "Leave" : "Join"}
-            </button>
+            {!myRole && (
+              <button
+                onClick={() => void join()}
+                disabled={joining}
+                className="px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700"
+              >
+                Join
+              </button>
+            )}
             <Link to={`/committee/${committeeId}/workspace`} className="px-4 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
               Workspace
             </Link>
@@ -342,7 +337,10 @@ export function CommitteeDashboard() {
                       <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} className={`w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "bg-blue-50" : ""}`}>
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
-                          {a.author?.display_name ?? "Unknown"} • {new Date(a.created_at).toLocaleString()}
+                          <Link to={`/profile/${a.author_user_id}`} className="text-blue-600 hover:underline">
+                            {a.author?.display_name ?? "Unknown"}
+                          </Link>{" "}
+                          • {new Date(a.created_at).toLocaleString()}
                         </div>
                       </button>
                     ))
@@ -355,7 +353,10 @@ export function CommitteeDashboard() {
                       <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
                         <div className="text-sm text-gray-900 whitespace-pre-line">{selectedAnnouncement.body}</div>
                         <div className="text-xs text-gray-500 mt-2">
-                          {selectedAnnouncement.author?.display_name ?? "Unknown"} • {new Date(selectedAnnouncement.created_at).toLocaleString()}
+                          <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className="text-blue-600 hover:underline">
+                            {selectedAnnouncement.author?.display_name ?? "Unknown"}
+                          </Link>{" "}
+                          • {new Date(selectedAnnouncement.created_at).toLocaleString()}
                         </div>
                       </div>
 
@@ -375,7 +376,9 @@ export function CommitteeDashboard() {
                               )}
                               <div className="flex-1">
                                 <div className="text-sm text-gray-900">
-                                  <span className="font-medium">{c.author?.display_name ?? "Unknown"}</span>{" "}
+                                  <Link to={`/profile/${c.author_user_id}`} className="font-medium text-blue-600 hover:underline">
+                                    {c.author?.display_name ?? "Unknown"}
+                                  </Link>{" "}
                                   <span className="text-xs text-gray-500">• {new Date(c.created_at).toLocaleString()}</span>
                                 </div>
                                 <div className="text-sm text-gray-700 whitespace-pre-line">{c.body}</div>
@@ -419,10 +422,14 @@ export function CommitteeDashboard() {
                       <User className="w-5 h-5 text-gray-400" />
                     </div>
                   )}
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">{m.profile?.display_name ?? "Member"}</div>
+                    <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium truncate">
+                      <Link to={`/profile/${m.user_id}`} className="text-blue-600 hover:underline">
+                        {m.profile?.display_name ?? "Member"}
+                      </Link>
+                    </div>
                     <div className="text-xs text-gray-500 truncate">
-                      {m.profile?.constituency_name ?? "—"} • {m.profile?.party ?? "—"}
+                      {m.profile?.constituency_name ?? "N/A"} • {m.profile?.party ?? "N/A"}
                     </div>
                   </div>
                   <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>

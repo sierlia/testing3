@@ -12,19 +12,49 @@ export function CommitteesHome() {
   const [loading, setLoading] = useState(true);
   const [committees, setCommittees] = useState<CommitteeRow[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [role, setRole] = useState<"teacher" | "student" | null>(null);
+  const [settings, setSettings] = useState<any>({});
 
   useEffect(() => {
     const load = async () => {
       setLoading(true);
       try {
+        const { data: auth } = await supabase.auth.getUser();
+        const me = auth.user?.id;
+        if (!me) return;
+
+        const { data: profile } = await supabase.from("profiles").select("class_id,role").eq("user_id", me).maybeSingle();
+        const classId = (profile as any)?.class_id;
+        setRole(((profile as any)?.role ?? null) as any);
+        if (!classId) {
+          setCommittees([]);
+          return;
+        }
+
+        const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
+        setSettings((cls as any)?.settings ?? {});
+
         const { data: rows, error } = await supabase
           .from("committees")
           .select("id,name,description,created_at")
           .order("created_at", { ascending: true });
         if (error) throw error;
-        setCommittees((rows ?? []) as any);
 
-        const ids = (rows ?? []).map((r: any) => r.id);
+        const enabled = ((cls as any)?.settings?.committees?.enabled ?? []) as string[];
+        let finalRows = (rows ?? []) as any[];
+        if (((profile as any)?.role === "teacher") && finalRows.length === 0 && enabled.length > 0) {
+          const { data: seeded, error: sErr } = await supabase
+            .from("committees")
+            .insert(enabled.map((name) => ({ class_id: classId, name, description: "" })))
+            .select("id,name,description,created_at");
+          if (sErr) throw sErr;
+          finalRows = (seeded ?? []) as any[];
+          setCommittees(finalRows as any);
+        } else {
+          setCommittees(finalRows as any);
+        }
+
+        const ids = finalRows.map((r) => r.id);
         const { data: memRows } = await supabase
           .from("committee_members")
           .select("committee_id")
@@ -85,4 +115,3 @@ export function CommitteesHome() {
     </div>
   );
 }
-

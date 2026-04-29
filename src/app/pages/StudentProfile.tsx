@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import {
   Award,
@@ -55,6 +55,7 @@ export function StudentProfile() {
   const [billsAuthored, setBillsAuthored] = useState<any[]>([]);
   const [billsCosponsored, setBillsCosponsored] = useState<any[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string>("");
+  const [orgs, setOrgs] = useState<{ committees: Array<{ id: string; name: string }>; caucuses: Array<{ id: string; name: string }> }>({ committees: [], caucuses: [] });
 
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
   const [editingContent, setEditingContent] = useState<string>("");
@@ -121,6 +122,19 @@ export function StudentProfile() {
       setPartyDraftId(existingPartyId ?? null);
       setNewPartyDraft((pr.written_responses as any)?.new_party ?? undefined);
       setConstituencyDraftId((pr.written_responses as any)?.constituency_id ?? null);
+
+      const { data: cm } = await supabase
+        .from("committee_members")
+        .select("committee_id, committees!inner(id,name)")
+        .eq("user_id", uid);
+      const { data: ca } = await supabase
+        .from("caucus_members")
+        .select("caucus_id, caucuses!inner(id,title)")
+        .eq("user_id", uid);
+      setOrgs({
+        committees: (cm ?? []).map((r: any) => ({ id: r.committees.id, name: r.committees.name })),
+        caucuses: (ca ?? []).map((r: any) => ({ id: r.caucuses.id, name: r.caucuses.title })),
+      });
     })();
   }, [id]);
 
@@ -290,8 +304,7 @@ export function StudentProfile() {
     if (!c) return;
     mergeWrittenResponses({ constituency_id: c.id });
     await saveProfile({
-      constituency_name: c.name,
-      constituency_population: c.population,
+      constituency_name: c.id.toUpperCase(),
       constituency_cook_pvi: c.pvi,
       constituency_url: c.wikipediaUrl,
     } as any);
@@ -382,8 +395,7 @@ export function StudentProfile() {
                     )}
                   </div>
                   <div className="text-xs text-gray-500">
-                    Population: {profile.constituency_population?.toLocaleString?.() ?? "N/A"} • Cook PVI:{" "}
-                    {profile.constituency_cook_pvi || "N/A"}{" "}
+                    Cook PVI: {profile.constituency_cook_pvi || "N/A"}{" "}
                     {profile.constituency_url ? (
                       <a href={profile.constituency_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
                         Wikipedia
@@ -408,6 +420,7 @@ export function StudentProfile() {
               </button>
             )}
           </div>
+          <div className="text-xs italic text-gray-500 mb-2">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
           {editingSection === "personal_statement" ? (
             <div className="space-y-3">
               <MarkdownToolbar />
@@ -489,6 +502,7 @@ export function StudentProfile() {
               </button>
             )}
           </div>
+          <div className="text-xs italic text-gray-500 mb-2">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
           {editingSection === "constituency_description" ? (
             <div className="space-y-3">
               <MarkdownToolbar />
@@ -562,6 +576,7 @@ export function StudentProfile() {
               </button>
             )}
           </div>
+          <div className="text-xs italic text-gray-500 mb-2">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
           {editingSection === "key_issues" ? (
             <div className="space-y-3">
               <textarea
@@ -646,6 +661,47 @@ export function StudentProfile() {
           </div>
         </div>
 
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+          <div className="flex items-center gap-2 mb-4">
+            <Users className="w-5 h-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">Organizations</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm font-medium text-gray-900 mb-2">Committees</div>
+              {orgs.committees.length === 0 ? (
+                <div className="text-sm text-gray-500">None</div>
+              ) : (
+                <ul className="space-y-1">
+                  {orgs.committees.map((c) => (
+                    <li key={c.id} className="text-sm">
+                      <Link to={`/committees/${c.id}`} className="text-blue-600 hover:underline">
+                        {c.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <div className="text-sm font-medium text-gray-900 mb-2">Caucuses</div>
+              {orgs.caucuses.length === 0 ? (
+                <div className="text-sm text-gray-500">None</div>
+              ) : (
+                <ul className="space-y-1">
+                  {orgs.caucuses.map((c) => (
+                    <li key={c.id} className="text-sm">
+                      <Link to={`/caucuses/${c.id}`} className="text-blue-600 hover:underline">
+                        {c.name}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-2 mb-3">
             <Mail className="w-5 h-5 text-blue-600" />
@@ -725,4 +781,3 @@ export function StudentProfile() {
     </div>
   );
 }
-

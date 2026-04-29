@@ -42,7 +42,28 @@ export function PartiesPage() {
           .select("id,name,platform,approved,created_at")
           .order("created_at", { ascending: false });
         if (pErr) throw pErr;
-        setParties((partyRows ?? []) as any);
+        const rows = (partyRows ?? []) as any;
+
+        // Teacher: if no parties exist yet, initialize from class settings
+        const allowed = ((cls as any)?.settings?.parties?.allowed ?? []) as string[];
+        if (((profile as any)?.role === "teacher") && rows.length === 0 && allowed.length > 0) {
+          const { data: seeded, error: sErr } = await supabase
+            .from("parties")
+            .insert(
+              allowed.map((name) => ({
+                class_id: classId,
+                name,
+                platform: "",
+                created_by: me,
+                approved: true,
+              })),
+            )
+            .select("id,name,platform,approved,created_at");
+          if (sErr) throw sErr;
+          setParties((seeded ?? []) as any);
+        } else {
+          setParties(rows);
+        }
       } catch (e: any) {
         toast.error(e.message || "Could not load parties");
       } finally {
@@ -163,4 +184,3 @@ export function PartiesPage() {
     </div>
   );
 }
-

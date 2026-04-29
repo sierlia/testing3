@@ -1,14 +1,16 @@
 import { ChevronDown, Building2, LogOut, User } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
 import { useAuth } from "../utils/AuthContext";
+import { supabase } from "../utils/supabase";
 
 export function Navigation() {
   const [billPipelineOpen, setBillPipelineOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
 
   const handleSignOut = async () => {
     await signOut();
@@ -20,6 +22,18 @@ export function Navigation() {
     .map((n: string) => n[0])
     .join('')
     .toUpperCase() || 'U';
+
+  useEffect(() => {
+    const load = async () => {
+      if (!user?.id) {
+        setAvatarUrl(null);
+        return;
+      }
+      const { data } = await supabase.from("profiles").select("avatar_url").eq("user_id", user.id).maybeSingle();
+      setAvatarUrl((data as any)?.avatar_url ?? null);
+    };
+    void load();
+  }, [user?.id]);
 
   // Show navigation for bypassed users (when on dashboard but no user)
   const currentPath = window.location.pathname;
@@ -129,9 +143,13 @@ export function Navigation() {
             <div className="relative">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium hover:bg-blue-700 transition-colors"
+                className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium hover:bg-blue-700 transition-colors overflow-hidden"
               >
-                {userInitials}
+                {avatarUrl ? (
+                  <img src={avatarUrl} alt="Profile" className="w-8 h-8 object-cover" />
+                ) : (
+                  userInitials
+                )}
               </button>
               
               {userMenuOpen && user && (

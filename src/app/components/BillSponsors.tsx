@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Users, UserPlus, Star } from "lucide-react";
+import { Link } from "react-router";
 
 interface Sponsor {
   id: string;
@@ -71,7 +72,11 @@ export function BillSponsors({ sponsor, cosponsors, isUserCosponsor, currentUser
         </div>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="font-semibold text-gray-900">{sponsor.name}</h3>
+            <h3 className="font-semibold text-gray-900">
+              <Link to={`/profile/${sponsor.id}`} className="text-blue-600 hover:underline">
+                {sponsor.name}
+              </Link>
+            </h3>
             <p className="text-sm text-gray-600">
               {sponsor.party}
               {sponsor.constituency && ` • ${sponsor.constituency}`}
@@ -89,7 +94,11 @@ export function BillSponsors({ sponsor, cosponsors, isUserCosponsor, currentUser
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {cosponsors.map(cosponsor => (
               <div key={cosponsor.id} className="p-3 bg-gray-50 rounded-md border border-gray-200">
-                <h4 className="font-medium text-gray-900">{cosponsor.name}</h4>
+                <h4 className="font-medium text-gray-900">
+                  <Link to={`/profile/${cosponsor.id}`} className="text-blue-600 hover:underline">
+                    {cosponsor.name}
+                  </Link>
+                </h4>
                 <p className="text-sm text-gray-600">{cosponsor.party}</p>
               </div>
             ))}

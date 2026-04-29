@@ -6,7 +6,6 @@ export interface Constituency {
   name: string;
   code: string;
   pvi: string;
-  population: number;
   wikipediaUrl: string;
 }
 
@@ -104,14 +103,12 @@ function generateDummyDistricts(): Constituency[] {
       const id = `${state.abbr.toLowerCase()}-${districtNum}`;
       const r = hashStringToUnitInterval(id);
       const randomPVI = pviOptions[Math.floor(r * pviOptions.length)];
-      const randomPopulation = Math.floor(650000 + r * (800000 - 650000));
       
       districts.push({
         id,
         name: `${state.name}'s ${i}${getOrdinalSuffix(i)} Congressional District`,
         code: `(${state.abbr}-${districtNum})`,
         pvi: randomPVI,
-        population: randomPopulation,
         wikipediaUrl: `https://en.wikipedia.org/wiki/${state.name}%27s_${i}${getOrdinalSuffix(i)}_congressional_district`,
       });
     }
@@ -142,7 +139,6 @@ export function ConstituencyPicker({
       name: "Alabama's 1st Congressional District",
       code: "(AL-01)",
       pvi: "R+27",
-      population: 760389,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_1st_congressional_district",
     },
     {
@@ -150,7 +146,6 @@ export function ConstituencyPicker({
       name: "Alabama's 2nd Congressional District",
       code: "(AL-02)",
       pvi: "D+5",
-      population: 703362,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_2nd_congressional_district",
     },
     {
@@ -158,7 +153,6 @@ export function ConstituencyPicker({
       name: "Alabama's 3rd Congressional District",
       code: "(AL-03)",
       pvi: "R+23",
-      population: 737665,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_3rd_congressional_district",
     },
     {
@@ -166,7 +160,6 @@ export function ConstituencyPicker({
       name: "Alabama's 4th Congressional District",
       code: "(AL-04)",
       pvi: "R+33",
-      population: 735310,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_4th_congressional_district",
     },
     {
@@ -174,7 +167,6 @@ export function ConstituencyPicker({
       name: "Alabama's 5th Congressional District",
       code: "(AL-05)",
       pvi: "R+15",
-      population: 773877,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_5th_congressional_district",
     },
     {
@@ -182,7 +174,6 @@ export function ConstituencyPicker({
       name: "Alabama's 6th Congressional District",
       code: "(AL-06)",
       pvi: "R+20",
-      population: 728184,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_6th_congressional_district",
     },
     {
@@ -190,7 +181,6 @@ export function ConstituencyPicker({
       name: "Alabama's 7th Congressional District",
       code: "(AL-07)",
       pvi: "D+13",
-      population: 718912,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_7th_congressional_district",
     },
   ];
@@ -271,9 +261,7 @@ export function ConstituencyPicker({
                       <p className="text-sm text-gray-600 mb-1">
                         PVI: {constituency.pvi}
                       </p>
-                      <p className="text-xs text-gray-500">
-                        Population: {constituency.population.toLocaleString()}
-                      </p>
+
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
@@ -313,7 +301,6 @@ export function getConstituencyById(id: string | null | undefined) {
       name: "Alabama's 1st Congressional District",
       code: "(AL-01)",
       pvi: "R+14",
-      population: 718074,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_1st_congressional_district",
     },
     {
@@ -321,7 +308,6 @@ export function getConstituencyById(id: string | null | undefined) {
       name: "Alabama's 2nd Congressional District",
       code: "(AL-02)",
       pvi: "R+12",
-      population: 718128,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_2nd_congressional_district",
     },
     {
@@ -329,7 +315,6 @@ export function getConstituencyById(id: string | null | undefined) {
       name: "Alabama's 3rd Congressional District",
       code: "(AL-03)",
       pvi: "R+16",
-      population: 719200,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_3rd_congressional_district",
     },
     {
@@ -337,7 +322,6 @@ export function getConstituencyById(id: string | null | undefined) {
       name: "Alabama's 4th Congressional District",
       code: "(AL-04)",
       pvi: "R+30",
-      population: 718408,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_4th_congressional_district",
     },
     {
@@ -345,7 +329,6 @@ export function getConstituencyById(id: string | null | undefined) {
       name: "Alabama's 5th Congressional District",
       code: "(AL-05)",
       pvi: "R+18",
-      population: 773877,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_5th_congressional_district",
     },
     {
@@ -353,7 +336,6 @@ export function getConstituencyById(id: string | null | undefined) {
       name: "Alabama's 6th Congressional District",
       code: "(AL-06)",
       pvi: "R+20",
-      population: 728184,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_6th_congressional_district",
     },
     {
@@ -361,7 +343,6 @@ export function getConstituencyById(id: string | null | undefined) {
       name: "Alabama's 7th Congressional District",
       code: "(AL-07)",
       pvi: "D+13",
-      population: 718912,
       wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_7th_congressional_district",
     },
   ];

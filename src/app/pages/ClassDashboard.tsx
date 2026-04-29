@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { 
+import {
   Gavel, 
   ArrowLeft, 
   Users, 
@@ -19,6 +19,7 @@ import {
   Settings,
   Bell
 } from 'lucide-react';
+import { supabase } from '../utils/supabase';
 
 interface StudentActivity {
   id: string;
@@ -38,6 +39,20 @@ interface CalendarEvent {
 export function ClassDashboard() {
   const { classId } = useParams();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const setActive = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || !classId) return;
+      await supabase.from('profiles').upsert({
+        user_id: user.id,
+        class_id: classId,
+        role: 'teacher',
+        display_name: user.user_metadata?.name ?? null,
+      });
+    };
+    void setActive();
+  }, [classId]);
 
   // Mock class data based on ID
   const className = classId === '1' ? 'super amazing class' : 'testing class 123';

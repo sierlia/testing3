@@ -11,7 +11,9 @@ interface Caucus {
   name: string;
   description: string;
   memberCount: number;
+  chairId: string | null;
   chair: { name: string; party: string; image: string | null };
+  coChairId: string | null;
   coChair: { name: string; party: string; image: string | null };
   isMember: boolean;
   createdAt: string;
@@ -77,14 +79,16 @@ export function TessCaucuses() {
             name: c.title,
             description: c.description ?? "",
             memberCount: members.length,
+            chairId: chair?.user_id ?? null,
             chair: {
-              name: chairProfile?.display_name ?? "Chair",
-              party: (chairProfile?.party ?? "").toString(),
+              name: chairProfile?.display_name ?? "N/A",
+              party: (chairProfile?.party ?? "N/A").toString(),
               image: chairProfile?.avatar_url ?? null,
             },
+            coChairId: coChair?.user_id ?? null,
             coChair: {
-              name: coChairProfile?.display_name ?? "—",
-              party: (coChairProfile?.party ?? "").toString(),
+              name: coChairProfile?.display_name ?? "N/A",
+              party: (coChairProfile?.party ?? "N/A").toString(),
               image: coChairProfile?.avatar_url ?? null,
             },
             isMember: members.some((m: any) => m.user_id === me),
@@ -322,9 +326,27 @@ export function TessCaucuses() {
                     <span>{caucus.memberCount} members</span>
                   </div>
                   <span>•</span>
-                  <span>Chair: {caucus.chair.name}</span>
+                  <span>
+                    Chair:{" "}
+                    {caucus.chairId ? (
+                      <Link to={`/profile/${caucus.chairId}`} className="text-blue-600 hover:underline">
+                        {caucus.chair.name}
+                      </Link>
+                    ) : (
+                      "N/A"
+                    )}
+                  </span>
                   <span>•</span>
-                  <span>Co-Chair: {caucus.coChair.name}</span>
+                  <span>
+                    Co-Chair:{" "}
+                    {caucus.coChairId ? (
+                      <Link to={`/profile/${caucus.coChairId}`} className="text-blue-600 hover:underline">
+                        {caucus.coChair.name}
+                      </Link>
+                    ) : (
+                      "N/A"
+                    )}
+                  </span>
                 </div>
               </div>
             ))

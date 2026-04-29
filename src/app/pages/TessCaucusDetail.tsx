@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { Save, X, Users as UsersIcon, Send, Pencil, User } from "lucide-react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 
@@ -391,7 +391,10 @@ export function TessCaucusDetail() {
                       >
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
-                          {a.author?.display_name ?? "Unknown"} • {new Date(a.created_at).toLocaleString()}
+                          <Link to={`/profile/${a.author_user_id}`} className="text-blue-600 hover:underline">
+                            {a.author?.display_name ?? "Unknown"}
+                          </Link>{" "}
+                          • {new Date(a.created_at).toLocaleString()}
                         </div>
                       </button>
                     ))
@@ -404,7 +407,10 @@ export function TessCaucusDetail() {
                       <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
                         <div className="text-sm text-gray-900 whitespace-pre-line">{selectedAnnouncement.body}</div>
                         <div className="text-xs text-gray-500 mt-2">
-                          {selectedAnnouncement.author?.display_name ?? "Unknown"} •{" "}
+                          <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className="text-blue-600 hover:underline">
+                            {selectedAnnouncement.author?.display_name ?? "Unknown"}
+                          </Link>{" "}
+                          •{" "}
                           {new Date(selectedAnnouncement.created_at).toLocaleString()}
                         </div>
                       </div>
@@ -425,7 +431,9 @@ export function TessCaucusDetail() {
                               )}
                               <div className="flex-1">
                                 <div className="text-sm text-gray-900">
-                                  <span className="font-medium">{c.author?.display_name ?? "Unknown"}</span>{" "}
+                                  <Link to={`/profile/${c.author_user_id}`} className="font-medium text-blue-600 hover:underline">
+                                    {c.author?.display_name ?? "Unknown"}
+                                  </Link>{" "}
                                   <span className="text-xs text-gray-500">
                                     • {new Date(c.created_at).toLocaleString()}
                                   </span>
@@ -485,9 +493,13 @@ export function TessCaucusDetail() {
                       </div>
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="text-sm font-medium text-gray-900 truncate">{m.profile?.display_name ?? "Member"}</div>
+                      <div className="text-sm font-medium truncate">
+                        <Link to={`/profile/${m.user_id}`} className="text-blue-600 hover:underline">
+                          {m.profile?.display_name ?? "Member"}
+                        </Link>
+                      </div>
                       <div className="text-xs text-gray-500 truncate">
-                        {m.profile?.constituency_name ?? "—"} • {m.profile?.party ?? "—"}
+                        {m.profile?.constituency_name ?? "N/A"} • {m.profile?.party ?? "N/A"}
                       </div>
                     </div>
                     <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>
@@ -500,4 +512,3 @@ export function TessCaucusDetail() {
     </div>
   );
 }
-

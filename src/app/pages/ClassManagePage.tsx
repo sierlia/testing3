@@ -22,6 +22,16 @@ export function ClassManagePage() {
 
   const loadClassData = async () => {
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user && classId) {
+        await supabase.from('profiles').upsert({
+          user_id: user.id,
+          class_id: classId,
+          role: 'teacher',
+          display_name: user.user_metadata?.name ?? null,
+        });
+      }
+
       const { data: cls, error: cErr } = await supabase.from('classes').select('id,name,class_code,created_at,settings').eq('id', classId).single();
       if (cErr) throw cErr;
       setClassDetails({ id: cls.id, name: cls.name, joinCode: cls.class_code, createdAt: cls.created_at, description: cls.settings?.description ?? '' });
