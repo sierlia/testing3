@@ -6,6 +6,7 @@ import { supabase } from "../utils/supabase";
 import { Users, Send, User, Pencil, Save, X } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
+import { pushLocalNotification } from "../utils/notifications";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
@@ -209,6 +210,18 @@ export function CommitteeDashboard() {
             ...prev,
             [comment.announcement_id]: [...(prev[comment.announcement_id] ?? []), comment],
           }));
+
+          if (meId && row.author_user_id !== meId) {
+            const ann = announcements.find((a) => a.id === row.announcement_id);
+            if (ann?.author_user_id === meId) {
+              pushLocalNotification({
+                kind: "comment",
+                title: `New comment in ${committee?.name ?? "committee"}`,
+                message: `${(author as any)?.display_name ?? "Someone"} commented on your announcement`,
+                href: `/committees/${committeeId}`,
+              });
+            }
+          }
         },
       )
       .on(
@@ -225,6 +238,18 @@ export function CommitteeDashboard() {
             if (uid === meId) mine.add(emoji);
             return { ...prev, [announcementId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
           });
+
+          if (meId && row.user_id !== meId) {
+            const ann = announcements.find((a) => a.id === announcementId);
+            if (ann?.author_user_id === meId) {
+              pushLocalNotification({
+                kind: "reaction",
+                title: `Reaction in ${committee?.name ?? "committee"}`,
+                message: `Someone reacted ${row.emoji} to your announcement`,
+                href: `/committees/${committeeId}`,
+              });
+            }
+          }
         },
       )
       .on(
@@ -261,6 +286,19 @@ export function CommitteeDashboard() {
             if (uid === meId) mine.add(emoji);
             return { ...prev, [commentId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
           });
+
+          if (meId && row.user_id !== meId) {
+            const all = Object.values(commentsByAnnouncement).flat();
+            const target = all.find((c) => c.id === commentId);
+            if (target?.author_user_id === meId) {
+              pushLocalNotification({
+                kind: "reaction",
+                title: `Reaction in ${committee?.name ?? "committee"}`,
+                message: `Someone reacted ${row.emoji} to your comment`,
+                href: `/committees/${committeeId}`,
+              });
+            }
+          }
         },
       )
       .on(
@@ -341,6 +379,19 @@ export function CommitteeDashboard() {
   const toggleAnnouncementReaction = async (announcementId: string, emoji: ReactionEmoji) => {
     if (!meId) return;
     const mine = announcementReactions[announcementId]?.mine?.has(emoji) ?? false;
+    setAnnouncementReactions((prev) => {
+      const cur = prev[announcementId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
+      const nextMine = new Set(cur.mine);
+      const nextCounts = { ...cur.counts };
+      if (mine) {
+        nextMine.delete(emoji);
+        nextCounts[emoji] = Math.max(0, (nextCounts[emoji] ?? 0) - 1);
+      } else {
+        nextMine.add(emoji);
+        nextCounts[emoji] = (nextCounts[emoji] ?? 0) + 1;
+      }
+      return { ...prev, [announcementId]: { counts: nextCounts, mine: nextMine } };
+    });
     try {
       if (mine) {
         const { error } = await supabase
@@ -360,6 +411,19 @@ export function CommitteeDashboard() {
         if (error) throw error;
       }
     } catch (e: any) {
+      setAnnouncementReactions((prev) => {
+        const cur = prev[announcementId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
+        const nextMine = new Set(cur.mine);
+        const nextCounts = { ...cur.counts };
+        if (!mine) {
+          nextMine.delete(emoji);
+          nextCounts[emoji] = Math.max(0, (nextCounts[emoji] ?? 0) - 1);
+        } else {
+          nextMine.add(emoji);
+          nextCounts[emoji] = (nextCounts[emoji] ?? 0) + 1;
+        }
+        return { ...prev, [announcementId]: { counts: nextCounts, mine: nextMine } };
+      });
       toast.error(e.message || "Could not react");
     }
   };
@@ -367,6 +431,19 @@ export function CommitteeDashboard() {
   const toggleCommentReaction = async (commentId: string, emoji: ReactionEmoji) => {
     if (!meId) return;
     const mine = commentReactions[commentId]?.mine?.has(emoji) ?? false;
+    setCommentReactions((prev) => {
+      const cur = prev[commentId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
+      const nextMine = new Set(cur.mine);
+      const nextCounts = { ...cur.counts };
+      if (mine) {
+        nextMine.delete(emoji);
+        nextCounts[emoji] = Math.max(0, (nextCounts[emoji] ?? 0) - 1);
+      } else {
+        nextMine.add(emoji);
+        nextCounts[emoji] = (nextCounts[emoji] ?? 0) + 1;
+      }
+      return { ...prev, [commentId]: { counts: nextCounts, mine: nextMine } };
+    });
     try {
       if (mine) {
         const { error } = await supabase
@@ -385,6 +462,19 @@ export function CommitteeDashboard() {
         if (error) throw error;
       }
     } catch (e: any) {
+      setCommentReactions((prev) => {
+        const cur = prev[commentId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
+        const nextMine = new Set(cur.mine);
+        const nextCounts = { ...cur.counts };
+        if (!mine) {
+          nextMine.delete(emoji);
+          nextCounts[emoji] = Math.max(0, (nextCounts[emoji] ?? 0) - 1);
+        } else {
+          nextMine.add(emoji);
+          nextCounts[emoji] = (nextCounts[emoji] ?? 0) + 1;
+        }
+        return { ...prev, [commentId]: { counts: nextCounts, mine: nextMine } };
+      });
       toast.error(e.message || "Could not react");
     }
   };
