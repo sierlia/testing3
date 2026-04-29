@@ -19,22 +19,19 @@ export function JoinClassPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return navigate('/signin');
 
-      const { data: classRow, error: classError } = await supabase
-        .from('classes')
-        .select('id, name')
-        .eq('class_code', joinCode.toUpperCase())
-        .single();
-      if (classError || !classRow) throw new Error('Invalid class code');
-
-      const { error: profileError } = await supabase.from('profiles').upsert({
-        user_id: user.id,
-        class_id: classRow.id,
-        role: 'student',
-        display_name: user.user_metadata?.name ?? null,
+      const { data: joined, error: joinError } = await supabase.rpc('join_class_by_code', {
+        join_code_input: joinCode.toUpperCase(),
       });
+      if (joinError) throw joinError;
+      const row = joined?.[0];
+      if (!row) throw new Error('Invalid class code');
+
+      const { error: profileError } = await supabase.from('profiles').update({
+        display_name: user.user_metadata?.name ?? null,
+      }).eq('user_id', user.id);
       if (profileError) throw profileError;
 
-      toast.success(`Joined ${classRow.name}`);
+      toast.success(`Joined ${row.class_name}`);
       navigate('/dashboard');
     } catch (error: any) {
       toast.error(error.message || 'Could not join class');

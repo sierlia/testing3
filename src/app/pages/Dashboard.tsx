@@ -13,7 +13,7 @@ export function Dashboard() {
   useEffect(() => { (async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return navigate('/signin');
-    const { data: profile } = await supabase.from('profiles').select('class_id').eq('user_id', user.id).single();
+    const { data: profile } = await supabase.from('profiles').select('class_id').eq('user_id', user.id).maybeSingle();
     if (!profile?.class_id) { setLoading(false); return; }
     const { data: cls } = await supabase.from('classes').select('id,name,class_code').eq('id', profile.class_id).single();
     setJoinedClass(cls as any); setLoading(false);
