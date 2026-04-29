@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { EditorContent, useEditor } from "@tiptap/react";
-import StarterKit from "@tiptap/starter-kit";
+import Document from "@tiptap/extension-document";
+import Paragraph from "@tiptap/extension-paragraph";
+import Text from "@tiptap/extension-text";
+import Bold from "@tiptap/extension-bold";
+import Italic from "@tiptap/extension-italic";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import * as Y from "yjs";
@@ -78,10 +82,15 @@ export function CollaborativeBillEditor({
       ? {
           editable,
           extensions: [
-            StarterKit.configure({ history: false }),
+            // Explicit base schema to avoid "Schema is missing its top node type ('doc')" crashes.
+            Document,
+            Paragraph,
+            Text,
+            Bold,
+            Italic,
             Collaboration.configure({
-              document: ydocRef.current,
-              field: "prosemirror",
+              // Use a named fragment so multiple editors don't collide.
+              fragment: ydocRef.current.getXmlFragment("prosemirror"),
             }),
             CollaborationCursor.configure({
               provider: { awareness: awarenessRef.current } as any,
