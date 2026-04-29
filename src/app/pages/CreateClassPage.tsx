@@ -14,6 +14,14 @@ function generateClassCode() {
   return Array.from({ length: 6 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
 }
 
+
+async function ensureClassesTableExists() {
+  const { error } = await supabase.from('classes').select('id').limit(1);
+  if (error && (error as any).code === 'PGRST205') {
+    throw new Error("Database is not initialized yet. Run Supabase migrations first (supabase link --project-ref qrtccdwxolfuuucadosa && supabase db push).");
+  }
+}
+
 export function CreateClassPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
@@ -45,6 +53,8 @@ export function CreateClassPage() {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return navigate('/signin');
+
+      await ensureClassesTableExists();
 
       const settings = {
         description: formData.description,
