@@ -105,7 +105,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/bills",
-    Component: AllBills,
+    Component: TessBills,
   },
   {
     path: "/tess-bills",
@@ -133,7 +133,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/caucuses",
-    Component: Caucuses,
+    Component: TessCaucuses,
   },
   {
     path: "/tess-caucuses",
@@ -141,7 +141,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/caucuses/:id",
-    Component: CaucusDetail,
+    Component: TessCaucusDetail,
   },
   {
     path: "/tess-caucuses/:id",
