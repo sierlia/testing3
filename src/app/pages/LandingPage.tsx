@@ -18,7 +18,7 @@ export function LandingPage() {
               <Link to="/signin">Sign In</Link>
             </Button>
             <Button asChild>
-              <Link to="/signup">Get Started</Link>
+              <Link to="/signup">Sign Up</Link>
             </Button>
           </div>
         </div>
@@ -111,7 +111,7 @@ export function LandingPage() {
         <div className="mt-20 text-center">
           <Card className="max-w-2xl mx-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white border-0">
             <CardHeader>
-              <CardTitle className="text-3xl text-white">Ready to Get Started?</CardTitle>
+              <CardTitle className="text-3xl text-white">Ready to Sign Up?</CardTitle>
               <CardDescription className="text-blue-100">
                 Create your free account and launch your first simulation in minutes
               </CardDescription>

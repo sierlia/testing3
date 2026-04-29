@@ -1,476 +1,89 @@
-import { useState } from "react";
-import { Navigation } from "../components/Navigation";
-import {
-  User,
-  MapPin,
-  Flag,
-  Award,
-  FileText,
-  Users,
-  Mail,
-  Send,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react";
-import { useParams } from "react-router";
-import tessLinImage from "figma:asset/966ec4d05f8fbeb48998b857574fc6613b388aae.png";
+import { useEffect, useMemo, useState } from 'react';
+import { useParams } from 'react-router';
+import { Navigation } from '../components/Navigation';
+import { supabase } from '../utils/supabase';
+import { MapPin, Flag, PenSquare, Save, X } from 'lucide-react';
+import constituencies from '../data/constituencies.json';
 
 export function StudentProfile() {
   const { id } = useParams();
-  const [showLetterModal, setShowLetterModal] = useState(false);
-  const [letterContent, setLetterContent] = useState("");
-  const [showFullStatement, setShowFullStatement] = useState(false);
-  const [showFullConstituency, setShowFullConstituency] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+  const [billsAuthored, setBillsAuthored] = useState<any[]>([]);
+  const [billsCosponsored, setBillsCosponsored] = useState<any[]>([]);
+  const [memberships, setMemberships] = useState<any[]>([]);
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draft, setDraft] = useState<any>({});
 
-  const profiles: Record<string, any> = {
-    "1": {
-      id: "1",
-      name: "Alice Johnson",
-      constituency: "District 1",
-      party: "Democratic",
-      leadershipRoles: [
-        "Committee Chair - Education",
-        "Party Whip",
-      ],
-      personalStatement:
-        "I am committed to improving education access and quality for all students in our district. My background in public policy has prepared me to advocate effectively for needed reforms.",
-      constituencyDescription:
-        "District 1 comprises suburban communities with a diverse population. Key issues include education funding, environmental protection, and healthcare access. The district has strong school systems but faces challenges with aging infrastructure.",
-      keyIssues: [],
-      billsWritten: [
-        {
-          id: "1",
-          number: "H.R. 101",
-          title: "Education Funding Enhancement Act",
-          status: "In Committee",
-        },
-        {
-          id: "2",
-          number: "H.R. 115",
-          title: "School Infrastructure Modernization Act",
-          status: "Draft",
-        },
-      ],
-      billsCosponsored: [
-        {
-          id: "3",
-          number: "H.R. 102",
-          title: "Clean Energy Investment Act",
-          sponsor: "Bob Smith",
-        },
-      ],
-      groups: [
-        {
-          type: "committee",
-          name: "Education Committee",
-          role: "Chair",
-        },
-        {
-          type: "caucus",
-          name: "Education Reform Coalition",
-          role: "Member",
-        },
-      ],
-      lettersWritten: 3,
-    },
-    "6": {
-      id: "6",
-      name: "Tess Lin",
-      constituency: "California's 22nd District",
-      party: "Democratic Party",
-      profileImage: tessLinImage,
-      leadershipRoles: [],
-      personalStatement:
-        "I am honored to represent California's 22nd District in Congress and help the hardworking people of one of our nation's largest agricultural districts achieve the standard of living they afford to the rest of the country.\n\nAs a Democrat, my priorities lie in protecting public health and safety. In light of the illegal biolab discovered in Reedley and the newly reported suspected biolab investigation in Las Vegas, I will push to strengthen federal oversight of select agents and toxins and improve coordination among local, state, and federal agencies so dangerous materials cannot be stored or handled in our communities without oversight. I will also support efforts to protect and strengthen Medicaid or expand access to care in rural areas.\n\nFurthermore, I will fight for water reliability, including solutions for failing wells and land subsidence. Modernizing federal water and infrastructure investments, cutting red tape that slows down repairs, and securing funding and technical support to help local groundwater users comply with California's evolving groundwater pumping requirements without crushing family farms and small communities are high on my agenda.\n\nFinally, I will support all workable legislation that lowers costs for working families, along with cost-of-living policies that help people afford housing, groceries, energy, and child care.\n\nSBA data shows that 1 in 2 of employees in California's 22nd Congressional District work for small businesses. I'm excited to join the Small Business Committee and support the small businesses that are the backbone of CA-22's economy.",
-      constituencyDescription:
-        "Representative: David Valadao, Republican\n\nDistribution: Largely rural, with half of cities/CDPs having a population under 10,000 and only one city with a population over 70,000.\n\nPopulation: 770,684\n\nMedian household income: $60,072\n\nEthnicity:\n73.2% Hispanic\n15.8% White\n4.5% Black\n3.6% Asian\n1.8% Two or more races\n1.1% other\n\nCook PVI: R+1",
-      keyIssues: [
-        "Medicaid (CA-22 has the highest Medicaid enrollment rate in the U.S.)",
-        "Cost of living (for similar reasons)",
-        "Agriculture (CA-22 is largely agricultural)",
-        "Wells/subsidence (Central Valley basin)",
-      ],
-      billsWritten: [
-        {
-          id: "1",
-          number: "H.R. 1",
-          title: "Laboratory Accountability, Biosafety, and Security Access and Facility Enforcement (LABSAFE) Act",
-          status: "Clerk's Desk",
-        },
-        {
-          id: "2",
-          number: "H.R. 2",
-          title: "Critical Water Infrastructure Protection and Drought Resilience Act",
-          status: "Clerk's Desk",
-        },
-        {
-          id: "3",
-          number: "H.R. 3",
-          title: "Basin Reporting, Impact mitigation, and Dispute resolution through Governance support and Equipment (BRIDGE) Pilot Act",
-          status: "Clerk's Desk",
-        },
-      ],
-      billsCosponsored: [],
-      groups: [],
-      lettersWritten: 0,
-    },
-  };
+  const allParties = useMemo(() => ['Democrat', 'Republican', 'Independent', 'Green', 'Libertarian'], []);
 
-  const profile = profiles[id || "1"] || profiles["1"];
+  useEffect(() => { (async () => {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = id === 'me' || !id ? auth.user?.id : id;
+    if (!uid) return;
 
-  const handleSendLetter = () => {
-    if (letterContent.trim()) {
-      console.log("Sending letter:", letterContent);
-      alert("Dear Colleague Letter sent!");
-      setShowLetterModal(false);
-      setLetterContent("");
+    const { data: p } = await supabase.from('profiles').select('*').eq('user_id', uid).maybeSingle();
+    setProfile(p ?? { user_id: uid, display_name: '', party: null, constituency_name: null, personal_statement: '' });
+
+    const { data: ba } = await supabase.from('bill_display').select('id,hr_label,title,status').eq('author_user_id', uid).order('bill_number');
+    setBillsAuthored(ba ?? []);
+
+    const { data: bc } = await supabase
+      .from('bill_cosponsors')
+      .select('bill_id,bills!inner(id,title,bill_number,status)')
+      .eq('user_id', uid);
+    setBillsCosponsored((bc ?? []).map((r:any)=>({id:r.bills.id,hr_label:`H.R. ${r.bills.bill_number}`,title:r.bills.title,status:r.bills.status})));
+
+    const classId = p?.class_id;
+    if (classId) {
+      const { data: cm } = await supabase.from('class_memberships').select('class_id,role').eq('user_id', uid);
+      setMemberships(cm ?? []);
     }
+  })(); }, [id]);
+
+  const saveField = async (field: string) => {
+    const next = { ...profile, [field]: draft[field] };
+    const { error } = await supabase.from('profiles').upsert({ user_id: profile.user_id, [field]: draft[field], role: profile.role ?? 'student', class_id: profile.class_id ?? null });
+    if (!error) setProfile(next);
+    setEditing(null);
   };
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
+  const selectConstituency = async (c: any) => {
+    const patch = { constituency_name: c.name, constituency_url: c.wikipedia_url || null, constituency_population: c.population, constituency_cook_pvi: c.cook_pvi };
+    await supabase.from('profiles').upsert({ user_id: profile.user_id, ...patch, role: profile.role ?? 'student', class_id: profile.class_id ?? null });
+    setProfile({ ...profile, ...patch });
+    setEditing(null);
+  };
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Header card */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-4">
-              {profile.profileImage ? (
-                <img 
-                  src={profile.profileImage} 
-                  alt={profile.name}
-                  className="w-16 h-16 rounded-full object-cover"
-                />
-              ) : (
-                <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
-                  <User className="w-8 h-8 text-white" />
-                </div>
-              )}
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                  {profile.name}
-                </h1>
-                <div className="space-y-1 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4" />
-                    <span>{profile.constituency}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Flag className="w-4 h-4" />
-                    <span>{profile.party}</span>
-                  </div>
-                </div>
-                {profile.leadershipRoles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-3">
-                    {profile.leadershipRoles.map((role) => (
-                      <span
-                        key={role}
-                        className="text-xs px-2 py-1 bg-purple-100 text-purple-700 rounded font-medium"
-                      >
-                        {role}
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            <button
-              onClick={() => setShowLetterModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-            >
-              <Mail className="w-4 h-4" />
-              Send Dear Colleague Letter
-            </button>
+  if (!profile) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+
+  return <div className="min-h-screen bg-gray-50"><Navigation />
+    <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+      <div className="bg-white rounded-lg border p-6">
+        <div className="flex items-start justify-between"><div>
+          <div className="flex items-center gap-2"><h1 className="text-2xl font-bold">{profile.display_name || 'N/A'}</h1><button onClick={()=>{setDraft({...draft,display_name:profile.display_name||''});setEditing('display_name')}}><PenSquare className="w-4 h-4 text-gray-500"/></button></div>
+          <div className="mt-2 text-sm text-gray-700 space-y-1">
+            <div className="flex items-center gap-2"><MapPin className="w-4 h-4" /><span>{profile.constituency_name || 'N/A'}</span><button onClick={()=>setEditing('constituency')} className="text-blue-600">Select District</button></div>
+            <div className="flex items-center gap-2"><Flag className="w-4 h-4" /><span>{profile.party || 'N/A'}</span><button onClick={()=>setEditing('party')} className="text-blue-600">Select Party</button></div>
           </div>
-        </div>
+        </div></div>
+      </div>
 
-        {/* Personal statement */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Personal Statement
-            </h2>
-            {profile.id === "6" && (
-              <span className="text-xs italic text-gray-500">2/23/2026</span>
-            )}
-          </div>
-          <div className="space-y-2">
-            {profile.personalStatement.split("\n\n").length > 1 ? (
-              <>
-                <div className={showFullStatement ? "" : "relative pb-6"}>
-                  {showFullStatement ? (
-                    <div className="text-gray-700 space-y-4">
-                      {profile.personalStatement.split("\n\n").map((para, index) => (
-                        <p key={index}>{para}</p>
-                      ))}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="text-gray-700 space-y-4">
-                        {profile.personalStatement.split("\n\n").slice(0, 2).map((para, index) => (
-                          <p key={index}>{para}</p>
-                        ))}
-                      </div>
-                      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none" />
-                    </>
-                  )}
-                </div>
-                <button
-                  onClick={() => setShowFullStatement(!showFullStatement)}
-                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 transition-colors relative z-10"
-                >
-                  {showFullStatement ? (
-                    <>
-                      Show less <ChevronUp className="w-4 h-4" />
-                    </>
-                  ) : (
-                    <>
-                      Show more <ChevronDown className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </>
-            ) : (
-              <p className="text-gray-700">{profile.personalStatement}</p>
-            )}
-          </div>
-        </div>
+      <div className="bg-white rounded-lg border p-6"><div className="flex items-center gap-2 mb-2"><h2 className="font-semibold">Personal Statement</h2><button onClick={()=>{setDraft({...draft,personal_statement:profile.personal_statement||''});setEditing('personal_statement')}}><PenSquare className="w-4 h-4 text-gray-500"/></button></div><p className="text-gray-700 whitespace-pre-wrap">{profile.personal_statement || 'N/A'}</p></div>
 
-        {/* Constituency description */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold text-gray-900">
-              Constituency Description
-            </h2>
-            {profile.id === "6" && (
-              <span className="text-xs italic text-gray-500">2/23/2026</span>
-            )}
-          </div>
-          <div className="space-y-2">
-            {profile.constituencyDescription.split("\n\n").length > 1 ? (
-              <>
-                <div className={showFullConstituency ? "" : "relative pb-6"}>
-                  {showFullConstituency ? (
-                    <div className="text-gray-700 space-y-4 whitespace-pre-line">
-                      {profile.constituencyDescription}
-                    </div>
-                  ) : (
-                    <>
-                      <div className="text-gray-700 whitespace-pre-line">
-                        {profile.constituencyDescription.split("\n\n")[0]}
-                      </div>
-                      <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none" />
-                    </>
-                  )}
-                </div>
-                <button
-                  onClick={() => setShowFullConstituency(!showFullConstituency)}
-                  className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 transition-colors relative z-10"
-                >
-                  {showFullConstituency ? (
-                    <>
-                      Show less <ChevronUp className="w-4 h-4" />
-                    </>
-                  ) : (
-                    <>
-                      Show more <ChevronDown className="w-4 h-4" />
-                    </>
-                  )}
-                </button>
-              </>
-            ) : (
-              <p className="text-gray-700 whitespace-pre-line">{profile.constituencyDescription}</p>
-            )}
-          </div>
-        </div>
+      <div className="grid md:grid-cols-2 gap-6">
+        <div className="bg-white rounded-lg border p-6"><h3 className="font-semibold mb-3">Legislation Written</h3>{billsAuthored.length===0?<p className="text-sm text-gray-500">N/A</p>:<ul className="space-y-2 text-sm">{billsAuthored.map((b:any)=><li key={b.id}>{b.hr_label}: {b.title}</li>)}</ul>}</div>
+        <div className="bg-white rounded-lg border p-6"><h3 className="font-semibold mb-3">Legislation Cosponsored</h3>{billsCosponsored.length===0?<p className="text-sm text-gray-500">N/A</p>:<ul className="space-y-2 text-sm">{billsCosponsored.map((b:any)=><li key={b.id}>{b.hr_label}: {b.title}</li>)}</ul>}</div>
+      </div>
 
-        {/* Key Issues */}
-        {profile.keyIssues && profile.keyIssues.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-lg font-semibold text-gray-900">
-                Key Issues
-              </h2>
-              {profile.id === "6" && (
-                <span className="text-xs italic text-gray-500">2/23/2026</span>
-              )}
-            </div>
-            <ul className="space-y-2">
-              {profile.keyIssues.map((issue, index) => (
-                <li key={index} className="text-gray-700 flex items-start">
-                  <span className="mr-2">•</span>
-                  <span>{issue}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
+      <div className="bg-white rounded-lg border p-6"><h3 className="font-semibold mb-3">Groups & Memberships</h3>{memberships.length===0?<p className="text-sm text-gray-500">N/A</p>:<ul className="text-sm space-y-1">{memberships.map((m:any,idx:number)=><li key={idx}>Class {m.class_id.slice(0,8)} ({m.role})</li>)}</ul>}</div>
+    </main>
 
-        {/* Activity panels */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          {/* Legislation written */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <FileText className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">
-                Legislation Written
-              </h2>
-            </div>
-            <div className="space-y-3">
-              {profile.billsWritten.map((bill) => (
-                <div
-                  key={bill.id}
-                  className="p-3 bg-gray-50 rounded-md"
-                >
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="font-mono text-sm font-semibold text-gray-900">
-                      {bill.number}
-                    </span>
-                    <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                      {bill.status}
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-700">
-                    {bill.title}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Legislation cosponsored */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Award className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">
-                Legislation Cosponsored
-              </h2>
-            </div>
-            {profile.billsCosponsored.length > 0 ? (
-              <div className="space-y-3">
-                {profile.billsCosponsored.map((bill) => (
-                  <div
-                    key={bill.id}
-                    className="p-3 bg-gray-50 rounded-md"
-                  >
-                    <span className="font-mono text-sm font-semibold text-gray-900 block mb-1">
-                      {bill.number}
-                    </span>
-                    <p className="text-sm text-gray-700 mb-1">
-                      {bill.title}
-                    </p>
-                    <p className="text-xs text-gray-600">
-                      Sponsor: {bill.sponsor}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">No legislation cosponsored yet</p>
-            )}
-          </div>
-        </div>
-
-        {/* Groups */}
-        {profile.groups.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Users className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">
-                Groups
-              </h2>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {profile.groups.map((group, index) => (
-                <div
-                  key={index}
-                  className="p-3 bg-gray-50 rounded-md"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900">
-                      {group.name}
-                    </span>
-                    <span className="text-xs px-2 py-1 bg-gray-200 text-gray-700 rounded">
-                      {group.type}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-600">
-                    {group.role}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Dear colleague letters */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Mail className="w-5 h-5 text-blue-600" />
-            <h2 className="text-lg font-semibold text-gray-900">
-              Dear Colleague Letters
-            </h2>
-          </div>
-          <p className="text-gray-600">
-            {profile.lettersWritten} letters sent
-          </p>
-        </div>
-      </main>
-
-      {/* Letter composer modal */}
-      {showLetterModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
-              <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">
-                  Compose Dear Colleague Letter
-                </h2>
-                <button
-                  onClick={() => setShowLetterModal(false)}
-                  className="text-gray-400 hover:text-gray-600 transition-colors"
-                >
-                  ×
-                </button>
-              </div>
-              <p className="text-sm text-gray-600 mt-2">
-                To: {profile.name}
-              </p>
-            </div>
-
-            <div className="p-6">
-              <textarea
-                value={letterContent}
-                onChange={(e) =>
-                  setLetterContent(e.target.value)
-                }
-                placeholder="Dear Colleague,
-
-I am writing to..."
-                rows={12}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-              />
-            </div>
-
-            <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">
-              <button
-                onClick={() => setShowLetterModal(false)}
-                className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSendLetter}
-                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-              >
-                <Send className="w-4 h-4" />
-                Send Letter
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
+    {editing==='display_name' && <Modal title="Edit Name" onClose={()=>setEditing(null)}><input className="w-full border rounded p-2" value={draft.display_name ?? ''} onChange={(e)=>setDraft({...draft,display_name:e.target.value})}/><ModalActions onSave={()=>saveField('display_name')} onCancel={()=>setEditing(null)} /></Modal>}
+    {editing==='personal_statement' && <Modal title="Edit Personal Statement" onClose={()=>setEditing(null)}><textarea className="w-full border rounded p-2 min-h-32" value={draft.personal_statement ?? ''} onChange={(e)=>setDraft({...draft,personal_statement:e.target.value})}/><ModalActions onSave={()=>saveField('personal_statement')} onCancel={()=>setEditing(null)} /></Modal>}
+    {editing==='party' && <Modal title="Select Party" onClose={()=>setEditing(null)}><div className="space-y-2">{allParties.map(p=><button key={p} className="w-full text-left border rounded p-2 hover:bg-gray-50" onClick={()=>{setDraft({...draft,party:p}); saveField('party');}}>{p}</button>)}</div></Modal>}
+    {editing==='constituency' && <Modal title="Select District" onClose={()=>setEditing(null)}><div className="max-h-80 overflow-auto space-y-2">{(constituencies as any[]).map(c=><button key={c.name} className="w-full text-left border rounded p-2 hover:bg-gray-50" onClick={()=>selectConstituency(c)}><div className="font-medium">{c.name}</div><div className="text-xs text-gray-500">Cook PVI: {c.cook_pvi || 'N/A'} • Population: {c.population ?? 'N/A'}</div></button>)}</div></Modal>}
+  </div>;
 }
+
+function Modal({ title, onClose, children }: any) { return <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"><div className="bg-white rounded-lg p-4 w-full max-w-xl"><div className="flex items-center justify-between mb-3"><h3 className="font-semibold">{title}</h3><button onClick={onClose}><X className="w-4 h-4"/></button></div>{children}</div></div>; }
+function ModalActions({ onSave, onCancel }: any) { return <div className="flex justify-end gap-2 mt-3"><button className="px-3 py-2 border rounded" onClick={onCancel}>Cancel</button><button className="px-3 py-2 bg-blue-600 text-white rounded" onClick={onSave}><Save className="w-4 h-4 inline mr-1"/>Save</button></div>; }
