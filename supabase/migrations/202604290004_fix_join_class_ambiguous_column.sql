@@ -1,3 +1,5 @@
+drop function if exists public.join_class_by_code(text);
+
 create or replace function public.join_class_by_code(join_code_input text)
 returns table(joined_class_id uuid, joined_class_name text, joined_class_code text)
 language plpgsql
