@@ -95,7 +95,7 @@ export function CollaborativeBillEditor({
             },
           },
         }
-      : null,
+      : undefined,
     [ready, editable, localUser.name, localUser.color],
   );
 
