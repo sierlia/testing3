@@ -16,6 +16,12 @@ import {
 import { useParams } from "react-router";
 import tessLinImage from "figma:asset/966ec4d05f8fbeb48998b857574fc6613b388aae.png";
 import { toast } from "sonner";
+import { ConstituencyPicker, getConstituencyById } from "../components/ConstituencyPicker";
+import {
+  getPartyNameById,
+  NewParty,
+  PartySelection,
+} from "../components/PartySelection";
 
 export function EditProfile() {
   const { id } = useParams();
@@ -23,8 +29,11 @@ export function EditProfile() {
   const [profileData, setProfileData] = useState({
     id: "6",
     name: "Tess Lin",
-    constituency: "California's 22nd District",
+    constituencyId: "ca-22",
+    constituency: "California's 22nd Congressional District",
     party: "Democratic Party",
+    partyId: "democratic",
+    newParty: undefined as NewParty | undefined,
     profileImage: tessLinImage,
     leadershipRoles: [],
     personalStatement:
@@ -42,6 +51,8 @@ export function EditProfile() {
   const [editingSection, setEditingSection] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState<string>("");
   const [textareaRef, setTextareaRef] = useState<HTMLTextAreaElement | null>(null);
+  const [showPartyModal, setShowPartyModal] = useState(false);
+  const [showConstituencyModal, setShowConstituencyModal] = useState(false);
 
   const handleEditClick = (section: string, content: string | string[]) => {
     setEditingSection(section);
@@ -67,6 +78,30 @@ export function EditProfile() {
   const handleCancel = () => {
     setEditingSection(null);
     setEditingContent("");
+  };
+
+  const handleSaveParty = () => {
+    const partyName = getPartyNameById(profileData.partyId) ?? profileData.newParty?.name ?? null;
+    setProfileData({
+      ...profileData,
+      party: partyName || "N/A",
+    });
+    setShowPartyModal(false);
+    toast.success("Party updated");
+  };
+
+  const handleSaveConstituency = () => {
+    const c = getConstituencyById(profileData.constituencyId);
+    if (!c) {
+      setShowConstituencyModal(false);
+      return;
+    }
+    setProfileData({
+      ...profileData,
+      constituency: c.name,
+    });
+    setShowConstituencyModal(false);
+    toast.success("Constituency updated");
   };
 
   const insertMarkdown = (prefix: string, suffix: string = "", placeholder: string = "text") => {
@@ -176,10 +211,24 @@ export function EditProfile() {
                 <div className="flex items-center gap-2">
                   <MapPin className="w-4 h-4" />
                   <span>{profileData.constituency}</span>
+                  <button
+                    onClick={() => setShowConstituencyModal(true)}
+                    className="text-blue-600 hover:text-blue-700 transition-colors"
+                    title="Change constituency"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
                 </div>
                 <div className="flex items-center gap-2">
                   <Flag className="w-4 h-4" />
                   <span>{profileData.party}</span>
+                  <button
+                    onClick={() => setShowPartyModal(true)}
+                    className="text-blue-600 hover:text-blue-700 transition-colors"
+                    title="Change party"
+                  >
+                    <Pencil className="w-3 h-3" />
+                  </button>
                 </div>
               </div>
             </div>
@@ -377,6 +426,97 @@ export function EditProfile() {
           )}
         </div>
       </main>
+
+      {/* Party modal */}
+      {showPartyModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Choose Party</h2>
+              <button
+                onClick={() => setShowPartyModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <PartySelection
+                selectedParty={profileData.partyId}
+                newParty={profileData.newParty}
+                onSelectParty={(pid) =>
+                  setProfileData({
+                    ...profileData,
+                    partyId: pid,
+                    newParty: pid === "custom" ? profileData.newParty : undefined,
+                  })
+                }
+                onCreateParty={(p) =>
+                  setProfileData({
+                    ...profileData,
+                    newParty: p,
+                    partyId: p ? "custom" : profileData.partyId,
+                  })
+                }
+              />
+            </div>
+            <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowPartyModal(false)}
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveParty}
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+              >
+                <Save className="w-4 h-4" />
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Constituency modal */}
+      {showConstituencyModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="text-xl font-semibold text-gray-900">Choose Constituency</h2>
+              <button
+                onClick={() => setShowConstituencyModal(false)}
+                className="text-gray-400 hover:text-gray-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-6">
+              <ConstituencyPicker
+                selected={profileData.constituencyId}
+                onSelect={(cid) => setProfileData({ ...profileData, constituencyId: cid })}
+              />
+            </div>
+            <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">
+              <button
+                onClick={() => setShowConstituencyModal(false)}
+                className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveConstituency}
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                disabled={!profileData.constituencyId}
+              >
+                <Save className="w-4 h-4" />
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

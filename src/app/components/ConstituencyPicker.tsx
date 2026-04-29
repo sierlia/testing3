@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Search, MapPin, Check, ExternalLink } from "lucide-react";
 
-interface Constituency {
+export interface Constituency {
   id: string;
   name: string;
   code: string;
@@ -13,6 +13,16 @@ interface Constituency {
 interface ConstituencyPickerProps {
   selected: string | null;
   onSelect: (constituency: string) => void;
+}
+
+function hashStringToUnitInterval(input: string): number {
+  // Simple deterministic hash -> [0,1)
+  let hash = 2166136261;
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 2 ** 32;
 }
 
 // Helper function to generate dummy districts
@@ -69,18 +79,35 @@ function generateDummyDistricts(): Constituency[] {
     { name: "Wyoming", abbr: "WY", count: 1 },
   ];
 
-  const pviOptions = ["R+35", "R+30", "R+25", "R+20", "R+15", "R+10", "R+5", "EVEN", "D+5", "D+10", "D+15", "D+20", "D+25", "D+30"];
+  const pviOptions = [
+    "R+35",
+    "R+30",
+    "R+25",
+    "R+20",
+    "R+15",
+    "R+10",
+    "R+5",
+    "EVEN",
+    "D+5",
+    "D+10",
+    "D+15",
+    "D+20",
+    "D+25",
+    "D+30",
+  ];
   
   const districts: Constituency[] = [];
   
   for (const state of states) {
     for (let i = 1; i <= state.count; i++) {
       const districtNum = i.toString().padStart(2, "0");
-      const randomPVI = pviOptions[Math.floor(Math.random() * pviOptions.length)];
-      const randomPopulation = Math.floor(Math.random() * (800000 - 650000) + 650000);
+      const id = `${state.abbr.toLowerCase()}-${districtNum}`;
+      const r = hashStringToUnitInterval(id);
+      const randomPVI = pviOptions[Math.floor(r * pviOptions.length)];
+      const randomPopulation = Math.floor(650000 + r * (800000 - 650000));
       
       districts.push({
-        id: `${state.abbr.toLowerCase()}-${districtNum}`,
+        id,
         name: `${state.name}'s ${i}${getOrdinalSuffix(i)} Congressional District`,
         code: `(${state.abbr}-${districtNum})`,
         pvi: randomPVI,
@@ -168,11 +195,10 @@ export function ConstituencyPicker({
     },
   ];
 
-  // Combine Alabama districts with dummy districts
-  const constituencies: Constituency[] = [
-    ...alabamaDistricts,
-    ...generateDummyDistricts(),
-  ];
+  const constituencies = useMemo<Constituency[]>(
+    () => [...alabamaDistricts, ...generateDummyDistricts()],
+    [],
+  );
 
   const filteredConstituencies = constituencies.filter(
     (constituency) => {
@@ -275,4 +301,71 @@ export function ConstituencyPicker({
       </div>
     </div>
   );
+}
+
+export function getConstituencyById(id: string | null | undefined) {
+  if (!id) return null;
+
+  // Alabama districts with real data
+  const alabamaDistricts: Constituency[] = [
+    {
+      id: "al-01",
+      name: "Alabama's 1st Congressional District",
+      code: "(AL-01)",
+      pvi: "R+14",
+      population: 718074,
+      wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_1st_congressional_district",
+    },
+    {
+      id: "al-02",
+      name: "Alabama's 2nd Congressional District",
+      code: "(AL-02)",
+      pvi: "R+12",
+      population: 718128,
+      wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_2nd_congressional_district",
+    },
+    {
+      id: "al-03",
+      name: "Alabama's 3rd Congressional District",
+      code: "(AL-03)",
+      pvi: "R+16",
+      population: 719200,
+      wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_3rd_congressional_district",
+    },
+    {
+      id: "al-04",
+      name: "Alabama's 4th Congressional District",
+      code: "(AL-04)",
+      pvi: "R+30",
+      population: 718408,
+      wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_4th_congressional_district",
+    },
+    {
+      id: "al-05",
+      name: "Alabama's 5th Congressional District",
+      code: "(AL-05)",
+      pvi: "R+18",
+      population: 773877,
+      wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_5th_congressional_district",
+    },
+    {
+      id: "al-06",
+      name: "Alabama's 6th Congressional District",
+      code: "(AL-06)",
+      pvi: "R+20",
+      population: 728184,
+      wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_6th_congressional_district",
+    },
+    {
+      id: "al-07",
+      name: "Alabama's 7th Congressional District",
+      code: "(AL-07)",
+      pvi: "D+13",
+      population: 718912,
+      wikipediaUrl: "https://en.wikipedia.org/wiki/Alabama%27s_7th_congressional_district",
+    },
+  ];
+
+  const all = [...alabamaDistricts, ...generateDummyDistricts()];
+  return all.find((c) => c.id === id) ?? null;
 }

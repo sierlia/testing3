@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { Check, Plus, AlertCircle } from "lucide-react";
 
-interface Party {
+export interface Party {
   id: string;
   name: string;
   platform: string;
   color: string;
 }
 
-interface NewParty {
+export interface NewParty {
   name: string;
   platform: string;
 }
@@ -34,32 +34,7 @@ export function PartySelection({
   const allowPartyCreation = true;
 
   // Mock teacher-approved parties
-  const approvedParties: Party[] = [
-    {
-      id: "democratic",
-      name: "Democratic Party",
-      platform: "Progressive policies focusing on social programs, healthcare reform, and environmental protection",
-      color: "blue",
-    },
-    {
-      id: "republican",
-      name: "Republican Party",
-      platform: "Conservative values emphasizing fiscal responsibility, limited government, and traditional institutions",
-      color: "red",
-    },
-    {
-      id: "green",
-      name: "Green Party",
-      platform: "Environmental sustainability, social justice, and grassroots democracy",
-      color: "green",
-    },
-    {
-      id: "libertarian",
-      name: "Libertarian Party",
-      platform: "Individual liberty, free markets, and minimal government intervention",
-      color: "yellow",
-    },
-  ];
+  const approvedParties: Party[] = APPROVED_PARTIES;
 
   const getColorClasses = (color: string, isSelected: boolean) => {
     const colorMap: Record<string, { border: string; bg: string; text: string }> = {
@@ -239,4 +214,42 @@ export function PartySelection({
       )}
     </div>
   );
+}
+
+export const APPROVED_PARTIES: Party[] = [
+  {
+    id: "democratic",
+    name: "Democratic Party",
+    platform: "Progressive policies focusing on social programs, healthcare reform, and environmental protection",
+    color: "blue",
+  },
+  {
+    id: "republican",
+    name: "Republican Party",
+    platform: "Conservative values emphasizing fiscal responsibility, limited government, and traditional institutions",
+    color: "red",
+  },
+  {
+    id: "green",
+    name: "Green Party",
+    platform: "Environmental sustainability, social justice, and grassroots democracy",
+    color: "green",
+  },
+  {
+    id: "libertarian",
+    name: "Libertarian Party",
+    platform: "Individual liberty, free markets, and minimal government intervention",
+    color: "yellow",
+  },
+];
+
+export function getPartyNameById(partyId: string | null | undefined) {
+  if (!partyId) return null;
+  if (partyId === "custom") return null;
+  return APPROVED_PARTIES.find((p) => p.id === partyId)?.name ?? null;
+}
+
+export function getPartyIdByName(name: string | null | undefined) {
+  if (!name) return null;
+  return APPROVED_PARTIES.find((p) => p.name === name)?.id ?? null;
 }
