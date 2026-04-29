@@ -1,4 +1,4 @@
-import { createBrowserRouter } from "react-router";
+import { createHashRouter } from "react-router";
 import { Root } from "./pages/Root";
 import { SignInPage } from "./pages/SignInPage";
 import { SignUpPage } from "./pages/SignUpPage";
@@ -41,8 +41,9 @@ import { TeacherStudentView } from "./pages/TeacherStudentView";
 import { TeacherCaucusManagement } from "./pages/TeacherCaucusManagement";
 import { CaucusChairVote } from "./pages/CaucusChairVote";
 import { TeacherBillSorting } from "./pages/TeacherBillSorting";
+import { NotFoundPage } from "./pages/NotFoundPage";
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: "/",
     Component: Root,
@@ -105,7 +106,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/bills",
-    Component: AllBills,
+    Component: TessBills,
   },
   {
     path: "/tess-bills",
@@ -133,7 +134,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/caucuses",
-    Component: Caucuses,
+    Component: TessCaucuses,
   },
   {
     path: "/tess-caucuses",
@@ -141,7 +142,7 @@ export const router = createBrowserRouter([
   },
   {
     path: "/caucuses/:id",
-    Component: CaucusDetail,
+    Component: TessCaucusDetail,
   },
   {
     path: "/tess-caucuses/:id",
@@ -210,5 +211,9 @@ export const router = createBrowserRouter([
   {
     path: "/teacher/bill-sorting",
     Component: TeacherBillSorting,
+  },
+  {
+    path: "*",
+    Component: NotFoundPage,
   },
 ]);
