@@ -1,78 +1,160 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { Send, X, User, Search } from "lucide-react";
 import { useNavigate } from "react-router";
+import { toast } from "sonner";
+import { supabase } from "../utils/supabase";
 
-interface Recipient {
-  type: "individual" | "caucus" | "party" | "committee";
+type RecipientType = "individual" | "caucus" | "party" | "committee";
+
+type Recipient = {
+  type: RecipientType;
+  id: string; // user_id for individual, org id otherwise
   name: string;
   image?: string | null;
-  district?: string;
-}
+  district?: string | null;
+};
 
 export function CreateDearColleagueLetter() {
   const navigate = useNavigate();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [recipients, setRecipients] = useState<Recipient[]>([]);
-  const [recipientType, setRecipientType] = useState<"individual" | "caucus" | "party" | "committee">("individual");
+  const [recipientType, setRecipientType] = useState<RecipientType>("individual");
   const [searchQuery, setSearchQuery] = useState("");
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data for suggestions
-  const individualSuggestions = [
-    { name: "Less Tin", district: "CA-21", image: null },
-  ];
+  const [individuals, setIndividuals] = useState<Array<{ user_id: string; display_name: string | null; constituency_code: string | null; avatar_url: string | null }>>([]);
+  const [caucuses, setCaucuses] = useState<Array<{ id: string; name: string }>>([]);
+  const [parties, setParties] = useState<Array<{ id: string; name: string }>>([]);
+  const [committees, setCommittees] = useState<Array<{ id: string; name: string }>>([]);
 
-  const caucusSuggestions = [
-    { name: "testing" },
-  ];
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) return navigate("/signin");
 
-  const partySuggestions = [
-    { name: "Democratic Party" },
-    { name: "Republican Party" },
-  ];
+        const { data: pRow, error: pErr } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
+        if (pErr) throw pErr;
+        const classId = (pRow as any)?.class_id as string | null;
+        if (!classId) {
+          toast.error("Select a class first (Settings â†’ Classes)");
+          return navigate("/settings/classes");
+        }
+
+        const { data: memberships, error: mErr } = await supabase.from("class_memberships").select("user_id").eq("class_id", classId);
+        if (mErr) throw mErr;
+        const memberIds = Array.from(new Set((memberships ?? []).map((m: any) => m.user_id))).filter((id) => id !== uid);
+
+        const [{ data: profiles, error: profErr }, { data: cau }, { data: par }, { data: com }] = await Promise.all([
+          memberIds.length
+            ? supabase
+                .from("profiles")
+                .select("user_id,display_name,constituency_code,avatar_url")
+                .in("user_id", memberIds)
+                .order("display_name")
+            : Promise.resolve({ data: [] as any[] } as any),
+          supabase.from("caucuses").select("id,name").order("name"),
+          supabase.from("parties").select("id,name").order("name"),
+          supabase.from("committees").select("id,name").order("name"),
+        ]);
+        if (profErr) throw profErr;
+        setIndividuals((profiles ?? []) as any);
+        setCaucuses((cau ?? []) as any);
+        setParties((par ?? []) as any);
+        setCommittees((com ?? []) as any);
+      } catch (e: any) {
+        toast.error(e.message || "Could not load recipients");
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [navigate]);
 
   const handleAddRecipient = (recipient: Recipient) => {
-    if (!recipients.some(r => r.name === recipient.name && r.type === recipient.type)) {
+    if (!recipients.some((r) => r.id === recipient.id && r.type === recipient.type)) {
       setRecipients([...recipients, recipient]);
     }
     setSearchQuery("");
     setShowSuggestions(false);
   };
 
-  const handleRemoveRecipient = (index: number) => {
-    setRecipients(recipients.filter((_, i) => i !== index));
-  };
+  const handleRemoveRecipient = (index: number) => setRecipients(recipients.filter((_, i) => i !== index));
 
-  const handleSendLetter = () => {
-    if (!subject || !message || recipients.length === 0) return;
-    
-    // Here you would send the letter
-    console.log("Sending letter:", { subject, message, recipients });
-    
-    // Navigate back to dashboard
-    navigate("/dashboard");
-  };
-
-  const getFilteredSuggestions = () => {
-    const query = searchQuery.toLowerCase();
-    
+  const filteredSuggestions = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    if (!query) return [];
     if (recipientType === "individual") {
-      return individualSuggestions.filter(s => 
-        s.name.toLowerCase().includes(query) || 
-        s.district.toLowerCase().includes(query)
-      );
-    } else if (recipientType === "caucus") {
-      return caucusSuggestions.filter(s => s.name.toLowerCase().includes(query));
-    } else if (recipientType === "party") {
-      return partySuggestions.filter(s => s.name.toLowerCase().includes(query));
+      return individuals
+        .filter((s) => (s.display_name || "").toLowerCase().includes(query) || (s.constituency_code || "").toLowerCase().includes(query))
+        .slice(0, 10)
+        .map((s) => ({ id: s.user_id, name: s.display_name || "Unknown", district: s.constituency_code, image: s.avatar_url }));
     }
-    
-    return [];
-  };
+    if (recipientType === "caucus") return caucuses.filter((s) => s.name.toLowerCase().includes(query)).slice(0, 10).map((s) => ({ id: s.id, name: s.name }));
+    if (recipientType === "party") return parties.filter((s) => s.name.toLowerCase().includes(query)).slice(0, 10).map((s) => ({ id: s.id, name: s.name }));
+    return committees.filter((s) => s.name.toLowerCase().includes(query)).slice(0, 10).map((s) => ({ id: s.id, name: s.name }));
+  }, [searchQuery, recipientType, individuals, caucuses, parties, committees]);
 
-  const filteredSuggestions = getFilteredSuggestions();
+  const handleSendLetter = async () => {
+    if (!subject.trim() || !message.trim() || recipients.length === 0) return;
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) return navigate("/signin");
+
+      const { data: pRow, error: pErr } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
+      if (pErr) throw pErr;
+      const classId = (pRow as any)?.class_id as string | null;
+      if (!classId) {
+        toast.error("No active class selected");
+        return;
+      }
+
+      const recipientUserIds = new Set<string>();
+      for (const r of recipients) {
+        if (r.type === "individual") recipientUserIds.add(r.id);
+        if (r.type === "caucus") {
+          const { data } = await supabase.from("caucus_members").select("user_id").eq("caucus_id", r.id);
+          for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
+        }
+        if (r.type === "party") {
+          const { data } = await supabase.from("profiles").select("user_id").eq("party_id", r.id);
+          for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
+        }
+        if (r.type === "committee") {
+          const { data } = await supabase.from("committee_members").select("user_id").eq("committee_id", r.id);
+          for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
+        }
+      }
+      recipientUserIds.delete(uid);
+      const ids = Array.from(recipientUserIds);
+      if (ids.length === 0) {
+        toast.error("No recipients found for that selection");
+        return;
+      }
+
+      const { data: letter, error: lErr } = await supabase
+        .from("dear_colleague_letters")
+        .insert({ class_id: classId, sender_user_id: uid, subject: subject.trim(), body: message } as any)
+        .select("id")
+        .single();
+      if (lErr) throw lErr;
+
+      const rows = ids.map((rid) => ({ letter_id: (letter as any).id, recipient_user_id: rid }));
+      const { error: rErr } = await supabase.from("dear_colleague_recipients").insert(rows as any);
+      if (rErr) throw rErr;
+
+      toast.success("Letter sent");
+      navigate("/dear-colleague/inbox");
+    } catch (e: any) {
+      toast.error(e.message || "Could not send letter");
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -85,35 +167,23 @@ export function CreateDearColleagueLetter() {
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          {/* Recipient Selection */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              To:
-            </label>
-            
-            {/* Selected Recipients */}
+            <label className="block text-sm font-medium text-gray-700 mb-2">To:</label>
+
             {recipients.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-3">
                 {recipients.map((recipient, index) => (
-                  <div key={index} className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full">
-                    {recipient.type === "individual" && recipient.image && (
-                      <img 
-                        src={recipient.image} 
-                        alt={recipient.name}
-                        className="w-5 h-5 rounded-full object-cover"
-                      />
-                    )}
-                    {recipient.type === "individual" && !recipient.image && (
+                  <div key={`${recipient.type}:${recipient.id}`} className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full">
+                    {recipient.type === "individual" && recipient.image ? (
+                      <img src={recipient.image} alt={recipient.name} className="w-5 h-5 rounded-full object-cover" />
+                    ) : recipient.type === "individual" ? (
                       <User className="w-4 h-4" />
-                    )}
+                    ) : null}
                     <span className="text-sm font-medium">
                       {recipient.name}
-                      {recipient.district && ` (${recipient.district})`}
+                      {recipient.district ? ` (${recipient.district})` : ""}
                     </span>
-                    <button
-                      onClick={() => handleRemoveRecipient(index)}
-                      className="hover:bg-blue-200 rounded-full p-0.5 transition-colors"
-                    >
+                    <button onClick={() => handleRemoveRecipient(index)} className="hover:bg-blue-200 rounded-full p-0.5 transition-colors">
                       <X className="w-3 h-3" />
                     </button>
                   </div>
@@ -121,53 +191,22 @@ export function CreateDearColleagueLetter() {
               </div>
             )}
 
-            {/* Recipient Type Selector */}
             <div className="flex gap-2 mb-3">
-              <button
-                onClick={() => setRecipientType("individual")}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  recipientType === "individual"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Individual
-              </button>
-              <button
-                onClick={() => setRecipientType("caucus")}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  recipientType === "caucus"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Caucus
-              </button>
-              <button
-                onClick={() => setRecipientType("party")}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  recipientType === "party"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Party
-              </button>
-              <button
-                onClick={() => setRecipientType("committee")}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                  recipientType === "committee"
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                }`}
-              >
-                Committee
-              </button>
+              {(["individual", "party", "committee", "caucus"] as RecipientType[]).map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setRecipientType(t)}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    recipientType === t ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                  }`}
+                >
+                  {t === "individual" ? "Individuals" : t === "party" ? "Parties" : t === "committee" ? "Committees" : "Caucuses"}
+                </button>
+              ))}
             </div>
 
-            {/* Search Input */}
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
@@ -177,111 +216,97 @@ export function CreateDearColleagueLetter() {
                 }}
                 onFocus={() => setShowSuggestions(true)}
                 placeholder={
-                  recipientType === "individual" ? "Search by name or district..." :
-                  recipientType === "caucus" ? "Search caucuses..." :
-                  recipientType === "party" ? "Search parties..." :
-                  "Search committees..."
+                  loading
+                    ? "Loading..."
+                    : recipientType === "individual"
+                      ? "Search members..."
+                      : recipientType === "party"
+                        ? "Search parties..."
+                        : recipientType === "committee"
+                          ? "Search committees..."
+                          : "Search caucuses..."
                 }
                 className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               />
 
-              {/* Suggestions Dropdown */}
               {showSuggestions && searchQuery && filteredSuggestions.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                  {recipientType === "individual" && filteredSuggestions.map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleAddRecipient({
-                        type: "individual",
-                        name: suggestion.name,
-                        district: suggestion.district,
-                        image: suggestion.image,
-                      })}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
-                    >
-                      {suggestion.image ? (
-                        <img 
-                          src={suggestion.image} 
-                          alt={suggestion.name}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                          <User className="w-4 h-4 text-gray-500" />
+                  {recipientType === "individual" ? (
+                    filteredSuggestions.map((s: any) => (
+                      <button
+                        key={s.id}
+                        onClick={() =>
+                          handleAddRecipient({
+                            type: "individual",
+                            id: s.id,
+                            name: s.name,
+                            district: s.district ?? null,
+                            image: s.image ?? null,
+                          })
+                        }
+                        className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        {s.image ? (
+                          <img src={s.image} alt={s.name} className="w-8 h-8 rounded-full object-cover" />
+                        ) : (
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
+                            <User className="w-4 h-4 text-gray-500" />
+                          </div>
+                        )}
+                        <div>
+                          <div className="font-medium text-gray-900">{s.name}</div>
+                          <div className="text-sm text-gray-600">{s.district || "N/A"}</div>
                         </div>
-                      )}
-                      <div>
-                        <div className="font-medium text-gray-900">{suggestion.name}</div>
-                        <div className="text-sm text-gray-600">{suggestion.district}</div>
-                      </div>
-                    </button>
-                  ))}
-                  
-                  {(recipientType === "caucus" || recipientType === "party") && filteredSuggestions.map((suggestion, index) => (
-                    <button
-                      key={index}
-                      onClick={() => handleAddRecipient({
-                        type: recipientType,
-                        name: suggestion.name,
-                      })}
-                      className="w-full px-4 py-3 hover:bg-gray-50 transition-colors text-left"
-                    >
-                      <div className="font-medium text-gray-900">{suggestion.name}</div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {recipientType === "committee" && searchQuery && (
-                <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg p-4 text-center text-sm text-gray-600">
-                  No committees available
+                      </button>
+                    ))
+                  ) : (
+                    filteredSuggestions.map((s: any) => (
+                      <button
+                        key={s.id}
+                        onClick={() => handleAddRecipient({ type: recipientType, id: s.id, name: s.name })}
+                        className="w-full px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+                      >
+                        <div className="font-medium text-gray-900">{s.name}</div>
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>
           </div>
 
-          {/* Subject */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Subject:
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Subject:</label>
             <input
               type="text"
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              placeholder="e.g., Support for H.R. 123"
+              placeholder="e.g., Support for H.R. 12"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             />
           </div>
 
-          {/* Message */}
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Message:
-            </label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Message:</label>
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Dear Colleague,&#10;&#10;I am writing to..."
+              placeholder="Dear Colleague,\n\nI am writing to..."
               rows={12}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             />
           </div>
 
-          {/* Actions */}
           <div className="flex gap-3">
             <button
-              onClick={handleSendLetter}
-              disabled={!subject || !message || recipients.length === 0}
+              onClick={() => void handleSendLetter()}
+              disabled={!subject.trim() || !message.trim() || recipients.length === 0}
               className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
               <Send className="w-4 h-4" />
               Send Letter
             </button>
-            <button
-              onClick={() => navigate("/dashboard")}
-              className="px-6 py-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
+            <button onClick={() => navigate("/dashboard")} className="px-6 py-2 text-gray-600 hover:text-gray-900 transition-colors">
               Cancel
             </button>
           </div>

@@ -1,4 +1,4 @@
-import { ChevronDown, Building2, LogOut, Settings, User } from "lucide-react";
+import { ChevronDown, Building2, LogOut, Settings, User, Mail } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
@@ -11,6 +11,8 @@ export function Navigation() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
+  const [unreadLetters, setUnreadLetters] = useState(0);
 
   const handleSignOut = async () => {
     await signOut();
@@ -27,12 +29,45 @@ export function Navigation() {
     const load = async () => {
       if (!user?.id) {
         setAvatarUrl(null);
+        setActiveClassId(null);
         return;
       }
-      const { data } = await supabase.from("profiles").select("avatar_url").eq("user_id", user.id).maybeSingle();
+      const { data } = await supabase.from("profiles").select("avatar_url,class_id").eq("user_id", user.id).maybeSingle();
       setAvatarUrl((data as any)?.avatar_url ?? null);
+      setActiveClassId((data as any)?.class_id ?? null);
     };
     void load();
+  }, [user?.id]);
+
+  const refreshUnreadLetters = async () => {
+    if (!user?.id) return;
+    const { count } = await supabase
+      .from("dear_colleague_recipients")
+      .select("letter_id", { count: "exact", head: true })
+      .eq("recipient_user_id", user.id)
+      .is("read_at", null);
+    setUnreadLetters(count ?? 0);
+  };
+
+  useEffect(() => {
+    void refreshUnreadLetters();
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase
+      .channel(`letters:${user.id}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "dear_colleague_recipients", filter: `recipient_user_id=eq.${user.id}` },
+        () => {
+          void refreshUnreadLetters();
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
   }, [user?.id]);
 
   // Show navigation for bypassed users (when on dashboard but no user)
@@ -42,6 +77,7 @@ export function Navigation() {
                         currentPath.startsWith('/committee') || currentPath.startsWith('/dear-colleague') ||
                         currentPath.startsWith('/notifications') || currentPath.startsWith('/members') ||
                         currentPath.startsWith('/parties') || currentPath.startsWith('/committees') ||
+                        currentPath.startsWith('/settings') ||
                         currentPath === '/elections' || currentPath === '/floor-session' || 
                         currentPath === '/calendar' || currentPath.startsWith('/profile') ||
                         currentPath === '/resources' || currentPath.startsWith('/tess-');
@@ -51,9 +87,12 @@ export function Navigation() {
     return null;
   }
 
-  const dashboardLink = user?.user_metadata?.role === 'teacher' 
-    ? '/teacher/dashboard' 
-    : '/dashboard';
+  const dashboardLink =
+    user?.user_metadata?.role === "teacher"
+      ? "/teacher/dashboard"
+      : activeClassId
+        ? `/class/${activeClassId}/dashboard`
+        : "/settings/classes";
 
   return (
     <nav className="bg-white border-b border-gray-200">
@@ -139,6 +178,14 @@ export function Navigation() {
           </div>
 
           <div className="flex items-center gap-4">
+            <Link to="/dear-colleague/inbox" className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors" title="Dear Colleague Inbox">
+              <Mail className="w-6 h-6" />
+              {unreadLetters > 0 && (
+                <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  {unreadLetters}
+                </span>
+              )}
+            </Link>
             <NotificationBadge />
             <div className="relative">
               <button

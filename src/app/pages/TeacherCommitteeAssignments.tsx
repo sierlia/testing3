@@ -150,9 +150,10 @@ export function TeacherCommitteeAssignments() {
       try {
         const committeeIds = committees.map((c) => c.id);
         const studentIds = students.map((s) => s.id);
-        // Clear existing committee memberships for this set of committees/students, then insert assigned
-        if (committeeIds.length && studentIds.length) {
-          await supabase.from("committee_members").delete().in("committee_id", committeeIds).in("user_id", studentIds);
+        // Clear existing committee memberships for these committees, then insert assigned
+        // (delete filter by committee_id only to match RLS teacher policy)
+        if (committeeIds.length) {
+          await supabase.from("committee_members").delete().in("committee_id", committeeIds);
         }
         const rows = students.filter((s) => s.assignedCommittee).map((s) => ({ committee_id: s.assignedCommittee, user_id: s.id, role: "member" }));
         if (rows.length) {

@@ -82,7 +82,7 @@ export function ClassSimulationDashboard() {
           caucusIds = (caucusMemberships ?? []).map((r: any) => r.caucus_id);
         }
 
-        const [cAnn, mAnn] = await Promise.all([
+        const [cAnn, mAnn, taskRows] = await Promise.all([
           caucusIds.length
             ? supabase
                 .from("caucus_announcements")
@@ -99,14 +99,28 @@ export function ClassSimulationDashboard() {
                 .order("created_at", { ascending: false })
                 .limit(10)
             : Promise.resolve({ data: [] as any[] } as any),
+          supabase
+            .from("class_tasks")
+            .select("id,task_type,title,description,due_at,created_at,created_by")
+            .order("created_at", { ascending: false })
+            .limit(10),
         ]);
 
         const combined = [
           ...((cAnn as any).data ?? []).map((a: any) => ({ ...a, _type: "caucus" as const })),
           ...((mAnn as any).data ?? []).map((a: any) => ({ ...a, _type: "committee" as const })),
-        ].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()).slice(0, 10);
+          ...(((taskRows as any).data ?? []) as any[]).map((t: any) => ({ ...t, _type: "task" as const })),
+        ]
+          .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+          .slice(0, 10);
 
-        const authorIds = Array.from(new Set(combined.map((a) => a.author_user_id)));
+        const authorIds = Array.from(
+          new Set(
+            combined
+              .map((a: any) => (a._type === "task" ? a.created_by : a.author_user_id))
+              .filter(Boolean),
+          ),
+        );
         const { data: authors } = await supabase
           .from("profiles")
           .select("user_id,display_name,role")
@@ -116,11 +130,17 @@ export function ClassSimulationDashboard() {
         setAnnouncements(
           combined.map((a: any) => ({
             id: a.id,
-            author: authorMap.get(a.author_user_id)?.display_name ?? "Unknown",
-            role: a._type === "committee" ? "Committee" : "Caucus",
-            content: a.body,
+            author:
+              authorMap.get(a._type === "task" ? a.created_by : a.author_user_id)?.display_name ?? "Unknown",
+            role: a._type === "task" ? "Teacher" : a._type === "committee" ? "Committee" : "Caucus",
+            content:
+              a._type === "task"
+                ? `${a.task_type === "deadline" ? "Deadline" : "Assignment"}: ${a.title}${
+                    a.due_at ? ` (Due ${new Date(a.due_at).toLocaleString()})` : ""
+                  }\n\n${a.description || ""}`.trim()
+                : a.body,
             timestamp: new Date(a.created_at),
-            isPinned: false,
+            isPinned: a._type === "task",
           })),
         );
       } catch (e: any) {
@@ -191,4 +211,3 @@ export function ClassSimulationDashboard() {
     </div>
   );
 }
-
