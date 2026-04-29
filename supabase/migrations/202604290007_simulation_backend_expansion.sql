@@ -93,7 +93,7 @@ for select using (exists (select 1 from public.committees c where c.id = committ
 
 create policy "committee leaders post announcements" on public.committee_announcements
 for insert with check (
-  exists (select 1 from public.committee_members m where m.committee_id = committee_id and m.user_id = auth.uid() and m.role in ('chair', 'co_chair', 'ranking_member'))
+  exists (select 1 from public.committee_members m where m.committee_id = committee_id and m.user_id = auth.uid() and m.role in ('chair', 'co_chair'))
 );
 
 create policy "class members read committee comments" on public.committee_comments
@@ -179,4 +179,3 @@ drop trigger if exists trg_set_bill_number on public.bills;
 create trigger trg_set_bill_number
 before insert on public.bills
 for each row execute function public.set_bill_number_if_missing();
-
