@@ -23,10 +23,11 @@ import { supabase } from '../utils/supabase';
 
 interface StudentActivity {
   id: string;
+  studentId: string;
   studentName: string;
   action: string;
   timestamp: Date;
-  type: 'bill' | 'vote' | 'caucus' | 'committee';
+  type: 'bill' | 'letter' | 'caucus' | 'committee' | 'comment';
 }
 
 interface CalendarEvent {
@@ -39,6 +40,11 @@ interface CalendarEvent {
 export function ClassDashboard() {
   const { classId } = useParams();
   const navigate = useNavigate();
+  const [className, setClassName] = useState<string>('Class');
+  const [studentCount, setStudentCount] = useState<number>(0);
+  const [recentActivity, setRecentActivity] = useState<StudentActivity[]>([]);
+  const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
+  const [stats, setStats] = useState({ activeBills: 0, completedVotes: 0, activeCommittees: 0, upcomingDeadlines: 0 });
 
   useEffect(() => {
     const setActive = async () => {
@@ -54,84 +60,153 @@ export function ClassDashboard() {
     void setActive();
   }, [classId]);
 
-  // Mock class data based on ID
-  const className = classId === '1' ? 'super amazing class' : 'testing class 123';
-  const studentCount = classId === '1' ? 24 : 18;
+  useEffect(() => {
+    const load = async () => {
+      if (!classId) return;
+      try {
+        const [{ data: cls, error: cErr }, { count: rosterCount }] = await Promise.all([
+          supabase.from("classes").select("name").eq("id", classId).maybeSingle(),
+          supabase.from("class_memberships").select("user_id", { count: "exact", head: true }).eq("class_id", classId),
+        ]);
+        if (cErr) throw cErr;
+        setClassName((cls as any)?.name ?? "Class");
+        setStudentCount(rosterCount ?? 0);
 
-  // Mock student activity data
-  const [recentActivity] = useState<StudentActivity[]>([
-    {
-      id: '1',
-      studentName: 'Less Tin',
-      action: 'Submitted H.R. 234 - Education Funding Act',
-      timestamp: new Date('2026-03-16T09:30:00'),
-      type: 'bill',
-    },
-    {
-      id: '2',
-      studentName: 'Sarah Johnson',
-      action: 'Voted on H.R. 123',
-      timestamp: new Date('2026-03-16T08:15:00'),
-      type: 'vote',
-    },
-    {
-      id: '3',
-      studentName: 'Michael Chen',
-      action: 'Posted in Democratic Caucus',
-      timestamp: new Date('2026-03-16T07:45:00'),
-      type: 'caucus',
-    },
-    {
-      id: '4',
-      studentName: 'Emma Williams',
-      action: 'Submitted amendment to H.R. 234',
-      timestamp: new Date('2026-03-15T16:20:00'),
-      type: 'committee',
-    },
-    {
-      id: '5',
-      studentName: 'David Martinez',
-      action: 'Joined Education Committee',
-      timestamp: new Date('2026-03-15T14:30:00'),
-      type: 'committee',
-    },
-  ]);
+        const nowIso = new Date().toISOString();
+        const { data: taskRows } = await supabase
+          .from("class_tasks")
+          .select("id,title,task_type,due_at")
+          .gte("due_at", nowIso)
+          .order("due_at", { ascending: true })
+          .limit(6);
+        const events: CalendarEvent[] = (taskRows ?? []).map((t: any) => ({
+          id: t.id,
+          title: `${t.task_type === "assignment" ? "Assignment" : "Deadline"}: ${t.title}`,
+          date: new Date(t.due_at),
+          type: "deadline",
+        }));
+        setUpcomingEvents(events);
 
-  // Mock upcoming deadlines/events
-  const [upcomingEvents] = useState<CalendarEvent[]>([
-    {
-      id: '1',
-      title: 'Bill Submissions Due',
-      date: new Date('2026-03-20T23:59:00'),
-      type: 'deadline',
-    },
-    {
-      id: '2',
-      title: 'Committee Markup Session',
-      date: new Date('2026-03-22T14:00:00'),
-      type: 'session',
-    },
-    {
-      id: '3',
-      title: 'Floor Session - Voting',
-      date: new Date('2026-03-25T10:00:00'),
-      type: 'session',
-    },
-    {
-      id: '4',
-      title: 'Speaker Election',
-      date: new Date('2026-03-27T13:00:00'),
-      type: 'election',
-    },
-  ]);
+        const [{ count: billsCount }, { count: committeesCount }] = await Promise.all([
+          supabase.from("bills").select("id", { count: "exact", head: true }).eq("class_id", classId),
+          supabase.from("committees").select("id", { count: "exact", head: true }).eq("class_id", classId),
+        ]);
+        setStats({
+          activeBills: billsCount ?? 0,
+          completedVotes: 0,
+          activeCommittees: committeesCount ?? 0,
+          upcomingDeadlines: events.length,
+        });
 
-  // Statistics
-  const stats = {
-    activeBills: 12,
-    completedVotes: 8,
-    activeCommittees: 5,
-    upcomingDeadlines: upcomingEvents.filter(e => e.type === 'deadline').length,
-  };
+        const [committeeRows, caucusRows] = await Promise.all([
+          supabase.from("committees").select("id,name").eq("class_id", classId),
+          supabase.from("caucuses").select("id,name").eq("class_id", classId),
+        ]);
+        const committeeMap = new Map((committeeRows.data ?? []).map((c: any) => [c.id, c.name]));
+        const caucusMap = new Map((caucusRows.data ?? []).map((c: any) => [c.id, c.name]));
+
+        const committeeIds = Array.from(committeeMap.keys());
+        const caucusIds = Array.from(caucusMap.keys());
+
+        const [bills, cm, cam, letters, cc, kcc] = await Promise.all([
+          supabase.from("bills").select("id,title,bill_number,author_user_id,created_at,status").eq("class_id", classId).order("created_at", { ascending: false }).limit(10),
+          committeeIds.length
+            ? supabase.from("committee_members").select("committee_id,user_id,created_at").in("committee_id", committeeIds).order("created_at", { ascending: false }).limit(10)
+            : Promise.resolve({ data: [] as any[] } as any),
+          caucusIds.length
+            ? supabase.from("caucus_members").select("caucus_id,user_id,created_at").in("caucus_id", caucusIds).order("created_at", { ascending: false }).limit(10)
+            : Promise.resolve({ data: [] as any[] } as any),
+          supabase.from("dear_colleague_letters").select("id,sender_user_id,subject,created_at").eq("class_id", classId).order("created_at", { ascending: false }).limit(10),
+          supabase.from("caucus_comments").select("id,author_user_id,created_at,caucus_announcements(caucus_id)").order("created_at", { ascending: false }).limit(10),
+          supabase.from("committee_comments").select("id,author_user_id,created_at,committee_announcements(committee_id)").order("created_at", { ascending: false }).limit(10),
+        ]);
+
+        const authorIds = new Set<string>();
+        for (const r of bills.data ?? []) authorIds.add((r as any).author_user_id);
+        for (const r of cm.data ?? []) authorIds.add((r as any).user_id);
+        for (const r of cam.data ?? []) authorIds.add((r as any).user_id);
+        for (const r of letters.data ?? []) authorIds.add((r as any).sender_user_id);
+        for (const r of cc.data ?? []) authorIds.add((r as any).author_user_id);
+        for (const r of kcc.data ?? []) authorIds.add((r as any).author_user_id);
+
+        const { data: authors } = await supabase
+          .from("profiles")
+          .select("user_id,display_name")
+          .in("user_id", authorIds.size ? Array.from(authorIds) : ["00000000-0000-0000-0000-000000000000"]);
+        const authorMap = new Map((authors ?? []).map((a: any) => [a.user_id, a.display_name ?? "Unknown"]));
+
+        const activity: StudentActivity[] = [];
+        for (const r of bills.data ?? []) {
+          activity.push({
+            id: (r as any).id,
+            studentId: (r as any).author_user_id,
+            studentName: authorMap.get((r as any).author_user_id) ?? "Unknown",
+            action: `${(r as any).status === "draft" ? "Drafted" : "Submitted"} H.R. ${(r as any).bill_number} â€” ${(r as any).title}`,
+            timestamp: new Date((r as any).created_at),
+            type: "bill",
+          });
+        }
+        for (const r of cm.data ?? []) {
+          activity.push({
+            id: `${(r as any).committee_id}:${(r as any).user_id}:${(r as any).created_at}`,
+            studentId: (r as any).user_id,
+            studentName: authorMap.get((r as any).user_id) ?? "Unknown",
+            action: `Joined ${committeeMap.get((r as any).committee_id) ?? "a committee"}`,
+            timestamp: new Date((r as any).created_at),
+            type: "committee",
+          });
+        }
+        for (const r of cam.data ?? []) {
+          activity.push({
+            id: `${(r as any).caucus_id}:${(r as any).user_id}:${(r as any).created_at}`,
+            studentId: (r as any).user_id,
+            studentName: authorMap.get((r as any).user_id) ?? "Unknown",
+            action: `Joined ${caucusMap.get((r as any).caucus_id) ?? "a caucus"}`,
+            timestamp: new Date((r as any).created_at),
+            type: "caucus",
+          });
+        }
+        for (const r of letters.data ?? []) {
+          activity.push({
+            id: (r as any).id,
+            studentId: (r as any).sender_user_id,
+            studentName: authorMap.get((r as any).sender_user_id) ?? "Unknown",
+            action: `Sent a Dear Colleague letter${(r as any).subject ? `: ${(r as any).subject}` : ""}`,
+            timestamp: new Date((r as any).created_at),
+            type: "letter",
+          });
+        }
+        for (const r of cc.data ?? []) {
+          const caucusId = (r as any)?.caucus_announcements?.caucus_id;
+          activity.push({
+            id: (r as any).id,
+            studentId: (r as any).author_user_id,
+            studentName: authorMap.get((r as any).author_user_id) ?? "Unknown",
+            action: `Commented in ${caucusId ? caucusMap.get(caucusId) ?? "a caucus" : "a caucus"}`,
+            timestamp: new Date((r as any).created_at),
+            type: "comment",
+          });
+        }
+        for (const r of kcc.data ?? []) {
+          const committeeId = (r as any)?.committee_announcements?.committee_id;
+          activity.push({
+            id: (r as any).id,
+            studentId: (r as any).author_user_id,
+            studentName: authorMap.get((r as any).author_user_id) ?? "Unknown",
+            action: `Commented in ${committeeId ? committeeMap.get(committeeId) ?? "a committee" : "a committee"}`,
+            timestamp: new Date((r as any).created_at),
+            type: "comment",
+          });
+        }
+
+        activity.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+        setRecentActivity(activity.slice(0, 8));
+      } catch {
+        // ignore
+      }
+    };
+    void load();
+  }, [classId]);
 
   const formatTimestamp = (date: Date) => {
     const now = new Date();
@@ -159,12 +234,14 @@ export function ClassDashboard() {
     switch (type) {
       case 'bill':
         return <FileText className="w-4 h-4 text-blue-600" />;
-      case 'vote':
-        return <Vote className="w-4 h-4 text-green-600" />;
+      case 'letter':
+        return <MessageSquare className="w-4 h-4 text-blue-600" />;
       case 'caucus':
         return <MessageSquare className="w-4 h-4 text-purple-600" />;
       case 'committee':
         return <BookOpen className="w-4 h-4 text-orange-600" />;
+      case 'comment':
+        return <MessageSquare className="w-4 h-4 text-gray-700" />;
       default:
         return <AlertCircle className="w-4 h-4 text-gray-600" />;
     }
@@ -338,7 +415,10 @@ export function ClassDashboard() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">{activity.studentName}</span> {activity.action}
+                          <Link to={`/profile/${activity.studentId}`} className="font-semibold hover:text-blue-600 transition-colors">
+                            {activity.studentName}
+                          </Link>{" "}
+                          {activity.action}
                         </p>
                         <p className="text-xs text-gray-500 mt-0.5">{formatTimestamp(activity.timestamp)}</p>
                       </div>
@@ -373,6 +453,12 @@ export function ClassDashboard() {
                   <Button variant="outline" className="w-full justify-start">
                     <FileText className="w-4 h-4 mr-2" />
                     Review Bills
+                  </Button>
+                </Link>
+                <Link to="/teacher/bill-sorting">
+                  <Button variant="outline" className="w-full justify-start">
+                    <FileText className="w-4 h-4 mr-2" />
+                    Sort Bills into Committees
                   </Button>
                 </Link>
                 <Link to="/elections">

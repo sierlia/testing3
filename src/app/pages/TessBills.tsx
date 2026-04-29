@@ -6,6 +6,7 @@ import { Search, ExternalLink, Plus } from "lucide-react";
 import { Link } from "react-router";
 import { fetchBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
+import { useAuth } from "../utils/AuthContext";
 
 interface BillView {
   id: string; number: string; title: string; sponsor: string; sponsorParty: string; committee: string;
@@ -28,6 +29,8 @@ const toBillView = (bill: BillRecord): BillView => ({
 });
 
 export function TessBills() {
+  const { user } = useAuth();
+  const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBill, setSelectedBill] = useState<BillView | null>(null);
   const [allBills, setAllBills] = useState<BillView[]>([]);
@@ -52,7 +55,16 @@ export function TessBills() {
   return <div className="min-h-screen bg-gray-50"><Navigation />
     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       <div className="flex items-center justify-between mb-8"><div><h1 className="text-3xl font-bold text-gray-900 mb-2">Class Bills</h1><p className="text-gray-600">{filteredBills.length} bills found</p></div>
-        <Link to="/bills/create"><button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"><Plus className="w-4 h-4" />Create Bill</button></Link></div>
+        <div className="flex items-center gap-3">
+          {isTeacher && (
+            <Link to="/teacher/bill-sorting">
+              <button className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium shadow-sm">
+                Sort into Committees
+              </button>
+            </Link>
+          )}
+          <Link to="/bills/create"><button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"><Plus className="w-4 h-4" />Create Bill</button></Link>
+        </div></div>
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6"><div className="lg:col-span-2 space-y-4">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4"><div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
           <input type="text" placeholder="Search by bill number, title, or sponsor..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md" /></div></div>
