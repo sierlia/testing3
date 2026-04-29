@@ -5,6 +5,7 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Text from "@tiptap/extension-text";
 import Bold from "@tiptap/extension-bold";
 import Italic from "@tiptap/extension-italic";
+import HardBreak from "@tiptap/extension-hard-break";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import * as Y from "yjs";
@@ -88,6 +89,7 @@ export function CollaborativeBillEditor({
             Text,
             Bold,
             Italic,
+            HardBreak,
             Collaboration.configure({
               // Use a named fragment so multiple editors don't collide.
               fragment: ydocRef.current.getXmlFragment("prosemirror"),
@@ -103,6 +105,8 @@ export function CollaborativeBillEditor({
                 "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
             },
           },
+          // Ensure schema is created with a doc node even before any remote steps arrive.
+          content: "<p></p>",
         }
       : undefined,
     [ready, editable, localUser.name, localUser.color],
