@@ -46,7 +46,10 @@ export function SettingsClasses() {
     const { data: auth } = await supabase.auth.getUser();
     const uid = auth.user?.id;
     if (!uid) return navigate("/signin");
-    const { error } = await supabase.from("profiles").upsert({ user_id: uid, class_id: id } as any);
+    const desiredRole = (auth.user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
+    const { error } = await supabase
+      .from("profiles")
+      .upsert({ user_id: uid, class_id: id, role: desiredRole, display_name: auth.user?.user_metadata?.name ?? null } as any);
     if (error) toast.error(error.message);
     navigate(`/class/${id}/dashboard`);
   };
@@ -89,4 +92,3 @@ export function SettingsClasses() {
     </SettingsLayout>
   );
 }
-

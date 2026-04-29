@@ -26,9 +26,15 @@ export function JoinClassPage() {
       const row = joined?.[0];
       if (!row) throw new Error('Invalid class code');
 
-      const { error: profileError } = await supabase.from('profiles').update({
-        display_name: user.user_metadata?.name ?? null,
-      }).eq('user_id', user.id);
+      const desiredRole = (user.user_metadata as any)?.role === 'teacher' ? 'teacher' : 'student';
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .upsert({
+          user_id: user.id,
+          class_id: row.joined_class_id,
+          role: desiredRole,
+          display_name: user.user_metadata?.name ?? null,
+        } as any);
       if (profileError) throw profileError;
 
       toast.success(`Joined ${row.joined_class_name}`);

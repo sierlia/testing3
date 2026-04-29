@@ -38,7 +38,10 @@ export function ClassSimulationDashboard() {
         setMeId(uid);
 
         // Set active class for RLS scoping
-        const { error: upErr } = await supabase.from("profiles").upsert({ user_id: uid, class_id: classId } as any);
+        const desiredRole = (auth.user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
+        const { error: upErr } = await supabase
+          .from("profiles")
+          .upsert({ user_id: uid, class_id: classId, role: desiredRole, display_name: auth.user?.user_metadata?.name ?? null } as any);
         if (upErr) throw upErr;
 
         const { data: pRow, error: pErr } = await supabase

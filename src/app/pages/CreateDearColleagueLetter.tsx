@@ -88,16 +88,28 @@ export function CreateDearColleagueLetter() {
 
   const filteredSuggestions = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
-    if (!query) return [];
     if (recipientType === "individual") {
-      return individuals
-        .filter((s) => (s.display_name || "").toLowerCase().includes(query) || (s.constituency_code || "").toLowerCase().includes(query))
-        .slice(0, 10)
+      const base = query
+        ? individuals.filter(
+            (s) =>
+              (s.display_name || "").toLowerCase().includes(query) ||
+              (s.constituency_code || "").toLowerCase().includes(query),
+          )
+        : individuals;
+      return base
+        .slice(0, 20)
         .map((s) => ({ id: s.user_id, name: s.display_name || "Unknown", district: s.constituency_code, image: s.avatar_url }));
     }
-    if (recipientType === "caucus") return caucuses.filter((s) => s.name.toLowerCase().includes(query)).slice(0, 10).map((s) => ({ id: s.id, name: s.name }));
-    if (recipientType === "party") return parties.filter((s) => s.name.toLowerCase().includes(query)).slice(0, 10).map((s) => ({ id: s.id, name: s.name }));
-    return committees.filter((s) => s.name.toLowerCase().includes(query)).slice(0, 10).map((s) => ({ id: s.id, name: s.name }));
+    if (recipientType === "caucus") {
+      const base = query ? caucuses.filter((s) => s.name.toLowerCase().includes(query)) : caucuses;
+      return base.slice(0, 20).map((s) => ({ id: s.id, name: s.name }));
+    }
+    if (recipientType === "party") {
+      const base = query ? parties.filter((s) => s.name.toLowerCase().includes(query)) : parties;
+      return base.slice(0, 20).map((s) => ({ id: s.id, name: s.name }));
+    }
+    const base = query ? committees.filter((s) => s.name.toLowerCase().includes(query)) : committees;
+    return base.slice(0, 20).map((s) => ({ id: s.id, name: s.name }));
   }, [searchQuery, recipientType, individuals, caucuses, parties, committees]);
 
   const handleSendLetter = async () => {
@@ -215,6 +227,7 @@ export function CreateDearColleagueLetter() {
                   setShowSuggestions(true);
                 }}
                 onFocus={() => setShowSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
                 placeholder={
                   loading
                     ? "Loading..."
@@ -229,7 +242,7 @@ export function CreateDearColleagueLetter() {
                 className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               />
 
-              {showSuggestions && searchQuery && filteredSuggestions.length > 0 && (
+              {showSuggestions && filteredSuggestions.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
                   {recipientType === "individual" ? (
                     filteredSuggestions.map((s: any) => (
