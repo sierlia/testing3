@@ -43,7 +43,9 @@ import { CaucusChairVote } from "./pages/CaucusChairVote";
 import { TeacherBillSorting } from "./pages/TeacherBillSorting";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { JoinClassPage } from "./pages/JoinClassPage";
-import { Organizations } from "./pages/Organizations";
+import { PartiesPage } from "./pages/PartiesPage";
+import { CommitteesHome } from "./pages/CommitteesHome";
+import { CommitteeDashboard } from "./pages/CommitteeDashboard";
 
 export const router = createHashRouter([
   {
@@ -92,7 +94,19 @@ export const router = createHashRouter([
   },
   {
     path: "/organizations",
-    Component: Organizations,
+    Component: PartiesPage,
+  },
+  {
+    path: "/parties",
+    Component: PartiesPage,
+  },
+  {
+    path: "/committees",
+    Component: CommitteesHome,
+  },
+  {
+    path: "/committees/:id",
+    Component: CommitteeDashboard,
   },
   {
     path: "/committee-preferences",

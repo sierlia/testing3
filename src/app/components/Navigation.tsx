@@ -27,6 +27,7 @@ export function Navigation() {
                         currentPath.startsWith('/bills') || currentPath.startsWith('/caucuses') ||
                         currentPath.startsWith('/committee') || currentPath.startsWith('/dear-colleague') ||
                         currentPath.startsWith('/notifications') || currentPath.startsWith('/members') ||
+                        currentPath.startsWith('/parties') || currentPath.startsWith('/committees') ||
                         currentPath === '/elections' || currentPath === '/floor-session' || 
                         currentPath === '/calendar' || currentPath.startsWith('/profile') ||
                         currentPath === '/resources' || currentPath.startsWith('/tess-');
@@ -65,7 +66,7 @@ export function Navigation() {
               </Link>
 
               <Link
-                to="/organizations"
+                to="/parties"
                 className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
               >
                 Organizations

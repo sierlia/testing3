@@ -55,12 +55,13 @@ export function CreateClassPage() {
 
       await ensureClassesTableExists();
 
-      const settings = {
-        description: formData.description,
-        parties: {
-          allowed: formData.allowedParties,
-          allowStudentCreated: formData.allowStudentCreatedParties,
-        },
+        const settings = {
+          description: formData.description,
+          parties: {
+            allowed: formData.allowedParties,
+            allowStudentCreated: formData.allowStudentCreatedParties,
+            requireApproval: true,
+          },
         committees: {
           enabled: formData.committees,
           assignmentMode: formData.committeeAssignmentMode,
@@ -70,14 +71,46 @@ export function CreateClassPage() {
         bills: { tabs: formData.billTabs },
       };
 
-      const { error } = await supabase.from('classes').insert({
+      const { data: createdClass, error } = await supabase.from('classes').insert({
         teacher_id: user.id,
         name: formData.name.trim(),
         class_code: formData.classCode,
         settings,
-      });
+      }).select('id').single();
 
       if (error) throw error;
+
+      // Ensure teacher profile exists and is set to this class
+      await supabase.from('profiles').upsert({
+        user_id: user.id,
+        class_id: createdClass.id,
+        role: 'teacher',
+        display_name: user.user_metadata?.name ?? null,
+      });
+
+      // Seed committees and parties from settings so they appear on Organizations pages
+      if (formData.committees.length > 0) {
+        await supabase.from('committees').insert(
+          formData.committees.map((name) => ({
+            class_id: createdClass.id,
+            name,
+            description: '',
+          })),
+        );
+      }
+
+      if (formData.allowedParties.length > 0) {
+        await supabase.from('parties').insert(
+          formData.allowedParties.map((name) => ({
+            class_id: createdClass.id,
+            name,
+            platform: '',
+            created_by: user.id,
+            approved: true,
+          })),
+        );
+      }
+
       toast.success(`Class created. Join code: ${formData.classCode}`);
       navigate('/teacher/dashboard');
     } catch (error: any) {

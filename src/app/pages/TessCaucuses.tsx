@@ -4,6 +4,7 @@ import { Search, Plus, Users, ArrowUpDown } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
+import { OrganizationsLayout } from "./OrganizationsLayout";
 
 interface Caucus {
   id: string;
@@ -207,19 +208,20 @@ export function TessCaucuses() {
       <Navigation />
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">Caucuses</h1>
-            <p className="text-gray-600">Join or create groups focused on specific issues</p>
+        <OrganizationsLayout active="caucuses">
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h2 className="text-xl font-semibold text-gray-900">Caucuses</h2>
+              <p className="text-sm text-gray-600">Join or create groups focused on specific issues</p>
+            </div>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              Create Caucus
+            </button>
           </div>
-          <button
-            onClick={() => setShowCreateForm(!showCreateForm)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-          >
-            <Plus className="w-4 h-4" />
-            Create Caucus
-          </button>
-        </div>
 
         {showCreateForm && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -328,8 +330,8 @@ export function TessCaucuses() {
             ))
           )}
         </div>
+        </OrganizationsLayout>
       </main>
     </div>
   );
 }
-
