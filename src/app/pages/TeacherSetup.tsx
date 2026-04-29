@@ -21,6 +21,7 @@ export function TeacherSetup() {
       "Judiciary Committee",
       "Agriculture Committee",
     ],
+    allowSelfJoinCommittees: false,
     
     // Simulation rules
     chairElectionMode: "elected", // "elected" or "teacher-assigned"
@@ -101,6 +102,7 @@ export function TeacherSetup() {
           allowStudentCreatedParties: s?.parties?.allowStudentCreated ?? settings.allowStudentCreatedParties,
           autoApproveParties: s?.parties?.autoApprove ?? settings.autoApproveParties,
           enabledCommittees: s?.committees?.enabled ?? settings.enabledCommittees,
+          allowSelfJoinCommittees: !!s?.committees?.allowSelfJoin,
           chairElectionMode: s?.committees?.chairElectionMode ?? settings.chairElectionMode,
           billAssignmentAuthority: s?.bills?.assignmentAuthority ?? settings.billAssignmentAuthority,
           floorResultsBinding: s?.floor?.binding ?? settings.floorResultsBinding,
@@ -152,6 +154,7 @@ export function TeacherSetup() {
           ...(existing?.committees ?? {}),
           enabled: settings.enabledCommittees,
           chairElectionMode: settings.chairElectionMode,
+          allowSelfJoin: settings.allowSelfJoinCommittees,
         },
         bills: { ...(existing?.bills ?? {}), assignmentAuthority: settings.billAssignmentAuthority },
         floor: { ...(existing?.floor ?? {}), binding: settings.floorResultsBinding },
@@ -305,6 +308,24 @@ export function TeacherSetup() {
                   <span className="text-sm font-medium text-gray-900">{committee}</span>
                 </label>
               ))}
+            </div>
+
+            <div className="mt-6">
+              <label className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-200 rounded-md cursor-pointer hover:bg-blue-100 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={settings.allowSelfJoinCommittees}
+                  onChange={(e) => {
+                    setSettings({ ...settings, allowSelfJoinCommittees: e.target.checked });
+                    setHasChanges(true);
+                  }}
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                />
+                <div>
+                  <span className="text-sm font-semibold text-blue-900">Allow students to join committees on their own</span>
+                  <p className="text-xs text-blue-700 mt-1">When disabled (default), students must submit committee preference rankings.</p>
+                </div>
+              </label>
             </div>
           </div>
 

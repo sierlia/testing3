@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Navigation } from "../components/Navigation";
 import { DraggableCommitteeCard } from "../components/DraggableCommitteeCard";
 import { GripVertical, Info } from "lucide-react";
+import { supabase } from "../utils/supabase";
+import { toast } from "sonner";
 
 interface Committee {
   id: string;
@@ -15,64 +17,10 @@ interface Committee {
 }
 
 export function CommitteePreferences() {
-  // Mock student's class tag
-  const studentClassTag = "civics-101";
-  
-  // Mock available committees
-  const availableCommittees: Committee[] = [
-    {
-      id: "education",
-      name: "Education Committee",
-      description: "Oversees K-12 and higher education policy, student loans, and educational standards.",
-      meetingTime: "Tuesdays, 3:00 PM",
-      notes: "High activity level during legislative session",
-      tags: ["civics-101", "advanced-gov"],
-    },
-    {
-      id: "environment",
-      name: "Environment & Energy Committee",
-      description: "Addresses climate change, renewable energy, conservation, and environmental protection.",
-      meetingTime: "Wednesdays, 2:30 PM",
-      tags: ["civics-101"],
-    },
-    {
-      id: "healthcare",
-      name: "Healthcare Committee",
-      description: "Focuses on healthcare access, insurance reform, public health, and medical policy.",
-      meetingTime: "Thursdays, 3:15 PM",
-      notes: "Often requires policy research",
-      tags: ["civics-101", "advanced-gov"],
-    },
-    {
-      id: "budget",
-      name: "Budget & Appropriations Committee",
-      description: "Reviews government spending, taxation, and fiscal policy decisions.",
-      meetingTime: "Fridays, 2:00 PM",
-      tags: ["advanced-gov"],
-    },
-    {
-      id: "judiciary",
-      name: "Judiciary Committee",
-      description: "Handles legal matters, constitutional issues, criminal justice, and civil rights.",
-      meetingTime: "Mondays, 3:30 PM",
-      tags: ["civics-101"],
-    },
-    {
-      id: "agriculture",
-      name: "Agriculture Committee",
-      description: "Covers farm policy, food security, rural development, and agricultural trade.",
-      meetingTime: "Tuesdays, 2:00 PM",
-      tags: ["civics-101"],
-    },
-  ];
-
-  // Filter committees based on student's class tag
-  const eligibleCommittees = availableCommittees.filter(committee => 
-    committee.tags.includes(studentClassTag)
-  );
-
-  const [rankedCommittees, setRankedCommittees] = useState<Committee[]>(eligibleCommittees);
+  const [rankedCommittees, setRankedCommittees] = useState<Committee[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [classId, setClassId] = useState<string | null>(null);
 
   const moveCommittee = (dragIndex: number, hoverIndex: number) => {
     const draggedCommittee = rankedCommittees[dragIndex];
@@ -82,9 +30,81 @@ export function CommitteePreferences() {
     setRankedCommittees(newRanking);
   };
 
-  const handleSubmit = () => {
-    setSubmitted(true);
-    console.log("Submitted committee preferences:", rankedCommittees);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) return;
+        const { data: prof } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
+        const cid = (prof as any)?.class_id ?? null;
+        setClassId(cid);
+        if (!cid) return;
+
+        const { data: cls } = await supabase.from("classes").select("settings").eq("id", cid).maybeSingle();
+        const enabledNames = ((cls as any)?.settings?.committees?.enabled ?? []) as string[];
+        const { data: committees } = await supabase.from("committees").select("id,name,description,created_at").order("created_at", { ascending: true });
+        const eligible = (committees ?? []).filter((c: any) => enabledNames.length === 0 || enabledNames.includes(c.name));
+
+        const { data: existingSub } = await supabase
+          .from("committee_preference_submissions")
+          .select("submitted_at")
+          .eq("class_id", cid)
+          .eq("user_id", uid)
+          .maybeSingle();
+        setSubmitted(!!existingSub);
+
+        const { data: existingPrefs } = await supabase
+          .from("committee_preferences")
+          .select("committee_id,rank")
+          .eq("class_id", cid)
+          .eq("user_id", uid);
+        const rankMap = new Map((existingPrefs ?? []).map((p: any) => [p.committee_id, p.rank]));
+
+        const sorted = eligible
+          .slice()
+          .sort((a: any, b: any) => (rankMap.get(a.id) ?? 999) - (rankMap.get(b.id) ?? 999) || a.name.localeCompare(b.name));
+
+        setRankedCommittees(
+          sorted.map((c: any) => ({
+            id: c.id,
+            name: c.name,
+            description: c.description || "No description provided.",
+            meetingTime: "TBD",
+            tags: [],
+          })),
+        );
+      } catch (e: any) {
+        toast.error(e.message || "Could not load committees");
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, []);
+
+  const handleSubmit = async () => {
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid || !classId) return;
+
+      await supabase.from("committee_preferences").delete().eq("class_id", classId).eq("user_id", uid);
+      const rows = rankedCommittees.map((c, idx) => ({ class_id: classId, user_id: uid, committee_id: c.id, rank: idx + 1 }));
+      const { error: insErr } = await supabase.from("committee_preferences").insert(rows);
+      if (insErr) throw insErr;
+
+      const { error: subErr } = await supabase
+        .from("committee_preference_submissions")
+        .upsert({ class_id: classId, user_id: uid, submitted_at: new Date().toISOString() } as any);
+      if (subErr) throw subErr;
+
+      setSubmitted(true);
+      toast.success("Preferences submitted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not submit preferences");
+    }
   };
 
   return (
@@ -134,11 +154,11 @@ export function CommitteePreferences() {
 
           <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">
-              {eligibleCommittees.length} eligible committees based on your class
+              {rankedCommittees.length} eligible committees
             </p>
             <button
               onClick={handleSubmit}
-              disabled={submitted}
+              disabled={submitted || loading || rankedCommittees.length === 0}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
               {submitted ? "Submitted" : "Submit Preferences"}

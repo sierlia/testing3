@@ -25,6 +25,7 @@ export function CommitteeDashboard() {
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
   const [myRole, setMyRole] = useState<MembershipRole | null>(null);
   const [joining, setJoining] = useState(false);
+  const [allowSelfJoin, setAllowSelfJoin] = useState(false);
 
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
@@ -74,6 +75,15 @@ export function CommitteeDashboard() {
         if (cErr) throw cErr;
         setCommittee(c as any);
         setAboutDraft((c as any).description ?? "");
+
+        const { data: prof } = await supabase.from("profiles").select("class_id,role").eq("user_id", me ?? "").maybeSingle();
+        const classId = (prof as any)?.class_id ?? null;
+        if (classId) {
+          const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
+          setAllowSelfJoin(!!(cls as any)?.settings?.committees?.allowSelfJoin);
+        } else {
+          setAllowSelfJoin(false);
+        }
 
         const { data: mRows, error: mErr } = await supabase
           .from("committee_members")
@@ -494,6 +504,7 @@ export function CommitteeDashboard() {
 
   const join = async () => {
     if (!meId) return;
+    if (!allowSelfJoin) return;
     setJoining(true);
     try {
       const { error } = await supabase
@@ -530,7 +541,7 @@ export function CommitteeDashboard() {
             <div className="text-sm text-gray-600">{members.length} members</div>
           </div>
           <div className="flex items-center gap-2">
-            {!myRole && (
+            {!myRole && allowSelfJoin && (
               <button
                 onClick={() => void join()}
                 disabled={joining}
@@ -539,9 +550,12 @@ export function CommitteeDashboard() {
                 Join
               </button>
             )}
-            <Link to={`/committee/${committeeId}/workspace`} className="px-4 py-2 border border-gray-300 rounded-md text-sm hover:bg-gray-50">
-              Workspace
-            </Link>
+            <div className="flex items-center rounded-md border border-gray-300 overflow-hidden">
+              <span className="px-3 py-2 text-sm bg-gray-50 text-gray-900 font-medium">Dashboard</span>
+              <Link to={`/committee/${committeeId}/workspace`} className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                Workspace
+              </Link>
+            </div>
           </div>
         </div>
 

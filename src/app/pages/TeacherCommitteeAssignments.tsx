@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Navigation } from "../components/Navigation";
 import { CommitteeAssignmentColumn } from "../components/CommitteeAssignmentColumn";
 import { Play, Eye, Send, AlertCircle } from "lucide-react";
+import { supabase } from "../utils/supabase";
+import { toast } from "sonner";
 
 interface Student {
   id: string;
@@ -20,39 +22,84 @@ interface Committee {
 
 export function TeacherCommitteeAssignments() {
   const [assignmentStage, setAssignmentStage] = useState<'pending' | 'preview' | 'published'>('pending');
-  
-  // Mock committees
-  const committees: Committee[] = [
-    { id: "education", name: "Education Committee", capacity: 6 },
-    { id: "environment", name: "Environment & Energy Committee", capacity: 6 },
-    { id: "healthcare", name: "Healthcare Committee", capacity: 5 },
-    { id: "judiciary", name: "Judiciary Committee", capacity: 5 },
-    { id: "agriculture", name: "Agriculture Committee", capacity: 4 },
-  ];
 
-  // Mock students with preferences
-  const initialStudents: Student[] = [
-    { id: "s1", name: "Alice Johnson", preferences: ["education", "environment", "healthcare"] },
-    { id: "s2", name: "Bob Smith", preferences: ["environment", "judiciary", "education"] },
-    { id: "s3", name: "Carol Martinez", preferences: ["healthcare", "education", "environment"] },
-    { id: "s4", name: "David Lee", preferences: ["judiciary", "agriculture", "education"] },
-    { id: "s5", name: "Emma Davis", preferences: ["environment", "healthcare", "judiciary"] },
-    { id: "s6", name: "Frank Wilson", preferences: ["education", "agriculture", "healthcare"] },
-    { id: "s7", name: "Grace Taylor", preferences: ["healthcare", "environment", "education"] },
-    { id: "s8", name: "Henry Brown", preferences: ["judiciary", "education", "environment"] },
-    { id: "s9", name: "Iris Chen", preferences: ["agriculture", "environment", "healthcare"] },
-    { id: "s10", name: "Jack Anderson", preferences: ["education", "judiciary", "agriculture"] },
-    { id: "s11", name: "Karen White", preferences: ["environment", "education", "healthcare"] },
-    { id: "s12", name: "Liam Garcia", preferences: ["healthcare", "judiciary", "education"] },
-    { id: "s13", name: "Maya Robinson", preferences: ["education", "healthcare", "environment"] },
-    { id: "s14", name: "Noah Clark", preferences: ["judiciary", "environment", "agriculture"] },
-    { id: "s15", name: "Olivia Lewis", preferences: ["agriculture", "education", "healthcare"] },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [classId, setClassId] = useState<string | null>(null);
+  const [committees, setCommittees] = useState<Committee[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
 
-  const [students, setStudents] = useState<Student[]>(initialStudents);
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const me = auth.user?.id;
+        if (!me) return;
+        const { data: prof } = await supabase.from("profiles").select("class_id,role").eq("user_id", me).maybeSingle();
+        const cid = (prof as any)?.class_id ?? null;
+        setClassId(cid);
+        if (!cid) return;
+
+        const { data: committeeRows, error: cErr } = await supabase.from("committees").select("id,name").order("created_at", { ascending: true });
+        if (cErr) throw cErr;
+
+        const { data: studentRows, error: sErr } = await supabase
+          .from("profiles")
+          .select("user_id,display_name,role")
+          .eq("role", "student")
+          .order("display_name", { ascending: true });
+        if (sErr) throw sErr;
+
+        const numStudents = (studentRows ?? []).length;
+        const numCommittees = Math.max(1, (committeeRows ?? []).length);
+        const baseCap = Math.ceil(numStudents / numCommittees);
+
+        setCommittees((committeeRows ?? []).map((c: any) => ({ id: c.id, name: c.name, capacity: baseCap })));
+
+        const studentIds = (studentRows ?? []).map((s: any) => s.user_id);
+        const { data: prefRows } = await supabase
+          .from("committee_preferences")
+          .select("user_id,committee_id,rank")
+          .eq("class_id", cid)
+          .in("user_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
+
+        const prefsByUser = new Map<string, string[]>();
+        for (const r of prefRows ?? []) {
+          const uid = (r as any).user_id as string;
+          const arr = prefsByUser.get(uid) ?? [];
+          arr.push((r as any).committee_id as string);
+          prefsByUser.set(uid, arr);
+        }
+        // ensure sorted by rank
+        const rankBy = new Map<string, number>();
+        for (const r of prefRows ?? []) rankBy.set(`${(r as any).user_id}|${(r as any).committee_id}`, (r as any).rank);
+        for (const [uid, arr] of prefsByUser.entries()) {
+          arr.sort((a, b) => (rankBy.get(`${uid}|${a}`) ?? 999) - (rankBy.get(`${uid}|${b}`) ?? 999));
+        }
+
+        const { data: existingMemberships } = await supabase.from("committee_members").select("committee_id,user_id").in("user_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
+        const assignedByUser = new Map<string, string>();
+        for (const r of existingMemberships ?? []) assignedByUser.set((r as any).user_id, (r as any).committee_id);
+
+        setStudents(
+          (studentRows ?? []).map((s: any) => ({
+            id: s.user_id,
+            name: s.display_name ?? "Student",
+            preferences: prefsByUser.get(s.user_id) ?? [],
+            assignedCommittee: assignedByUser.get(s.user_id),
+          })),
+        );
+      } catch (e: any) {
+        toast.error(e.message || "Could not load committee assignment data");
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, []);
 
   const runAssignmentAlgorithm = () => {
-    // Simple algorithm: Try to assign students to their highest preference available
+    if (committees.length === 0) return;
     const newStudents = [...students];
     const committeeCounts: Record<string, number> = {};
     
@@ -63,6 +110,7 @@ export function TeacherCommitteeAssignments() {
     const shuffled = [...newStudents].sort(() => Math.random() - 0.5);
 
     shuffled.forEach(student => {
+      student.assignedCommittee = undefined;
       // Try preferences in order
       for (const pref of student.preferences) {
         const committee = committees.find(c => c.id === pref);
@@ -97,8 +145,26 @@ export function TeacherCommitteeAssignments() {
   };
 
   const publishAssignments = () => {
-    setAssignmentStage('published');
-    console.log("Publishing assignments:", students);
+    void (async () => {
+      if (!classId) return;
+      try {
+        const committeeIds = committees.map((c) => c.id);
+        const studentIds = students.map((s) => s.id);
+        // Clear existing committee memberships for this set of committees/students, then insert assigned
+        if (committeeIds.length && studentIds.length) {
+          await supabase.from("committee_members").delete().in("committee_id", committeeIds).in("user_id", studentIds);
+        }
+        const rows = students.filter((s) => s.assignedCommittee).map((s) => ({ committee_id: s.assignedCommittee, user_id: s.id, role: "member" }));
+        if (rows.length) {
+          const { error } = await supabase.from("committee_members").insert(rows as any);
+          if (error) throw error;
+        }
+        toast.success("Assignments published");
+        setAssignmentStage('published');
+      } catch (e: any) {
+        toast.error(e.message || "Could not publish assignments");
+      }
+    })();
   };
 
   const getStudentsForCommittee = (committeeId: string) => {

@@ -3,17 +3,19 @@ import { Navigation } from "../components/Navigation";
 import { Building2, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 
 type CommitteeRow = { id: string; name: string; description: string | null; created_at: string };
 
 export function CommitteesHome() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [committees, setCommittees] = useState<CommitteeRow[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
   const [settings, setSettings] = useState<any>({});
+  const [preferencesSubmitted, setPreferencesSubmitted] = useState<boolean>(false);
 
   useEffect(() => {
     const load = async () => {
@@ -32,7 +34,20 @@ export function CommitteesHome() {
         }
 
         const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
-        setSettings((cls as any)?.settings ?? {});
+        const s = (cls as any)?.settings ?? {};
+        setSettings(s);
+
+        if ((profile as any)?.role === "student" && !s?.committees?.allowSelfJoin) {
+          const { data: sub } = await supabase
+            .from("committee_preference_submissions")
+            .select("submitted_at")
+            .eq("class_id", classId)
+            .eq("user_id", me)
+            .maybeSingle();
+          const submitted = !!sub;
+          setPreferencesSubmitted(submitted);
+          if (!submitted) return navigate("/committee-preferences");
+        }
 
         const { data: rows, error } = await supabase
           .from("committees")
