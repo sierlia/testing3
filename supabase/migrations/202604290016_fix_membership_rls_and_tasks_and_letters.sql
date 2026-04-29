@@ -87,7 +87,7 @@ for select using (
         from public.parties pa
         join public.profiles p on p.user_id = auth.uid()
         where pa.id = audience_id
-          and pa.class_id = class_id
+          and pa.class_id = public.class_tasks.class_id
           and p.party = pa.name
       )
     )
