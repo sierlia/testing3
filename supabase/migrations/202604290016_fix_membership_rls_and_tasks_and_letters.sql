@@ -82,7 +82,14 @@ for select using (
     audience_type = 'all'
     or (
       audience_type = 'party'
-      and exists (select 1 from public.profiles p where p.user_id = auth.uid() and p.party_id = audience_id)
+      and exists (
+        select 1
+        from public.parties pa
+        join public.profiles p on p.user_id = auth.uid()
+        where pa.id = audience_id
+          and pa.class_id = class_id
+          and p.party = pa.name
+      )
     )
     or (
       audience_type = 'committee'
