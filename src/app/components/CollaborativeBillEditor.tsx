@@ -37,6 +37,7 @@ export function CollaborativeBillEditor({
   const didInitRef = useRef(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
+  const hydratedFromSnapshotRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
@@ -61,7 +62,10 @@ export function CollaborativeBillEditor({
           key: { classId, committeeId, billId },
           user: { id: uid, name, color },
         },
-        () => mounted && setReady(true),
+        () => {
+          hydratedFromSnapshotRef.current = provider.getHydratedFromSnapshot();
+          mounted && setReady(true);
+        },
       );
       providerRef.current = provider;
     };
@@ -143,7 +147,10 @@ export function CollaborativeBillEditor({
     // If the doc was empty when we joined, seed it once from the bill text.
     if (didInitRef.current) return;
     didInitRef.current = true;
-    if (editor.getText().trim() === "") {
+    // Important: only seed from the bill's original text if we *didn't* hydrate
+    // from a previously persisted Yjs snapshot. Otherwise we risk overwriting
+    // the canonical collaborative state on reopen.
+    if (!hydratedFromSnapshotRef.current && editor.getText().trim() === "") {
       editor.commands.setContent(initialHtml || "<p></p>", false);
     }
   }, [editor, initialHtml]);

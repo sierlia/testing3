@@ -32,6 +32,7 @@ export class YjsSupabaseProvider {
   private persistTimer: number | null = null;
   private lastPersistedB64: string | null = null;
   private onSynced?: () => void;
+  private hadSnapshot = false;
 
   constructor({ doc, awareness, key, user }: { doc: Y.Doc; awareness: Awareness; key: DocKey; user: { id: string; name: string; color: string } }, onSynced?: () => void) {
     this.doc = doc;
@@ -65,7 +66,7 @@ export class YjsSupabaseProvider {
       .subscribe(async (status) => {
         if (status !== "SUBSCRIBED") return;
         if (this.destroyed) return;
-        await this.hydrateFromDb();
+        this.hadSnapshot = await this.hydrateFromDb();
         this.onSynced?.();
         this.broadcastAwareness();
       });
@@ -97,7 +98,7 @@ export class YjsSupabaseProvider {
     this.persistTimer = window.setTimeout(() => void this.persistToDb(), 1200);
   }
 
-  private async hydrateFromDb() {
+  private async hydrateFromDb(): Promise<boolean> {
     const { committeeId, billId } = this.key;
     const { data, error } = await supabase
       .from("committee_bill_docs")
@@ -105,13 +106,19 @@ export class YjsSupabaseProvider {
       .eq("committee_id", committeeId)
       .eq("bill_id", billId)
       .maybeSingle();
-    if (error) return;
+    if (error) return false;
     const b64 = (data as any)?.ydoc_base64 as string | undefined;
     if (b64) {
       this.lastPersistedB64 = b64;
       const update = fromBase64(b64);
       if (update.length) Y.applyUpdate(this.doc, update, "remote");
+      return update.length > 0;
     }
+    return false;
+  }
+
+  getHydratedFromSnapshot() {
+    return this.hadSnapshot;
   }
 
   private async persistToDb() {
@@ -136,4 +143,3 @@ export class YjsSupabaseProvider {
     void supabase.removeChannel(this.channel);
   }
 }
-
