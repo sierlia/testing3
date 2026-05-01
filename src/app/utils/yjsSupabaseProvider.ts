@@ -33,6 +33,7 @@ export class YjsSupabaseProvider {
   private lastPersistedB64: string | null = null;
   private onSynced?: () => void;
   private hadSnapshot = false;
+  private isSubscribed = false;
 
   constructor({ doc, awareness, key, user }: { doc: Y.Doc; awareness: Awareness; key: DocKey; user: { id: string; name: string; color: string } }, onSynced?: () => void) {
     this.doc = doc;
@@ -54,6 +55,14 @@ export class YjsSupabaseProvider {
         // even if the originating user disconnects quickly.
         this.schedulePersist();
       })
+      .on("broadcast", { event: "yjs-sync" }, (payload) => {
+        const b64 = (payload as any)?.payload?.b64 as string | undefined;
+        if (!b64) return;
+        const update = fromBase64(b64);
+        // Applying a full-state update is safe; Yjs will merge it.
+        Y.applyUpdate(this.doc, update, "remote");
+        this.schedulePersist();
+      })
       .on("broadcast", { event: "yjs-awareness" }, (payload) => {
         const b64 = (payload as any)?.payload?.b64 as string | undefined;
         if (!b64) return;
@@ -64,7 +73,16 @@ export class YjsSupabaseProvider {
       .subscribe(async (status) => {
         if (status !== "SUBSCRIBED") return;
         if (this.destroyed) return;
+        this.isSubscribed = true;
         this.hadSnapshot = await this.hydrateFromDb();
+        // Broadcast full state so other connected clients converge even if their
+        // DB hydration was blocked/stale or they joined simultaneously.
+        try {
+          const full = Y.encodeStateAsUpdate(this.doc);
+          this.channel.send({ type: "broadcast", event: "yjs-sync", payload: { b64: toBase64(full) } });
+        } catch {
+          // ignore
+        }
         this.onSynced?.();
         this.broadcastAwareness();
       });
@@ -144,5 +162,9 @@ export class YjsSupabaseProvider {
     }
     if (this.persistTimer) window.clearTimeout(this.persistTimer);
     void supabase.removeChannel(this.channel);
+  }
+
+  getSubscribed() {
+    return this.isSubscribed;
   }
 }

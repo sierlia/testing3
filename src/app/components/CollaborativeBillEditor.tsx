@@ -38,6 +38,7 @@ export function CollaborativeBillEditor({
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const hydratedFromSnapshotRef = useRef(false);
+  const [collabStatus, setCollabStatus] = useState<"connecting" | "live" | "fallback">("connecting");
 
   useEffect(() => {
     let mounted = true;
@@ -64,6 +65,7 @@ export function CollaborativeBillEditor({
         },
         () => {
           hydratedFromSnapshotRef.current = provider.getHydratedFromSnapshot();
+          setCollabStatus(provider.getSubscribed() ? "live" : "connecting");
           mounted && setReady(true);
         },
       );
@@ -111,6 +113,7 @@ export function CollaborativeBillEditor({
       });
 
       setEditor(ed);
+      setCollabStatus("live");
       return () => {
         ed.destroy();
         setEditor(null);
@@ -131,6 +134,7 @@ export function CollaborativeBillEditor({
         });
         setEditor(ed);
         setEditorError(`Collaboration unavailable: ${e?.message || String(e)}`);
+        setCollabStatus("fallback");
         return () => {
           ed.destroy();
           setEditor(null);
@@ -138,6 +142,7 @@ export function CollaborativeBillEditor({
       } catch (e2: any) {
         setEditor(null);
         setEditorError(e2?.message || e?.message || String(e2 || e));
+        setCollabStatus("fallback");
       }
     }
   }, [ready, editable, localUser.name, localUser.color, initialHtml]);
@@ -167,5 +172,14 @@ export function CollaborativeBillEditor({
     return <div className="text-sm text-gray-500">Loading editor…</div>;
   }
 
-  return <EditorContent editor={editor} />;
+  return (
+    <div>
+      {collabStatus !== "live" && (
+        <div className="mb-2 text-xs px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-800">
+          {collabStatus === "connecting" ? "Connecting collaborationâ€¦" : "Collaboration offline (local edits only)"}
+        </div>
+      )}
+      <EditorContent editor={editor} />
+    </div>
+  );
 }
