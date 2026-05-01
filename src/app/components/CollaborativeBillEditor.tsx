@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { EditorContent } from "@tiptap/react";
 import { Editor, Extension, Mark } from "@tiptap/core";
 import { isChangeOrigin } from "@tiptap/extension-collaboration";
@@ -8,7 +8,22 @@ import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
-import { Bold, Code, Heading1, Heading2, Italic, List, ListOrdered, Pilcrow, Quote, RemoveFormatting } from "lucide-react";
+import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Heading1,
+  Heading2,
+  Heading3,
+  Italic,
+  Link as LinkIcon,
+  List,
+  ListOrdered,
+  RemoveFormatting,
+  Underline,
+} from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { supabase } from "../utils/supabase";
 import { YjsSupabaseProvider } from "../utils/yjsSupabaseProvider";
 
@@ -78,6 +93,161 @@ const EditHighlight = Mark.create({
   },
 });
 
+const DeleteHighlight = Mark.create({
+  name: "deleteHighlight",
+  inclusive: false,
+
+  addAttributes() {
+    return {
+      authorId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-delete-author-id"),
+        renderHTML: () => ({}),
+      },
+      authorName: {
+        default: "Member",
+        parseHTML: (element) => element.getAttribute("data-delete-author") ?? "Member",
+        renderHTML: () => ({}),
+      },
+      color: {
+        default: "#2563eb",
+        parseHTML: (element) => element.getAttribute("data-delete-color") ?? "#2563eb",
+        renderHTML: () => ({}),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "span[data-delete-highlight]" }];
+  },
+
+  renderHTML({ mark }) {
+    const authorId = mark.attrs.authorId || "";
+    const authorName = String(mark.attrs.authorName || "").trim() || "Member";
+    const color = mark.attrs.color || "#2563eb";
+    return [
+      "span",
+      {
+        "data-delete-highlight": "true",
+        "data-delete-author-id": authorId,
+        "data-delete-author": authorName,
+        "data-delete-color": color,
+        class: "committee-delete-highlight",
+        style: `--edit-color:${color}; background-color: ${hexToRgba(color, 0.12)}; text-decoration-line: line-through; text-decoration-color: ${color}; text-decoration-thickness: 2px;`,
+      },
+      0,
+    ];
+  },
+});
+
+const UnderlineMark = Mark.create({
+  name: "underline",
+
+  parseHTML() {
+    const isUnderline = (value: unknown) => (String(value).includes("underline") ? null : false);
+    return [{ tag: "u" }, { style: "text-decoration", getAttrs: isUnderline }, { style: "text-decoration-line", getAttrs: isUnderline }];
+  },
+
+  renderHTML() {
+    return ["u", {}, 0];
+  },
+});
+
+const LinkMark = Mark.create({
+  name: "link",
+  inclusive: false,
+
+  addAttributes() {
+    return {
+      href: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("href"),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "a[href]" }];
+  },
+
+  renderHTML({ mark }) {
+    return [
+      "a",
+      {
+        href: mark.attrs.href,
+        target: "_blank",
+        rel: "noopener noreferrer",
+        class: "text-blue-700 underline",
+      },
+      0,
+    ];
+  },
+});
+
+const TextAlignment = Extension.create({
+  name: "textAlignment",
+
+  addGlobalAttributes() {
+    return [
+      {
+        types: ["paragraph", "heading"],
+        attributes: {
+          textAlign: {
+            default: null,
+            parseHTML: (element) => element.style.textAlign || null,
+            renderHTML: (attributes) => (attributes.textAlign ? { style: `text-align: ${attributes.textAlign}` } : {}),
+          },
+        },
+      },
+    ];
+  },
+});
+
+function sanitizeUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+}
+
+function deletedOriginalText(doc: any, from: number, to: number) {
+  const pieces: string[] = [];
+  doc.nodesBetween(from, to, (node: any) => {
+    if (!node.isText) return true;
+    const isTrackedChange = node.marks?.some((mark: any) => mark.type.name === "editHighlight" || mark.type.name === "deleteHighlight");
+    if (!isTrackedChange && node.text) pieces.push(node.text);
+    return false;
+  });
+  return pieces.join("");
+}
+
+function setBlockAlignment(editor: Editor, alignment: "left" | "center" | "right") {
+  const { state, view } = editor;
+  const { from, to } = state.selection;
+  const tr = state.tr;
+  let changed = false;
+
+  state.doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type.name !== "paragraph" && node.type.name !== "heading") return true;
+    tr.setNodeMarkup(pos, undefined, { ...node.attrs, textAlign: alignment === "left" ? null : alignment }, node.marks);
+    changed = true;
+    return false;
+  });
+
+  if (!changed) {
+    const { $from } = state.selection;
+    for (let depth = $from.depth; depth > 0; depth -= 1) {
+      const node = $from.node(depth);
+      if (node.type.name !== "paragraph" && node.type.name !== "heading") continue;
+      tr.setNodeMarkup($from.before(depth), undefined, { ...node.attrs, textAlign: alignment === "left" ? null : alignment }, node.marks);
+      changed = true;
+      break;
+    }
+  }
+
+  if (changed) view.dispatch(tr.scrollIntoView());
+  view.focus();
+}
+
 function createEditAttributionExtension({
   getAuthor,
   shouldSuppress,
@@ -97,8 +267,9 @@ function createEditAttributionExtension({
           appendTransaction: (transactions, _oldState, newState) => {
             if (!editor.isEditable || shouldSuppress()) return null;
 
-            const markType = newState.schema.marks.editHighlight;
-            if (!markType) return null;
+            const editMarkType = newState.schema.marks.editHighlight;
+            const deleteMarkType = newState.schema.marks.deleteHighlight;
+            if (!editMarkType || !deleteMarkType) return null;
 
             const changedTransactions = transactions.filter(
               (transaction) =>
@@ -107,26 +278,39 @@ function createEditAttributionExtension({
             if (!changedTransactions.length) return null;
 
             const ranges: Array<{ from: number; to: number }> = [];
+            const deletions: Array<{ at: number; text: string }> = [];
             for (const transaction of changedTransactions) {
               transaction.mapping.maps.forEach((stepMap, mapIndex) => {
                 stepMap.forEach((oldStart, oldEnd, newStart, newEnd) => {
-                  if (newEnd <= newStart) return;
-                  // Only highlight pure insertions (typing/paste). Replacements are harder to
-                  // slice precisely; skipping them avoids painting over existing text.
-                  if (oldEnd !== oldStart) return;
                   const laterMaps = transaction.mapping.slice(mapIndex + 1);
-                  ranges.push({
-                    from: laterMaps.map(newStart, 1),
-                    to: laterMaps.map(newEnd, -1),
-                  });
+                  if (newEnd > newStart) {
+                    ranges.push({
+                      from: laterMaps.map(newStart, 1),
+                      to: laterMaps.map(newEnd, -1),
+                    });
+                  }
+                  if (oldEnd > oldStart) {
+                    const text = deletedOriginalText(transaction.before, oldStart, oldEnd);
+                    if (text) {
+                      deletions.push({
+                        at: laterMaps.map(newStart, 1),
+                        text,
+                      });
+                    }
+                  }
                 });
               });
             }
-            if (!ranges.length) return null;
+            if (!ranges.length && !deletions.length) return null;
 
             const author = getAuthor();
             if (!author?.id) return null;
-            const mark = markType.create({
+            const editMark = editMarkType.create({
+              authorId: author.id,
+              authorName: String(author.name || "").trim() || "Member",
+              color: author.color,
+            });
+            const deleteMark = deleteMarkType.create({
               authorId: author.id,
               authorName: String(author.name || "").trim() || "Member",
               color: author.color,
@@ -137,7 +321,15 @@ function createEditAttributionExtension({
             for (const range of ranges) {
               const from = Math.max(0, Math.min(range.from, max));
               const to = Math.max(from, Math.min(range.to, max));
-              if (to > from) tr.addMark(from, to, mark);
+              if (to > from) tr.addMark(from, to, editMark);
+            }
+
+            for (const deletion of [...deletions].sort((a, b) => b.at - a.at)) {
+              const from = Math.max(0, Math.min(deletion.at, tr.doc.content.size));
+              tr.insertText(deletion.text, from);
+              const to = from + deletion.text.length;
+              tr.removeMark(from, to, editMarkType);
+              tr.addMark(from, to, deleteMark);
             }
 
             if (!tr.docChanged) return null;
@@ -157,32 +349,49 @@ function CommitteeEditorToolbar({ editor }: { editor: Editor }) {
     editor.view.focus();
   };
 
+  const setLink = () => {
+    const existing = String(editor.getAttributes("link").href || "");
+    const url = sanitizeUrl(window.prompt("Enter link URL", existing) || "");
+    if (!url) {
+      run(() => editor.chain().focus().extendMarkRange("link").unsetMark("link").run());
+      return;
+    }
+    run(() => editor.chain().focus().extendMarkRange("link").setMark("link", { href: url }).run());
+  };
+
   const buttons = [
-    { label: "Paragraph", icon: Pilcrow, onClick: () => run(() => editor.chain().focus().setParagraph().run()) },
-    { label: "Heading 1", icon: Heading1, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 1 }).run()) },
-    { label: "Heading 2", icon: Heading2, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 2 }).run()) },
+    { label: "Header 1", icon: Heading1, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 1 }).run()) },
+    { label: "Header 2", icon: Heading2, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 2 }).run()) },
+    { label: "Header 3", icon: Heading3, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 3 }).run()) },
     { label: "Bold", icon: Bold, onClick: () => run(() => editor.chain().focus().toggleBold().run()) },
     { label: "Italic", icon: Italic, onClick: () => run(() => editor.chain().focus().toggleItalic().run()) },
-    { label: "Bullet list", icon: List, onClick: () => run(() => editor.chain().focus().toggleBulletList().run()) },
+    { label: "Underline", icon: Underline, onClick: () => run(() => editor.chain().focus().toggleMark("underline").run()) },
+    { label: "Hyperlink", icon: LinkIcon, onClick: setLink },
     { label: "Numbered list", icon: ListOrdered, onClick: () => run(() => editor.chain().focus().toggleOrderedList().run()) },
-    { label: "Quote", icon: Quote, onClick: () => run(() => editor.chain().focus().toggleBlockquote().run()) },
-    { label: "Code block", icon: Code, onClick: () => run(() => editor.chain().focus().toggleCodeBlock().run()) },
-    { label: "Clear", icon: RemoveFormatting, onClick: () => run(() => editor.chain().focus().unsetAllMarks().clearNodes().run()) },
+    { label: "Bullet point list", icon: List, onClick: () => run(() => editor.chain().focus().toggleBulletList().run()) },
+    { label: "Align left", icon: AlignLeft, onClick: () => setBlockAlignment(editor, "left") },
+    { label: "Align center", icon: AlignCenter, onClick: () => setBlockAlignment(editor, "center") },
+    { label: "Align right", icon: AlignRight, onClick: () => setBlockAlignment(editor, "right") },
+    { label: "Remove formatting", icon: RemoveFormatting, onClick: () => run(() => editor.chain().focus().unsetAllMarks().clearNodes().run()) },
   ];
 
   return (
-    <div className="flex items-center gap-1 border border-gray-200 border-b-0 bg-gray-50 px-2 py-2 rounded-t-md">
+    <div className="flex flex-wrap items-center gap-1 border border-gray-200 border-b-0 bg-gray-50 px-2 py-2 rounded-t-md">
       {buttons.map(({ label, icon: Icon, onClick }) => (
-        <button
-          key={label}
-          type="button"
-          aria-label={label}
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={onClick}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-700 hover:bg-white hover:text-gray-900"
-        >
-          <Icon className="w-4 h-4" />
-        </button>
+        <Tooltip key={label}>
+          <TooltipTrigger asChild>
+            <button
+              type="button"
+              aria-label={label}
+              onMouseDown={(event) => event.preventDefault()}
+              onClick={onClick}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-700 transition-colors hover:bg-white hover:text-gray-900"
+            >
+              <Icon className="w-4 h-4" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent sideOffset={6}>{label}</TooltipContent>
+        </Tooltip>
       ))}
     </div>
   );
@@ -212,6 +421,7 @@ export function CollaborativeBillEditor({
   const [editorError, setEditorError] = useState<string | null>(null);
   const hydratedFromSnapshotRef = useRef(false);
   const [collabStatus, setCollabStatus] = useState<"connecting" | "live" | "fallback">("connecting");
+  const [restoreMenu, setRestoreMenu] = useState<{ x: number; y: number; pos: number; color: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -297,6 +507,10 @@ export function CollaborativeBillEditor({
           // StarterKit provides the base schema (doc/paragraph/text/etc).
           (StarterKit as any)?.configure ? StarterKit.configure({ history: false }) : (StarterKit as any),
           EditHighlight,
+          DeleteHighlight,
+          UnderlineMark,
+          LinkMark,
+          TextAlignment,
           createEditAttributionExtension({
             getAuthor: () => localUser,
             shouldSuppress: () => suppressAttributionRef.current,
@@ -331,6 +545,10 @@ export function CollaborativeBillEditor({
           extensions: [
             (StarterKit as any)?.configure ? StarterKit.configure({ history: false }) : (StarterKit as any),
             EditHighlight,
+            DeleteHighlight,
+            UnderlineMark,
+            LinkMark,
+            TextAlignment,
             createEditAttributionExtension({
               getAuthor: () => localUser,
               shouldSuppress: () => suppressAttributionRef.current,
@@ -375,6 +593,43 @@ export function CollaborativeBillEditor({
     }
   }, [editor, initialHtml]);
 
+  useEffect(() => {
+    if (!restoreMenu) return;
+    const close = () => setRestoreMenu(null);
+    window.addEventListener("click", close);
+    window.addEventListener("keydown", close);
+    return () => {
+      window.removeEventListener("click", close);
+      window.removeEventListener("keydown", close);
+    };
+  }, [restoreMenu]);
+
+  const handleEditorContextMenu = (event: MouseEvent<HTMLDivElement>) => {
+    if (!editor) return;
+    const target = event.target as HTMLElement | null;
+    const deleted = target?.closest("[data-delete-highlight]") as HTMLElement | null;
+    if (!deleted) {
+      setRestoreMenu(null);
+      return;
+    }
+
+    const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
+    if (typeof pos !== "number") return;
+    event.preventDefault();
+    setRestoreMenu({
+      x: event.clientX,
+      y: event.clientY,
+      pos,
+      color: deleted.getAttribute("data-delete-color") || "#2563eb",
+    });
+  };
+
+  const restoreDeletedText = () => {
+    if (!editor || !restoreMenu) return;
+    editor.chain().focus().setTextSelection(restoreMenu.pos).extendMarkRange("deleteHighlight").unsetMark("deleteHighlight").run();
+    setRestoreMenu(null);
+  };
+
   if (editorError) {
     return (
       <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">
@@ -388,7 +643,7 @@ export function CollaborativeBillEditor({
   }
 
   return (
-    <div>
+    <div onContextMenu={handleEditorContextMenu}>
       {collabStatus !== "live" && (
         <div className="mb-2 text-xs px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-800">
           {collabStatus === "connecting" ? "Connecting collaboration..." : "Collaboration offline (local edits only)"}
@@ -396,6 +651,21 @@ export function CollaborativeBillEditor({
       )}
       {editable && <CommitteeEditorToolbar editor={editor} />}
       <EditorContent editor={editor} />
+      {restoreMenu && (
+        <div
+          className="fixed z-50 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
+          style={{ left: restoreMenu.x, top: restoreMenu.y, ["--restore-color" as any]: restoreMenu.color }}
+          onClick={(event) => event.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={restoreDeletedText}
+            className="rounded-md px-3 py-1.5 text-sm font-medium text-gray-800 hover:bg-gray-50"
+          >
+            Restore text
+          </button>
+        </div>
+      )}
     </div>
   );
 }

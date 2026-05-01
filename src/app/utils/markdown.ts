@@ -12,6 +12,7 @@ function renderInlineMarkdown(value: string) {
   text = text.replace(/`([^`]+)`/g, "<code>$1</code>");
   text = text.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   text = text.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  text = text.replace(/\+\+([^+]+)\+\+/g, "<u>$1</u>");
   text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
   return text;
 }
@@ -36,8 +37,10 @@ export function markdownToHtml(markdown: string) {
   let orderedList = false;
   let inCodeBlock = false;
   const codeLines: string[] = [];
+  const lines = markdown.replace(/\r\n/g, "\n").split("\n");
 
-  for (const rawLine of markdown.replace(/\r\n/g, "\n").split("\n")) {
+  for (let index = 0; index < lines.length; index += 1) {
+    const rawLine = lines[index];
     const line = rawLine.trimEnd();
 
     if (line.trim().startsWith("```")) {
@@ -53,6 +56,20 @@ export function markdownToHtml(markdown: string) {
 
     if (inCodeBlock) {
       codeLines.push(rawLine);
+      continue;
+    }
+
+    const alignment = line.trim().match(/^:::\s*(left|center|right)$/i);
+    if (alignment) {
+      flushParagraph(paragraph, output);
+      flushList(listItems, orderedList, output);
+      const alignedLines: string[] = [];
+      index += 1;
+      while (index < lines.length && lines[index].trim() !== ":::") {
+        alignedLines.push(lines[index]);
+        index += 1;
+      }
+      output.push(`<div style="text-align: ${alignment[1].toLowerCase()}">${markdownToHtml(alignedLines.join("\n"))}</div>`);
       continue;
     }
 
@@ -124,6 +141,8 @@ export function htmlToMarkdown(html: string) {
       case "em":
       case "i":
         return `*${children}*`;
+      case "u":
+        return `++${children}++`;
       case "code":
         return `\`${children}\``;
       case "br":
@@ -141,14 +160,20 @@ export function htmlToMarkdown(html: string) {
     const tag = element.tagName.toLowerCase();
     const text = Array.from(element.childNodes).map(readNode).join("").trim();
     if (!text) return "";
-    if (tag === "h1") return `# ${text}`;
-    if (tag === "h2") return `## ${text}`;
-    if (tag === "h3") return `### ${text}`;
-    if (tag === "blockquote") return text.split("\n").map((line) => `> ${line}`).join("\n");
-    if (tag === "pre") return `\`\`\`\n${element.textContent || ""}\n\`\`\``;
-    if (tag === "ul") return Array.from(element.children).map((li) => `- ${readNode(li).trim()}`).join("\n");
-    if (tag === "ol") return Array.from(element.children).map((li, index) => `${index + 1}. ${readNode(li).trim()}`).join("\n");
-    return text;
+    let block = text;
+    if (tag === "h1") block = `# ${text}`;
+    else if (tag === "h2") block = `## ${text}`;
+    else if (tag === "h3") block = `### ${text}`;
+    else if (tag === "blockquote") block = text.split("\n").map((line) => `> ${line}`).join("\n");
+    else if (tag === "pre") block = `\`\`\`\n${element.textContent || ""}\n\`\`\``;
+    else if (tag === "ul") block = Array.from(element.children).map((li) => `- ${readNode(li).trim()}`).join("\n");
+    else if (tag === "ol") block = Array.from(element.children).map((li, index) => `${index + 1}. ${readNode(li).trim()}`).join("\n");
+
+    const alignment = (element as HTMLElement).style.textAlign;
+    if (alignment === "left" || alignment === "center" || alignment === "right") {
+      return `::: ${alignment}\n${block}\n:::`;
+    }
+    return block;
   });
 
   return blocks.filter(Boolean).join("\n\n");

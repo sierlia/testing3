@@ -87,7 +87,13 @@
   border-radius: 3px;
 }
 
-.committee-edit-highlight:hover::after {
+.committee-delete-highlight {
+  position: relative;
+  border-radius: 3px;
+}
+
+.committee-edit-highlight:hover::after,
+.committee-delete-highlight:hover::after {
   content: attr(data-edit-author);
   position: absolute;
   left: 0;
@@ -105,7 +111,12 @@
   box-shadow: 0 6px 18px rgba(17, 24, 39, 0.18);
 }
 
-.committee-edit-highlight:hover::before {
+.committee-delete-highlight:hover::after {
+  content: attr(data-delete-author);
+}
+
+.committee-edit-highlight:hover::before,
+.committee-delete-highlight:hover::before {
   content: "";
   position: absolute;
   left: 10px;
@@ -113,6 +124,21 @@
   z-index: 20;
   border: 4px solid transparent;
   border-top-color: var(--edit-color, #111827);
+}
+
+.bill-editor-shell .ql-container.ql-snow {
+  border: 0;
+  font-size: 1rem;
+}
+
+.bill-editor-shell .ql-editor {
+  min-height: inherit;
+  padding: 1rem;
+}
+
+.bill-editor-shell .ql-editor.ql-blank::before {
+  left: 1rem;
+  right: 1rem;
 }
 
 .presence-avatar {
