@@ -36,6 +36,7 @@ export function CommitteeWorkspace() {
     Array<{ id: string; name: string; color: string; avatar_url: string | null }>
   >([]);
   const presenceRef = useRef<{ provider: YjsSupabaseProvider; doc: Y.Doc; awareness: Awareness } | null>(null);
+  const presenceEmitSeqRef = useRef(0);
 
   useEffect(() => {
     const load = async () => {
@@ -172,12 +173,24 @@ export function CommitteeWorkspace() {
         // Get display name + stable per-committee color for awareness metadata.
         const { data: p } = await supabase.from("profiles").select("display_name").eq("user_id", uid).maybeSingle();
         const name = (p as any)?.display_name ?? auth.user?.user_metadata?.name ?? "Member";
+        const normalizedName = String(name || "").trim() || "Member";
         let color = "#2563eb";
         try {
-          const { data: assigned } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
-          if (typeof assigned === "string" && assigned) color = assigned;
-        } catch {
-          // ignore
+          const { data: row } = await supabase
+            .from("committee_member_colors")
+            .select("color")
+            .eq("committee_id", committeeId)
+            .eq("user_id", uid)
+            .maybeSingle();
+          if ((row as any)?.color) color = (row as any).color as string;
+        } catch {}
+        if (!color || color === "#2563eb") {
+          try {
+            const { data: assigned } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
+            if (typeof assigned === "string" && assigned) color = assigned;
+          } catch {
+            // ignore
+          }
         }
 
         // Tear down any previous presence connection for a different bill.
@@ -188,12 +201,13 @@ export function CommitteeWorkspace() {
         const doc = new Y.Doc();
         const awareness = new Awareness(doc);
         const provider = new YjsSupabaseProvider(
-          { doc, awareness, key: { classId, committeeId, billId: selectedBillId }, user: { id: uid, name, color } },
+          { doc, awareness, key: { classId, committeeId, billId: selectedBillId }, user: { id: uid, name: normalizedName, color } },
           undefined,
         );
         presenceRef.current = { provider, doc, awareness };
 
         const emit = async () => {
+          const seq = ++presenceEmitSeqRef.current;
           const states = awareness.getStates();
           const map = new Map<string, { id: string; name: string; color: string }>();
           for (const [, st] of states.entries()) {
@@ -202,11 +216,24 @@ export function CommitteeWorkspace() {
             map.set(u.id, { id: u.id, name: u.name ?? "Member", color: u.color ?? "#2563eb" });
           }
           const users = Array.from(map.values());
+          if (!users.length) {
+            if (!cancelled && seq === presenceEmitSeqRef.current) setActiveEditors([]);
+            return;
+          }
+
+          // First paint quickly from awareness; then enrich with avatar urls.
+          if (!cancelled && seq === presenceEmitSeqRef.current) {
+            setActiveEditors(
+              users
+                .map((u) => ({ id: u.id, name: u.name ?? "Member", color: u.color, avatar_url: null }))
+                .sort((a, b) => a.name.localeCompare(b.name)),
+            );
+          }
+
           const ids = users.map((u) => u.id);
-          if (!ids.length) return !cancelled && setActiveEditors([]);
           const { data } = await supabase.from("profiles").select("user_id,display_name,avatar_url").in("user_id", ids);
           const pMap = new Map((data ?? []).map((row: any) => [row.user_id, row]));
-          if (cancelled) return;
+          if (cancelled || seq !== presenceEmitSeqRef.current) return;
           setActiveEditors(
             users
               .map((u) => ({
@@ -220,7 +247,10 @@ export function CommitteeWorkspace() {
         };
 
         await emit();
-        awareness.on("change", () => void emit());
+        const onChange = () => void emit();
+        awareness.on("change", onChange);
+        // Ensure we remove listener when we tear down this presence doc.
+        (presenceRef.current as any).__onChange = onChange;
       } catch (e: any) {
         if (!cancelled) setActiveEditors([]);
       }
@@ -229,6 +259,13 @@ export function CommitteeWorkspace() {
     void setupPresence();
     return () => {
       cancelled = true;
+      presenceEmitSeqRef.current++;
+      const cur: any = presenceRef.current;
+      if (cur?.awareness && cur?.__onChange) {
+        try {
+          cur.awareness.off("change", cur.__onChange);
+        } catch {}
+      }
       presenceRef.current?.provider.destroy();
       presenceRef.current?.doc.destroy();
       presenceRef.current = null;
@@ -289,7 +326,13 @@ export function CommitteeWorkspace() {
                         {activeEditors.length > 0 && (
                           <div className="flex items-center gap-1.5 justify-end">
                             {activeEditors.map((u) => (
-                              <Link key={u.id} to={`/profile/${u.id}`} title={u.name} className="relative">
+                              <Link
+                                key={u.id}
+                                to={`/profile/${u.id}`}
+                                className="presence-avatar"
+                                data-tooltip={u.name}
+                                style={{ ["--presence-color" as any]: u.color }}
+                              >
                                 {u.avatar_url ? (
                                   <img
                                     src={u.avatar_url}

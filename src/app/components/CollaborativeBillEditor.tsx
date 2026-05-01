@@ -122,9 +122,10 @@ function createEditAttributionExtension({
             if (!ranges.length) return null;
 
             const author = getAuthor();
+            if (!author?.id) return null;
             const mark = markType.create({
               authorId: author.id,
-              authorName: author.name,
+              authorName: String(author.name || "").trim() || "Member",
               color: author.color,
             });
             const tr = newState.tr;
@@ -191,6 +192,19 @@ export function CollaborativeBillEditor({
       const normalizedName = String(name || "").trim() || "Member";
       let color = colorFromId(uid);
       try {
+        const { data: row } = await supabase
+          .from("committee_member_colors")
+          .select("color")
+          .eq("committee_id", committeeId)
+          .eq("user_id", uid)
+          .maybeSingle();
+        const existing = (row as any)?.color as string | undefined;
+        if (existing) color = existing;
+      } catch {
+        // ignore
+      }
+      try {
+        // Backfill if missing.
         const { data: assigned, error: cErr } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
         if (!cErr && typeof assigned === "string" && assigned) color = assigned;
       } catch {
