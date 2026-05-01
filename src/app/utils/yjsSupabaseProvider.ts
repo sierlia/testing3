@@ -1,5 +1,5 @@
 import * as Y from "yjs";
-import { Awareness } from "y-protocols/awareness";
+import { Awareness, applyAwarenessUpdate, encodeAwarenessUpdate } from "y-protocols/awareness";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "./supabase";
 
@@ -50,18 +50,16 @@ export class YjsSupabaseProvider {
         if (!b64) return;
         const update = fromBase64(b64);
         Y.applyUpdate(this.doc, update, "remote");
+        // Persist remote updates too so the canonical snapshot is eventually written
+        // even if the originating user disconnects quickly.
+        this.schedulePersist();
       })
       .on("broadcast", { event: "yjs-awareness" }, (payload) => {
-        const state = (payload as any)?.payload?.state;
-        const clientID = (payload as any)?.payload?.clientID;
-        if (!clientID) return;
-        const current = this.awareness.getStates();
-        const next = new Map(current);
-        if (state === null) next.delete(clientID);
-        else next.set(clientID, state);
-        // @ts-expect-error internal
-        this.awareness.states = next;
-        this.awareness.emit("change", [{ added: [], updated: [], removed: [] }, "remote"]);
+        const b64 = (payload as any)?.payload?.b64 as string | undefined;
+        if (!b64) return;
+        const update = fromBase64(b64);
+        // y-protocols awareness update format
+        applyAwarenessUpdate(this.awareness, update, "remote");
       })
       .subscribe(async (status) => {
         if (status !== "SUBSCRIBED") return;
@@ -73,8 +71,10 @@ export class YjsSupabaseProvider {
 
     this.doc.on("update", (update: Uint8Array, origin: any) => {
       if (this.destroyed) return;
-      if (origin === "remote") return;
-      this.channel.send({ type: "broadcast", event: "yjs-update", payload: { b64: toBase64(update) } });
+      if (origin !== "remote") {
+        this.channel.send({ type: "broadcast", event: "yjs-update", payload: { b64: toBase64(update) } });
+      }
+      // Persist on both local and remote updates for robustness
       this.schedulePersist();
     });
 
@@ -86,11 +86,8 @@ export class YjsSupabaseProvider {
 
   private broadcastAwareness() {
     const local = this.awareness.getLocalState();
-    this.channel.send({
-      type: "broadcast",
-      event: "yjs-awareness",
-      payload: { clientID: this.doc.clientID, state: local ?? null },
-    });
+    const update = encodeAwarenessUpdate(this.awareness, [this.doc.clientID]);
+    this.channel.send({ type: "broadcast", event: "yjs-awareness", payload: { b64: toBase64(update), state: local ?? null } });
   }
 
   private schedulePersist() {
@@ -136,6 +133,12 @@ export class YjsSupabaseProvider {
     this.destroyed = true;
     try {
       this.broadcastAwareness();
+    } catch {
+      // ignore
+    }
+    try {
+      // Best-effort persist on teardown
+      void this.persistToDb();
     } catch {
       // ignore
     }

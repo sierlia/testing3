@@ -48,7 +48,8 @@
   border-left-style: solid;
   margin-left: -1px;
   margin-right: -1px;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: default;
 }
 
 .collaboration-cursor__label {
