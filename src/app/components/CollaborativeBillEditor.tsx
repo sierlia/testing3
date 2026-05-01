@@ -8,6 +8,7 @@ import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
+import { Bold, Code, Heading1, Heading2, Italic, List, ListOrdered, Pilcrow, Quote, RemoveFormatting } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { YjsSupabaseProvider } from "../utils/yjsSupabaseProvider";
 
@@ -148,6 +149,43 @@ function createEditAttributionExtension({
       ];
     },
   });
+}
+
+function CommitteeEditorToolbar({ editor }: { editor: Editor }) {
+  const run = (command: () => void) => {
+    command();
+    editor.view.focus();
+  };
+
+  const buttons = [
+    { label: "Paragraph", icon: Pilcrow, onClick: () => run(() => editor.chain().focus().setParagraph().run()) },
+    { label: "Heading 1", icon: Heading1, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 1 }).run()) },
+    { label: "Heading 2", icon: Heading2, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 2 }).run()) },
+    { label: "Bold", icon: Bold, onClick: () => run(() => editor.chain().focus().toggleBold().run()) },
+    { label: "Italic", icon: Italic, onClick: () => run(() => editor.chain().focus().toggleItalic().run()) },
+    { label: "Bullet list", icon: List, onClick: () => run(() => editor.chain().focus().toggleBulletList().run()) },
+    { label: "Numbered list", icon: ListOrdered, onClick: () => run(() => editor.chain().focus().toggleOrderedList().run()) },
+    { label: "Quote", icon: Quote, onClick: () => run(() => editor.chain().focus().toggleBlockquote().run()) },
+    { label: "Code block", icon: Code, onClick: () => run(() => editor.chain().focus().toggleCodeBlock().run()) },
+    { label: "Clear", icon: RemoveFormatting, onClick: () => run(() => editor.chain().focus().unsetAllMarks().clearNodes().run()) },
+  ];
+
+  return (
+    <div className="flex items-center gap-1 border border-gray-200 border-b-0 bg-gray-50 px-2 py-2 rounded-t-md">
+      {buttons.map(({ label, icon: Icon, onClick }) => (
+        <button
+          key={label}
+          type="button"
+          aria-label={label}
+          onMouseDown={(event) => event.preventDefault()}
+          onClick={onClick}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-700 hover:bg-white hover:text-gray-900"
+        >
+          <Icon className="w-4 h-4" />
+        </button>
+      ))}
+    </div>
+  );
 }
 
 export function CollaborativeBillEditor({
@@ -356,6 +394,7 @@ export function CollaborativeBillEditor({
           {collabStatus === "connecting" ? "Connecting collaboration..." : "Collaboration offline (local edits only)"}
         </div>
       )}
+      {editable && <CommitteeEditorToolbar editor={editor} />}
       <EditorContent editor={editor} />
     </div>
   );
