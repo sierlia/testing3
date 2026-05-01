@@ -52,6 +52,17 @@
   cursor: default;
 }
 
+/* Make the caret easier to hover (thin 2px is hard to hit) */
+.collaboration-cursor__caret::after {
+  content: "";
+  position: absolute;
+  left: -6px;
+  top: -2px;
+  width: 14px;
+  height: 1.5em;
+  pointer-events: auto;
+}
+
 .collaboration-cursor__label {
   position: absolute;
   top: -1.25rem;

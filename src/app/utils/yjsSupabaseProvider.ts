@@ -50,7 +50,9 @@ export class YjsSupabaseProvider {
         const b64 = (payload as any)?.payload?.b64 as string | undefined;
         if (!b64) return;
         const update = fromBase64(b64);
-        Y.applyUpdate(this.doc, update, "remote");
+        // Tag remote updates with this provider instance so our update handler
+        // can reliably ignore echo without depending on string origins.
+        Y.applyUpdate(this.doc, update, this);
         // Persist remote updates too so the canonical snapshot is eventually written
         // even if the originating user disconnects quickly.
         this.schedulePersist();
@@ -60,7 +62,7 @@ export class YjsSupabaseProvider {
         if (!b64) return;
         const update = fromBase64(b64);
         // Applying a full-state update is safe; Yjs will merge it.
-        Y.applyUpdate(this.doc, update, "remote");
+        Y.applyUpdate(this.doc, update, this);
         this.schedulePersist();
       })
       .on("broadcast", { event: "yjs-awareness" }, (payload) => {
@@ -89,7 +91,8 @@ export class YjsSupabaseProvider {
 
     this.doc.on("update", (update: Uint8Array, origin: any) => {
       if (this.destroyed) return;
-      if (origin !== "remote") {
+      // Ignore updates applied by this provider (i.e. remote updates).
+      if (origin !== this) {
         this.channel.send({ type: "broadcast", event: "yjs-update", payload: { b64: toBase64(update) } });
       }
       // Persist on both local and remote updates for robustness
