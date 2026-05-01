@@ -40,7 +40,7 @@ interface CalendarEvent {
 export function ClassDashboard() {
   const { classId } = useParams();
   const navigate = useNavigate();
-  const [className, setClassName] = useState<string>('Class');
+  const [className, setClassName] = useState<string>('');
   const [studentCount, setStudentCount] = useState<number>(0);
   const [recentActivity, setRecentActivity] = useState<StudentActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
@@ -267,7 +267,11 @@ export function ClassDashboard() {
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">{className}</h1>
+          {className ? (
+            <h1 className="text-3xl font-bold text-gray-900">{className}</h1>
+          ) : (
+            <div className="h-9 w-64 rounded bg-gray-200 animate-pulse" />
+          )}
           <p className="text-sm text-gray-600 mt-1">{studentCount} students enrolled</p>
         </div>
         {/* Stats Overview */}

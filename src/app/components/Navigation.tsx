@@ -15,7 +15,7 @@ export function Navigation() {
   const location = useLocation();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
-  const [activeClassName, setActiveClassName] = useState<string>("Switch Classes");
+  const [activeClassName, setActiveClassName] = useState<string>("");
   const [teacherClasses, setTeacherClasses] = useState<Array<{ id: string; name: string }>>([]);
   const [unreadLetters, setUnreadLetters] = useState(0);
   const orgCloseTimerRef = useRef<number | null>(null);
@@ -30,7 +30,7 @@ export function Navigation() {
       if (!user?.id) {
         setAvatarUrl(null);
         setActiveClassId(null);
-        setActiveClassName("Switch Classes");
+        setActiveClassName("");
         setTeacherClasses([]);
         return;
       }
@@ -55,7 +55,7 @@ export function Navigation() {
             display_name: user.user_metadata?.name ?? null,
           } as any);
         }
-        setActiveClassName(rows.find((c) => c.id === classId)?.name ?? "Switch Classes");
+        setActiveClassName(rows.find((c) => c.id === classId)?.name ?? "");
       }
       setActiveClassId(classId);
     };
@@ -74,7 +74,17 @@ export function Navigation() {
     setActiveClassId(classId);
     setActiveClassName(next?.name ?? "Class");
     setClassMenuOpen(false);
-    navigate(`/teacher/class/${classId}`);
+    const current = location.pathname;
+    const teacherClassMatch = current.match(/^\/teacher\/class\/[^/]+(\/manage)?$/);
+    if (teacherClassMatch) {
+      navigate(`/teacher/class/${classId}${teacherClassMatch[1] ?? ""}`);
+      return;
+    }
+    if (current === "/teacher/dashboard") {
+      navigate(`/teacher/class/${classId}`);
+      return;
+    }
+    navigate(0);
   };
 
   const openOrganizations = () => {
@@ -300,7 +310,7 @@ export function Navigation() {
                   className="flex min-w-[180px] items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
                 >
                   <span className="min-w-0">
-                    <span className="block truncate text-sm font-semibold text-gray-900">{activeClassName}</span>
+                    <span className="block min-h-[20px] truncate text-sm font-semibold text-gray-900">{activeClassName}</span>
                     <span className="block text-xs text-gray-500">Switch classes</span>
                   </span>
                   <ChevronDown className={`h-4 w-4 flex-shrink-0 transition-transform ${classMenuOpen ? "rotate-180" : ""}`} />

@@ -56,12 +56,6 @@ export function BillDetail() {
   const timeline = useMemo(() => {
     if (!bill) return [];
     const createdAt = bill.created_at;
-    if (bill.status === 'draft') {
-      return [
-        { stage: 'Introduced', status: 'upcoming' as const, date: null },
-        { stage: 'Committee', status: 'upcoming' as const, date: null },
-      ];
-    }
     if (referral) {
       return [
         { stage: 'Introduced', status: 'completed' as const, date: createdAt },

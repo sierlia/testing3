@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { Send, X, Search } from "lucide-react";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -19,6 +19,7 @@ type Recipient = {
 
 export function CreateDearColleagueLetter() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
   const [recipients, setRecipients] = useState<Recipient[]>([]);
@@ -31,6 +32,7 @@ export function CreateDearColleagueLetter() {
   const [caucuses, setCaucuses] = useState<Array<{ id: string; name: string }>>([]);
   const [parties, setParties] = useState<Array<{ id: string; name: string }>>([]);
   const [committees, setCommittees] = useState<Array<{ id: string; name: string }>>([]);
+  const didPrefillReplyRef = useRef(false);
 
   useEffect(() => {
     const load = async () => {
@@ -55,10 +57,30 @@ export function CreateDearColleagueLetter() {
           supabase.from("committees").select("id,name").eq("class_id", classId).order("name"),
         ]);
         if (dirErr) throw dirErr;
-        setIndividuals(((directory ?? []) as any[]).filter((p) => p.user_id !== uid));
+        const classMembers = ((directory ?? []) as any[]).filter((p) => p.user_id !== uid);
+        setIndividuals(classMembers);
         setCaucuses((cau ?? []) as any);
         setParties((par ?? []) as any);
         setCommittees((com ?? []) as any);
+
+        const replyTo = searchParams.get("to");
+        if (!didPrefillReplyRef.current && replyTo) {
+          didPrefillReplyRef.current = true;
+          const match = classMembers.find((p) => p.user_id === replyTo);
+          if (match) {
+            setRecipients([
+              {
+                type: "individual",
+                id: match.user_id,
+                name: match.display_name || "Unknown",
+                district: formatConstituency(match.constituency_name),
+                image: match.avatar_url,
+              },
+            ]);
+          }
+          const replySubject = searchParams.get("subject") || "";
+          if (replySubject) setSubject(replySubject.toLowerCase().startsWith("re:") ? replySubject : `Re: ${replySubject}`);
+        }
       } catch (e: any) {
         toast.error(e.message || "Could not load recipients");
       } finally {
@@ -66,7 +88,7 @@ export function CreateDearColleagueLetter() {
       }
     };
     void load();
-  }, [navigate]);
+  }, [navigate, searchParams]);
 
   const handleAddRecipient = (recipient: Recipient) => {
     if (!recipients.some((r) => r.id === recipient.id && r.type === recipient.type)) {
