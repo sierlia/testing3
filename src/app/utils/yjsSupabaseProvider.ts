@@ -30,7 +30,9 @@ export class YjsSupabaseProvider {
   private key: DocKey;
   private destroyed = false;
   private persistTimer: number | null = null;
+  private pollTimer: number | null = null;
   private lastPersistedB64: string | null = null;
+  private lastSeenUpdatedAt: string | null = null;
   private onSynced?: () => void;
   private hadSnapshot = false;
   private isSubscribed = false;
@@ -78,6 +80,7 @@ export class YjsSupabaseProvider {
         if (this.destroyed) return;
         this.isSubscribed = true;
         this.hadSnapshot = await this.hydrateFromDb();
+        this.startDbPolling();
         // Flush any queued broadcasts that happened before subscription.
         for (const msg of this.pendingSends.splice(0, this.pendingSends.length)) {
           void this.sendBroadcast(msg.event, msg.b64, msg.extra);
@@ -131,19 +134,24 @@ export class YjsSupabaseProvider {
 
   private schedulePersist() {
     if (this.persistTimer) window.clearTimeout(this.persistTimer);
-    this.persistTimer = window.setTimeout(() => void this.persistToDb(), 1200);
+    this.persistTimer = window.setTimeout(() => void this.persistToDb(), 500);
   }
 
   private async hydrateFromDb(): Promise<boolean> {
     const { committeeId, billId } = this.key;
     const { data, error } = await supabase
       .from("committee_bill_docs")
-      .select("ydoc_base64")
+      .select("ydoc_base64,updated_at")
       .eq("committee_id", committeeId)
       .eq("bill_id", billId)
       .maybeSingle();
-    if (error) return false;
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn("committee bill doc hydrate failed", error);
+      return false;
+    }
     const b64 = (data as any)?.ydoc_base64 as string | undefined;
+    this.lastSeenUpdatedAt = ((data as any)?.updated_at as string | undefined) ?? null;
     if (b64) {
       this.lastPersistedB64 = b64;
       const update = fromBase64(b64);
@@ -155,6 +163,34 @@ export class YjsSupabaseProvider {
     return false;
   }
 
+  private startDbPolling() {
+    if (this.pollTimer) window.clearInterval(this.pollTimer);
+    this.pollTimer = window.setInterval(() => void this.syncFromDb(), 1000);
+  }
+
+  private async syncFromDb() {
+    if (this.destroyed) return;
+    const { committeeId, billId } = this.key;
+    const { data, error } = await supabase
+      .from("committee_bill_docs")
+      .select("ydoc_base64,updated_at")
+      .eq("committee_id", committeeId)
+      .eq("bill_id", billId)
+      .maybeSingle();
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn("committee bill doc sync failed", error);
+      return;
+    }
+    const updatedAt = ((data as any)?.updated_at as string | undefined) ?? null;
+    const b64 = (data as any)?.ydoc_base64 as string | undefined;
+    if (!b64 || !updatedAt || updatedAt === this.lastSeenUpdatedAt || b64 === this.lastPersistedB64) return;
+    this.lastSeenUpdatedAt = updatedAt;
+    this.lastPersistedB64 = b64;
+    const update = fromBase64(b64);
+    if (update.length) Y.applyUpdate(this.doc, update, this);
+  }
+
   getHydratedFromSnapshot() {
     return this.hadSnapshot;
   }
@@ -164,10 +200,20 @@ export class YjsSupabaseProvider {
     const state = Y.encodeStateAsUpdate(this.doc);
     const b64 = toBase64(state);
     if (b64 === this.lastPersistedB64) return;
+    const { data, error } = await supabase
+      .from("committee_bill_docs")
+      .upsert({ committee_id: committeeId, bill_id: billId, class_id: classId, ydoc_base64: b64 } as any, {
+        onConflict: "bill_id,committee_id",
+      })
+      .select("updated_at")
+      .single();
+    if (error) {
+      // eslint-disable-next-line no-console
+      console.warn("committee bill doc persist failed", error);
+      return;
+    }
     this.lastPersistedB64 = b64;
-    await supabase.from("committee_bill_docs").upsert({ committee_id: committeeId, bill_id: billId, class_id: classId, ydoc_base64: b64 } as any, {
-      onConflict: "bill_id,committee_id",
-    });
+    this.lastSeenUpdatedAt = ((data as any)?.updated_at as string | undefined) ?? this.lastSeenUpdatedAt;
   }
 
   destroy() {
@@ -184,6 +230,7 @@ export class YjsSupabaseProvider {
       // ignore
     }
     if (this.persistTimer) window.clearTimeout(this.persistTimer);
+    if (this.pollTimer) window.clearInterval(this.pollTimer);
     void supabase.removeChannel(this.channel);
   }
 
