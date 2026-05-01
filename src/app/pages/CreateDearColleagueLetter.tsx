@@ -48,28 +48,14 @@ export function CreateDearColleagueLetter() {
           return navigate("/settings/classes");
         }
 
-        const { data: memberships, error: mErr } = await supabase
-          .from("class_memberships")
-          .select("user_id")
-          .eq("class_id", classId)
-          .eq("status", "approved");
-        if (mErr) throw mErr;
-        const memberIds = Array.from(new Set((memberships ?? []).map((m: any) => m.user_id))).filter((id) => id !== uid);
-
-        const [{ data: profiles, error: profErr }, { data: cau }, { data: par }, { data: com }] = await Promise.all([
-          memberIds.length
-            ? supabase
-                .from("profiles")
-                .select("user_id,display_name,constituency_name,avatar_url")
-                .in("user_id", memberIds)
-                .order("display_name")
-            : Promise.resolve({ data: [] as any[] } as any),
+        const [{ data: directory, error: dirErr }, { data: cau }, { data: par }, { data: com }] = await Promise.all([
+          supabase.rpc("class_directory", { target_class: classId } as any),
           supabase.from("caucuses").select("id,title").eq("class_id", classId).order("title"),
           supabase.from("parties").select("id,name").eq("class_id", classId).order("name"),
           supabase.from("committees").select("id,name").eq("class_id", classId).order("name"),
         ]);
-        if (profErr) throw profErr;
-        setIndividuals((profiles ?? []) as any);
+        if (dirErr) throw dirErr;
+        setIndividuals(((directory ?? []) as any[]).filter((p) => p.user_id !== uid));
         setCaucuses((cau ?? []) as any);
         setParties((par ?? []) as any);
         setCommittees((com ?? []) as any);

@@ -18,6 +18,7 @@ export function BillDetail() {
   const [sponsor, setSponsor] = useState<any>(null);
   const [cosponsors, setCosponsors] = useState<any[]>([]);
   const [cosponsorIds, setCosponsorIds] = useState<string[]>([]);
+  const [referral, setReferral] = useState<any>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [userRole, setUserRole] = useState<'student' | 'teacher' | 'leadership'>('student');
 
@@ -35,6 +36,7 @@ export function BillDetail() {
         setSponsor(res.sponsor);
         setCosponsors(res.cosponsors);
         setCosponsorIds(res.cosponsorIds);
+        setReferral(res.referral);
 
         if (me) {
           const { data: p } = await supabase.from('profiles').select('role').eq('user_id', me).maybeSingle();
@@ -56,15 +58,27 @@ export function BillDetail() {
     const createdAt = bill.created_at;
     if (bill.status === 'draft') {
       return [
-        { stage: 'Draft', status: 'current' as const, date: createdAt },
-        { stage: 'Submitted', status: 'upcoming' as const, date: null },
+        { stage: 'Introduced', status: 'upcoming' as const, date: null },
+        { stage: 'Committee', status: 'upcoming' as const, date: null },
+      ];
+    }
+    if (referral) {
+      return [
+        { stage: 'Introduced', status: 'completed' as const, date: createdAt },
+        {
+          stage: referral.committee_name ?? 'Committee',
+          status: 'current' as const,
+          date: referral.referred_at ?? createdAt,
+          tone: 'orange' as const,
+          currentLabel: 'Referred to committee',
+        },
       ];
     }
     return [
-      { stage: 'Draft', status: 'completed' as const, date: createdAt },
-      { stage: 'Submitted', status: 'current' as const, date: createdAt },
+      { stage: 'Introduced', status: 'current' as const, date: createdAt },
+      { stage: 'Committee', status: 'upcoming' as const, date: null },
     ];
-  }, [bill]);
+  }, [bill, referral]);
 
   if (loading || !bill) {
     return (

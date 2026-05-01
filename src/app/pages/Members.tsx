@@ -37,20 +37,7 @@ export function Members() {
           return;
         }
 
-        const { data: memberships, error: mErr } = await supabase
-          .from("class_memberships")
-          .select("user_id")
-          .eq("class_id", classId)
-          .eq("status", "approved");
-        if (mErr) throw mErr;
-        const memberIds = (memberships ?? []).map((m: any) => m.user_id);
-
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("user_id,display_name,party,constituency_name,avatar_url,role")
-          .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"])
-          .order("role", { ascending: true })
-          .order("display_name", { ascending: true });
+        const { data, error } = await supabase.rpc("class_directory", { target_class: classId } as any);
         if (error) throw error;
         setMembers((data ?? []) as any);
       } catch (e: any) {

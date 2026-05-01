@@ -78,11 +78,24 @@ export async function fetchBillDetail(billId: string) {
     .select('user_id, display_name, party')
     .in('user_id', cosponsorIds.length ? cosponsorIds : ['00000000-0000-0000-0000-000000000000']);
 
+  const { data: referral } = await supabase
+    .from('bill_referrals')
+    .select('committee_id,referred_at,committees(name)')
+    .eq('bill_id', billId)
+    .maybeSingle();
+
   return {
     bill: bill as any,
     sponsor: sponsor as any,
     cosponsors: cosponsors ?? [],
     cosponsorIds,
+    referral: referral
+      ? {
+          committee_id: (referral as any).committee_id as string,
+          committee_name: (referral as any).committees?.name as string | undefined,
+          referred_at: (referral as any).referred_at as string,
+        }
+      : null,
   };
 }
 
