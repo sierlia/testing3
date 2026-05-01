@@ -40,8 +40,9 @@ export function CommitteesHome() {
         const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
         const s = (cls as any)?.settings ?? {};
         setSettings(s);
+        const allowSelfJoin = !!s?.committees?.allowSelfJoin || s?.committees?.assignmentMode === "self-join";
 
-        if ((profile as any)?.role === "student" && !s?.committees?.allowSelfJoin) {
+        if ((profile as any)?.role === "student" && !allowSelfJoin) {
           const { data: sub } = await supabase
             .from("committee_preference_submissions")
             .select("submitted_at")
@@ -56,6 +57,7 @@ export function CommitteesHome() {
         const { data: rows, error } = await supabase
           .from("committees")
           .select("id,name,description,created_at")
+          .eq("class_id", classId)
           .order("created_at", { ascending: true });
         if (error) throw error;
 
@@ -97,13 +99,15 @@ export function CommitteesHome() {
   }, []);
 
   const items = useMemo(() => committees.map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0 })), [committees, memberCounts]);
-  const canSelfJoin = role === "student" && !!settings?.committees?.allowSelfJoin;
+  const canSelfJoin = role === "student" && (!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
 
   const joinCommittee = async (committeeId: string) => {
     if (!meId || joinedCommitteeIds.has(committeeId)) return;
     setJoiningCommitteeId(committeeId);
     try {
-      const { error } = await supabase.from("committee_members").insert({ committee_id: committeeId, user_id: meId, role: "member" });
+      const { error } = await supabase
+        .from("committee_members")
+        .upsert({ committee_id: committeeId, user_id: meId, role: "member" } as any, { onConflict: "committee_id,user_id" });
       if (error) throw error;
       setJoinedCommitteeIds((prev) => new Set(prev).add(committeeId));
       setMemberCounts((prev) => ({ ...prev, [committeeId]: (prev[committeeId] ?? 0) + 1 }));
@@ -157,9 +161,10 @@ export function CommitteesHome() {
                     <div className="flex items-center gap-2 shrink-0">
                       {canSelfJoin && (
                         <button
-                          onClick={() => void joinCommittee(c.id)}
-                          onMouseDown={(event) => event.stopPropagation()}
-                          onClickCapture={(event) => event.stopPropagation()}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void joinCommittee(c.id);
+                          }}
                           disabled={joinedCommitteeIds.has(c.id) || joiningCommitteeId === c.id}
                           className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors disabled:cursor-default ${
                             joinedCommitteeIds.has(c.id)

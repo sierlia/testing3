@@ -53,11 +53,6 @@ export function SettingsClasses() {
     const uid = auth.user?.id;
     if (!uid) return navigate("/signin");
     const desiredRole = (auth.user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
-    const current = classes.find((c) => c.id === id);
-    if (current?.status === "pending") {
-      toast.info("Your teacher has not approved this class yet.");
-      return;
-    }
     const { error } = await supabase
       .from("profiles")
       .upsert({ user_id: uid, class_id: id, role: desiredRole, display_name: auth.user?.user_metadata?.name ?? null } as any);
@@ -94,8 +89,7 @@ export function SettingsClasses() {
                 <p className="text-sm text-gray-600 mb-3">
                   Join code: <span className="font-mono font-semibold">{c.class_code}</span>
                 </p>
-                {c.status === "pending" && <p className="text-sm text-amber-700 mb-3">Pending teacher approval</p>}
-                <Button onClick={() => void openClassDashboard(c.id)} disabled={c.status === "pending"}>Open</Button>
+                <Button onClick={() => void openClassDashboard(c.id)}>Open</Button>
               </CardContent>
             </Card>
           ))}

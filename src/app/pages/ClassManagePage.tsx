@@ -3,11 +3,12 @@ import { useParams, useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Gavel, ArrowLeft, Users, Copy, Check, UserX } from 'lucide-react';
+import { Users, Copy, Check, UserX } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Badge } from '../components/ui/badge';
+import { Navigation } from '../components/Navigation';
 
 interface Student { id: string; name: string; email: string; joinedAt: string; status: "approved" | "pending"; }
 interface ClassDetails { id: string; name: string; description: string; joinCode: string; createdAt: string; }
@@ -68,20 +69,13 @@ export function ClassManagePage() {
     toast.success('Student removed'); loadClassData();
   };
 
-  const approveStudent = async (studentId: string) => {
-    const { error } = await supabase.from('class_memberships').update({ status: 'approved', approved_at: new Date().toISOString() }).eq('user_id', studentId).eq('class_id', classId);
-    if (error) return toast.error('Failed to approve student');
-    toast.success('Student approved');
-    loadClassData();
-  };
-
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;
   if (!classDetails) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Button onClick={() => navigate('/teacher/dashboard')}>Back</Button></div>;
 
-  return <div className="min-h-screen bg-gray-50"><header className="bg-white border-b"><div className="container mx-auto px-4 py-4"><div className="flex items-center gap-3"><Button variant="ghost" size="sm" onClick={() => navigate('/teacher/dashboard')}><ArrowLeft className="w-4 h-4 mr-2" />Back to Dashboard</Button><Gavel className="w-8 h-8 text-blue-600" /><div><h1 className="text-2xl font-bold text-gray-900">{classDetails.name}</h1><p className="text-sm text-gray-600">Class Management</p></div></div></div></header>
-  <main className="container mx-auto px-4 py-8"><div className="grid lg:grid-cols-2 gap-6 mb-8"><Card><CardHeader><CardTitle className="text-lg">Join Code</CardTitle></CardHeader><CardContent><div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg"><div className="text-3xl font-bold text-blue-600 font-mono">{classDetails.joinCode}</div><Button size="sm" variant="ghost" onClick={() => {navigator.clipboard.writeText(classDetails.joinCode);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),1500)}}>{copiedCode ? <Check className="w-5 h-5 text-green-600"/> : <Copy className="w-5 h-5"/>}</Button></div></CardContent></Card>
+  return <div className="min-h-screen bg-gray-50"><Navigation />
+  <main className="container mx-auto px-4 py-8"><div className="mb-8"><h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1><p className="text-sm text-gray-600 mt-1">Class Management</p></div><div className="grid lg:grid-cols-2 gap-6 mb-8"><Card><CardHeader><CardTitle className="text-lg">Join Code</CardTitle></CardHeader><CardContent><div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg"><div className="text-3xl font-bold text-blue-600 font-mono">{classDetails.joinCode}</div><Button size="sm" variant="ghost" onClick={() => {navigator.clipboard.writeText(classDetails.joinCode);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),1500)}}>{copiedCode ? <Check className="w-5 h-5 text-green-600"/> : <Copy className="w-5 h-5"/>}</Button></div></CardContent></Card>
   <Card><CardHeader><CardTitle className="text-lg">Total Students</CardTitle></CardHeader><CardContent><div className="text-4xl font-bold text-gray-900">{students.length}</div></CardContent></Card></div>
   <Tabs defaultValue="students"><TabsList><TabsTrigger value="students">Students</TabsTrigger><TabsTrigger value="settings">Settings</TabsTrigger></TabsList>
-  <TabsContent value="students"><Card><CardHeader><CardTitle>Student Roster</CardTitle></CardHeader><CardContent>{students.length===0? <div className="py-8 text-center"><Users className="w-10 h-10 mx-auto text-gray-400"/><p>No students yet.</p></div> : <Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{students.map(s=><TableRow key={s.id}><TableCell>{s.name}</TableCell><TableCell>{s.email}</TableCell><TableCell>{new Date(s.joinedAt).toLocaleDateString()}</TableCell><TableCell><Badge variant={s.status === 'pending' ? 'secondary' : 'default'}>{s.status}</Badge></TableCell><TableCell className="text-right space-x-2">{s.status === 'pending' && <Button variant="outline" size="sm" onClick={()=>approveStudent(s.id)}>Approve</Button>}<Button variant="ghost" size="sm" onClick={()=>removeStudent(s.id)}><UserX className="w-4 h-4"/></Button></TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card></TabsContent>
+  <TabsContent value="students"><Card><CardHeader><CardTitle>Student Roster</CardTitle></CardHeader><CardContent>{students.length===0? <div className="py-8 text-center"><Users className="w-10 h-10 mx-auto text-gray-400"/><p>No students yet.</p></div> : <Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{students.map(s=><TableRow key={s.id}><TableCell>{s.name}</TableCell><TableCell>{s.email}</TableCell><TableCell>{new Date(s.joinedAt).toLocaleDateString()}</TableCell><TableCell><Badge variant="default">{s.status === 'pending' ? 'approved' : s.status}</Badge></TableCell><TableCell className="text-right space-x-2"><Button variant="ghost" size="sm" onClick={()=>removeStudent(s.id)}><UserX className="w-4 h-4"/></Button></TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card></TabsContent>
   <TabsContent value="settings"><Card><CardHeader><CardTitle>Class Settings</CardTitle><CardDescription>{classDetails.description || 'No description set.'}</CardDescription></CardHeader></Card></TabsContent></Tabs></main></div>;
 }

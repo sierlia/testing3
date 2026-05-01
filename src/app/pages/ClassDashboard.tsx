@@ -4,7 +4,6 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import {
   Gavel, 
-  ArrowLeft, 
   Users, 
   Calendar as CalendarIcon, 
   BookOpen, 
@@ -20,6 +19,7 @@ import {
   Bell
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
+import { Navigation } from '../components/Navigation';
 
 interface StudentActivity {
   id: string;
@@ -262,27 +262,14 @@ export function ClassDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button variant="ghost" size="sm" onClick={() => navigate('/teacher/dashboard')}>
-                <ArrowLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-              <Gavel className="w-8 h-8 text-blue-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">{className}</h1>
-                <p className="text-sm text-gray-600">{studentCount} students enrolled</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Navigation />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">{className}</h1>
+          <p className="text-sm text-gray-600 mt-1">{studentCount} students enrolled</p>
+        </div>
         {/* Stats Overview */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <Card>
@@ -434,49 +421,49 @@ export function ClassDashboard() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <Link to={`/teacher/class/${classId}/manage`}>
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <Users className="w-4 h-4 mr-2" />
                     Student Roster
                   </Button>
                 </Link>
                 <Link to="/teacher/committee-assignments">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <BookOpen className="w-4 h-4 mr-2" />
                     Committee Assignments
                   </Button>
                 </Link>
                 <Link to="/bills">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <FileText className="w-4 h-4 mr-2" />
                     Review Bills
                   </Button>
                 </Link>
                 <Link to="/teacher/bill-sorting">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <FileText className="w-4 h-4 mr-2" />
                     Sort Bills into Committees
                   </Button>
                 </Link>
                 <Link to="/elections">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <Vote className="w-4 h-4 mr-2" />
                     Manage Elections
                   </Button>
                 </Link>
                 <Link to="/floor-session">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <Gavel className="w-4 h-4 mr-2" />
                     Floor Session
                   </Button>
                 </Link>
                 <Link to="/teacher/setup">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <Settings className="w-4 h-4 mr-2" />
                     Setup & Configuration
                   </Button>
                 </Link>
                 <Link to="/teacher/deadlines">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <Bell className="w-4 h-4 mr-2" />
                     Manage Deadlines
                   </Button>
@@ -491,13 +478,13 @@ export function ClassDashboard() {
               </CardHeader>
               <CardContent className="space-y-2">
                 <Link to="/resources">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <BookOpen className="w-4 h-4 mr-2" />
                     Curriculum Resources
                   </Button>
                 </Link>
                 <Link to="/teacher/admin">
-                  <Button variant="outline" className="w-full justify-start">
+                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
                     <Settings className="w-4 h-4 mr-2" />
                     Admin Settings
                   </Button>

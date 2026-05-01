@@ -47,8 +47,11 @@ export function ClassSimulationDashboard() {
           .eq("user_id", uid)
           .maybeSingle();
         if ((membership as any)?.status === "pending") {
-          toast.info("Your teacher has not approved this class yet.");
-          return navigate("/settings/classes");
+          await supabase
+            .from("class_memberships")
+            .update({ status: "approved", approved_at: new Date().toISOString() })
+            .eq("class_id", classId)
+            .eq("user_id", uid);
         }
 
         const { error: upErr } = await supabase

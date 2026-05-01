@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Gavel, Plus, Users, Copy, Check, KeyRound } from 'lucide-react';
+import { Plus, Users, Copy, Check } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
+import { Navigation } from '../components/Navigation';
 
 interface ClassData {
   id: string;
@@ -20,7 +21,6 @@ export function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  const [bypassAuth, setBypassAuth] = useState(false);
 
   useEffect(() => {
     loadUserAndClasses();
@@ -30,8 +30,8 @@ export function TeacherDashboard() {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
-      if (!session && !bypassAuth) {
-        // Show bypass button instead of navigating
+      if (!session) {
+        navigate('/signin');
         setLoading(false);
         return;
       }
@@ -57,36 +57,12 @@ export function TeacherDashboard() {
           return { ...c, student_count: count ?? 0 };
         }));
         setClasses(normalized as any);
-      } else if (bypassAuth) {
-        setUserName('Teacher (Dev Mode)');
-        // Mock classes for development
-        setClasses([
-          {
-            id: '1',
-            name: 'super amazing class',
-            class_code: 'SAC123',
-            student_count: 24,
-            created_at: new Date('2026-01-15').toISOString(),
-          },
-          {
-            id: '2',
-            name: 'testing class 123',
-            class_code: 'TEST99',
-            student_count: 18,
-            created_at: new Date('2026-02-20').toISOString(),
-          },
-        ]);
       }
     } catch (error) {
       console.error('Error loading classes:', error);
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    navigate('/');
   };
 
   const copyJoinCode = (code: string) => {
@@ -122,38 +98,9 @@ export function TeacherDashboard() {
     );
   }
 
-  if (!userName && !bypassAuth) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Button onClick={() => setBypassAuth(true)}>
-            <KeyRound className="w-4 h-4 mr-2" />
-            Bypass Authentication (Dev Mode)
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Gavel className="w-8 h-8 text-blue-600" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">Gavel Teacher Dashboard</h1>
-                <p className="text-sm text-gray-600">Welcome back, {userName}</p>
-              </div>
-            </div>
-            <Button variant="outline" onClick={handleSignOut}>
-              Sign Out
-            </Button>
-          </div>
-        </div>
-      </header>
+      <Navigation />
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">

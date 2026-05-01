@@ -270,6 +270,26 @@ function createEditAttributionExtension({
       return [
         new Plugin({
           key: editAttributionPluginKey,
+          filterTransaction: (transaction, state) => {
+            if (!editor.isEditable || shouldSuppress()) return true;
+            if (!transaction.docChanged || transaction.getMeta(editAttributionPluginKey) || transaction.getMeta("restoreDeleteHighlight")) return true;
+
+            let touchesDeletedText = false;
+            transaction.mapping.maps.forEach((stepMap) => {
+              stepMap.forEach((oldStart, oldEnd) => {
+                if (touchesDeletedText || oldEnd <= oldStart) return;
+                state.doc.nodesBetween(oldStart, oldEnd, (node) => {
+                  if (node.marks?.some((mark) => mark.type.name === "deleteHighlight")) {
+                    touchesDeletedText = true;
+                    return false;
+                  }
+                  return true;
+                });
+              });
+            });
+
+            return !touchesDeletedText;
+          },
           appendTransaction: (transactions, _oldState, newState) => {
             if (!editor.isEditable || shouldSuppress()) return null;
 
@@ -378,7 +398,7 @@ function CommitteeEditorToolbar({ editor }: { editor: Editor }) {
     { label: "Align left", icon: AlignLeft, onClick: () => setBlockAlignment(editor, "left") },
     { label: "Align center", icon: AlignCenter, onClick: () => setBlockAlignment(editor, "center") },
     { label: "Align right", icon: AlignRight, onClick: () => setBlockAlignment(editor, "right") },
-    { label: "Remove formatting", icon: RemoveFormatting, onClick: () => run(() => editor.chain().focus().unsetAllMarks().clearNodes().run()) },
+    { label: "Remove formatting", icon: RemoveFormatting, onClick: () => run(() => editor.chain().focus().unsetMark("bold").unsetMark("italic").unsetMark("underline").unsetMark("link").clearNodes().run()) },
   ];
 
   return (
@@ -601,16 +621,14 @@ export function CollaborativeBillEditor({
 
   useEffect(() => {
     if (!restoreMenu) return;
-    const close = () => setRestoreMenu(null);
-    window.addEventListener("click", close);
-    window.addEventListener("keydown", close);
-    return () => {
-      window.removeEventListener("click", close);
-      window.removeEventListener("keydown", close);
+    const close = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRestoreMenu(null);
     };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
   }, [restoreMenu]);
 
-  const handleEditorContextMenu = (event: MouseEvent<HTMLDivElement>) => {
+  const showRestoreMenu = (event: MouseEvent<HTMLDivElement>) => {
     if (!editor) return;
     const target = event.target as HTMLElement | null;
     const deleted = target?.closest("[data-delete-highlight]") as HTMLElement | null;
@@ -632,7 +650,14 @@ export function CollaborativeBillEditor({
 
   const restoreDeletedText = () => {
     if (!editor || !restoreMenu) return;
-    editor.chain().focus().setTextSelection(restoreMenu.pos).extendMarkRange("deleteHighlight").unsetMark("deleteHighlight").run();
+    editor
+      .chain()
+      .focus()
+      .setMeta("restoreDeleteHighlight", true)
+      .setTextSelection(restoreMenu.pos)
+      .extendMarkRange("deleteHighlight")
+      .unsetMark("deleteHighlight")
+      .run();
     setRestoreMenu(null);
   };
 
@@ -649,7 +674,7 @@ export function CollaborativeBillEditor({
   }
 
   return (
-    <div onContextMenu={handleEditorContextMenu}>
+    <div onClick={showRestoreMenu} onContextMenu={showRestoreMenu}>
       {collabStatus !== "live" && (
         <div className="mb-2 text-xs px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-800">
           {collabStatus === "connecting" ? "Connecting collaboration..." : "Collaboration offline (local edits only)"}

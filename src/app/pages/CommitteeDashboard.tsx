@@ -23,7 +23,7 @@ export function CommitteeDashboard() {
   const [loading, setLoading] = useState(true);
   const [meId, setMeId] = useState<string | null>(null);
   const [meProfile, setMeProfile] = useState<ProfileLite | null>(null);
-  const [committee, setCommittee] = useState<{ id: string; name: string; description: string | null; created_at: string } | null>(null);
+  const [committee, setCommittee] = useState<{ id: string; class_id: string; name: string; description: string | null; created_at: string } | null>(null);
 
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
   const [memberSearch, setMemberSearch] = useState("");
@@ -75,7 +75,7 @@ export function CommitteeDashboard() {
 
         const { data: c, error: cErr } = await supabase
           .from("committees")
-          .select("id,name,description,created_at")
+          .select("id,class_id,name,description,created_at")
           .eq("id", committeeId)
           .single();
         if (cErr) throw cErr;
@@ -85,9 +85,10 @@ export function CommitteeDashboard() {
         const { data: prof } = await supabase.from("profiles").select("class_id,role").eq("user_id", me ?? "").maybeSingle();
         const classId = (prof as any)?.class_id ?? null;
         setViewerRole(((prof as any)?.role ?? null) as any);
-        if (classId) {
-          const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
-          setAllowSelfJoin(!!(cls as any)?.settings?.committees?.allowSelfJoin);
+        if ((c as any).class_id) {
+          const { data: cls } = await supabase.from("classes").select("settings").eq("id", (c as any).class_id).maybeSingle();
+          const settings = (cls as any)?.settings ?? {};
+          setAllowSelfJoin(!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
         } else {
           setAllowSelfJoin(false);
         }
@@ -521,10 +522,10 @@ export function CommitteeDashboard() {
     try {
       const { error } = await supabase
         .from("committee_members")
-        .insert({ committee_id: committeeId, user_id: meId, role: "member" });
+        .upsert({ committee_id: committeeId, user_id: meId, role: "member" } as any, { onConflict: "committee_id,user_id" });
       if (error) throw error;
       setMyRole("member");
-      setMembers((prev) => [...prev, { user_id: meId, role: "member", profile: null }]);
+      setMembers((prev) => (prev.some((m) => m.user_id === meId) ? prev : [...prev, { user_id: meId, role: "member", profile: meProfile }]));
     } catch (e: any) {
       toast.error(e.message || "Could not update membership");
     } finally {

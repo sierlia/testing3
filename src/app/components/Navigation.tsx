@@ -1,6 +1,6 @@
-import { ChevronDown, Building2, LogOut, Settings, User, Mail } from "lucide-react";
+import { ChevronDown, Building2, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
 import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
@@ -9,10 +9,14 @@ import { DefaultAvatar } from "./DefaultAvatar";
 export function Navigation() {
   const [organizationsOpen, setOrganizationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [classMenuOpen, setClassMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
+  const [activeClassName, setActiveClassName] = useState<string>("Switch Classes");
+  const [teacherClasses, setTeacherClasses] = useState<Array<{ id: string; name: string }>>([]);
   const [unreadLetters, setUnreadLetters] = useState(0);
   const orgCloseTimerRef = useRef<number | null>(null);
 
@@ -26,14 +30,52 @@ export function Navigation() {
       if (!user?.id) {
         setAvatarUrl(null);
         setActiveClassId(null);
+        setActiveClassName("Switch Classes");
+        setTeacherClasses([]);
         return;
       }
-      const { data } = await supabase.from("profiles").select("avatar_url,class_id").eq("user_id", user.id).maybeSingle();
+      const { data } = await supabase.from("profiles").select("avatar_url,class_id,role").eq("user_id", user.id).maybeSingle();
       setAvatarUrl((data as any)?.avatar_url ?? null);
-      setActiveClassId((data as any)?.class_id ?? null);
+      const routeClassId = location.pathname.match(/^\/(?:teacher\/class|class)\/([^/]+)/)?.[1] ?? null;
+      let classId = routeClassId ?? (data as any)?.class_id ?? null;
+      if ((user.user_metadata as any)?.role === "teacher") {
+        const { data: classes } = await supabase
+          .from("classes")
+          .select("id,name")
+          .eq("teacher_id", user.id)
+          .order("created_at", { ascending: false });
+        const rows = ((classes ?? []) as any[]).map((c) => ({ id: c.id, name: c.name }));
+        setTeacherClasses(rows);
+        if (!classId && rows[0]) {
+          classId = rows[0].id;
+          await supabase.from("profiles").upsert({
+            user_id: user.id,
+            class_id: classId,
+            role: "teacher",
+            display_name: user.user_metadata?.name ?? null,
+          } as any);
+        }
+        setActiveClassName(rows.find((c) => c.id === classId)?.name ?? "Switch Classes");
+      }
+      setActiveClassId(classId);
     };
     void load();
-  }, [user?.id]);
+  }, [user?.id, location.pathname]);
+
+  const switchClass = async (classId: string) => {
+    if (!user?.id) return;
+    const next = teacherClasses.find((c) => c.id === classId);
+    await supabase.from("profiles").upsert({
+      user_id: user.id,
+      class_id: classId,
+      role: "teacher",
+      display_name: user.user_metadata?.name ?? null,
+    } as any);
+    setActiveClassId(classId);
+    setActiveClassName(next?.name ?? "Class");
+    setClassMenuOpen(false);
+    navigate(`/teacher/class/${classId}`);
+  };
 
   const openOrganizations = () => {
     if (orgCloseTimerRef.current) {
@@ -101,7 +143,9 @@ export function Navigation() {
 
   const dashboardLink =
     user?.user_metadata?.role === "teacher"
-      ? "/teacher/dashboard"
+      ? activeClassId
+        ? `/teacher/class/${activeClassId}`
+        : "/teacher/dashboard"
       : activeClassId
         ? `/class/${activeClassId}/dashboard`
         : "/settings/classes";
@@ -248,6 +292,62 @@ export function Navigation() {
                 </div>
               )}
             </div>
+            {user?.user_metadata?.role === "teacher" && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setClassMenuOpen((open) => !open)}
+                  className="flex min-w-[180px] items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-sm font-semibold text-gray-900">{activeClassName}</span>
+                    <span className="block text-xs text-gray-500">Switch classes</span>
+                  </span>
+                  <ChevronDown className={`h-4 w-4 flex-shrink-0 transition-transform ${classMenuOpen ? "rotate-180" : ""}`} />
+                </button>
+
+                {classMenuOpen && (
+                  <div className="absolute right-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
+                    <div className="max-h-72 overflow-y-auto py-1">
+                      {teacherClasses.length === 0 ? (
+                        <div className="px-4 py-3 text-sm text-gray-500">No classes yet</div>
+                      ) : (
+                        teacherClasses.map((c) => (
+                          <button
+                            key={c.id}
+                            type="button"
+                            onClick={() => void switchClass(c.id)}
+                            className={`block w-full px-4 py-2 text-left text-sm hover:bg-gray-50 ${
+                              c.id === activeClassId ? "bg-blue-50 font-medium text-blue-700" : "text-gray-700"
+                            }`}
+                          >
+                            {c.name}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    <div className="border-t border-gray-200 py-1">
+                      <Link
+                        to="/teacher/create-class"
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => setClassMenuOpen(false)}
+                      >
+                        <Plus className="h-4 w-4" />
+                        Add class
+                      </Link>
+                      <Link
+                        to="/teacher/dashboard"
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => setClassMenuOpen(false)}
+                      >
+                        <Layers className="h-4 w-4" />
+                        Manage classes
+                      </Link>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>

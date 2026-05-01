@@ -5,9 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
-import { Gavel, ArrowLeft, WandSparkles } from 'lucide-react';
+import { WandSparkles } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
+import { Navigation } from '../components/Navigation';
 
 function generateClassCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -65,6 +66,7 @@ export function CreateClassPage() {
         committees: {
           enabled: formData.committees,
           assignmentMode: formData.committeeAssignmentMode,
+          allowSelfJoin: formData.committeeAssignmentMode === 'self-join',
           chairElectionMode: formData.chairElectionMode,
           chairVoteThresholdPct: Number(formData.chairVoteThresholdPct),
         },
@@ -122,12 +124,9 @@ export function CreateClassPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b"><div className="container mx-auto px-4 py-4"><div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate('/teacher/dashboard')}><ArrowLeft className="w-4 h-4 mr-2" />Back</Button>
-        <Gavel className="w-8 h-8 text-blue-600" /><h1 className="text-2xl font-bold text-gray-900">Create New Class</h1>
-      </div></div></header>
+      <Navigation />
 
-      <main className="container mx-auto px-4 py-8"><div className="max-w-3xl mx-auto"><Card><CardHeader><CardTitle>Class & Simulation Setup</CardTitle><CardDescription>Set up your simulation and generate a class code for student enrollment.</CardDescription></CardHeader><CardContent>
+      <main className="container mx-auto px-4 py-8"><div className="max-w-3xl mx-auto"><Card><CardHeader><CardTitle>Create New Class</CardTitle><CardDescription>Set up your simulation and generate a class code for student enrollment.</CardDescription></CardHeader><CardContent>
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="space-y-2"><Label htmlFor="name">Class Name *</Label><Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required /></div>
           <div className="space-y-2"><Label htmlFor="description">Description</Label><Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} /></div>
