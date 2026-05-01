@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Calendar, Mail, PenSquare } from "lucide-react";
+import { Calendar, CheckCircle, Mail, PenSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -11,6 +11,7 @@ type Mailbox = "inbox" | "sent";
 
 type LetterItem = {
   letter_id: string;
+  parent_letter_id: string | null;
   mailbox: Mailbox;
   from_user_id: string;
   from_name: string;
@@ -40,12 +41,12 @@ export function DearColleagueInbox() {
       const [{ data: inboxRows, error: inboxErr }, { data: sentRows, error: sentErr }] = await Promise.all([
         supabase
           .from("dear_colleague_recipients")
-          .select("letter_id,read_at,dear_colleague_letters(id,sender_user_id,subject,body,created_at)")
+          .select("letter_id,read_at,dear_colleague_letters(id,parent_letter_id,sender_user_id,subject,body,created_at)")
           .eq("recipient_user_id", uid)
           .order("dear_colleague_letters(created_at)", { ascending: false } as any),
         supabase
           .from("dear_colleague_letters")
-          .select("id,sender_user_id,subject,body,created_at")
+          .select("id,parent_letter_id,sender_user_id,subject,body,created_at")
           .eq("sender_user_id", uid)
           .order("created_at", { ascending: false }),
       ]);
@@ -54,6 +55,7 @@ export function DearColleagueInbox() {
 
       const inboxLetters = (inboxRows ?? []).map((r: any) => ({
         letter_id: r.letter_id,
+        parent_letter_id: r.dear_colleague_letters.parent_letter_id ?? null,
         read_at: r.read_at,
         sender_user_id: r.dear_colleague_letters.sender_user_id,
         subject: r.dear_colleague_letters.subject,
@@ -62,6 +64,7 @@ export function DearColleagueInbox() {
       }));
       const sentLetters = (sentRows ?? []).map((l: any) => ({
         letter_id: l.id,
+        parent_letter_id: l.parent_letter_id ?? null,
         read_at: null,
         sender_user_id: l.sender_user_id,
         subject: l.subject,
@@ -94,6 +97,7 @@ export function DearColleagueInbox() {
 
       const inboxMapped: LetterItem[] = inboxLetters.map((l: any) => ({
         letter_id: l.letter_id,
+        parent_letter_id: l.parent_letter_id ?? null,
         mailbox: "inbox",
         from_user_id: l.sender_user_id,
         from_name: profileMap.get(l.sender_user_id)?.display_name ?? "Unknown",
@@ -107,6 +111,7 @@ export function DearColleagueInbox() {
       }));
       const sentMapped: LetterItem[] = sentLetters.map((l: any) => ({
         letter_id: l.letter_id,
+        parent_letter_id: l.parent_letter_id ?? null,
         mailbox: "sent",
         from_user_id: l.sender_user_id,
         from_name: "You",
@@ -144,8 +149,11 @@ export function DearColleagueInbox() {
   const formatDate = (iso: string) =>
     new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 
-  const selectLetter = async (it: LetterItem) => {
+  const selectLetter = (it: LetterItem) => {
     setSelected(it);
+  };
+
+  const markAsRead = async (it: LetterItem) => {
     if (it.mailbox !== "inbox" || it.read_at) return;
     try {
       const { data: auth } = await supabase.auth.getUser();
@@ -168,6 +176,23 @@ export function DearColleagueInbox() {
   const unreadCount = useMemo(() => items.filter((i) => i.mailbox === "inbox" && !i.read_at).length, [items]);
   const visibleItems = useMemo(() => items.filter((i) => i.mailbox === mailbox), [items, mailbox]);
   const replySubject = selected?.subject && selected.subject !== "(No subject)" ? selected.subject : "";
+  const threadItems = useMemo(() => {
+    if (!selected) return [];
+    const byId = new Map(items.map((it) => [it.letter_id, it]));
+    const rootFor = (item: LetterItem) => {
+      let current = item;
+      const seen = new Set<string>();
+      while (current.parent_letter_id && byId.has(current.parent_letter_id) && !seen.has(current.parent_letter_id)) {
+        seen.add(current.letter_id);
+        current = byId.get(current.parent_letter_id)!;
+      }
+      return current.letter_id;
+    };
+    const rootId = rootFor(selected);
+    return items
+      .filter((it) => rootFor(it) === rootId)
+      .sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+  }, [items, selected]);
 
   const switchMailbox = (next: Mailbox) => {
     setMailbox(next);
@@ -277,14 +302,26 @@ export function DearColleagueInbox() {
                       </div>
                     </div>
                     {selected.mailbox === "inbox" && (
-                      <button
-                        type="button"
-                        onClick={() => navigate(`/dear-colleague/compose?to=${encodeURIComponent(selected.from_user_id)}&subject=${encodeURIComponent(replySubject)}`)}
-                        className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-                      >
-                        <PenSquare className="w-4 h-4" />
-                        Reply
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {!selected.read_at && (
+                          <button
+                            type="button"
+                            onClick={() => void markAsRead(selected)}
+                            className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                          >
+                            <CheckCircle className="w-4 h-4" />
+                            Mark as read
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => navigate(`/dear-colleague/compose?to=${encodeURIComponent(selected.from_user_id)}&subject=${encodeURIComponent(replySubject)}&replyTo=${encodeURIComponent(selected.letter_id)}`)}
+                          className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                          <PenSquare className="w-4 h-4" />
+                          Reply
+                        </button>
+                      </div>
                     )}
                   </div>
 
@@ -292,6 +329,29 @@ export function DearColleagueInbox() {
                   <div className="prose prose-sm max-w-none">
                     <p className="whitespace-pre-wrap text-gray-700">{selected.body}</p>
                   </div>
+
+                  {threadItems.length > 1 && (
+                    <div className="mt-8 border-t border-gray-200 pt-6">
+                      <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Reply history</h3>
+                      <div className="space-y-4">
+                        {threadItems.map((it) => (
+                          <div
+                            key={`${it.mailbox}:${it.letter_id}:history`}
+                            className={`rounded-md border p-4 ${it.letter_id === selected.letter_id ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50"}`}
+                          >
+                            <div className="mb-2 flex items-center justify-between gap-3">
+                              <div className="text-sm font-medium text-gray-900">
+                                {it.from_name}
+                                {it.mailbox === "sent" && it.to_names.length ? ` to ${it.to_names.join(", ")}` : ""}
+                              </div>
+                              <div className="text-xs text-gray-500">{formatDate(it.created_at)}</div>
+                            </div>
+                            <p className="whitespace-pre-wrap text-sm text-gray-700">{it.body}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">

@@ -40,24 +40,6 @@ export function BillFilters({ filters, onFilterChange }: BillFiltersProps) {
     "Libertarian",
   ];
 
-  const availableTags = [
-    "education",
-    "healthcare",
-    "environment",
-    "energy",
-    "justice",
-    "budget",
-    "reform",
-    "agriculture",
-  ];
-
-  const handleTagToggle = (tag: string) => {
-    const newTags = filters.tags.includes(tag)
-      ? filters.tags.filter(t => t !== tag)
-      : [...filters.tags, tag];
-    onFilterChange({ ...filters, tags: newTags });
-  };
-
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
       <div className="flex items-center gap-2 mb-4">
@@ -112,26 +94,6 @@ export function BillFilters({ filters, onFilterChange }: BillFiltersProps) {
               </option>
             ))}
           </select>
-        </div>
-
-        {/* Tags filter */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
-          <div className="flex flex-wrap gap-2">
-            {availableTags.map(tag => (
-              <button
-                key={tag}
-                onClick={() => handleTagToggle(tag)}
-                className={`px-3 py-1 text-xs rounded-full transition-colors ${
-                  filters.tags.includes(tag)
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
         </div>
       </div>
     </div>

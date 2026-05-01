@@ -29,7 +29,7 @@ import {
 } from "../components/PartySelection";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
-import { formatConstituency } from "../utils/constituency";
+import { formatConstituencyFull, normalizeConstituencyId } from "../utils/constituency";
 
 type EditingSection = "personal_statement" | "constituency_description" | "key_issues" | null;
 
@@ -49,6 +49,18 @@ type ProfileRow = {
   role?: string | null;
   class_id?: string | null;
 };
+
+const PROFILE_COLLAPSE_WORDS = 150;
+
+function countWords(text: string) {
+  return text.trim().split(/\s+/).filter(Boolean).length;
+}
+
+function truncateWords(text: string, maxWords: number) {
+  const words = text.trim().split(/\s+/).filter(Boolean);
+  if (words.length <= maxWords) return text;
+  return `${words.slice(0, maxWords).join(" ")}...`;
+}
 
 export function StudentProfile() {
   const { id } = useParams();
@@ -72,6 +84,7 @@ export function StudentProfile() {
 
   const [showConstituencyModal, setShowConstituencyModal] = useState(false);
   const [constituencyDraftId, setConstituencyDraftId] = useState<string | null>(null);
+  const [unavailableConstituencies, setUnavailableConstituencies] = useState<string[]>([]);
 
   useEffect(() => {
     (async () => {
@@ -100,17 +113,21 @@ export function StudentProfile() {
       setProfile(pr);
       setUpdatedAt(pr.updated_at || pr.created_at || new Date().toISOString());
 
-      const { data: ba } = await supabase
+      let authoredQuery = supabase
         .from("bill_display")
-        .select("id,hr_label,title,status")
-        .eq("author_user_id", uid)
-        .order("bill_number");
+        .select("id,hr_label,title,status,class_id")
+        .eq("author_user_id", uid);
+      if (pr.class_id) authoredQuery = authoredQuery.eq("class_id", pr.class_id);
+      if (uid !== currentUserId) authoredQuery = authoredQuery.neq("status", "draft");
+      const { data: ba } = await authoredQuery.order("bill_number");
       setBillsAuthored(ba ?? []);
 
-      const { data: bc } = await supabase
+      let cosponsoredQuery = supabase
         .from("bill_cosponsors")
-        .select("bill_id,bills!inner(id,title,bill_number,status)")
+        .select("bill_id,bills!inner(id,title,bill_number,status,class_id)")
         .eq("user_id", uid);
+      if (pr.class_id) cosponsoredQuery = cosponsoredQuery.eq("bills.class_id", pr.class_id);
+      const { data: bc } = await cosponsoredQuery;
       setBillsCosponsored(
         (bc ?? []).map((r: any) => ({
           id: r.bills.id,
@@ -124,6 +141,17 @@ export function StudentProfile() {
       setPartyDraftId(existingPartyId ?? null);
       setNewPartyDraft((pr.written_responses as any)?.new_party ?? undefined);
       setConstituencyDraftId((pr.written_responses as any)?.constituency_id ?? null);
+
+      if (pr.class_id) {
+        const { data: directory } = await supabase.rpc("class_directory", { target_class: pr.class_id } as any);
+        const taken = ((directory ?? []) as any[])
+          .filter((row) => row.user_id !== uid)
+          .map((row) => normalizeConstituencyId(row.constituency_name))
+          .filter(Boolean) as string[];
+        setUnavailableConstituencies(taken);
+      } else {
+        setUnavailableConstituencies([]);
+      }
 
       const { data: cm } = await supabase
         .from("committee_members")
@@ -305,6 +333,10 @@ export function StudentProfile() {
     if (!profile) return;
     const c = getConstituencyById(constituencyDraftId);
     if (!c) return;
+    if (unavailableConstituencies.includes(normalizeConstituencyId(c.id) ?? c.id)) {
+      toast.error("That constituency has already been selected in this class");
+      return;
+    }
     mergeWrittenResponses({ constituency_id: c.id });
     await saveProfile({
       constituency_name: c.id.toUpperCase(),
@@ -320,6 +352,8 @@ export function StudentProfile() {
 
   const personalStatement = profile.personal_statement || "";
   const constituencyDescription = String((profile.written_responses || {})["constituency_description"] || "");
+  const shouldCollapseStatement = countWords(personalStatement) > PROFILE_COLLAPSE_WORDS;
+  const shouldCollapseConstituency = countWords(constituencyDescription) > PROFILE_COLLAPSE_WORDS;
   const keyIssuesRaw = (profile.written_responses || {})["key_issues"];
   const keyIssues: string[] = Array.isArray(keyIssuesRaw)
     ? keyIssuesRaw
@@ -373,7 +407,7 @@ export function StudentProfile() {
                 <div className="space-y-1 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
-                    <span>{formatConstituency(profile.constituency_name)}</span>
+                    <span>{formatConstituencyFull(profile.constituency_name)}</span>
                     {isMe && (
                       <button
                         onClick={() => setShowConstituencyModal(true)}
@@ -406,8 +440,19 @@ export function StudentProfile() {
                 </div>
               </div>
             </div>
-            <div className="text-xs italic text-gray-500 whitespace-nowrap">
-              {updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}
+            <div className="flex flex-col items-end gap-3">
+              <div className="text-xs italic text-gray-500 whitespace-nowrap">
+                {updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}
+              </div>
+              {!isMe && (
+                <Link
+                  to={`/dear-colleague/compose?to=${encodeURIComponent(profile.user_id)}`}
+                  className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                >
+                  <Mail className="h-4 w-4" />
+                  Send letter
+                </Link>
+              )}
             </div>
           </div>
         </div>
@@ -452,7 +497,7 @@ export function StudentProfile() {
             </div>
           ) : personalStatement.trim() ? (
             <div className="space-y-2">
-              {personalStatement.split("\n\n").length > 1 ? (
+              {shouldCollapseStatement ? (
                 <>
                   <div className={showFullStatement ? "" : "relative pb-6"}>
                     {showFullStatement ? (
@@ -464,7 +509,7 @@ export function StudentProfile() {
                     ) : (
                       <>
                         <div className="text-gray-700 space-y-4">
-                          {personalStatement.split("\n\n").slice(0, 3).map((para, index) => (
+                          {truncateWords(personalStatement, PROFILE_COLLAPSE_WORDS).split("\n\n").map((para, index) => (
                             <p key={index}>{para}</p>
                           ))}
                         </div>
@@ -536,14 +581,14 @@ export function StudentProfile() {
             </div>
           ) : constituencyDescription.trim() ? (
             <div className="space-y-2">
-              {constituencyDescription.split("\n\n").length > 1 ? (
+              {shouldCollapseConstituency ? (
                 <>
                   <div className={showFullConstituency ? "" : "relative pb-6"}>
                     {showFullConstituency ? (
                       <div className="text-gray-700 space-y-4 whitespace-pre-line">{constituencyDescription}</div>
                     ) : (
                       <>
-                        <div className="text-gray-700 whitespace-pre-line">{constituencyDescription.split("\n\n").slice(0, 2).join("\n\n")}</div>
+                        <div className="text-gray-700 whitespace-pre-line">{truncateWords(constituencyDescription, PROFILE_COLLAPSE_WORDS)}</div>
                         <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none" />
                       </>
                     )}
@@ -764,7 +809,7 @@ export function StudentProfile() {
               </button>
             </div>
             <div className="p-6">
-              <ConstituencyPicker selected={constituencyDraftId} onSelect={(cid) => setConstituencyDraftId(cid)} />
+              <ConstituencyPicker selected={constituencyDraftId} unavailableIds={unavailableConstituencies} onSelect={(cid) => setConstituencyDraftId(cid)} />
             </div>
             <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">
               <button

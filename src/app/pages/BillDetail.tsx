@@ -60,11 +60,11 @@ export function BillDetail() {
       return [
         { stage: 'Introduced', status: 'completed' as const, date: createdAt },
         {
-          stage: referral.committee_name ?? 'Committee',
+          stage: 'Referred to committee',
           status: 'current' as const,
           date: referral.referred_at ?? createdAt,
-          tone: 'orange' as const,
-          currentLabel: 'Referred to committee',
+          tone: 'gray' as const,
+          currentLabel: referral.committee_name ?? 'Committee',
         },
       ];
     }

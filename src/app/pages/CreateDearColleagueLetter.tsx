@@ -63,10 +63,10 @@ export function CreateDearColleagueLetter() {
         setParties((par ?? []) as any);
         setCommittees((com ?? []) as any);
 
-        const replyTo = searchParams.get("to");
-        if (!didPrefillReplyRef.current && replyTo) {
+        const replyRecipientId = searchParams.get("to");
+        if (!didPrefillReplyRef.current && replyRecipientId) {
           didPrefillReplyRef.current = true;
-          const match = classMembers.find((p) => p.user_id === replyTo);
+          const match = classMembers.find((p) => p.user_id === replyRecipientId);
           if (match) {
             setRecipients([
               {
@@ -171,7 +171,7 @@ export function CreateDearColleagueLetter() {
 
       const { data: letter, error: lErr } = await supabase
         .from("dear_colleague_letters")
-        .insert({ class_id: classId, sender_user_id: uid, subject: subject.trim(), body: message } as any)
+        .insert({ class_id: classId, sender_user_id: uid, subject: subject.trim(), body: message, parent_letter_id: searchParams.get("replyTo") || null } as any)
         .select("id")
         .single();
       if (lErr) throw lErr;

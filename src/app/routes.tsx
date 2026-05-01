@@ -14,6 +14,7 @@ import { CommitteeLeadership } from "./pages/CommitteeLeadership";
 import { CreateBill } from "./pages/CreateBill";
 import { AllBills } from "./pages/AllBills";
 import { TessBills } from "./pages/TessBills";
+import { MyBills } from "./pages/MyBills";
 import { BillDetail } from "./pages/BillDetail";
 import { BillPipeline } from "./pages/BillPipeline";
 import { TeacherSetup } from "./pages/TeacherSetup";
@@ -143,6 +144,10 @@ export const router = createHashRouter([
   {
     path: "/bills",
     Component: TessBills,
+  },
+  {
+    path: "/bills/my",
+    Component: MyBills,
   },
   {
     path: "/tess-bills",

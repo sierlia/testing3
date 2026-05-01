@@ -1,13 +1,16 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router";
 import { Navigation } from "../components/Navigation";
+import { useAuth } from "../utils/AuthContext";
 
 export function SettingsLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const { user } = useAuth();
   const path = location.pathname;
+  const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const tabs = [
     { label: "Notifications", to: "/settings/notifications" },
-    { label: "Classes", to: "/settings/classes" },
+    ...(!isTeacher ? [{ label: "Classes", to: "/settings/classes" }] : []),
   ];
 
   return (

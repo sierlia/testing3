@@ -4,7 +4,7 @@ interface TimelineStage {
   stage: string;
   status: 'completed' | 'current' | 'upcoming';
   date: string | null;
-  tone?: 'blue' | 'orange';
+  tone?: 'blue' | 'gray';
   currentLabel?: string;
 }
 
@@ -33,7 +33,7 @@ export function BillStatusTimeline({ timeline }: BillStatusTimelineProps) {
                   </div>
                 )}
                 {item.status === 'current' && (
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${item.tone === 'orange' ? 'bg-orange-500' : 'bg-blue-600'}`}>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${item.tone === 'gray' ? 'bg-gray-500' : 'bg-blue-600'}`}>
                     <Clock className="w-4 h-4 text-white" />
                   </div>
                 )}
@@ -59,7 +59,7 @@ export function BillStatusTimeline({ timeline }: BillStatusTimelineProps) {
                   )}
                 </div>
                 {item.status === 'current' && (
-                  <p className={`text-sm mt-1 ${item.tone === 'orange' ? 'text-orange-600' : 'text-blue-600'}`}>
+                  <p className={`text-sm mt-1 ${item.tone === 'gray' ? 'text-gray-600' : 'text-blue-600'}`}>
                     {item.currentLabel ?? 'Current stage'}
                   </p>
                 )}

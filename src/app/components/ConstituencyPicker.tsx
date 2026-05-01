@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Search, MapPin, Check, ExternalLink } from "lucide-react";
+import { normalizeConstituencyId } from "../utils/constituency";
 
 export interface Constituency {
   id: string;
@@ -12,6 +13,7 @@ export interface Constituency {
 interface ConstituencyPickerProps {
   selected: string | null;
   onSelect: (constituency: string) => void;
+  unavailableIds?: string[];
 }
 
 function hashStringToUnitInterval(input: string): number {
@@ -129,8 +131,13 @@ function getOrdinalSuffix(num: number): string {
 export function ConstituencyPicker({
   selected,
   onSelect,
+  unavailableIds = [],
 }: ConstituencyPickerProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const unavailableSet = useMemo(
+    () => new Set(unavailableIds.map((id) => normalizeConstituencyId(id)).filter(Boolean) as string[]),
+    [unavailableIds],
+  );
 
   // Alabama districts with real data
   const alabamaDistricts: Constituency[] = [
@@ -231,16 +238,20 @@ export function ConstituencyPicker({
         ) : (
           filteredConstituencies.map((constituency) => {
             const isSelected = selected === constituency.id;
+            const isUnavailable = !isSelected && unavailableSet.has(normalizeConstituencyId(constituency.id) ?? constituency.id);
 
             return (
               <button
                 key={constituency.id}
                 onClick={() => onSelect(constituency.id)}
+                disabled={isUnavailable}
                 className={`
                   w-full text-left p-4 rounded-lg border-2 transition-all relative
                   ${
                     isSelected
                       ? "border-blue-600 bg-blue-50"
+                      : isUnavailable
+                        ? "border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed"
                       : "border-gray-200 hover:border-gray-300 bg-white"
                   }
                 `}
@@ -279,6 +290,11 @@ export function ConstituencyPicker({
                       <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
                         <Check className="w-4 h-4 text-white" />
                       </div>
+                    )}
+                    {isUnavailable && (
+                      <span className="rounded-full bg-gray-200 px-2 py-1 text-xs font-medium text-gray-600">
+                        Unavailable
+                      </span>
                     )}
                   </div>
                 </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Building2, Check, UserPlus, Users } from "lucide-react";
+import { Building2, Check, ClipboardList, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
@@ -16,6 +16,7 @@ export function CommitteesHome() {
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
   const [settings, setSettings] = useState<any>({});
   const [preferencesSubmitted, setPreferencesSubmitted] = useState<boolean>(false);
+  const [needsPreferences, setNeedsPreferences] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
   const [joinedCommitteeIds, setJoinedCommitteeIds] = useState<Set<string>>(new Set());
   const [joiningCommitteeId, setJoiningCommitteeId] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export function CommitteesHome() {
             .maybeSingle();
           const submitted = !!sub;
           setPreferencesSubmitted(submitted);
-          if (!submitted) return navigate("/committee-preferences");
+          setNeedsPreferences(!submitted);
         }
 
         const { data: rows, error } = await supabase
@@ -133,6 +134,19 @@ export function CommitteesHome() {
               <Building2 className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Committees</h2>
             </div>
+            {role === "student" && needsPreferences && !preferencesSubmitted && (
+              <button
+                type="button"
+                onClick={() => navigate("/committee-preferences")}
+                className="mb-4 flex w-full items-center gap-3 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-left text-blue-900 transition-colors hover:bg-blue-100"
+              >
+                <ClipboardList className="h-5 w-5 flex-shrink-0 text-blue-600" />
+                <span>
+                  <span className="block text-sm font-semibold">Fill out your committee preference survey</span>
+                  <span className="block text-sm text-blue-800">Your teacher will use these rankings to assign committees.</span>
+                </span>
+              </button>
+            )}
             {loading ? (
               <div className="text-sm text-gray-500">Loading committees…</div>
             ) : items.length === 0 ? (

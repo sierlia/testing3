@@ -50,6 +50,16 @@ const STATE_TO_ABBR: Record<string, string> = {
   Wisconsin: "WI",
   Wyoming: "WY",
 };
+const ABBR_TO_STATE = Object.fromEntries(Object.entries(STATE_TO_ABBR).map(([name, abbr]) => [abbr, name])) as Record<string, string>;
+
+function ordinalSuffix(num: number): string {
+  const j = num % 10;
+  const k = num % 100;
+  if (j === 1 && k !== 11) return "st";
+  if (j === 2 && k !== 12) return "nd";
+  if (j === 3 && k !== 13) return "rd";
+  return "th";
+}
 
 export function formatConstituency(value: string | null | undefined) {
   if (!value) return "N/A";
@@ -67,4 +77,21 @@ export function formatConstituency(value: string | null | undefined) {
   const parenthetical = trimmed.match(/\(([A-Za-z]{2})-0?(\d{1,2})\)/);
   if (parenthetical) return `${parenthetical[1].toUpperCase()}-${Number(parenthetical[2])}`;
   return trimmed;
+}
+
+export function normalizeConstituencyId(value: string | null | undefined) {
+  if (!value) return null;
+  const short = formatConstituency(value).match(/^([A-Za-z]{2})-(\d{1,2})$/);
+  if (!short) return value.trim().toLowerCase();
+  return `${short[1].toLowerCase()}-${short[2].padStart(2, "0")}`;
+}
+
+export function formatConstituencyFull(value: string | null | undefined) {
+  const shortValue = formatConstituency(value);
+  const match = shortValue.match(/^([A-Z]{2})-(\d{1,2})$/);
+  if (!match) return shortValue;
+  const stateName = ABBR_TO_STATE[match[1]];
+  if (!stateName) return shortValue;
+  const district = Number(match[2]);
+  return `${stateName}'s ${district}${ordinalSuffix(district)} District (${shortValue})`;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { AnnouncementsFeed } from "../components/AnnouncementsFeed";
@@ -8,6 +8,8 @@ import { MyStatusCard } from "../components/MyStatusCard";
 import { TeacherAdminShortcuts } from "../components/TeacherAdminShortcuts";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
+import { fetchMyBillsForCurrentClass } from "../services/bills";
+import { BillRecord } from "../types/domain";
 
 type Profile = {
   user_id: string;
@@ -27,6 +29,7 @@ export function ClassSimulationDashboard() {
   const [leadershipRoles, setLeadershipRoles] = useState<string[]>([]);
   const [className, setClassName] = useState("");
   const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
+  const [myBills, setMyBills] = useState<BillRecord[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -174,6 +177,10 @@ export function ClassSimulationDashboard() {
           })),
         );
         window.localStorage.setItem(seenKey, String(Date.now()));
+
+        if ((pRow as any)?.role !== "teacher") {
+          setMyBills((await fetchMyBillsForCurrentClass()).slice(0, 12));
+        }
       } catch (e: any) {
         toast.error(e.message || "Could not load dashboard");
       } finally {
@@ -193,6 +200,8 @@ export function ClassSimulationDashboard() {
     }),
     [profile?.party, profile?.constituency_name, committeeNames, leadershipRoles],
   );
+
+  const statusLabel = (value: string) => value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 
   if (loading) {
     return (
@@ -217,6 +226,40 @@ export function ClassSimulationDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <AnnouncementsFeed announcements={announcements} />
+
+            {profile?.role !== "teacher" && (
+              <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">My Bills</h2>
+                    <p className="text-sm text-gray-600">Drafts and submitted legislation</p>
+                  </div>
+                  <Link to="/bills/my" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                    All
+                  </Link>
+                </div>
+                {myBills.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-500">No bills yet.</div>
+                ) : (
+                  <div className="flex snap-x gap-3 overflow-x-auto pb-2">
+                    {myBills.map((bill) => (
+                      <Link
+                        key={bill.id}
+                        to={bill.status === "draft" ? `/bills/create?draft=${bill.id}` : `/bills/${bill.id}`}
+                        className="min-w-[240px] snap-start rounded-md border border-gray-200 bg-gray-50 p-4 hover:border-blue-200 hover:bg-blue-50"
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-semibold text-gray-900">{bill.hr_label}</span>
+                          <span className="rounded bg-white px-2 py-1 text-xs font-medium text-gray-700">{statusLabel(bill.status)}</span>
+                        </div>
+                        <h3 className="line-clamp-2 text-sm font-semibold text-gray-900">{bill.title}</h3>
+                        <p className="mt-3 text-xs text-gray-500">{bill.status === "draft" ? "Continue editing" : "View bill"}</p>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
           </div>
 
           <div className="lg:col-span-1 space-y-6">

@@ -2,9 +2,24 @@ import { supabase } from '../utils/supabase';
 import { BillRecord } from '../types/domain';
 
 export async function fetchBillsForCurrentClass() {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new Error('Not signed in');
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('class_id')
+    .eq('user_id', me)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  const classId = (profile as any)?.class_id;
+  if (!classId) return [];
+
   const { data, error } = await supabase
     .from('bill_display')
-    .select('id, hr_label, title, status, created_at, legislative_text, supporting_text, author_user_id, bill_number')
+    .select('id, hr_label, title, status, created_at, legislative_text, supporting_text, author_user_id, bill_number, class_id')
+    .eq('class_id', classId)
+    .neq('status', 'draft')
     .order('bill_number', { ascending: true });
   if (error) throw error;
 
@@ -52,11 +67,79 @@ export async function createBillForCurrentClass(input: {
   return data as { id: string };
 }
 
+export async function fetchMyBillsForCurrentClass() {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new Error('Not signed in');
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('class_id')
+    .eq('user_id', me)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  const classId = (profile as any)?.class_id;
+  if (!classId) return [];
+
+  const { data, error } = await supabase
+    .from('bill_display')
+    .select('id, hr_label, title, status, created_at, legislative_text, supporting_text, author_user_id, bill_number, class_id')
+    .eq('class_id', classId)
+    .eq('author_user_id', me)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data ?? []) as BillRecord[];
+}
+
+export async function updateBillDraftForCurrentClass(
+  billId: string,
+  input: {
+    title: string;
+    legislativeText: string;
+    supportingText?: string | null;
+    status?: 'draft' | 'submitted';
+  },
+) {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new Error('Not signed in');
+
+  const { data, error } = await supabase
+    .from('bills')
+    .update({
+      title: input.title,
+      legislative_text: input.legislativeText,
+      supporting_text: input.supportingText ?? null,
+      status: input.status ?? 'draft',
+    } as any)
+    .eq('id', billId)
+    .eq('author_user_id', me)
+    .eq('status', 'draft')
+    .select('id')
+    .single();
+  if (error) throw error;
+  return data as { id: string };
+}
+
 export async function fetchBillDetail(billId: string) {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new Error('Not signed in');
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('class_id')
+    .eq('user_id', me)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  const classId = (profile as any)?.class_id;
+  if (!classId) throw new Error('Select a class first');
+
   const { data: bill, error: bErr } = await supabase
     .from('bill_display')
     .select('id, hr_label, bill_number, title, status, created_at, legislative_text, supporting_text, author_user_id, class_id')
     .eq('id', billId)
+    .eq('class_id', classId)
     .single();
   if (bErr) throw bErr;
 

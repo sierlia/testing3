@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import {
   AlignCenter,
@@ -22,10 +22,10 @@ import {
 } from "lucide-react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
-import { createBillForCurrentClass } from "../services/bills";
+import { createBillForCurrentClass, fetchBillDetail, updateBillDraftForCurrentClass } from "../services/bills";
 import { htmlToMarkdown, markdownToHtml } from "../utils/markdown";
 
 type TextMode = "default" | "markdown" | "preview";
@@ -362,8 +362,10 @@ function MarkdownEnabledEditor({
 
 export function CreateBill() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const legislativeMarkdownRef = useRef<HTMLTextAreaElement | null>(null);
   const supportingMarkdownRef = useRef<HTMLTextAreaElement | null>(null);
+  const draftId = searchParams.get("draft");
   const [formData, setFormData] = useState<FormData>({
     title: "",
     type: "H.R. Bill",
@@ -376,6 +378,7 @@ export function CreateBill() {
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [savingDraft, setSavingDraft] = useState(false);
 
   const billTypes = [
     "H.R. Bill",
@@ -384,11 +387,43 @@ export function CreateBill() {
     "H. Res. (Simple Resolution)",
   ];
 
+  useEffect(() => {
+    if (!draftId) return;
+    void (async () => {
+      try {
+        const { bill } = await fetchBillDetail(draftId);
+        if (bill.status !== "draft") {
+          toast.error("Only draft bills can be edited");
+          return navigate(`/bills/${draftId}`);
+        }
+        setFormData((prev) => ({
+          ...prev,
+          title: bill.title ?? "",
+          legislativeText: bill.legislative_text ?? "",
+          supportingText: bill.supporting_text ?? "",
+          legislativeMarkdown: htmlToMarkdown(bill.legislative_text ?? ""),
+          supportingMarkdown: htmlToMarkdown(bill.supporting_text ?? ""),
+        }));
+      } catch (error: any) {
+        toast.error(error.message || "Could not load draft");
+      }
+    })();
+  }, [draftId, navigate]);
+
+  const buildBillPayload = () => {
+    const legislativeHtml = formData.legislativeMode === "default" ? formData.legislativeText : markdownToHtml(formData.legislativeMarkdown);
+    const supportingHtml = formData.supportingMode === "default" ? formData.supportingText : markdownToHtml(formData.supportingMarkdown);
+    return {
+      legislativeHtml,
+      supportingHtml,
+      supportingText: supportingHtml.replace(/<[^>]+>/g, "").trim() ? supportingHtml : null,
+    };
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const legislativeHtml = formData.legislativeMode === "default" ? formData.legislativeText : markdownToHtml(formData.legislativeMarkdown);
-    const supportingHtml = formData.supportingMode === "default" ? formData.supportingText : markdownToHtml(formData.supportingMarkdown);
+    const { legislativeHtml, supportingText } = buildBillPayload();
     
     // Validation
     const newErrors: Record<string, string> = {};
@@ -402,16 +437,49 @@ export function CreateBill() {
     }
 
     try {
+      if (draftId) {
+        await updateBillDraftForCurrentClass(draftId, {
+          title: formData.title.trim(),
+          legislativeText: legislativeHtml,
+          supportingText,
+          status: "submitted",
+        });
+        toast.success("Bill submitted");
+        navigate(`/bills/${draftId}`);
+        return;
+      }
       const created = await createBillForCurrentClass({
         title: formData.title.trim(),
         legislativeText: legislativeHtml,
-        supportingText: supportingHtml.replace(/<[^>]+>/g, "").trim() ? supportingHtml : null,
+        supportingText,
         status: "submitted",
       });
       toast.success("Bill submitted");
       navigate(`/bills/${created.id}`);
     } catch (error: any) {
       toast.error(error.message || "Could not submit bill");
+    }
+  };
+
+  const handleSaveDraft = async () => {
+    const { legislativeHtml, supportingText } = buildBillPayload();
+    if (!formData.title.trim() && !legislativeHtml.replace(/<[^>]+>/g, "").trim() && !supportingText) {
+      toast.error("Add a title or bill text before saving");
+      return;
+    }
+    setSavingDraft(true);
+    try {
+      const title = formData.title.trim() || "Untitled draft";
+      const legislativeText = legislativeHtml.replace(/<[^>]+>/g, "").trim() ? legislativeHtml : "<p></p>";
+      const saved = draftId
+        ? await updateBillDraftForCurrentClass(draftId, { title, legislativeText, supportingText, status: "draft" })
+        : await createBillForCurrentClass({ title, legislativeText, supportingText, status: "draft" });
+      toast.success("Draft saved");
+      navigate(`/bills/create?draft=${saved.id}`, { replace: true });
+    } catch (error: any) {
+      toast.error(error.message || "Could not save draft");
+    } finally {
+      setSavingDraft(false);
     }
   };
 
@@ -425,20 +493,6 @@ export function CreateBill() {
           <p className="text-gray-600">
             Draft legislation to be submitted to the clerk's office
           </p>
-        </div>
-
-        {/* Warning banner */}
-        <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4 mb-6">
-          <div className="flex items-start gap-3">
-            <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
-            <div>
-              <h3 className="font-semibold text-red-900 mb-1">Important: Bill Text is Final</h3>
-              <p className="text-sm text-red-800">
-                Once submitted, the legislative text <strong>cannot be edited or repealed</strong>. 
-                Please review carefully before submitting. You may only withdraw the bill.
-              </p>
-            </div>
-          </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -510,6 +564,19 @@ export function CreateBill() {
             minHeightClass="min-h-[200px]"
           />
 
+          <div className="bg-red-50 border-2 border-red-200 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-red-900 mb-1">Important: Bill Text is Final</h3>
+                <p className="text-sm text-red-800">
+                  Once submitted, the legislative text <strong>cannot be edited or repealed</strong>.
+                  Save a draft if you need to keep working before submission.
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Submit button */}
           <div className="flex items-center justify-between pt-6 border-t border-gray-200">
             <button
@@ -519,13 +586,24 @@ export function CreateBill() {
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-            >
-              <Send className="w-4 h-4" />
-              Submit Bill
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => void handleSaveDraft()}
+                disabled={savingDraft}
+                className="flex items-center gap-2 px-6 py-2 border border-gray-300 bg-white text-gray-700 rounded-md hover:bg-gray-50 disabled:opacity-60 transition-colors font-medium"
+              >
+                <FileText className="w-4 h-4" />
+                {savingDraft ? "Saving..." : "Save Draft"}
+              </button>
+              <button
+                type="submit"
+                className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+              >
+                <Send className="w-4 h-4" />
+                Submit Bill
+              </button>
+            </div>
           </div>
         </form>
       </main>
