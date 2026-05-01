@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { EditorContent, useEditor } from "@tiptap/react";
+import { useEffect, useRef, useState } from "react";
+import { EditorContent } from "@tiptap/react";
+import { Editor } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
@@ -34,6 +35,8 @@ export function CollaborativeBillEditor({
   const providerRef = useRef<YjsSupabaseProvider | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
   const didInitRef = useRef(false);
+  const [editor, setEditor] = useState<Editor | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -68,38 +71,72 @@ export function CollaborativeBillEditor({
       mounted = false;
       providerRef.current?.destroy();
       providerRef.current = null;
+      setEditor((prev) => {
+        prev?.destroy();
+        return null;
+      });
+      setEditorError(null);
       ydocRef.current?.destroy();
       ydocRef.current = null;
     };
   }, [billId, classId, committeeId]);
 
-  const editor = useEditor(
-    ready && ydocRef.current && awarenessRef.current
-      ? {
+  useEffect(() => {
+    if (!ready || !ydocRef.current || !awarenessRef.current) return;
+
+    try {
+      setEditorError(null);
+      const ed = new Editor({
+        editable,
+        extensions: [
+          // StarterKit provides the base schema (doc/paragraph/text/etc).
+          (StarterKit as any)?.configure ? StarterKit.configure({ history: false }) : (StarterKit as any),
+          Collaboration.configure({ document: ydocRef.current }),
+          CollaborationCursor.configure({
+            provider: { awareness: awarenessRef.current } as any,
+            user: { name: localUser.name, color: localUser.color },
+          }),
+        ],
+        editorProps: {
+          attributes: {
+            class: "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
+          },
+        },
+        // Ensure schema is created with a doc node even before any remote steps arrive.
+        content: "<p></p>",
+      });
+
+      setEditor(ed);
+      return () => {
+        ed.destroy();
+        setEditor(null);
+      };
+    } catch (e: any) {
+      // Fallback: if collaboration init fails for any reason, still show a non-collaborative editor
+      // so the workspace doesn't crash. This also lets us surface the error to debug.
+      try {
+        const ed = new Editor({
           editable,
-          extensions: [
-            // StarterKit provides the base schema (doc/paragraph/text/etc).
-            StarterKit.configure({ history: false }),
-            Collaboration.configure({
-              document: ydocRef.current,
-            }),
-            CollaborationCursor.configure({
-              provider: { awareness: awarenessRef.current } as any,
-              user: { name: localUser.name, color: localUser.color },
-            }),
-          ],
+          extensions: [(StarterKit as any)?.configure ? StarterKit.configure({ history: false }) : (StarterKit as any)],
           editorProps: {
             attributes: {
-              class:
-                "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
+              class: "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
             },
           },
-          // Ensure schema is created with a doc node even before any remote steps arrive.
-          content: "<p></p>",
-        }
-      : undefined,
-    [ready, editable, localUser.name, localUser.color],
-  );
+          content: initialHtml || "<p></p>",
+        });
+        setEditor(ed);
+        setEditorError(`Collaboration unavailable: ${e?.message || String(e)}`);
+        return () => {
+          ed.destroy();
+          setEditor(null);
+        };
+      } catch (e2: any) {
+        setEditor(null);
+        setEditorError(e2?.message || e?.message || String(e2 || e));
+      }
+    }
+  }, [ready, editable, localUser.name, localUser.color, initialHtml]);
 
   useEffect(() => {
     if (!editor) return;
@@ -110,6 +147,14 @@ export function CollaborativeBillEditor({
       editor.commands.setContent(initialHtml || "<p></p>", false);
     }
   }, [editor, initialHtml]);
+
+  if (editorError) {
+    return (
+      <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-md p-3">
+        Could not start collaborative editor: {editorError}
+      </div>
+    );
+  }
 
   if (!editor) {
     return <div className="text-sm text-gray-500">Loading editor…</div>;
