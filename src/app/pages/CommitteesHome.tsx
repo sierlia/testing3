@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Building2, Users } from "lucide-react";
+import { Building2, Check, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { Link, useNavigate } from "react-router";
@@ -16,6 +16,9 @@ export function CommitteesHome() {
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
   const [settings, setSettings] = useState<any>({});
   const [preferencesSubmitted, setPreferencesSubmitted] = useState<boolean>(false);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [joinedCommitteeIds, setJoinedCommitteeIds] = useState<Set<string>>(new Set());
+  const [joiningCommitteeId, setJoiningCommitteeId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -24,6 +27,7 @@ export function CommitteesHome() {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id;
         if (!me) return;
+        setMeId(me);
 
         const { data: profile } = await supabase.from("profiles").select("class_id,role").eq("user_id", me).maybeSingle();
         const classId = (profile as any)?.class_id;
@@ -72,14 +76,17 @@ export function CommitteesHome() {
         const ids = finalRows.map((r) => r.id);
         const { data: memRows } = await supabase
           .from("committee_members")
-          .select("committee_id")
+          .select("committee_id,user_id")
           .in("committee_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
         const counts: Record<string, number> = {};
+        const joined = new Set<string>();
         for (const r of memRows ?? []) {
           const cid = (r as any).committee_id;
           counts[cid] = (counts[cid] ?? 0) + 1;
+          if ((r as any).user_id === me) joined.add(cid);
         }
         setMemberCounts(counts);
+        setJoinedCommitteeIds(joined);
       } catch (e: any) {
         toast.error(e.message || "Could not load committees");
       } finally {
@@ -90,6 +97,27 @@ export function CommitteesHome() {
   }, []);
 
   const items = useMemo(() => committees.map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0 })), [committees, memberCounts]);
+  const canSelfJoin = role === "student" && !!settings?.committees?.allowSelfJoin;
+
+  const joinCommittee = async (committeeId: string) => {
+    if (!meId || joinedCommitteeIds.has(committeeId)) return;
+    setJoiningCommitteeId(committeeId);
+    try {
+      const { error } = await supabase.from("committee_members").insert({ committee_id: committeeId, user_id: meId, role: "member" });
+      if (error) throw error;
+      setJoinedCommitteeIds((prev) => new Set(prev).add(committeeId));
+      setMemberCounts((prev) => ({ ...prev, [committeeId]: (prev[committeeId] ?? 0) + 1 }));
+      toast.success("Joined committee");
+    } catch (e: any) {
+      if (String(e?.message ?? "").toLowerCase().includes("duplicate")) {
+        setJoinedCommitteeIds((prev) => new Set(prev).add(committeeId));
+      } else {
+        toast.error(e.message || "Could not join committee");
+      }
+    } finally {
+      setJoiningCommitteeId(null);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -117,9 +145,25 @@ export function CommitteesHome() {
                         {c.memberCount} members
                       </div>
                     </div>
-                    <Link to={`/committees/${c.id}`} className="text-sm text-blue-600 hover:underline whitespace-nowrap">
-                      Open
-                    </Link>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {canSelfJoin && (
+                        <button
+                          onClick={() => void joinCommittee(c.id)}
+                          disabled={joinedCommitteeIds.has(c.id) || joiningCommitteeId === c.id}
+                          className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors disabled:cursor-default ${
+                            joinedCommitteeIds.has(c.id)
+                              ? "bg-green-50 text-green-700 border border-green-200"
+                              : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                          }`}
+                        >
+                          {joinedCommitteeIds.has(c.id) ? <Check className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                          {joinedCommitteeIds.has(c.id) ? "Joined" : joiningCommitteeId === c.id ? "Joining" : "Join"}
+                        </button>
+                      )}
+                      <Link to={`/committees/${c.id}`} className="text-sm text-blue-600 hover:underline whitespace-nowrap">
+                        Open
+                      </Link>
+                    </div>
                   </div>
                 ))}
               </div>

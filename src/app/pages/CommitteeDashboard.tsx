@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
-import { Users, Send, User, Pencil, Save, X } from "lucide-react";
+import { Users, Send, User, Pencil, Save, X, UserPlus } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 
@@ -24,6 +24,7 @@ export function CommitteeDashboard() {
 
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
   const [myRole, setMyRole] = useState<MembershipRole | null>(null);
+  const [viewerRole, setViewerRole] = useState<"teacher" | "student" | null>(null);
   const [joining, setJoining] = useState(false);
   const [allowSelfJoin, setAllowSelfJoin] = useState(false);
 
@@ -78,6 +79,7 @@ export function CommitteeDashboard() {
 
         const { data: prof } = await supabase.from("profiles").select("class_id,role").eq("user_id", me ?? "").maybeSingle();
         const classId = (prof as any)?.class_id ?? null;
+        setViewerRole(((prof as any)?.role ?? null) as any);
         if (classId) {
           const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
           setAllowSelfJoin(!!(cls as any)?.settings?.committees?.allowSelfJoin);
@@ -541,13 +543,14 @@ export function CommitteeDashboard() {
             <div className="text-sm text-gray-600">{members.length} members</div>
           </div>
           <div className="flex items-center gap-2">
-            {!myRole && allowSelfJoin && (
+            {!myRole && allowSelfJoin && viewerRole === "student" && (
               <button
                 onClick={() => void join()}
                 disabled={joining}
-                className="px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700"
               >
-                Join
+                <UserPlus className="w-4 h-4" />
+                {joining ? "Joining" : "Join"}
               </button>
             )}
             <div className="flex items-center rounded-md border border-gray-300 overflow-hidden">

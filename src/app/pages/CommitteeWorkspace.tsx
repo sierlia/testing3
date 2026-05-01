@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
-import { FileText } from "lucide-react";
+import { CheckCircle2, FileText, Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -24,6 +24,11 @@ export function CommitteeWorkspace() {
 
   const [bills, setBills] = useState<Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string }>>([]);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
+  const [textView, setTextView] = useState<"edited" | "original">("edited");
+  const [reportDraft, setReportDraft] = useState("");
+  const [reportLoading, setReportLoading] = useState(false);
+  const [reportSaving, setReportSaving] = useState(false);
+  const [reportSaved, setReportSaved] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -88,6 +93,62 @@ export function CommitteeWorkspace() {
 
   const selected = bills.find((b) => b.id === selectedBillId) ?? null;
 
+  useEffect(() => {
+    if (!selectedBillId || !classId) {
+      setReportDraft("");
+      return;
+    }
+
+    let cancelled = false;
+    const loadReport = async () => {
+      setReportLoading(true);
+      setReportSaved(false);
+      try {
+        const { data, error } = await supabase
+          .from("committee_bill_docs")
+          .select("committee_report")
+          .eq("committee_id", committeeId)
+          .eq("bill_id", selectedBillId)
+          .maybeSingle();
+        if (error) throw error;
+        if (!cancelled) setReportDraft((data as any)?.committee_report ?? "");
+      } catch (e: any) {
+        if (!cancelled) toast.error(e.message || "Could not load committee report");
+      } finally {
+        if (!cancelled) setReportLoading(false);
+      }
+    };
+
+    void loadReport();
+    return () => {
+      cancelled = true;
+    };
+  }, [classId, committeeId, selectedBillId]);
+
+  const saveReport = async () => {
+    if (!selected || !classId) return;
+    setReportSaving(true);
+    setReportSaved(false);
+    try {
+      const { error } = await supabase.from("committee_bill_docs").upsert(
+        {
+          bill_id: selected.id,
+          committee_id: committeeId,
+          class_id: classId,
+          committee_report: reportDraft,
+        } as any,
+        { onConflict: "bill_id,committee_id" },
+      );
+      if (error) throw error;
+      setReportSaved(true);
+      toast.success("Committee report saved");
+    } catch (e: any) {
+      toast.error(e.message || "Could not save committee report");
+    } finally {
+      setReportSaving(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -132,20 +193,93 @@ export function CommitteeWorkspace() {
               {selected && classId ? (
                 <>
                   <div className="p-5 border-b border-gray-200">
-                    <div className="font-mono text-sm font-semibold text-gray-900">{selected.number}</div>
-                    <div className="text-xl font-bold text-gray-900 mt-1">{selected.title}</div>
-                    <div className="text-sm text-gray-600 mt-1">Sponsor: {selected.sponsor}</div>
+                    <div className="flex items-start justify-between gap-4 flex-wrap">
+                      <div>
+                        <div className="font-mono text-sm font-semibold text-gray-900">{selected.number}</div>
+                        <div className="text-xl font-bold text-gray-900 mt-1">{selected.title}</div>
+                        <div className="text-sm text-gray-600 mt-1">Sponsor: {selected.sponsor}</div>
+                      </div>
+                      <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setTextView("edited")}
+                          className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
+                            textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Edited Text
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTextView("original")}
+                          className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+                            textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          <FileText className="w-4 h-4" />
+                          Original Text
+                        </button>
+                      </div>
+                    </div>
                   </div>
-                  <div className="p-5">
-                    <CollaborativeBillEditor
-                      classId={classId}
-                      committeeId={committeeId}
-                      billId={selected.id}
-                      initialHtml={selected.legislativeHtml}
-                      editable
-                    />
-                    <div className="text-xs text-gray-500 mt-3">
-                      Changes sync live to other committee members and are persisted in Supabase.
+                  <div className="p-5 space-y-6">
+                    <div>
+                      {textView === "edited" ? (
+                        <CollaborativeBillEditor
+                          classId={classId}
+                          committeeId={committeeId}
+                          billId={selected.id}
+                          initialHtml={selected.legislativeHtml}
+                          editable
+                        />
+                      ) : (
+                        <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
+                          <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
+                        </div>
+                      )}
+                      <div className="text-xs text-gray-500 mt-3">
+                        {textView === "edited"
+                          ? "Changes sync live to other committee members and are persisted in Supabase."
+                          : "Original bill text is read-only."}
+                      </div>
+                    </div>
+
+                    <div className="border-t border-gray-200 pt-5">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">Committee Report</h3>
+                          <p className="text-sm text-gray-600">Draft the committee's recommendation, findings, or notes for this bill.</p>
+                        </div>
+                        {reportSaved && (
+                          <div className="inline-flex items-center gap-1.5 text-sm text-green-700">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Saved
+                          </div>
+                        )}
+                      </div>
+                      <textarea
+                        value={reportDraft}
+                        onChange={(e) => {
+                          setReportDraft(e.target.value);
+                          setReportSaved(false);
+                        }}
+                        disabled={reportLoading}
+                        rows={7}
+                        placeholder="Write the committee report..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-y disabled:bg-gray-50 disabled:text-gray-500"
+                      />
+                      <div className="flex justify-end mt-3">
+                        <button
+                          type="button"
+                          onClick={() => void saveReport()}
+                          disabled={reportSaving || reportLoading}
+                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium disabled:opacity-60"
+                        >
+                          <Save className="w-4 h-4" />
+                          {reportSaving ? "Saving" : "Save Report"}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </>

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { EditorContent } from "@tiptap/react";
-import { Editor } from "@tiptap/core";
+import { Editor, Extension, Mark } from "@tiptap/core";
+import { isChangeOrigin } from "@tiptap/extension-collaboration";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
 import { supabase } from "../utils/supabase";
@@ -14,6 +16,135 @@ function colorFromId(id: string) {
   let hash = 0;
   for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) >>> 0;
   return colors[hash % colors.length];
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const normalized = hex.replace("#", "");
+  if (normalized.length !== 6) return `rgba(37, 99, 235, ${alpha})`;
+  const value = Number.parseInt(normalized, 16);
+  const r = (value >> 16) & 255;
+  const g = (value >> 8) & 255;
+  const b = value & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
+const editAttributionPluginKey = new PluginKey("committeeEditAttribution");
+
+const EditHighlight = Mark.create({
+  name: "editHighlight",
+  inclusive: false,
+
+  addAttributes() {
+    return {
+      authorId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-edit-author-id"),
+        renderHTML: () => ({}),
+      },
+      authorName: {
+        default: "Member",
+        parseHTML: (element) => element.getAttribute("data-edit-author") ?? "Member",
+        renderHTML: () => ({}),
+      },
+      color: {
+        default: "#2563eb",
+        parseHTML: (element) => element.getAttribute("data-edit-color") ?? "#2563eb",
+        renderHTML: () => ({}),
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: "span[data-edit-highlight]" }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    const authorName = HTMLAttributes.authorName || "Member";
+    const color = HTMLAttributes.color || "#2563eb";
+    return [
+      "span",
+      {
+        "data-edit-highlight": "true",
+        "data-edit-author-id": HTMLAttributes.authorId || "",
+        "data-edit-author": authorName,
+        "data-edit-color": color,
+        "data-tooltip": `Added by ${authorName}`,
+        title: `Added by ${authorName}`,
+        class: "committee-edit-highlight",
+        style: `background-color: ${hexToRgba(color, 0.16)}; box-shadow: inset 0 -0.45em 0 ${hexToRgba(color, 0.1)};`,
+      },
+      0,
+    ];
+  },
+});
+
+function createEditAttributionExtension({
+  getAuthor,
+  shouldSuppress,
+}: {
+  getAuthor: () => { id: string; name: string; color: string };
+  shouldSuppress: () => boolean;
+}) {
+  return Extension.create({
+    name: "editAttribution",
+
+    addProseMirrorPlugins() {
+      const editor = this.editor;
+
+      return [
+        new Plugin({
+          key: editAttributionPluginKey,
+          appendTransaction: (transactions, _oldState, newState) => {
+            if (!editor.isEditable || shouldSuppress()) return null;
+
+            const markType = newState.schema.marks.editHighlight;
+            if (!markType) return null;
+
+            const changedTransactions = transactions.filter(
+              (transaction) =>
+                transaction.docChanged && !transaction.getMeta(editAttributionPluginKey) && !isChangeOrigin(transaction),
+            );
+            if (!changedTransactions.length) return null;
+
+            const ranges: Array<{ from: number; to: number }> = [];
+            for (const transaction of changedTransactions) {
+              transaction.mapping.maps.forEach((stepMap, mapIndex) => {
+                stepMap.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
+                  if (newEnd <= newStart) return;
+                  const laterMaps = transaction.mapping.slice(mapIndex + 1);
+                  ranges.push({
+                    from: laterMaps.map(newStart, 1),
+                    to: laterMaps.map(newEnd, -1),
+                  });
+                });
+              });
+            }
+            if (!ranges.length) return null;
+
+            const author = getAuthor();
+            const mark = markType.create({
+              authorId: author.id,
+              authorName: author.name,
+              color: author.color,
+            });
+            const tr = newState.tr;
+            const max = newState.doc.content.size;
+
+            for (const range of ranges) {
+              const from = Math.max(0, Math.min(range.from, max));
+              const to = Math.max(from, Math.min(range.to, max));
+              if (to > from) tr.addMark(from, to, mark);
+            }
+
+            if (!tr.docChanged) return null;
+            tr.setMeta(editAttributionPluginKey, true);
+            tr.setMeta("addToHistory", false);
+            return tr;
+          },
+        }),
+      ];
+    },
+  });
 }
 
 export function CollaborativeBillEditor({
@@ -30,11 +161,12 @@ export function CollaborativeBillEditor({
   editable?: boolean;
 }) {
   const [ready, setReady] = useState(false);
-  const [localUser, setLocalUser] = useState<{ name: string; color: string }>({ name: "Member", color: "#2563eb" });
+  const [localUser, setLocalUser] = useState<{ id: string; name: string; color: string }>({ id: "", name: "Member", color: "#2563eb" });
   const ydocRef = useRef<Y.Doc | null>(null);
   const providerRef = useRef<YjsSupabaseProvider | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
   const didInitRef = useRef(false);
+  const suppressAttributionRef = useRef(false);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const hydratedFromSnapshotRef = useRef(false);
@@ -43,13 +175,18 @@ export function CollaborativeBillEditor({
   useEffect(() => {
     let mounted = true;
     const setup = async () => {
+      didInitRef.current = false;
+      hydratedFromSnapshotRef.current = false;
+      setReady(false);
+      setCollabStatus("connecting");
+
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;
       if (!uid) return;
       const { data: p } = await supabase.from("profiles").select("display_name").eq("user_id", uid).maybeSingle();
       const name = (p as any)?.display_name ?? auth.user?.user_metadata?.name ?? "Member";
       const color = colorFromId(uid);
-      setLocalUser({ name, color });
+      setLocalUser({ id: uid, name, color });
 
       const ydoc = new Y.Doc();
       const awareness = new Awareness(ydoc);
@@ -97,6 +234,11 @@ export function CollaborativeBillEditor({
         extensions: [
           // StarterKit provides the base schema (doc/paragraph/text/etc).
           (StarterKit as any)?.configure ? StarterKit.configure({ history: false }) : (StarterKit as any),
+          EditHighlight,
+          createEditAttributionExtension({
+            getAuthor: () => localUser,
+            shouldSuppress: () => suppressAttributionRef.current,
+          }),
           Collaboration.configure({ document: ydocRef.current }),
           CollaborationCursor.configure({
             provider: { awareness: awarenessRef.current } as any,
@@ -124,7 +266,14 @@ export function CollaborativeBillEditor({
       try {
         const ed = new Editor({
           editable,
-          extensions: [(StarterKit as any)?.configure ? StarterKit.configure({ history: false }) : (StarterKit as any)],
+          extensions: [
+            (StarterKit as any)?.configure ? StarterKit.configure({ history: false }) : (StarterKit as any),
+            EditHighlight,
+            createEditAttributionExtension({
+              getAuthor: () => localUser,
+              shouldSuppress: () => suppressAttributionRef.current,
+            }),
+          ],
           editorProps: {
             attributes: {
               class: "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
@@ -145,7 +294,7 @@ export function CollaborativeBillEditor({
         setCollabStatus("fallback");
       }
     }
-  }, [ready, editable, localUser.name, localUser.color, initialHtml]);
+  }, [ready, editable, localUser.id, localUser.name, localUser.color, initialHtml]);
 
   useEffect(() => {
     if (!editor) return;
@@ -156,7 +305,12 @@ export function CollaborativeBillEditor({
     // from a previously persisted Yjs snapshot. Otherwise we risk overwriting
     // the canonical collaborative state on reopen.
     if (!hydratedFromSnapshotRef.current && editor.getText().trim() === "") {
-      editor.commands.setContent(initialHtml || "<p></p>", false);
+      suppressAttributionRef.current = true;
+      try {
+        editor.commands.setContent(initialHtml || "<p></p>", false);
+      } finally {
+        suppressAttributionRef.current = false;
+      }
     }
   }, [editor, initialHtml]);
 
@@ -169,14 +323,14 @@ export function CollaborativeBillEditor({
   }
 
   if (!editor) {
-    return <div className="text-sm text-gray-500">Loading editor…</div>;
+    return <div className="text-sm text-gray-500">Loading editor...</div>;
   }
 
   return (
     <div>
       {collabStatus !== "live" && (
         <div className="mb-2 text-xs px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-800">
-          {collabStatus === "connecting" ? "Connecting collaborationâ€¦" : "Collaboration offline (local edits only)"}
+          {collabStatus === "connecting" ? "Connecting collaboration..." : "Collaboration offline (local edits only)"}
         </div>
       )}
       <EditorContent editor={editor} />
