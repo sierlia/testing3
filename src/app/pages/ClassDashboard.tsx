@@ -66,7 +66,7 @@ export function ClassDashboard() {
       try {
         const [{ data: cls, error: cErr }, { count: rosterCount }] = await Promise.all([
           supabase.from("classes").select("name").eq("id", classId).maybeSingle(),
-          supabase.from("class_memberships").select("user_id", { count: "exact", head: true }).eq("class_id", classId),
+          supabase.from("class_memberships").select("user_id", { count: "exact", head: true }).eq("class_id", classId).eq("status", "approved"),
         ]);
         if (cErr) throw cErr;
         setClassName((cls as any)?.name ?? "Class");
@@ -277,10 +277,6 @@ export function ClassDashboard() {
                 <p className="text-sm text-gray-600">{studentCount} students enrolled</p>
               </div>
             </div>
-            <Button onClick={() => navigate(`/teacher/class/${classId}/manage`)}>
-              <Settings className="w-4 h-4 mr-2" />
-              Manage Class
-            </Button>
           </div>
         </div>
       </header>

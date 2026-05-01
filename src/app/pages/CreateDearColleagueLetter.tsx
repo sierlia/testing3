@@ -5,6 +5,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { formatConstituency } from "../utils/constituency";
 
 type RecipientType = "individual" | "caucus" | "party" | "committee";
 
@@ -26,7 +27,7 @@ export function CreateDearColleagueLetter() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [individuals, setIndividuals] = useState<Array<{ user_id: string; display_name: string | null; constituency_code: string | null; avatar_url: string | null }>>([]);
+  const [individuals, setIndividuals] = useState<Array<{ user_id: string; display_name: string | null; constituency_name: string | null; avatar_url: string | null }>>([]);
   const [caucuses, setCaucuses] = useState<Array<{ id: string; name: string }>>([]);
   const [parties, setParties] = useState<Array<{ id: string; name: string }>>([]);
   const [committees, setCommittees] = useState<Array<{ id: string; name: string }>>([]);
@@ -55,11 +56,11 @@ export function CreateDearColleagueLetter() {
           memberIds.length
             ? supabase
                 .from("profiles")
-                .select("user_id,display_name,constituency_code,avatar_url")
+                .select("user_id,display_name,constituency_name,avatar_url")
                 .in("user_id", memberIds)
                 .order("display_name")
             : Promise.resolve({ data: [] as any[] } as any),
-          supabase.from("caucuses").select("id,name").order("name"),
+          supabase.from("caucuses").select("id,title").order("title"),
           supabase.from("parties").select("id,name").order("name"),
           supabase.from("committees").select("id,name").order("name"),
         ]);
@@ -94,16 +95,16 @@ export function CreateDearColleagueLetter() {
         ? individuals.filter(
             (s) =>
               (s.display_name || "").toLowerCase().includes(query) ||
-              (s.constituency_code || "").toLowerCase().includes(query),
+              formatConstituency(s.constituency_name).toLowerCase().includes(query),
           )
         : individuals;
       return base
         .slice(0, 20)
-        .map((s) => ({ id: s.user_id, name: s.display_name || "Unknown", district: s.constituency_code, image: s.avatar_url }));
+        .map((s) => ({ id: s.user_id, name: s.display_name || "Unknown", district: formatConstituency(s.constituency_name), image: s.avatar_url }));
     }
     if (recipientType === "caucus") {
-      const base = query ? caucuses.filter((s) => s.name.toLowerCase().includes(query)) : caucuses;
-      return base.slice(0, 20).map((s) => ({ id: s.id, name: s.name }));
+      const base = query ? caucuses.filter((s: any) => (s.name ?? s.title ?? "").toLowerCase().includes(query)) : caucuses;
+      return base.slice(0, 20).map((s: any) => ({ id: s.id, name: s.name ?? s.title }));
     }
     if (recipientType === "party") {
       const base = query ? parties.filter((s) => s.name.toLowerCase().includes(query)) : parties;
@@ -136,7 +137,8 @@ export function CreateDearColleagueLetter() {
           for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
         }
         if (r.type === "party") {
-          const { data } = await supabase.from("profiles").select("user_id").eq("party_id", r.id);
+          const { data: partyRow } = await supabase.from("parties").select("name").eq("id", r.id).maybeSingle();
+          const { data } = await supabase.from("profiles").select("user_id").eq("party", (partyRow as any)?.name ?? r.name);
           for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
         }
         if (r.type === "committee") {

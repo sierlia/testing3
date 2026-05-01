@@ -8,6 +8,7 @@ import { QuickLinks } from "../components/QuickLinks";
 import { MyStatusCard } from "../components/MyStatusCard";
 import { TeacherAdminShortcuts } from "../components/TeacherAdminShortcuts";
 import { supabase } from "../utils/supabase";
+import { formatConstituency } from "../utils/constituency";
 
 type Profile = {
   user_id: string;
@@ -25,7 +26,8 @@ export function ClassSimulationDashboard() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [committeeNames, setCommitteeNames] = useState<string[]>([]);
   const [leadershipRoles, setLeadershipRoles] = useState<string[]>([]);
-  const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean }>>([]);
+  const [className, setClassName] = useState("");
+  const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -39,10 +41,24 @@ export function ClassSimulationDashboard() {
 
         // Set active class for RLS scoping
         const desiredRole = (auth.user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
+        const { data: membership } = await supabase
+          .from("class_memberships")
+          .select("status")
+          .eq("class_id", classId)
+          .eq("user_id", uid)
+          .maybeSingle();
+        if ((membership as any)?.status === "pending") {
+          toast.info("Your teacher has not approved this class yet.");
+          return navigate("/settings/classes");
+        }
+
         const { error: upErr } = await supabase
           .from("profiles")
           .upsert({ user_id: uid, class_id: classId, role: desiredRole, display_name: auth.user?.user_metadata?.name ?? null } as any);
         if (upErr) throw upErr;
+
+        const { data: cls } = await supabase.from("classes").select("name").eq("id", classId).maybeSingle();
+        setClassName((cls as any)?.name ?? "Class Dashboard");
 
         const { data: pRow, error: pErr } = await supabase
           .from("profiles")
@@ -130,6 +146,8 @@ export function ClassSimulationDashboard() {
           .in("user_id", authorIds.length ? authorIds : ["00000000-0000-0000-0000-000000000000"]);
         const authorMap = new Map((authors ?? []).map((a: any) => [a.user_id, a]));
 
+        const seenKey = `class:${classId}:announcements-seen-at`;
+        const seenAt = Number(window.localStorage.getItem(seenKey) || "0");
         setAnnouncements(
           combined.map((a: any) => ({
             id: a.id,
@@ -144,8 +162,16 @@ export function ClassSimulationDashboard() {
                 : a.body,
             timestamp: new Date(a.created_at),
             isPinned: a._type === "task",
+            href:
+              a._type === "committee"
+                ? `/committees/${a.committee_id}?announcement=${a.id}`
+                : a._type === "caucus"
+                  ? `/caucuses/${a.caucus_id}?announcement=${a.id}`
+                  : undefined,
+            isNew: new Date(a.created_at).getTime() > seenAt,
           })),
         );
+        window.localStorage.setItem(seenKey, String(Date.now()));
       } catch (e: any) {
         toast.error(e.message || "Could not load dashboard");
       } finally {
@@ -159,7 +185,7 @@ export function ClassSimulationDashboard() {
   const status = useMemo(
     () => ({
       party: profile?.party ?? "N/A",
-      constituency: profile?.constituency_name ?? "N/A",
+      constituency: formatConstituency(profile?.constituency_name),
       committees: committeeNames,
       leadershipRoles,
     }),
@@ -182,6 +208,10 @@ export function ClassSimulationDashboard() {
       <Navigation />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-gray-900">{className || "Class Dashboard"}</h1>
+        </div>
+
         <div className="flex gap-3 mb-6">
           <button
             onClick={() => navigate("/dear-colleague/inbox")}

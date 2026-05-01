@@ -211,10 +211,16 @@ function sanitizeUrl(value: string) {
 
 function deletedOriginalText(doc: any, from: number, to: number) {
   const pieces: string[] = [];
-  doc.nodesBetween(from, to, (node: any) => {
+  doc.nodesBetween(from, to, (node: any, pos: number) => {
     if (!node.isText) return true;
     const isTrackedChange = node.marks?.some((mark: any) => mark.type.name === "editHighlight" || mark.type.name === "deleteHighlight");
-    if (!isTrackedChange && node.text) pieces.push(node.text);
+    if (!isTrackedChange && node.text) {
+      const textStart = Math.max(from, pos);
+      const textEnd = Math.min(to, pos + node.nodeSize);
+      const sliceStart = Math.max(0, textStart - pos);
+      const sliceEnd = Math.max(sliceStart, textEnd - pos);
+      pieces.push(node.text.slice(sliceStart, sliceEnd));
+    }
     return false;
   });
   return pieces.join("");

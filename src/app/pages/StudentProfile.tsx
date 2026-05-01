@@ -29,6 +29,7 @@ import {
 } from "../components/PartySelection";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { formatConstituency } from "../utils/constituency";
 
 type EditingSection = "personal_statement" | "constituency_description" | "key_issues" | null;
 
@@ -140,6 +141,7 @@ export function StudentProfile() {
   }, [id]);
 
   const isMe = authUserId !== null && profile?.user_id === authUserId;
+  const emptySectionText = isMe ? "Fill out this section to complete your profile." : "No content";
 
   const saveProfile = async (patch: Partial<ProfileRow>, syncName = false) => {
     if (!profile) return;
@@ -371,7 +373,7 @@ export function StudentProfile() {
                 <div className="space-y-1 text-sm text-gray-600">
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
-                    <span>{profile.constituency_name || "N/A"}</span>
+                    <span>{formatConstituency(profile.constituency_name)}</span>
                     {isMe && (
                       <button
                         onClick={() => setShowConstituencyModal(true)}
@@ -413,13 +415,15 @@ export function StudentProfile() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-900">Personal Statement</h2>
-            {isMe && editingSection !== "personal_statement" && (
-              <button onClick={() => startEdit("personal_statement")} className="text-blue-600 hover:text-blue-700 transition-colors">
-                <Pencil className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <div className="text-xs italic text-gray-500">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
+              {isMe && editingSection !== "personal_statement" && (
+                <button onClick={() => startEdit("personal_statement")} className="text-blue-600 hover:text-blue-700 transition-colors">
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="text-xs italic text-gray-500 mb-2">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
           {editingSection === "personal_statement" ? (
             <div className="space-y-3">
               <MarkdownToolbar />
@@ -460,11 +464,11 @@ export function StudentProfile() {
                     ) : (
                       <>
                         <div className="text-gray-700 space-y-4">
-                          {personalStatement.split("\n\n").slice(0, 2).map((para, index) => (
+                          {personalStatement.split("\n\n").slice(0, 3).map((para, index) => (
                             <p key={index}>{para}</p>
                           ))}
                         </div>
-                        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none" />
                       </>
                     )}
                   </div>
@@ -488,20 +492,22 @@ export function StudentProfile() {
               )}
             </div>
           ) : (
-            <p className="text-gray-400 italic">Fill out this section to complete your profile.</p>
+            <p className="text-gray-400 italic">{emptySectionText}</p>
           )}
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-900">Constituency Description</h2>
-            {isMe && editingSection !== "constituency_description" && (
-              <button onClick={() => startEdit("constituency_description")} className="text-blue-600 hover:text-blue-700 transition-colors">
-                <Pencil className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <div className="text-xs italic text-gray-500">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
+              {isMe && editingSection !== "constituency_description" && (
+                <button onClick={() => startEdit("constituency_description")} className="text-blue-600 hover:text-blue-700 transition-colors">
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="text-xs italic text-gray-500 mb-2">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
           {editingSection === "constituency_description" ? (
             <div className="space-y-3">
               <MarkdownToolbar />
@@ -537,8 +543,8 @@ export function StudentProfile() {
                       <div className="text-gray-700 space-y-4 whitespace-pre-line">{constituencyDescription}</div>
                     ) : (
                       <>
-                        <div className="text-gray-700 whitespace-pre-line">{constituencyDescription.split("\n\n")[0]}</div>
-                        <div className="absolute bottom-0 left-0 right-0 h-32 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none" />
+                        <div className="text-gray-700 whitespace-pre-line">{constituencyDescription.split("\n\n").slice(0, 2).join("\n\n")}</div>
+                        <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-white via-white/80 to-transparent pointer-events-none" />
                       </>
                     )}
                   </div>
@@ -562,20 +568,22 @@ export function StudentProfile() {
               )}
             </div>
           ) : (
-            <p className="text-gray-400 italic">Fill out this section to complete your profile.</p>
+            <p className="text-gray-400 italic">{emptySectionText}</p>
           )}
         </div>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-900">Key Issues</h2>
-            {isMe && editingSection !== "key_issues" && (
-              <button onClick={() => startEdit("key_issues")} className="text-blue-600 hover:text-blue-700 transition-colors">
-                <Pencil className="w-4 h-4" />
-              </button>
-            )}
+            <div className="flex items-center gap-3">
+              <div className="text-xs italic text-gray-500">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
+              {isMe && editingSection !== "key_issues" && (
+                <button onClick={() => startEdit("key_issues")} className="text-blue-600 hover:text-blue-700 transition-colors">
+                  <Pencil className="w-4 h-4" />
+                </button>
+              )}
+            </div>
           </div>
-          <div className="text-xs italic text-gray-500 mb-2">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
           {editingSection === "key_issues" ? (
             <div className="space-y-3">
               <textarea
@@ -610,7 +618,7 @@ export function StudentProfile() {
               ))}
             </ul>
           ) : (
-            <p className="text-gray-400 italic">Fill out this section to complete your profile.</p>
+            <p className="text-gray-400 italic">{emptySectionText}</p>
           )}
         </div>
 
@@ -623,13 +631,13 @@ export function StudentProfile() {
             <div className="space-y-3">
               {billsAuthored.length ? (
                 billsAuthored.map((bill: any) => (
-                  <div key={bill.id} className="p-3 bg-gray-50 rounded-md">
+                  <Link key={bill.id} to={`/bills/${bill.id}`} className="block p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">{bill.status}</span>
                     </div>
                     <p className="text-sm text-gray-700">{bill.title}</p>
-                  </div>
+                  </Link>
                 ))
               ) : (
                 <p className="text-sm text-gray-500">No legislation yet</p>
@@ -645,13 +653,13 @@ export function StudentProfile() {
             <div className="space-y-3">
               {billsCosponsored.length ? (
                 billsCosponsored.map((bill: any) => (
-                  <div key={bill.id} className="p-3 bg-gray-50 rounded-md">
+                  <Link key={bill.id} to={`/bills/${bill.id}`} className="block p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
                       <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">{bill.status}</span>
                     </div>
                     <p className="text-sm text-gray-700">{bill.title}</p>
-                  </div>
+                  </Link>
                 ))
               ) : (
                 <p className="text-sm text-gray-500">No legislation cosponsored yet</p>

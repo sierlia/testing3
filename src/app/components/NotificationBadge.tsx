@@ -144,7 +144,14 @@ export function NotificationBadge() {
                               Mark read
                             </button>
                           )}
-                          <Link to={n.href} className="text-xs text-blue-600 hover:text-blue-700 font-medium" onClick={() => setIsOpen(false)}>
+                          <Link
+                            to={n.href}
+                            className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                            onClick={() => {
+                              void markRead(n.id);
+                              setIsOpen(false);
+                            }}
+                          >
                             View
                           </Link>
                         </div>

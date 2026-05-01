@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 export function SettingsClasses() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
-  const [classes, setClasses] = useState<Array<{ id: string; name: string; class_code: string }>>([]);
+  const [classes, setClasses] = useState<Array<{ id: string; name: string; class_code: string; status: string }>>([]);
 
   const load = async () => {
     setLoading(true);
@@ -18,19 +18,25 @@ export function SettingsClasses() {
       const uid = auth.user?.id;
       if (!uid) return navigate("/signin");
 
-      const { data: memberships, error: mErr } = await supabase
+      const [{ data: memberships, error: mErr }, { data: profile }] = await Promise.all([
+        supabase
         .from("class_memberships")
-        .select("class_id")
-        .eq("user_id", uid);
+        .select("class_id,status")
+        .eq("user_id", uid),
+        supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle(),
+      ]);
       if (mErr) throw mErr;
-      const classIds = (memberships ?? []).map((m: any) => m.class_id);
+      const byClass = new Map((memberships ?? []).map((m: any) => [m.class_id, m.status ?? "approved"]));
+      const profileClassId = (profile as any)?.class_id as string | undefined;
+      if (profileClassId && !byClass.has(profileClassId)) byClass.set(profileClassId, "approved");
+      const classIds = Array.from(byClass.keys());
       if (classIds.length === 0) {
         setClasses([]);
         return;
       }
       const { data: cls, error: cErr } = await supabase.from("classes").select("id,name,class_code").in("id", classIds);
       if (cErr) throw cErr;
-      setClasses((cls ?? []) as any);
+      setClasses(((cls ?? []) as any[]).map((c) => ({ ...c, status: byClass.get(c.id) ?? "approved" })));
     } catch (e: any) {
       toast.error(e.message || "Could not load classes");
     } finally {
@@ -47,6 +53,11 @@ export function SettingsClasses() {
     const uid = auth.user?.id;
     if (!uid) return navigate("/signin");
     const desiredRole = (auth.user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
+    const current = classes.find((c) => c.id === id);
+    if (current?.status === "pending") {
+      toast.info("Your teacher has not approved this class yet.");
+      return;
+    }
     const { error } = await supabase
       .from("profiles")
       .upsert({ user_id: uid, class_id: id, role: desiredRole, display_name: auth.user?.user_metadata?.name ?? null } as any);
@@ -83,7 +94,8 @@ export function SettingsClasses() {
                 <p className="text-sm text-gray-600 mb-3">
                   Join code: <span className="font-mono font-semibold">{c.class_code}</span>
                 </p>
-                <Button onClick={() => void openClassDashboard(c.id)}>Go to Dashboard</Button>
+                {c.status === "pending" && <p className="text-sm text-amber-700 mb-3">Pending teacher approval</p>}
+                <Button onClick={() => void openClassDashboard(c.id)} disabled={c.status === "pending"}>Open</Button>
               </CardContent>
             </Card>
           ))}

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Users, UserPlus, Star } from "lucide-react";
 import { Link } from "react-router";
+import { formatConstituency } from "../utils/constituency";
 
 interface Sponsor {
   id: string;
@@ -79,7 +80,7 @@ export function BillSponsors({ sponsor, cosponsors, isUserCosponsor, currentUser
             </h3>
             <p className="text-sm text-gray-600">
               {sponsor.party}
-              {sponsor.constituency && ` • ${sponsor.constituency}`}
+              {sponsor.constituency && ` • ${formatConstituency(sponsor.constituency)}`}
             </p>
           </div>
         </div>

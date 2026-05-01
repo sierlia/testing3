@@ -1,4 +1,5 @@
 import { Pin } from "lucide-react";
+import { Link } from "react-router";
 
 interface Announcement {
   id: string;
@@ -7,6 +8,8 @@ interface Announcement {
   content: string;
   timestamp: Date;
   isPinned: boolean;
+  href?: string;
+  isNew?: boolean;
 }
 
 interface AnnouncementsFeedProps {
@@ -50,11 +53,8 @@ export function AnnouncementsFeed({ announcements }: AnnouncementsFeedProps) {
             No announcements yet
           </div>
         ) : (
-          sortedAnnouncements.map((announcement) => (
-            <div
-              key={announcement.id}
-              className={`px-6 py-4 ${announcement.isPinned ? 'bg-blue-50' : ''}`}
-            >
+          sortedAnnouncements.map((announcement) => {
+            const content = (
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
@@ -76,8 +76,21 @@ export function AnnouncementsFeed({ announcements }: AnnouncementsFeedProps) {
                   {formatTimestamp(announcement.timestamp)}
                 </span>
               </div>
-            </div>
-          ))
+            );
+
+            const className = `block px-6 py-4 ${announcement.isNew || announcement.isPinned ? "bg-blue-50" : ""} ${
+              announcement.href ? "hover:bg-gray-50 transition-colors" : ""
+            }`;
+            return announcement.href ? (
+              <Link key={announcement.id} to={announcement.href} className={className}>
+                {content}
+              </Link>
+            ) : (
+              <div key={announcement.id} className={className}>
+                {content}
+              </div>
+            );
+          })
         )}
       </div>
     </div>

@@ -240,17 +240,24 @@ function MarkdownEnabledEditor({
     const quill = getQuill();
     if (!quill) return;
     quill.focus();
+    const range = quill.getSelection(true);
     const current = quill.getFormat();
     const currentValue = current[format];
     const isActive = value === true ? Boolean(currentValue) : currentValue === value;
-    quill.format(format, isActive ? false : value, "user");
+    if ((format === "header" || format === "list") && range) {
+      quill.formatLine(range.index, Math.max(range.length, 1), format, isActive ? false : value, "user");
+    } else {
+      quill.format(format, isActive ? false : value, "user");
+    }
   };
 
   const setQuillAlignment = (alignment: "left" | "center" | "right") => {
     const quill = getQuill();
     if (!quill) return;
     quill.focus();
-    quill.format("align", alignment === "left" ? false : alignment, "user");
+    const range = quill.getSelection(true);
+    if (!range) return;
+    quill.formatLine(range.index, Math.max(range.length, 1), "align", alignment === "left" ? false : alignment, "user");
   };
 
   const addQuillLink = () => {

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { Save, X, Users as UsersIcon, Send, Pencil } from "lucide-react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { formatConstituency } from "../utils/constituency";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -40,6 +41,7 @@ type Comment = {
 
 export function TessCaucusDetail() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const caucusId = id!;
 
   const [loading, setLoading] = useState(true);
@@ -48,6 +50,8 @@ export function TessCaucusDetail() {
 
   const [caucus, setCaucus] = useState<{ id: string; title: string; description: string; created_at: string } | null>(null);
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberSort, setMemberSort] = useState<"role" | "name" | "party">("role");
   const [myRole, setMyRole] = useState<MembershipRole | null>(null);
 
   const [editingAbout, setEditingAbout] = useState(false);
@@ -141,7 +145,12 @@ export function TessCaucusDetail() {
           author: (aAuthorMap.get(a.author_user_id) as ProfileLite) ?? null,
         }));
         setAnnouncements(mappedAnnouncements);
-        setSelectedAnnouncementId(mappedAnnouncements[0]?.id ?? null);
+        const requestedAnnouncement = searchParams.get("announcement");
+        setSelectedAnnouncementId(
+          requestedAnnouncement && mappedAnnouncements.some((a) => a.id === requestedAnnouncement)
+            ? requestedAnnouncement
+            : mappedAnnouncements[0]?.id ?? null,
+        );
 
         // Load comments for announcements (initial)
         const announcementIds = mappedAnnouncements.map((a) => a.id);
@@ -214,7 +223,7 @@ export function TessCaucusDetail() {
 
     if (!caucusId) return;
     void load();
-  }, [caucusId]);
+  }, [caucusId, searchParams]);
 
   useEffect(() => {
     if (!draggingSplit) return;
@@ -564,6 +573,23 @@ export function TessCaucusDetail() {
   const visibleComments = selectedAnnouncementId ? commentsByAnnouncement[selectedAnnouncementId] ?? [] : [];
   const chairMember = members.find((m) => m.role === "chair");
   const coChairMember = members.find((m) => m.role === "co_chair");
+  const visibleMembers = members
+    .filter((m) => {
+      const query = memberSearch.toLowerCase().trim();
+      if (!query) return true;
+      return (
+        (m.profile?.display_name ?? "Member").toLowerCase().includes(query) ||
+        (m.profile?.party ?? "").toLowerCase().includes(query) ||
+        formatConstituency(m.profile?.constituency_name).toLowerCase().includes(query) ||
+        m.role.replace("_", " ").toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => {
+      if (memberSort === "name") return (a.profile?.display_name ?? "Member").localeCompare(b.profile?.display_name ?? "Member");
+      if (memberSort === "party") return (a.profile?.party ?? "").localeCompare(b.profile?.party ?? "");
+      const rank = { chair: 0, co_chair: 1, ranking_member: 2, member: 3 } as Record<MembershipRole, number>;
+      return rank[a.role] - rank[b.role] || (a.profile?.display_name ?? "").localeCompare(b.profile?.display_name ?? "");
+    });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -603,11 +629,7 @@ export function TessCaucusDetail() {
               {myRole ? "Leave" : "Join"}
             </button>
           </div>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="mt-5 pt-5 border-t border-gray-200">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold text-gray-900">About</h2>
                 {isLeader && !editingAbout && (
@@ -647,8 +669,11 @@ export function TessCaucusDetail() {
               ) : (
                 <p className="text-gray-700 whitespace-pre-line">{caucus.description || "No description yet."}</p>
               )}
-            </div>
+          </div>
+        </div>
 
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2 space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
@@ -775,10 +800,21 @@ export function TessCaucusDetail() {
               <UsersIcon className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Members</h2>
             </div>
+            <div className="flex gap-2 mb-4">
+              <input
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Search members..."
+                className="min-w-0 flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md"
+              />
+              <select value={memberSort} onChange={(e) => setMemberSort(e.target.value as any)} className="px-2 py-2 text-sm border border-gray-300 rounded-md">
+                <option value="role">Role</option>
+                <option value="name">Name</option>
+                <option value="party">Party</option>
+              </select>
+            </div>
             <div className="space-y-3">
-              {members
-                .slice()
-                .sort((a, b) => (a.role === b.role ? 0 : a.role === "chair" ? -1 : b.role === "chair" ? 1 : 0))
+              {visibleMembers
                 .map((m) => (
                   <div key={m.user_id} className="flex items-center gap-3">
                     {m.profile?.avatar_url ? (
@@ -793,7 +829,7 @@ export function TessCaucusDetail() {
                         </Link>
                       </div>
                       <div className="text-xs text-gray-500 truncate">
-                        {m.profile?.constituency_name ?? "N/A"} • {m.profile?.party ?? "N/A"}
+                        {formatConstituency(m.profile?.constituency_name)} • {m.profile?.party ?? "N/A"}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">

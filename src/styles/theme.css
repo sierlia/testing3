@@ -141,6 +141,16 @@
   right: 1rem;
 }
 
+.ProseMirror ul {
+  list-style: disc;
+  padding-left: 1.5rem;
+}
+
+.ProseMirror ol {
+  list-style: decimal;
+  padding-left: 1.5rem;
+}
+
 .presence-avatar {
   position: relative;
   display: inline-flex;

@@ -19,6 +19,15 @@ export function Dashboard() {
       const classId = (pRow as any)?.class_id as string | null | undefined;
       if (classId) return navigate(`/class/${classId}/dashboard`);
 
+      const { data: memberships } = await supabase
+        .from("class_memberships")
+        .select("class_id,status")
+        .eq("user_id", user.id)
+        .eq("status", "approved")
+        .limit(1);
+      const membershipClassId = (memberships ?? [])[0]?.class_id;
+      if (membershipClassId) return navigate(`/class/${membershipClassId}/dashboard`);
+
       navigate("/settings/classes");
     };
     void go();
@@ -31,4 +40,3 @@ export function Dashboard() {
     </div>
   );
 }
-

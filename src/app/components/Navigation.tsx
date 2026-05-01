@@ -7,7 +7,7 @@ import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "./DefaultAvatar";
 
 export function Navigation() {
-  const [billPipelineOpen, setBillPipelineOpen] = useState(false);
+  const [organizationsOpen, setOrganizationsOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
@@ -107,67 +107,52 @@ export function Navigation() {
 
             <div className="hidden md:flex items-center gap-1">
               <Link
-                to="/members"
+                to="/bills"
                 className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
               >
-                Members
+                Legislation
               </Link>
 
-              <Link
-                to="/parties"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-              >
-                Organizations
-              </Link>
-
-              <div className="relative">
+              <div className="relative" onMouseEnter={() => setOrganizationsOpen(true)} onMouseLeave={() => setOrganizationsOpen(false)}>
                 <button
-                  onClick={() =>
-                    setBillPipelineOpen(!billPipelineOpen)
-                  }
+                  onClick={() => navigate("/parties")}
                   className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
                 >
-                  Bill Pipeline
+                  Organizations
                   <ChevronDown
-                    className={`w-4 h-4 transition-transform ${billPipelineOpen ? "rotate-180" : ""}`}
+                    className={`w-4 h-4 transition-transform ${organizationsOpen ? "rotate-180" : ""}`}
                   />
                 </button>
 
-                {billPipelineOpen && (
+                {organizationsOpen && (
                   <div className="absolute top-full left-0 mt-1 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10">
-                    <a
-                      href="#"
+                    <Link
+                      to="/parties"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      Clerk
-                    </a>
-                    <a
-                      href="#"
+                      Party
+                    </Link>
+                    <Link
+                      to="/committees"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      Committees
-                    </a>
-                    <a
-                      href="#"
+                      Committee
+                    </Link>
+                    <Link
+                      to="/caucuses"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      Floor
-                    </a>
-                    <a
-                      href="#"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                    >
-                      Calendar
-                    </a>
+                      Caucus
+                    </Link>
                   </div>
                 )}
               </div>
 
               <Link
-                to="/resources"
+                to="/members"
                 className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
               >
-                Resources
+                Members
               </Link>
             </div>
           </div>

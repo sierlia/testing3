@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router";
+import { useParams, Link, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -7,6 +7,7 @@ import { Users, Send, Pencil, Save, X, UserPlus } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { formatConstituency } from "../utils/constituency";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
@@ -16,6 +17,7 @@ type Comment = { id: string; announcement_id: string; author_user_id: string; bo
 
 export function CommitteeDashboard() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const committeeId = id!;
 
   const [loading, setLoading] = useState(true);
@@ -24,6 +26,8 @@ export function CommitteeDashboard() {
   const [committee, setCommittee] = useState<{ id: string; name: string; description: string | null; created_at: string } | null>(null);
 
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
+  const [memberSearch, setMemberSearch] = useState("");
+  const [memberSort, setMemberSort] = useState<"role" | "name" | "party">("role");
   const [myRole, setMyRole] = useState<MembershipRole | null>(null);
   const [viewerRole, setViewerRole] = useState<"teacher" | "student" | null>(null);
   const [joining, setJoining] = useState(false);
@@ -129,7 +133,12 @@ export function CommitteeDashboard() {
           author: (aAuthorMap.get(a.author_user_id) as ProfileLite) ?? null,
         }));
         setAnnouncements(mappedAnnouncements);
-        setSelectedAnnouncementId(mappedAnnouncements[0]?.id ?? null);
+        const requestedAnnouncement = searchParams.get("announcement");
+        setSelectedAnnouncementId(
+          requestedAnnouncement && mappedAnnouncements.some((a) => a.id === requestedAnnouncement)
+            ? requestedAnnouncement
+            : mappedAnnouncements[0]?.id ?? null,
+        );
 
         const announcementIds = mappedAnnouncements.map((a) => a.id);
         if (announcementIds.length) {
@@ -201,7 +210,7 @@ export function CommitteeDashboard() {
 
     if (!committeeId) return;
     void load();
-  }, [committeeId]);
+  }, [committeeId, searchParams]);
 
   useEffect(() => {
     if (!draggingSplit) return;
@@ -533,6 +542,23 @@ export function CommitteeDashboard() {
   }
 
   const visibleComments = selectedAnnouncementId ? commentsByAnnouncement[selectedAnnouncementId] ?? [] : [];
+  const visibleMembers = members
+    .filter((m) => {
+      const query = memberSearch.toLowerCase().trim();
+      if (!query) return true;
+      return (
+        (m.profile?.display_name ?? "Member").toLowerCase().includes(query) ||
+        (m.profile?.party ?? "").toLowerCase().includes(query) ||
+        formatConstituency(m.profile?.constituency_name).toLowerCase().includes(query) ||
+        m.role.replace("_", " ").toLowerCase().includes(query)
+      );
+    })
+    .sort((a, b) => {
+      if (memberSort === "name") return (a.profile?.display_name ?? "Member").localeCompare(b.profile?.display_name ?? "Member");
+      if (memberSort === "party") return (a.profile?.party ?? "").localeCompare(b.profile?.party ?? "");
+      const rank = { chair: 0, co_chair: 1, ranking_member: 2, member: 3 } as Record<MembershipRole, number>;
+      return rank[a.role] - rank[b.role] || (a.profile?.display_name ?? "").localeCompare(b.profile?.display_name ?? "");
+    });
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -702,8 +728,21 @@ export function CommitteeDashboard() {
               <Users className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Members</h2>
             </div>
+            <div className="flex gap-2 mb-4">
+              <input
+                value={memberSearch}
+                onChange={(e) => setMemberSearch(e.target.value)}
+                placeholder="Search members..."
+                className="min-w-0 flex-1 px-3 py-2 text-sm border border-gray-300 rounded-md"
+              />
+              <select value={memberSort} onChange={(e) => setMemberSort(e.target.value as any)} className="px-2 py-2 text-sm border border-gray-300 rounded-md">
+                <option value="role">Role</option>
+                <option value="name">Name</option>
+                <option value="party">Party</option>
+              </select>
+            </div>
             <div className="space-y-3">
-              {members.map((m) => (
+              {visibleMembers.map((m) => (
                 <div key={m.user_id} className="flex items-center gap-3">
                   {m.profile?.avatar_url ? (
                     <img src={m.profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
@@ -717,13 +756,13 @@ export function CommitteeDashboard() {
                       </Link>
                     </div>
                     <div className="text-xs text-gray-500 truncate">
-                      {m.profile?.constituency_name ?? "N/A"} • {m.profile?.party ?? "N/A"}
+                      {formatConstituency(m.profile?.constituency_name)} • {m.profile?.party ?? "N/A"}
                     </div>
                   </div>
                   <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>
                 </div>
               ))}
-              {members.length === 0 && <div className="text-sm text-gray-500">No members yet.</div>}
+              {visibleMembers.length === 0 && <div className="text-sm text-gray-500">No members found.</div>}
             </div>
           </div>
         </div>

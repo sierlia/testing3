@@ -3,7 +3,7 @@ import { Navigation } from "../components/Navigation";
 import { Building2, Check, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
-import { Link, useNavigate } from "react-router";
+import { useNavigate } from "react-router";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 
 type CommitteeRow = { id: string; name: string; description: string | null; created_at: string };
@@ -136,7 +136,16 @@ export function CommitteesHome() {
             ) : (
               <div className="space-y-3">
                 {items.map((c) => (
-                  <div key={c.id} className="border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4">
+                  <div
+                    key={c.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/committees/${c.id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") navigate(`/committees/${c.id}`);
+                    }}
+                    className="border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
                     <div className="min-w-0">
                       <div className="font-semibold text-gray-900 truncate">{c.name}</div>
                       {c.description ? <div className="text-sm text-gray-600 mt-1 line-clamp-2">{c.description}</div> : null}
@@ -149,6 +158,8 @@ export function CommitteesHome() {
                       {canSelfJoin && (
                         <button
                           onClick={() => void joinCommittee(c.id)}
+                          onMouseDown={(event) => event.stopPropagation()}
+                          onClickCapture={(event) => event.stopPropagation()}
                           disabled={joinedCommitteeIds.has(c.id) || joiningCommitteeId === c.id}
                           className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors disabled:cursor-default ${
                             joinedCommitteeIds.has(c.id)
@@ -160,9 +171,6 @@ export function CommitteesHome() {
                           {joinedCommitteeIds.has(c.id) ? "Joined" : joiningCommitteeId === c.id ? "Joining" : "Join"}
                         </button>
                       )}
-                      <Link to={`/committees/${c.id}`} className="text-sm text-blue-600 hover:underline whitespace-nowrap">
-                        Open
-                      </Link>
                     </div>
                   </div>
                 ))}

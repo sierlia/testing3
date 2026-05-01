@@ -6,8 +6,8 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const path = location.pathname;
   const tabs = [
-    { label: "Classes", to: "/settings/classes" },
     { label: "Notifications", to: "/settings/notifications" },
+    { label: "Classes", to: "/settings/classes" },
   ];
 
   return (

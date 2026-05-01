@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Gavel, Plus, Users, Settings, Copy, Check, KeyRound } from 'lucide-react';
+import { Gavel, Plus, Users, Copy, Check, KeyRound } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 
@@ -48,7 +48,12 @@ export function TeacherDashboard() {
         if (error) throw error;
 
         const normalized = await Promise.all((classRows ?? []).map(async (c) => {
-          const { count } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('class_id', c.id).eq('role', 'student');
+          const { count } = await supabase
+            .from('class_memberships')
+            .select('*', { count: 'exact', head: true })
+            .eq('class_id', c.id)
+            .eq('role', 'student')
+            .eq('status', 'approved');
           return { ...c, student_count: count ?? 0 };
         }));
         setClasses(normalized as any);
@@ -216,26 +221,16 @@ export function TeacherDashboard() {
                       <span>{classItem.student_count} students enrolled</span>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={async () => {
-                          await setActiveClass(classItem.id);
-                          navigate(`/teacher/class/${classItem.id}/manage`);
-                        }}
-                      >
-                        <Settings className="w-4 h-4 mr-1" />
-                        Manage
-                      </Button>
+                    <div>
                       <Button
                         size="sm"
+                        className="w-full"
                         onClick={async () => {
                           await setActiveClass(classItem.id);
                           navigate(`/teacher/class/${classItem.id}`);
                         }}
                       >
-                        Open Class
+                        Open
                       </Button>
                     </div>
                   </div>

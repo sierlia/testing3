@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { formatConstituency } from "../utils/constituency";
 
 type Member = {
   user_id: string;
@@ -25,11 +26,25 @@ export function Members() {
     const load = async () => {
       setLoading(true);
       try {
-        const { data, error } = await supabase
+        const { data: auth } = await supabase.auth.getUser();
+        const me = auth.user?.id;
+        const { data: myProfile } = me ? await supabase.from("profiles").select("class_id").eq("user_id", me).maybeSingle() : { data: null } as any;
+        const classId = (myProfile as any)?.class_id as string | undefined;
+        let memberIds: string[] | null = null;
+        if (classId) {
+          const { data: memberships } = await supabase
+            .from("class_memberships")
+            .select("user_id")
+            .eq("class_id", classId)
+            .eq("status", "approved");
+          memberIds = (memberships ?? []).map((m: any) => m.user_id);
+        }
+        const query = supabase
           .from("profiles")
           .select("user_id,display_name,party,constituency_name,avatar_url,role")
           .order("role", { ascending: true })
           .order("display_name", { ascending: true });
+        const { data, error } = memberIds ? await query.in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]) : await query;
         if (error) throw error;
         setMembers((data ?? []) as any);
       } catch (e: any) {
@@ -50,7 +65,7 @@ export function Members() {
   const filteredMembers = useMemo(() => {
     return members.filter((member) => {
       const name = member.display_name ?? "";
-      const constituency = member.constituency_name ?? "";
+      const constituency = formatConstituency(member.constituency_name);
       const matchesSearch =
         name.toLowerCase().includes(searchQuery.toLowerCase()) || constituency.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesParty = filterParty === "all" || (member.party ?? "N/A") === filterParty;
@@ -117,7 +132,7 @@ export function Members() {
                   <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <MapPin className="w-3 h-3" />
-                      <span className="truncate">{member.constituency_name ?? "N/A"}</span>
+                      <span className="truncate">{formatConstituency(member.constituency_name)}</span>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Flag className="w-3 h-3" />
