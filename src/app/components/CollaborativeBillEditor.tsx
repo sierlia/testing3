@@ -59,17 +59,14 @@ const EditHighlight = Mark.create({
   },
 
   renderHTML({ HTMLAttributes }) {
-    const authorName = HTMLAttributes.authorName || "Member";
     const color = HTMLAttributes.color || "#2563eb";
     return [
       "span",
       {
         "data-edit-highlight": "true",
         "data-edit-author-id": HTMLAttributes.authorId || "",
-        "data-edit-author": authorName,
+        "data-edit-author": HTMLAttributes.authorName || "Member",
         "data-edit-color": color,
-        "data-tooltip": `Added by ${authorName}`,
-        title: `Added by ${authorName}`,
         class: "committee-edit-highlight",
         style: `--edit-color:${color}; background-color: ${hexToRgba(color, 0.16)}; box-shadow: inset 0 -0.45em 0 ${hexToRgba(color, 0.1)};`,
       },
@@ -109,8 +106,11 @@ function createEditAttributionExtension({
             const ranges: Array<{ from: number; to: number }> = [];
             for (const transaction of changedTransactions) {
               transaction.mapping.maps.forEach((stepMap, mapIndex) => {
-                stepMap.forEach((_oldStart, _oldEnd, newStart, newEnd) => {
+                stepMap.forEach((oldStart, oldEnd, newStart, newEnd) => {
                   if (newEnd <= newStart) return;
+                  // Only highlight pure insertions (typing/paste). Replacements are harder to
+                  // slice precisely; skipping them avoids painting over existing text.
+                  if (oldEnd !== oldStart) return;
                   const laterMaps = transaction.mapping.slice(mapIndex + 1);
                   ranges.push({
                     from: laterMaps.map(newStart, 1),
@@ -187,6 +187,8 @@ export function CollaborativeBillEditor({
       if (!uid) return;
       const { data: p } = await supabase.from("profiles").select("display_name").eq("user_id", uid).maybeSingle();
       const name = (p as any)?.display_name ?? auth.user?.user_metadata?.name ?? "Member";
+      // Keep authorName in highlights consistent: prefer a concrete non-empty name.
+      const normalizedName = String(name || "").trim() || "Member";
       let color = colorFromId(uid);
       try {
         const { data: assigned, error: cErr } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
@@ -194,7 +196,7 @@ export function CollaborativeBillEditor({
       } catch {
         // ignore; fall back to deterministic colorFromId
       }
-      setLocalUser({ id: uid, name, color });
+      setLocalUser({ id: uid, name: normalizedName, color });
 
       const ydoc = new Y.Doc();
       const awareness = new Awareness(ydoc);
@@ -206,7 +208,7 @@ export function CollaborativeBillEditor({
           doc: ydoc,
           awareness,
           key: { classId, committeeId, billId },
-          user: { id: uid, name, color },
+          user: { id: uid, name: normalizedName, color },
         },
         () => {
           hydratedFromSnapshotRef.current = provider.getHydratedFromSnapshot();

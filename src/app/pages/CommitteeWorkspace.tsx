@@ -1,10 +1,13 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { CheckCircle2, FileText, Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
+import * as Y from "yjs";
+import { Awareness } from "y-protocols/awareness";
+import { YjsSupabaseProvider } from "../utils/yjsSupabaseProvider";
 
 type BillRow = {
   id: string;
@@ -32,6 +35,7 @@ export function CommitteeWorkspace() {
   const [activeEditors, setActiveEditors] = useState<
     Array<{ id: string; name: string; color: string; avatar_url: string | null }>
   >([]);
+  const presenceRef = useRef<{ provider: YjsSupabaseProvider; doc: Y.Doc; awareness: Awareness } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -152,31 +156,84 @@ export function CommitteeWorkspace() {
     }
   };
 
-  const handlePresenceChange = (users: Array<{ id: string; name: string; color: string }>) => {
-    void (async () => {
+  useEffect(() => {
+    if (!classId || !selectedBillId) {
+      setActiveEditors([]);
+      return;
+    }
+
+    let cancelled = false;
+    const setupPresence = async () => {
       try {
-        const ids = users.map((u) => u.id);
-        if (!ids.length) return setActiveEditors([]);
-        const { data, error } = await supabase
-          .from("profiles")
-          .select("user_id,display_name,avatar_url")
-          .in("user_id", ids);
-        if (error) throw error;
-        const pMap = new Map((data ?? []).map((p: any) => [p.user_id, p]));
-        setActiveEditors(
-          users.map((u) => ({
-            id: u.id,
-            name: (pMap.get(u.id) as any)?.display_name ?? u.name ?? "Member",
-            color: u.color,
-            avatar_url: (pMap.get(u.id) as any)?.avatar_url ?? null,
-          })),
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) return;
+
+        // Get display name + stable per-committee color for awareness metadata.
+        const { data: p } = await supabase.from("profiles").select("display_name").eq("user_id", uid).maybeSingle();
+        const name = (p as any)?.display_name ?? auth.user?.user_metadata?.name ?? "Member";
+        let color = "#2563eb";
+        try {
+          const { data: assigned } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
+          if (typeof assigned === "string" && assigned) color = assigned;
+        } catch {
+          // ignore
+        }
+
+        // Tear down any previous presence connection for a different bill.
+        presenceRef.current?.provider.destroy();
+        presenceRef.current?.doc.destroy();
+        presenceRef.current = null;
+
+        const doc = new Y.Doc();
+        const awareness = new Awareness(doc);
+        const provider = new YjsSupabaseProvider(
+          { doc, awareness, key: { classId, committeeId, billId: selectedBillId }, user: { id: uid, name, color } },
+          undefined,
         );
-      } catch {
-        // Presence is best-effort; ignore failures.
-        setActiveEditors(users.map((u) => ({ ...u, avatar_url: null })));
+        presenceRef.current = { provider, doc, awareness };
+
+        const emit = async () => {
+          const states = awareness.getStates();
+          const map = new Map<string, { id: string; name: string; color: string }>();
+          for (const [, st] of states.entries()) {
+            const u = (st as any)?.user as { id?: string; name?: string; color?: string } | undefined;
+            if (!u?.id) continue;
+            map.set(u.id, { id: u.id, name: u.name ?? "Member", color: u.color ?? "#2563eb" });
+          }
+          const users = Array.from(map.values());
+          const ids = users.map((u) => u.id);
+          if (!ids.length) return !cancelled && setActiveEditors([]);
+          const { data } = await supabase.from("profiles").select("user_id,display_name,avatar_url").in("user_id", ids);
+          const pMap = new Map((data ?? []).map((row: any) => [row.user_id, row]));
+          if (cancelled) return;
+          setActiveEditors(
+            users
+              .map((u) => ({
+                id: u.id,
+                name: (pMap.get(u.id) as any)?.display_name ?? u.name ?? "Member",
+                color: u.color,
+                avatar_url: (pMap.get(u.id) as any)?.avatar_url ?? null,
+              }))
+              .sort((a, b) => a.name.localeCompare(b.name)),
+          );
+        };
+
+        await emit();
+        awareness.on("change", () => void emit());
+      } catch (e: any) {
+        if (!cancelled) setActiveEditors([]);
       }
-    })();
-  };
+    };
+
+    void setupPresence();
+    return () => {
+      cancelled = true;
+      presenceRef.current?.provider.destroy();
+      presenceRef.current?.doc.destroy();
+      presenceRef.current = null;
+    };
+  }, [classId, committeeId, selectedBillId]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -230,23 +287,18 @@ export function CommitteeWorkspace() {
                       </div>
                       <div className="flex items-center gap-3">
                         {activeEditors.length > 0 && (
-                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                          <div className="flex items-center gap-1.5 justify-end">
                             {activeEditors.map((u) => (
-                              <Link
-                                key={u.id}
-                                to={`/profile/${u.id}`}
-                                title={u.name}
-                                className="inline-flex items-center gap-2 px-2 py-1 rounded-md hover:bg-gray-50"
-                              >
+                              <Link key={u.id} to={`/profile/${u.id}`} title={u.name} className="relative">
                                 {u.avatar_url ? (
-                                  <img src={u.avatar_url} className="w-7 h-7 rounded-full object-cover" />
+                                  <img
+                                    src={u.avatar_url}
+                                    className="w-8 h-8 rounded-full object-cover border-2"
+                                    style={{ borderColor: u.color }}
+                                  />
                                 ) : (
-                                  <div className="w-7 h-7 rounded-full bg-gray-100" />
+                                  <div className="w-8 h-8 rounded-full bg-gray-100 border-2" style={{ borderColor: u.color }} />
                                 )}
-                                <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
-                                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: u.color }} />
-                                  <span className="max-w-[120px] truncate">{u.name}</span>
-                                </span>
                               </Link>
                             ))}
                           </div>
@@ -286,7 +338,6 @@ export function CommitteeWorkspace() {
                           billId={selected.id}
                           initialHtml={selected.legislativeHtml}
                           editable
-                          onPresenceChange={handlePresenceChange}
                         />
                       ) : (
                         <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
