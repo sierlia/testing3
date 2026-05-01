@@ -71,7 +71,7 @@ const EditHighlight = Mark.create({
         "data-tooltip": `Added by ${authorName}`,
         title: `Added by ${authorName}`,
         class: "committee-edit-highlight",
-        style: `background-color: ${hexToRgba(color, 0.16)}; box-shadow: inset 0 -0.45em 0 ${hexToRgba(color, 0.1)};`,
+        style: `--edit-color:${color}; background-color: ${hexToRgba(color, 0.16)}; box-shadow: inset 0 -0.45em 0 ${hexToRgba(color, 0.1)};`,
       },
       0,
     ];
@@ -153,12 +153,14 @@ export function CollaborativeBillEditor({
   billId,
   initialHtml,
   editable = true,
+  onPresenceChange,
 }: {
   classId: string;
   committeeId: string;
   billId: string;
   initialHtml: string;
   editable?: boolean;
+  onPresenceChange?: (users: Array<{ id: string; name: string; color: string }>) => void;
 }) {
   const [ready, setReady] = useState(false);
   const [localUser, setLocalUser] = useState<{ id: string; name: string; color: string }>({ id: "", name: "Member", color: "#2563eb" });
@@ -185,7 +187,13 @@ export function CollaborativeBillEditor({
       if (!uid) return;
       const { data: p } = await supabase.from("profiles").select("display_name").eq("user_id", uid).maybeSingle();
       const name = (p as any)?.display_name ?? auth.user?.user_metadata?.name ?? "Member";
-      const color = colorFromId(uid);
+      let color = colorFromId(uid);
+      try {
+        const { data: assigned, error: cErr } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
+        if (!cErr && typeof assigned === "string" && assigned) color = assigned;
+      } catch {
+        // ignore; fall back to deterministic colorFromId
+      }
       setLocalUser({ id: uid, name, color });
 
       const ydoc = new Y.Doc();
@@ -223,6 +231,30 @@ export function CollaborativeBillEditor({
       ydocRef.current = null;
     };
   }, [billId, classId, committeeId]);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (!awarenessRef.current) return;
+    const awareness = awarenessRef.current;
+
+    const emit = () => {
+      const states = awareness.getStates();
+      const map = new Map<string, { id: string; name: string; color: string }>();
+      for (const [, st] of states.entries()) {
+        const u = (st as any)?.user as { id?: string; name?: string; color?: string } | undefined;
+        if (!u?.id) continue;
+        map.set(u.id, { id: u.id, name: u.name ?? "Member", color: u.color ?? "#2563eb" });
+      }
+      const list = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+      onPresenceChange?.(list);
+    };
+
+    emit();
+    awareness.on("change", emit);
+    return () => {
+      awareness.off("change", emit);
+    };
+  }, [ready, onPresenceChange]);
 
   useEffect(() => {
     if (!ready || !ydocRef.current || !awarenessRef.current) return;
@@ -301,10 +333,9 @@ export function CollaborativeBillEditor({
     // If the doc was empty when we joined, seed it once from the bill text.
     if (didInitRef.current) return;
     didInitRef.current = true;
-    // Important: only seed from the bill's original text if we *didn't* hydrate
-    // from a previously persisted Yjs snapshot. Otherwise we risk overwriting
-    // the canonical collaborative state on reopen.
-    if (!hydratedFromSnapshotRef.current && editor.getText().trim() === "") {
+    // Seed from the original bill text if the collaborative document is still empty.
+    // This ensures the editable version always starts with the original text.
+    if (editor.getText().trim() === "") {
       suppressAttributionRef.current = true;
       try {
         editor.commands.setContent(initialHtml || "<p></p>", false);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams } from "react-router";
+import { Link, useParams } from "react-router";
 import { CheckCircle2, FileText, Pencil, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
@@ -29,6 +29,9 @@ export function CommitteeWorkspace() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportSaving, setReportSaving] = useState(false);
   const [reportSaved, setReportSaved] = useState(false);
+  const [activeEditors, setActiveEditors] = useState<
+    Array<{ id: string; name: string; color: string; avatar_url: string | null }>
+  >([]);
 
   useEffect(() => {
     const load = async () => {
@@ -149,6 +152,32 @@ export function CommitteeWorkspace() {
     }
   };
 
+  const handlePresenceChange = (users: Array<{ id: string; name: string; color: string }>) => {
+    void (async () => {
+      try {
+        const ids = users.map((u) => u.id);
+        if (!ids.length) return setActiveEditors([]);
+        const { data, error } = await supabase
+          .from("profiles")
+          .select("user_id,display_name,avatar_url")
+          .in("user_id", ids);
+        if (error) throw error;
+        const pMap = new Map((data ?? []).map((p: any) => [p.user_id, p]));
+        setActiveEditors(
+          users.map((u) => ({
+            id: u.id,
+            name: (pMap.get(u.id) as any)?.display_name ?? u.name ?? "Member",
+            color: u.color,
+            avatar_url: (pMap.get(u.id) as any)?.avatar_url ?? null,
+          })),
+        );
+      } catch {
+        // Presence is best-effort; ignore failures.
+        setActiveEditors(users.map((u) => ({ ...u, avatar_url: null })));
+      }
+    })();
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -199,27 +228,52 @@ export function CommitteeWorkspace() {
                         <div className="text-xl font-bold text-gray-900 mt-1">{selected.title}</div>
                         <div className="text-sm text-gray-600 mt-1">Sponsor: {selected.sponsor}</div>
                       </div>
-                      <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-                        <button
-                          type="button"
-                          onClick={() => setTextView("edited")}
-                          className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
-                            textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          <Pencil className="w-4 h-4" />
-                          Edited Text
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setTextView("original")}
-                          className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
-                            textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                          }`}
-                        >
-                          <FileText className="w-4 h-4" />
-                          Original Text
-                        </button>
+                      <div className="flex items-center gap-3">
+                        {activeEditors.length > 0 && (
+                          <div className="flex items-center gap-2 flex-wrap justify-end">
+                            {activeEditors.map((u) => (
+                              <Link
+                                key={u.id}
+                                to={`/profile/${u.id}`}
+                                title={u.name}
+                                className="inline-flex items-center gap-2 px-2 py-1 rounded-md hover:bg-gray-50"
+                              >
+                                {u.avatar_url ? (
+                                  <img src={u.avatar_url} className="w-7 h-7 rounded-full object-cover" />
+                                ) : (
+                                  <div className="w-7 h-7 rounded-full bg-gray-100" />
+                                )}
+                                <span className="inline-flex items-center gap-1.5 text-sm text-gray-700">
+                                  <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: u.color }} />
+                                  <span className="max-w-[120px] truncate">{u.name}</span>
+                                </span>
+                              </Link>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setTextView("edited")}
+                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
+                              textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                            Edited Text
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTextView("original")}
+                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+                              textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <FileText className="w-4 h-4" />
+                            Original Text
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -232,6 +286,7 @@ export function CommitteeWorkspace() {
                           billId={selected.id}
                           initialHtml={selected.legislativeHtml}
                           editable
+                          onPresenceChange={handlePresenceChange}
                         />
                       ) : (
                         <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
