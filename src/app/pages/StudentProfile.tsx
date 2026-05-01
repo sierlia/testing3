@@ -16,7 +16,6 @@ import {
   MapPin,
   Pencil,
   Save,
-  User,
   Users,
   X,
 } from "lucide-react";
@@ -29,6 +28,7 @@ import {
   PartySelection,
 } from "../components/PartySelection";
 import { supabase } from "../utils/supabase";
+import { DefaultAvatar } from "../components/DefaultAvatar";
 
 type EditingSection = "personal_statement" | "constituency_description" | "key_issues" | null;
 
@@ -342,9 +342,7 @@ export function StudentProfile() {
                     className="w-16 h-16 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
-                    <User className="w-8 h-8 text-white" />
-                  </div>
+                  <DefaultAvatar className="w-16 h-16" iconClassName="w-8 h-8 text-gray-500" />
                 )}
                 {isMe && (
                   <label className="absolute -top-1 -right-1 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors shadow-sm cursor-pointer">

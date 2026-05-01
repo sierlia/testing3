@@ -3,9 +3,10 @@ import { useParams, Link } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
-import { Users, Send, User, Pencil, Save, X, UserPlus } from "lucide-react";
+import { Users, Send, Pencil, Save, X, UserPlus } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
+import { DefaultAvatar } from "../components/DefaultAvatar";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
@@ -707,9 +708,7 @@ export function CommitteeDashboard() {
                   {m.profile?.avatar_url ? (
                     <img src={m.profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
                   ) : (
-                    <div className="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center">
-                      <User className="w-5 h-5 text-gray-400" />
-                    </div>
+                    <DefaultAvatar className="w-10 h-10" iconClassName="w-5 h-5 text-gray-500" />
                   )}
                     <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Search, User, MapPin, Flag } from "lucide-react";
+import { Search, MapPin, Flag } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
+import { DefaultAvatar } from "../components/DefaultAvatar";
 
 type Member = {
   user_id: string;
@@ -109,9 +110,7 @@ export function Members() {
                 {member.avatar_url ? (
                   <img src={member.avatar_url} alt={member.display_name ?? "Member"} className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
                 ) : (
-                  <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
-                    <User className="w-8 h-8 text-white" />
-                  </div>
+                  <DefaultAvatar className="w-16 h-16 flex-shrink-0" iconClassName="w-8 h-8 text-gray-500" />
                 )}
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-gray-900 mb-1 truncate">{member.display_name ?? "Member"}</h3>

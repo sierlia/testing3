@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
 import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
+import { DefaultAvatar } from "./DefaultAvatar";
 
 export function Navigation() {
   const [billPipelineOpen, setBillPipelineOpen] = useState(false);
@@ -18,12 +19,6 @@ export function Navigation() {
     await signOut();
     navigate('/');
   };
-
-  const userInitials = user?.user_metadata?.name
-    ?.split(' ')
-    .map((n: string) => n[0])
-    .join('')
-    .toUpperCase() || 'U';
 
   useEffect(() => {
     const load = async () => {
@@ -190,12 +185,12 @@ export function Navigation() {
             <div className="relative">
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
-                className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-white text-sm font-medium hover:bg-blue-700 transition-colors overflow-hidden"
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all overflow-hidden"
               >
                 {avatarUrl ? (
                   <img src={avatarUrl} alt="Profile" className="w-8 h-8 object-cover" />
                 ) : (
-                  userInitials
+                  <DefaultAvatar className="w-8 h-8" iconClassName="w-4 h-4 text-gray-500" />
                 )}
               </button>
               

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Send, X, User, Search } from "lucide-react";
+import { Send, X, Search } from "lucide-react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
+import { DefaultAvatar } from "../components/DefaultAvatar";
 
 type RecipientType = "individual" | "caucus" | "party" | "committee";
 
@@ -189,7 +190,7 @@ export function CreateDearColleagueLetter() {
                     {recipient.type === "individual" && recipient.image ? (
                       <img src={recipient.image} alt={recipient.name} className="w-5 h-5 rounded-full object-cover" />
                     ) : recipient.type === "individual" ? (
-                      <User className="w-4 h-4" />
+                      <DefaultAvatar className="w-5 h-5" iconClassName="w-3 h-3 text-blue-700" />
                     ) : null}
                     <span className="text-sm font-medium">
                       {recipient.name}
@@ -262,9 +263,7 @@ export function CreateDearColleagueLetter() {
                         {s.image ? (
                           <img src={s.image} alt={s.name} className="w-8 h-8 rounded-full object-cover" />
                         ) : (
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center">
-                            <User className="w-4 h-4 text-gray-500" />
-                          </div>
+                          <DefaultAvatar className="w-8 h-8" iconClassName="w-4 h-4 text-gray-500" />
                         )}
                         <div>
                           <div className="font-medium text-gray-900">{s.name}</div>

@@ -5,9 +5,7 @@ import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
-import * as Y from "yjs";
-import { Awareness } from "y-protocols/awareness";
-import { YjsSupabaseProvider } from "../utils/yjsSupabaseProvider";
+import { DefaultAvatar } from "../components/DefaultAvatar";
 
 type BillRow = {
   id: string;
@@ -35,8 +33,7 @@ export function CommitteeWorkspace() {
   const [activeEditors, setActiveEditors] = useState<
     Array<{ id: string; name: string; color: string; avatar_url: string | null }>
   >([]);
-  const presenceRef = useRef<{ provider: YjsSupabaseProvider; doc: Y.Doc; awareness: Awareness } | null>(null);
-  const presenceEmitSeqRef = useRef(0);
+  const presenceChannelRef = useRef<any>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -170,88 +167,68 @@ export function CommitteeWorkspace() {
         const uid = auth.user?.id;
         if (!uid) return;
 
-        // Get display name + stable per-committee color for awareness metadata.
-        const { data: p } = await supabase.from("profiles").select("display_name").eq("user_id", uid).maybeSingle();
-        const name = (p as any)?.display_name ?? auth.user?.user_metadata?.name ?? "Member";
-        const normalizedName = String(name || "").trim() || "Member";
+        const { data: profile } = await supabase.from("profiles").select("display_name,avatar_url").eq("user_id", uid).maybeSingle();
+        const normalizedName = String((profile as any)?.display_name ?? auth.user?.user_metadata?.name ?? "").trim() || "Member";
+
         let color = "#2563eb";
-        try {
-          const { data: row } = await supabase
-            .from("committee_member_colors")
-            .select("color")
-            .eq("committee_id", committeeId)
-            .eq("user_id", uid)
-            .maybeSingle();
-          if ((row as any)?.color) color = (row as any).color as string;
-        } catch {}
-        if (!color || color === "#2563eb") {
-          try {
-            const { data: assigned } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
-            if (typeof assigned === "string" && assigned) color = assigned;
-          } catch {
-            // ignore
-          }
+        const { data: existingColor } = await supabase
+          .from("committee_member_colors")
+          .select("color")
+          .eq("committee_id", committeeId)
+          .eq("user_id", uid)
+          .maybeSingle();
+        if ((existingColor as any)?.color) {
+          color = (existingColor as any).color;
+        } else {
+          const { data: assigned } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
+          if (typeof assigned === "string" && assigned) color = assigned;
         }
 
-        // Tear down any previous presence connection for a different bill.
-        presenceRef.current?.provider.destroy();
-        presenceRef.current?.doc.destroy();
-        presenceRef.current = null;
+        const self = {
+          id: uid,
+          name: normalizedName,
+          color,
+          avatar_url: (profile as any)?.avatar_url ?? null,
+          online_at: new Date().toISOString(),
+        };
+        if (cancelled) return;
+        if (!cancelled) setActiveEditors([self]);
 
-        const doc = new Y.Doc();
-        const awareness = new Awareness(doc);
-        const provider = new YjsSupabaseProvider(
-          { doc, awareness, key: { classId, committeeId, billId: selectedBillId }, user: { id: uid, name: normalizedName, color } },
-          undefined,
-        );
-        presenceRef.current = { provider, doc, awareness };
+        const channel = supabase.channel(`bill-presence:${committeeId}:${selectedBillId}`, {
+          config: { presence: { key: uid } },
+        });
 
-        const emit = async () => {
-          const seq = ++presenceEmitSeqRef.current;
-          const states = awareness.getStates();
-          const map = new Map<string, { id: string; name: string; color: string }>();
-          for (const [, st] of states.entries()) {
-            const u = (st as any)?.user as { id?: string; name?: string; color?: string } | undefined;
-            if (!u?.id) continue;
-            map.set(u.id, { id: u.id, name: u.name ?? "Member", color: u.color ?? "#2563eb" });
-          }
-          const users = Array.from(map.values());
-          if (!users.length) {
-            if (!cancelled && seq === presenceEmitSeqRef.current) setActiveEditors([]);
-            return;
-          }
+        const syncPresence = () => {
+          const state = channel.presenceState() as Record<string, Array<any>>;
+          const editors = Object.values(state)
+            .flat()
+            .map((payload: any) => ({
+              id: payload.id as string,
+              name: String(payload.name || "").trim() || "Member",
+              color: (payload.color as string) || "#2563eb",
+              avatar_url: (payload.avatar_url as string | null | undefined) ?? null,
+              online_at: payload.online_at as string | undefined,
+            }))
+            .filter((payload) => payload.id);
 
-          // First paint quickly from awareness; then enrich with avatar urls.
-          if (!cancelled && seq === presenceEmitSeqRef.current) {
-            setActiveEditors(
-              users
-                .map((u) => ({ id: u.id, name: u.name ?? "Member", color: u.color, avatar_url: null }))
-                .sort((a, b) => a.name.localeCompare(b.name)),
-            );
-          }
-
-          const ids = users.map((u) => u.id);
-          const { data } = await supabase.from("profiles").select("user_id,display_name,avatar_url").in("user_id", ids);
-          const pMap = new Map((data ?? []).map((row: any) => [row.user_id, row]));
-          if (cancelled || seq !== presenceEmitSeqRef.current) return;
-          setActiveEditors(
-            users
-              .map((u) => ({
-                id: u.id,
-                name: (pMap.get(u.id) as any)?.display_name ?? u.name ?? "Member",
-                color: u.color,
-                avatar_url: (pMap.get(u.id) as any)?.avatar_url ?? null,
-              }))
-              .sort((a, b) => a.name.localeCompare(b.name)),
-          );
+          const byUser = new Map<string, (typeof editors)[number]>();
+          for (const editor of editors) byUser.set(editor.id, editor);
+          const list = Array.from(byUser.values()).sort((a, b) => a.name.localeCompare(b.name));
+          if (!cancelled) setActiveEditors(list.length ? list : [self]);
         };
 
-        await emit();
-        const onChange = () => void emit();
-        awareness.on("change", onChange);
-        // Ensure we remove listener when we tear down this presence doc.
-        (presenceRef.current as any).__onChange = onChange;
-      } catch (e: any) {
+        channel
+          .on("presence", { event: "sync" }, syncPresence)
+          .on("presence", { event: "join" }, syncPresence)
+          .on("presence", { event: "leave" }, syncPresence)
+          .subscribe(async (status) => {
+            if (status !== "SUBSCRIBED" || cancelled) return;
+            await channel.track(self);
+            syncPresence();
+          });
+
+        presenceChannelRef.current = channel;
+      } catch {
         if (!cancelled) setActiveEditors([]);
       }
     };
@@ -259,16 +236,12 @@ export function CommitteeWorkspace() {
     void setupPresence();
     return () => {
       cancelled = true;
-      presenceEmitSeqRef.current++;
-      const cur: any = presenceRef.current;
-      if (cur?.awareness && cur?.__onChange) {
-        try {
-          cur.awareness.off("change", cur.__onChange);
-        } catch {}
+      const channel = presenceChannelRef.current;
+      presenceChannelRef.current = null;
+      if (channel) {
+        void channel.untrack();
+        void supabase.removeChannel(channel);
       }
-      presenceRef.current?.provider.destroy();
-      presenceRef.current?.doc.destroy();
-      presenceRef.current = null;
     };
   }, [classId, committeeId, selectedBillId]);
 
@@ -340,7 +313,7 @@ export function CommitteeWorkspace() {
                                     style={{ borderColor: u.color }}
                                   />
                                 ) : (
-                                  <div className="w-8 h-8 rounded-full bg-gray-100 border-2" style={{ borderColor: u.color }} />
+                                  <DefaultAvatar className="w-8 h-8 border-2" style={{ borderColor: u.color }} />
                                 )}
                               </Link>
                             ))}
@@ -374,7 +347,7 @@ export function CommitteeWorkspace() {
                   </div>
                   <div className="p-5 space-y-6">
                     <div>
-                      {textView === "edited" ? (
+                      <div className={textView === "edited" ? "block" : "hidden"} aria-hidden={textView !== "edited"}>
                         <CollaborativeBillEditor
                           classId={classId}
                           committeeId={committeeId}
@@ -382,11 +355,12 @@ export function CommitteeWorkspace() {
                           initialHtml={selected.legislativeHtml}
                           editable
                         />
-                      ) : (
+                      </div>
+                      <div className={textView === "original" ? "block" : "hidden"} aria-hidden={textView !== "original"}>
                         <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
                           <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
                         </div>
-                      )}
+                      </div>
                       <div className="text-xs text-gray-500 mt-3">
                         {textView === "edited"
                           ? "Changes sync live to other committee members and are persisted in Supabase."

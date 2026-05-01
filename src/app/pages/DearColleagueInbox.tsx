@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Mail, User, Calendar } from "lucide-react";
+import { Mail, Calendar } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
+import { DefaultAvatar } from "../components/DefaultAvatar";
 
 type InboxItem = {
   letter_id: string;
@@ -149,9 +150,7 @@ export function DearColleagueInbox() {
                       {it.from_avatar ? (
                         <img src={it.from_avatar} alt={it.from_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
                       ) : (
-                        <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                          <User className="w-5 h-5 text-gray-500" />
-                        </div>
+                        <DefaultAvatar className="w-10 h-10 flex-shrink-0" iconClassName="w-5 h-5 text-gray-500" />
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
@@ -179,9 +178,7 @@ export function DearColleagueInbox() {
                           className="w-12 h-12 rounded-full object-cover hover:ring-2 hover:ring-blue-500 transition-all"
                         />
                       ) : (
-                        <div className="w-12 h-12 rounded-full bg-gray-200 flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all">
-                          <User className="w-6 h-6 text-gray-500" />
-                        </div>
+                        <DefaultAvatar className="w-12 h-12 hover:ring-2 hover:ring-blue-500 transition-all" iconClassName="w-6 h-6 text-gray-500" />
                       )}
                     </Link>
                     <div className="flex-1">
@@ -215,4 +212,3 @@ export function DearColleagueInbox() {
     </div>
   );
 }
-

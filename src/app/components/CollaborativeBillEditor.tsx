@@ -58,14 +58,16 @@ const EditHighlight = Mark.create({
     return [{ tag: "span[data-edit-highlight]" }];
   },
 
-  renderHTML({ HTMLAttributes }) {
-    const color = HTMLAttributes.color || "#2563eb";
+  renderHTML({ mark }) {
+    const authorId = mark.attrs.authorId || "";
+    const authorName = String(mark.attrs.authorName || "").trim() || "Member";
+    const color = mark.attrs.color || "#2563eb";
     return [
       "span",
       {
         "data-edit-highlight": "true",
-        "data-edit-author-id": HTMLAttributes.authorId || "",
-        "data-edit-author": HTMLAttributes.authorName || "Member",
+        "data-edit-author-id": authorId,
+        "data-edit-author": authorName,
         "data-edit-color": color,
         class: "committee-edit-highlight",
         style: `--edit-color:${color}; background-color: ${hexToRgba(color, 0.16)}; box-shadow: inset 0 -0.45em 0 ${hexToRgba(color, 0.1)};`,
@@ -154,14 +156,12 @@ export function CollaborativeBillEditor({
   billId,
   initialHtml,
   editable = true,
-  onPresenceChange,
 }: {
   classId: string;
   committeeId: string;
   billId: string;
   initialHtml: string;
   editable?: boolean;
-  onPresenceChange?: (users: Array<{ id: string; name: string; color: string }>) => void;
 }) {
   const [ready, setReady] = useState(false);
   const [localUser, setLocalUser] = useState<{ id: string; name: string; color: string }>({ id: "", name: "Member", color: "#2563eb" });
@@ -247,30 +247,6 @@ export function CollaborativeBillEditor({
       ydocRef.current = null;
     };
   }, [billId, classId, committeeId]);
-
-  useEffect(() => {
-    if (!ready) return;
-    if (!awarenessRef.current) return;
-    const awareness = awarenessRef.current;
-
-    const emit = () => {
-      const states = awareness.getStates();
-      const map = new Map<string, { id: string; name: string; color: string }>();
-      for (const [, st] of states.entries()) {
-        const u = (st as any)?.user as { id?: string; name?: string; color?: string } | undefined;
-        if (!u?.id) continue;
-        map.set(u.id, { id: u.id, name: u.name ?? "Member", color: u.color ?? "#2563eb" });
-      }
-      const list = Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
-      onPresenceChange?.(list);
-    };
-
-    emit();
-    awareness.on("change", emit);
-    return () => {
-      awareness.off("change", emit);
-    };
-  }, [ready, onPresenceChange]);
 
   useEffect(() => {
     if (!ready || !ydocRef.current || !awarenessRef.current) return;

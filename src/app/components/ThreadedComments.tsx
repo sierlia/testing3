@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Reply } from "lucide-react";
 import { Link } from "react-router";
 import { ReactionEmoji, ReactionsBar, ReactionsSummary } from "./ReactionsBar";
+import { DefaultAvatar } from "./DefaultAvatar";
 
 export type ProfileLite = {
   user_id: string;
@@ -79,7 +80,7 @@ export function ThreadedComments({
               className="w-8 h-8 rounded-full object-cover flex-shrink-0"
             />
           ) : (
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex-shrink-0" />
+            <DefaultAvatar className="w-8 h-8 flex-shrink-0" iconClassName="w-4 h-4 text-gray-500" />
           )}
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-3">
