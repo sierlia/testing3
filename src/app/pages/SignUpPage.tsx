@@ -362,14 +362,7 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
             </form>
 
             <div className="mt-6 pt-6 border-t border-gray-200">
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium shadow-sm"
-              >
-                <KeyRound className="w-4 h-4" />
-                Bypass to Student Dashboard
-              </button>
+              {/* Intentionally empty: no bypass links on auth surfaces */}
             </div>
           </CardContent>
         </Card>

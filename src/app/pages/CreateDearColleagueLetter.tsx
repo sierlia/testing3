@@ -48,7 +48,11 @@ export function CreateDearColleagueLetter() {
           return navigate("/settings/classes");
         }
 
-        const { data: memberships, error: mErr } = await supabase.from("class_memberships").select("user_id").eq("class_id", classId);
+        const { data: memberships, error: mErr } = await supabase
+          .from("class_memberships")
+          .select("user_id")
+          .eq("class_id", classId)
+          .eq("status", "approved");
         if (mErr) throw mErr;
         const memberIds = Array.from(new Set((memberships ?? []).map((m: any) => m.user_id))).filter((id) => id !== uid);
 
@@ -60,9 +64,9 @@ export function CreateDearColleagueLetter() {
                 .in("user_id", memberIds)
                 .order("display_name")
             : Promise.resolve({ data: [] as any[] } as any),
-          supabase.from("caucuses").select("id,title").order("title"),
-          supabase.from("parties").select("id,name").order("name"),
-          supabase.from("committees").select("id,name").order("name"),
+          supabase.from("caucuses").select("id,title").eq("class_id", classId).order("title"),
+          supabase.from("parties").select("id,name").eq("class_id", classId).order("name"),
+          supabase.from("committees").select("id,name").eq("class_id", classId).order("name"),
         ]);
         if (profErr) throw profErr;
         setIndividuals((profiles ?? []) as any);
@@ -138,7 +142,11 @@ export function CreateDearColleagueLetter() {
         }
         if (r.type === "party") {
           const { data: partyRow } = await supabase.from("parties").select("name").eq("id", r.id).maybeSingle();
-          const { data } = await supabase.from("profiles").select("user_id").eq("party", (partyRow as any)?.name ?? r.name);
+          const { data } = await supabase
+            .from("profiles")
+            .select("user_id")
+            .eq("class_id", classId)
+            .eq("party", (partyRow as any)?.name ?? r.name);
           for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
         }
         if (r.type === "committee") {

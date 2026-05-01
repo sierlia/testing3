@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Mail, PenSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { AnnouncementsFeed } from "../components/AnnouncementsFeed";
@@ -210,23 +209,6 @@ export function ClassSimulationDashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">{className || "Class Dashboard"}</h1>
-        </div>
-
-        <div className="flex gap-3 mb-6">
-          <button
-            onClick={() => navigate("/dear-colleague/inbox")}
-            className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium shadow-sm"
-          >
-            <Mail className="w-4 h-4" />
-            Dear Colleague Letters
-          </button>
-          <button
-            onClick={() => navigate("/dear-colleague/compose")}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium shadow-sm"
-          >
-            <PenSquare className="w-4 h-4" />
-            Compose Letter
-          </button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

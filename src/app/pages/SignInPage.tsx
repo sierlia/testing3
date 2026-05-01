@@ -4,7 +4,7 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
-import { Gavel, KeyRound } from 'lucide-react';
+import { Gavel } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 
@@ -103,16 +103,8 @@ export function SignInPage() {
               </Link>
             </div>
 
-            <div className="mt-4 pt-4 border-t border-gray-200 flex flex-col gap-2">
-              <button
-                type="button"
-                onClick={() => navigate('/dashboard')}
-                className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors font-medium shadow-sm"
-              >
-                <KeyRound className="w-4 h-4" />
-                Bypass to Student Dashboard
-              </button>
-              <Link to="/" className="text-center text-sm text-gray-600 hover:underline">
+            <div className="mt-4 pt-4 border-t border-gray-200">
+              <Link to="/" className="block text-center text-sm text-gray-600 hover:underline">
                 Back to home
               </Link>
             </div>

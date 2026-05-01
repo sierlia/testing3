@@ -28,23 +28,29 @@ export function Members() {
       try {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id;
-        const { data: myProfile } = me ? await supabase.from("profiles").select("class_id").eq("user_id", me).maybeSingle() : { data: null } as any;
+        const { data: myProfile } = me
+          ? await supabase.from("profiles").select("class_id").eq("user_id", me).maybeSingle()
+          : ({ data: null } as any);
         const classId = (myProfile as any)?.class_id as string | undefined;
-        let memberIds: string[] | null = null;
-        if (classId) {
-          const { data: memberships } = await supabase
-            .from("class_memberships")
-            .select("user_id")
-            .eq("class_id", classId)
-            .eq("status", "approved");
-          memberIds = (memberships ?? []).map((m: any) => m.user_id);
+        if (!classId) {
+          setMembers([]);
+          return;
         }
-        const query = supabase
+
+        const { data: memberships, error: mErr } = await supabase
+          .from("class_memberships")
+          .select("user_id")
+          .eq("class_id", classId)
+          .eq("status", "approved");
+        if (mErr) throw mErr;
+        const memberIds = (memberships ?? []).map((m: any) => m.user_id);
+
+        const { data, error } = await supabase
           .from("profiles")
           .select("user_id,display_name,party,constituency_name,avatar_url,role")
+          .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"])
           .order("role", { ascending: true })
           .order("display_name", { ascending: true });
-        const { data, error } = memberIds ? await query.in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]) : await query;
         if (error) throw error;
         setMembers((data ?? []) as any);
       } catch (e: any) {

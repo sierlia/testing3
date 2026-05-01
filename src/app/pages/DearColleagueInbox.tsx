@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Mail, Calendar } from "lucide-react";
+import { Mail, Calendar, PenSquare } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { formatConstituency } from "../utils/constituency";
 
 type InboxItem = {
   letter_id: string;
@@ -50,7 +51,7 @@ export function DearColleagueInbox() {
       const senderIds = Array.from(new Set(letters.map((l: any) => l.sender_user_id)));
       const { data: senders, error: sErr } = await supabase
         .from("profiles")
-        .select("user_id,display_name,constituency_code,avatar_url")
+        .select("user_id,display_name,constituency_name,avatar_url")
         .in("user_id", senderIds.length ? senderIds : ["00000000-0000-0000-0000-000000000000"]);
       if (sErr) throw sErr;
       const senderMap = new Map((senders ?? []).map((s: any) => [s.user_id, s]));
@@ -59,7 +60,7 @@ export function DearColleagueInbox() {
         letter_id: l.letter_id,
         from_user_id: l.sender_user_id,
         from_name: senderMap.get(l.sender_user_id)?.display_name ?? "Unknown",
-        from_district: senderMap.get(l.sender_user_id)?.constituency_code ?? null,
+        from_district: senderMap.get(l.sender_user_id)?.constituency_name ?? null,
         from_avatar: senderMap.get(l.sender_user_id)?.avatar_url ?? null,
         subject: l.subject || "(No subject)",
         body: l.body,
@@ -119,11 +120,21 @@ export function DearColleagueInbox() {
       <Navigation />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-6">
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
           <h1 className="text-3xl font-bold text-gray-900">Dear Colleague Letters</h1>
           <p className="text-gray-600 mt-1">
             Read letters from your fellow representatives{unreadCount ? ` â€¢ ${unreadCount} unread` : ""}
           </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate("/dear-colleague/compose")}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium shadow-sm"
+          >
+            <PenSquare className="w-4 h-4" />
+            Compose Letter
+          </button>
         </div>
 
         {loading ? (
@@ -185,7 +196,7 @@ export function DearColleagueInbox() {
                       <Link to={`/profile/${selected.from_user_id}`} className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors">
                         {selected.from_name}
                       </Link>
-                      <p className="text-sm text-gray-600">{selected.from_district || "N/A"}</p>
+                      <p className="text-sm text-gray-600">{formatConstituency(selected.from_district)}</p>
                       <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                         <Calendar className="w-3 h-3" />
                         <span>{formatDate(selected.created_at)}</span>

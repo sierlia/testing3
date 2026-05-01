@@ -46,6 +46,7 @@ import { TeacherBillSorting } from "./pages/TeacherBillSorting";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { JoinClassPage } from "./pages/JoinClassPage";
 import { PartiesPage } from "./pages/PartiesPage";
+import { PartyDetail } from "./pages/PartyDetail";
 import { CommitteesHome } from "./pages/CommitteesHome";
 import { CommitteeDashboard } from "./pages/CommitteeDashboard";
 import { ClassSimulationDashboard } from "./pages/ClassSimulationDashboard";
@@ -106,6 +107,10 @@ export const router = createHashRouter([
   {
     path: "/parties",
     Component: PartiesPage,
+  },
+  {
+    path: "/parties/:id",
+    Component: PartyDetail,
   },
   {
     path: "/committees",
