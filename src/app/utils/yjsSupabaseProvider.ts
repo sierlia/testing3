@@ -34,6 +34,7 @@ export class YjsSupabaseProvider {
   private onSynced?: () => void;
   private hadSnapshot = false;
   private isSubscribed = false;
+  private pendingSends: Array<{ event: string; b64: string; extra?: Record<string, any> }> = [];
 
   constructor({ doc, awareness, key, user }: { doc: Y.Doc; awareness: Awareness; key: DocKey; user: { id: string; name: string; color: string } }, onSynced?: () => void) {
     this.doc = doc;
@@ -41,7 +42,7 @@ export class YjsSupabaseProvider {
     this.key = key;
     this.onSynced = onSynced;
 
-    this.channel = supabase.channel(`doc:${key.committeeId}:${key.billId}`, { config: { broadcast: { ack: false } } });
+    this.channel = supabase.channel(`doc:${key.committeeId}:${key.billId}`, { config: { broadcast: { ack: true } } });
 
     this.awareness.setLocalStateField("user", { id: user.id, name: user.name, color: user.color });
 
@@ -77,11 +78,15 @@ export class YjsSupabaseProvider {
         if (this.destroyed) return;
         this.isSubscribed = true;
         this.hadSnapshot = await this.hydrateFromDb();
+        // Flush any queued broadcasts that happened before subscription.
+        for (const msg of this.pendingSends.splice(0, this.pendingSends.length)) {
+          void this.sendBroadcast(msg.event, msg.b64, msg.extra);
+        }
         // Broadcast full state so other connected clients converge even if their
         // DB hydration was blocked/stale or they joined simultaneously.
         try {
           const full = Y.encodeStateAsUpdate(this.doc);
-          this.channel.send({ type: "broadcast", event: "yjs-sync", payload: { b64: toBase64(full) } });
+          void this.sendBroadcast("yjs-sync", toBase64(full));
         } catch {
           // ignore
         }
@@ -93,7 +98,7 @@ export class YjsSupabaseProvider {
       if (this.destroyed) return;
       // Ignore updates applied by this provider (i.e. remote updates).
       if (origin !== this) {
-        this.channel.send({ type: "broadcast", event: "yjs-update", payload: { b64: toBase64(update) } });
+        void this.sendBroadcast("yjs-update", toBase64(update));
       }
       // Persist on both local and remote updates for robustness
       this.schedulePersist();
@@ -108,7 +113,20 @@ export class YjsSupabaseProvider {
   private broadcastAwareness() {
     const local = this.awareness.getLocalState();
     const update = encodeAwarenessUpdate(this.awareness, [this.doc.clientID]);
-    this.channel.send({ type: "broadcast", event: "yjs-awareness", payload: { b64: toBase64(update), state: local ?? null } });
+    void this.sendBroadcast("yjs-awareness", toBase64(update), { state: local ?? null });
+  }
+
+  private async sendBroadcast(event: string, b64: string, extra?: Record<string, any>) {
+    if (this.destroyed) return;
+    if (!this.isSubscribed) {
+      this.pendingSends.push({ event, b64, extra });
+      return;
+    }
+    const resp = await this.channel.send({ type: "broadcast", event, payload: { b64, ...(extra ?? {}) } });
+    if ((resp as any)?.status && (resp as any).status !== "ok") {
+      // eslint-disable-next-line no-console
+      console.warn("yjs broadcast send failed", event, resp);
+    }
   }
 
   private schedulePersist() {
@@ -129,7 +147,9 @@ export class YjsSupabaseProvider {
     if (b64) {
       this.lastPersistedB64 = b64;
       const update = fromBase64(b64);
-      if (update.length) Y.applyUpdate(this.doc, update, "remote");
+      // Tag hydration update as provider-origin so we don't re-broadcast it as "local"
+      // which can cause reload to overwrite other clients.
+      if (update.length) Y.applyUpdate(this.doc, update, this);
       return update.length > 0;
     }
     return false;
