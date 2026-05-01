@@ -41,6 +41,35 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+/* Tiptap collaboration cursors (Google Docs-like) */
+.collaboration-cursor__caret {
+  position: relative;
+  border-left-width: 2px;
+  border-left-style: solid;
+  margin-left: -1px;
+  margin-right: -1px;
+  pointer-events: none;
+}
+
+.collaboration-cursor__label {
+  position: absolute;
+  top: -1.25rem;
+  left: -1px;
+  transform: translateX(-2px);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1;
+  color: white;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 120ms ease-in-out;
+}
+
+.collaboration-cursor__caret:hover .collaboration-cursor__label {
+  opacity: 1;
+}
+
 .dark {
   --background: oklch(0.145 0 0);
   --foreground: oklch(0.985 0 0);

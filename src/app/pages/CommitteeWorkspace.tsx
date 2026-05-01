@@ -33,14 +33,17 @@ export function CommitteeWorkspace() {
         const uid = auth.user?.id;
         if (!uid) return;
 
-        const { data: prof, error: pErr } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
-        if (pErr) throw pErr;
-        const cid = (prof as any)?.class_id ?? null;
-        setClassId(cid);
-        if (!cid) return;
-
-        const { data: committee } = await supabase.from("committees").select("name").eq("id", committeeId).maybeSingle();
+        // Derive the class from the committee so deep-links/reloads still have a working my_class_id().
+        const { data: committee, error: cErr } = await supabase.from("committees").select("name,class_id").eq("id", committeeId).maybeSingle();
+        if (cErr) throw cErr;
+        const cid = (committee as any)?.class_id ?? null;
         setCommitteeName((committee as any)?.name ?? "Committee");
+        setClassId(cid);
+        if (cid) {
+          const desiredRole = (auth.user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
+          await supabase.from("profiles").upsert({ user_id: uid, class_id: cid, role: desiredRole, display_name: auth.user?.user_metadata?.name ?? null } as any);
+        }
+        if (!cid) return;
 
         const { data: refs, error: rErr } = await supabase.from("bill_referrals").select("bill_id").eq("committee_id", committeeId);
         if (rErr) throw rErr;
@@ -156,4 +159,3 @@ export function CommitteeWorkspace() {
     </div>
   );
 }
-
