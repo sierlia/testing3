@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Plus, Users, Copy, Check } from 'lucide-react';
+import { Card, CardContent } from '../components/ui/card';
+import { Plus, Users, Copy, Check, ExternalLink } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 import { Navigation } from '../components/Navigation';
@@ -132,21 +132,23 @@ export function TeacherDashboard() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
             {classes.map((classItem) => (
-              <Card key={classItem.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <CardTitle>{classItem.name}</CardTitle>
-                  <CardDescription>
-                    Created {new Date(classItem.created_at).toLocaleDateString()}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
+              <div key={classItem.id} className="flex flex-col gap-4 border-b border-gray-200 p-4 last:border-b-0 md:flex-row md:items-center md:justify-between">
+                <div className="min-w-0">
+                  <h3 className="truncate text-lg font-semibold text-gray-900">{classItem.name}</h3>
+                  <p className="text-sm text-gray-500">Created {new Date(classItem.created_at).toLocaleDateString()}</p>
+                  <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+                    <Users className="w-4 h-4" />
+                    <span>{classItem.student_count} students enrolled</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  <div className="flex items-center justify-between rounded-md bg-blue-50 px-3 py-2">
                       <div>
                         <p className="text-xs text-gray-600 mb-1">Join Code</p>
-                        <p className="text-2xl font-bold text-blue-600 font-mono">
+                        <p className="font-mono text-xl font-bold text-blue-600">
                           {classItem.class_code}
                         </p>
                       </div>
@@ -161,28 +163,21 @@ export function TeacherDashboard() {
                           <Copy className="w-4 h-4" />
                         )}
                       </Button>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Users className="w-4 h-4" />
-                      <span>{classItem.student_count} students enrolled</span>
-                    </div>
-
-                    <div>
-                      <Button
-                        size="sm"
-                        className="w-full"
-                        onClick={async () => {
-                          await setActiveClass(classItem.id);
-                          navigate(`/teacher/class/${classItem.id}`);
-                        }}
-                      >
-                        Open
-                      </Button>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
+
+                  <Button
+                    size="sm"
+                    className="sm:w-28"
+                    onClick={async () => {
+                      await setActiveClass(classItem.id);
+                      navigate(`/teacher/class/${classItem.id}`);
+                    }}
+                  >
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Open
+                  </Button>
+                </div>
+              </div>
             ))}
           </div>
         )}

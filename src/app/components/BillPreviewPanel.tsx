@@ -72,22 +72,22 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
         <h3 className="font-semibold">{bill.title}</h3>
       </div>
 
-      {/* Content */}
       <div className="p-4 space-y-4">
-        {/* Status and Hold */}
-        <div className="flex flex-wrap items-center gap-2">
-          <span className={`text-xs px-2 py-1 rounded font-medium ${getStatusColor(bill.status)}`}>
-            {statusLabel(bill.status)}
-          </span>
-          {bill.hasHold && (
-            <span className="text-xs px-2 py-1 rounded font-medium bg-amber-100 text-amber-700">
-              Hold
-            </span>
-          )}
-        </div>
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-xs">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            {bill.status !== "submitted" && (
+              <span className={`rounded px-2 py-1 font-medium ${getStatusColor(bill.status)}`}>
+                {statusLabel(bill.status)}
+              </span>
+            )}
+            {bill.hasHold && (
+              <span className="rounded bg-amber-100 px-2 py-1 font-medium text-amber-700">
+                Hold
+              </span>
+            )}
+          </div>
 
-        {/* Metadata */}
-        <div className="space-y-2 text-sm">
+          <div className="space-y-1.5">
           <div className="flex items-center gap-2 text-gray-600">
             <User className="w-4 h-4" />
             <span className="font-medium">Sponsor:</span>
@@ -113,6 +113,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
           <div className="text-gray-600">
             <span className="font-medium">Cosponsors:</span> {bill.cosponsorCount ?? 0}
           </div>
+          </div>
         </div>
 
         {/* Tags */}
@@ -130,7 +131,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
         <div>
           <h4 className="text-sm font-semibold text-gray-900 mb-2">Legislative Text</h4>
           <div 
-            className="text-sm text-gray-600 line-clamp-4"
+            className="max-h-[520px] overflow-hidden text-sm leading-6 text-gray-700"
             dangerouslySetInnerHTML={{ __html: bill.legislativeText }}
           />
         </div>

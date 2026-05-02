@@ -12,7 +12,6 @@ import {
   MessageSquare,
   TrendingUp,
   Clock,
-  CheckCircle2,
   AlertCircle,
   Plus,
   Settings,
@@ -44,7 +43,6 @@ export function ClassDashboard() {
   const [studentCount, setStudentCount] = useState<number>(0);
   const [recentActivity, setRecentActivity] = useState<StudentActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
-  const [stats, setStats] = useState({ activeBills: 0, completedVotes: 0, activeCommittees: 0, upcomingDeadlines: 0 });
 
   useEffect(() => {
     const setActive = async () => {
@@ -86,17 +84,6 @@ export function ClassDashboard() {
           type: "deadline",
         }));
         setUpcomingEvents(events);
-
-        const [{ count: billsCount }, { count: committeesCount }] = await Promise.all([
-          supabase.from("bills").select("id", { count: "exact", head: true }).eq("class_id", classId),
-          supabase.from("committees").select("id", { count: "exact", head: true }).eq("class_id", classId),
-        ]);
-        setStats({
-          activeBills: billsCount ?? 0,
-          completedVotes: 0,
-          activeCommittees: committeesCount ?? 0,
-          upcomingDeadlines: events.length,
-        });
 
         const [committeeRows, caucusRows] = await Promise.all([
           supabase.from("committees").select("id,name").eq("class_id", classId),
@@ -260,6 +247,51 @@ export function ClassDashboard() {
     }
   };
 
+  const primaryActions = [
+    {
+      label: "Student Roster",
+      description: "Review students, profiles, and enrollment.",
+      href: `/teacher/class/${classId}/manage`,
+      icon: Users,
+    },
+    {
+      label: "Simulation Settings",
+      description: "Configure class rules, elections, floor, and notifications.",
+      href: "/teacher/setup",
+      icon: Settings,
+    },
+  ];
+
+  const actionSections = [
+    {
+      title: "Legislation",
+      actions: [
+        { label: "Calendar Bills", href: "/calendar", icon: CalendarIcon },
+        { label: "Floor Session", href: "/floor-session", icon: Gavel },
+        { label: "Review Bills", href: "/bills", icon: FileText },
+        { label: "Sort Bills into Committees", href: "/teacher/bill-sorting", icon: FileText },
+      ],
+    },
+    {
+      title: "Organizations",
+      actions: [
+        { label: "Committee Assignments", href: "/teacher/committee-assignments", icon: BookOpen },
+        { label: "Elections", href: "/elections", icon: Vote },
+      ],
+    },
+    {
+      title: "Class Operations",
+      actions: [
+        { label: "Admin Settings", href: "/teacher/admin", icon: Settings },
+        { label: "Curriculum Resources", href: "/resources", icon: BookOpen },
+        { label: "Manage Deadlines", href: "/teacher/deadlines", icon: Bell },
+      ],
+    },
+  ].map((section) => ({
+    ...section,
+    actions: [...section.actions].sort((a, b) => a.label.localeCompare(b.label)),
+  }));
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -274,63 +306,23 @@ export function ClassDashboard() {
           )}
           <p className="text-sm text-gray-600 mt-1">{studentCount} students enrolled</p>
         </div>
-        {/* Stats Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Active Bills</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.activeBills}</p>
+        <div className="grid gap-4 md:grid-cols-2 mb-8">
+          {primaryActions.map((action) => {
+            const Icon = action.icon;
+            return (
+              <Link key={action.label} to={action.href} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50">
+                <div className="flex items-start gap-4">
+                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">{action.label}</h2>
+                    <p className="mt-1 text-sm text-gray-600">{action.description}</p>
+                  </div>
                 </div>
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <FileText className="w-6 h-6 text-blue-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Completed Votes</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.completedVotes}</p>
-                </div>
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <CheckCircle2 className="w-6 h-6 text-green-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Active Committees</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.activeCommittees}</p>
-                </div>
-                <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center">
-                  <BookOpen className="w-6 h-6 text-orange-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-gray-600">Upcoming Deadlines</p>
-                  <p className="text-2xl font-bold text-gray-900 mt-1">{stats.upcomingDeadlines}</p>
-                </div>
-                <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                  <Clock className="w-6 h-6 text-red-600" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </Link>
+            );
+          })}
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
@@ -420,79 +412,28 @@ export function ClassDashboard() {
           <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Quick Actions</CardTitle>
-                <CardDescription>Manage class components</CardDescription>
+                <CardTitle>Actions</CardTitle>
+                <CardDescription>Sorted by workflow area</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-2">
-                <Link to={`/teacher/class/${classId}/manage`}>
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <Users className="w-4 h-4 mr-2" />
-                    Student Roster
-                  </Button>
-                </Link>
-                <Link to="/teacher/committee-assignments">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <BookOpen className="w-4 h-4 mr-2" />
-                    Committee Assignments
-                  </Button>
-                </Link>
-                <Link to="/bills">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Review Bills
-                  </Button>
-                </Link>
-                <Link to="/teacher/bill-sorting">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <FileText className="w-4 h-4 mr-2" />
-                    Sort Bills into Committees
-                  </Button>
-                </Link>
-                <Link to="/elections">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <Vote className="w-4 h-4 mr-2" />
-                    Manage Elections
-                  </Button>
-                </Link>
-                <Link to="/floor-session">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <Gavel className="w-4 h-4 mr-2" />
-                    Floor Session
-                  </Button>
-                </Link>
-                <Link to="/teacher/setup">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <Settings className="w-4 h-4 mr-2" />
-                    Setup & Configuration
-                  </Button>
-                </Link>
-                <Link to="/teacher/deadlines">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <Bell className="w-4 h-4 mr-2" />
-                    Manage Deadlines
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Resources</CardTitle>
-                <CardDescription>Teaching materials</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2">
-                <Link to="/resources">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <BookOpen className="w-4 h-4 mr-2" />
-                    Curriculum Resources
-                  </Button>
-                </Link>
-                <Link to="/teacher/admin">
-                  <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
-                    <Settings className="w-4 h-4 mr-2" />
-                    Admin Settings
-                  </Button>
-                </Link>
+              <CardContent className="space-y-5">
+                {actionSections.map((section) => (
+                  <div key={section.title}>
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{section.title}</h3>
+                    <div className="space-y-2">
+                      {section.actions.map((action) => {
+                        const Icon = action.icon;
+                        return (
+                          <Link key={action.label} to={action.href}>
+                            <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
+                              <Icon className="w-4 h-4 mr-2" />
+                              {action.label}
+                            </Button>
+                          </Link>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
               </CardContent>
             </Card>
           </div>

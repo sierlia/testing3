@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { ArrowUpDown, ExternalLink, Eye, FileText, Plus, Search } from "lucide-react";
+import { Check, Circle, Clock, ExternalLink, Eye, FileText, Plus, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BillPreviewPanel } from "../components/BillPreviewPanel";
 import { fetchBillsForCurrentClass } from "../services/bills";
@@ -59,6 +59,40 @@ function statusClass(status: string) {
 
 function sponsorDescriptor(bill: BillView) {
   return `Rep.-${partyAbbr(bill.sponsorParty)}-${bill.sponsorDistrict || "N/A"}`;
+}
+
+function billTrackerSteps(bill: BillView) {
+  const status = bill.status;
+  const referred = Boolean(bill.committee) || ["in_committee", "reported", "calendared", "floor", "passed", "failed"].includes(status);
+  const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
+  const calendared = ["calendared", "floor", "passed", "failed"].includes(status);
+  const floor = ["floor", "passed", "failed"].includes(status);
+  const final = ["passed", "failed"].includes(status);
+  return [
+    { label: "Introduced", done: true, current: status === "submitted" },
+    { label: bill.committee ? "Referred" : "Committee", done: referred, current: status === "in_committee" },
+    { label: "Reported", done: reported, current: status === "reported" },
+    { label: "Calendared", done: calendared, current: status === "calendared" },
+    { label: "Floor", done: floor, current: status === "floor" },
+    { label: final && status === "failed" ? "Failed" : "Passed", done: final, current: final },
+  ];
+}
+
+function BillTracker({ bill }: { bill: BillView }) {
+  const steps = billTrackerSteps(bill);
+  return (
+    <div className="mt-3 grid grid-cols-6 gap-1.5">
+      {steps.map((step) => (
+        <div key={step.label} className="min-w-0">
+          <div className={`h-1.5 rounded-full ${step.done ? "bg-blue-600" : step.current ? "bg-blue-300" : "bg-gray-200"}`} />
+          <div className={`mt-1 flex items-center gap-1 truncate text-[11px] ${step.done || step.current ? "text-gray-700" : "text-gray-400"}`}>
+            {step.done ? <Check className="h-3 w-3 flex-shrink-0" /> : step.current ? <Clock className="h-3 w-3 flex-shrink-0" /> : <Circle className="h-3 w-3 flex-shrink-0" />}
+            <span className="truncate">{step.label}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const toBillView = (bill: BillRecord): BillView => ({
@@ -184,7 +218,17 @@ export function TessBills() {
             <h1 className="text-3xl font-bold text-gray-900 mb-2">All Bills</h1>
             <p className="text-gray-600">{filteredBills.length} bills found</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="flex rounded-md border border-gray-300 bg-white p-1 shadow-sm">
+              <button type="button" onClick={() => setRowMode("preview")} className={`flex items-center justify-center gap-1 rounded px-3 py-1.5 text-sm font-medium ${rowMode === "preview" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
+                <Eye className="h-4 w-4" />
+                Preview
+              </button>
+              <button type="button" onClick={() => setRowMode("open")} className={`flex items-center justify-center gap-1 rounded px-3 py-1.5 text-sm font-medium ${rowMode === "open" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
+                <ExternalLink className="h-4 w-4" />
+                Open
+              </button>
+            </div>
             {isTeacher && (
               <Link to="/teacher/bill-sorting" className="rounded-md border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
                 Sort into Committees
@@ -198,7 +242,7 @@ export function TessBills() {
         </div>
 
         <div className="mb-4 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_150px_180px_180px_180px_160px_160px]">
+          <div className="space-y-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
               <input
@@ -206,51 +250,37 @@ export function TessBills() {
                 placeholder="Search number, title, sponsor, cosponsor, committee..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-md border border-gray-300 py-2 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full rounded-md border border-gray-300 py-3 pl-10 pr-3 text-base outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
-              <option value="all">All statuses</option>
-              {statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
-            </select>
-            <select value={filters.committee} onChange={(e) => setFilters({ ...filters, committee: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
-              <option value="all">All committees</option>
-              {committeeOptions.map((committee) => <option key={committee} value={committee}>{committee}</option>)}
-            </select>
-            <select value={filters.sponsorId} onChange={(e) => setFilters({ ...filters, sponsorId: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
-              <option value="all">All sponsors</option>
-              {sponsorOptions.map((sponsor) => <option key={sponsor.id} value={sponsor.id}>{sponsor.name}</option>)}
-            </select>
-            <select value={filters.cosponsorId} onChange={(e) => setFilters({ ...filters, cosponsorId: e.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
-              <option value="all">All cosponsors</option>
-              {cosponsorOptions.map((cosponsor) => <option key={cosponsor.id} value={cosponsor.id}>{cosponsor.name}</option>)}
-            </select>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
-              <option value="number">Bill number</option>
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="title">Title</option>
-              <option value="sponsor">Sponsor</option>
-              <option value="status">Status</option>
-              <option value="cosponsors">Cosponsors</option>
-            </select>
-            <div className="flex rounded-md border border-gray-300 bg-white p-1">
-              <button type="button" onClick={() => setRowMode("preview")} className={`flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-sm font-medium ${rowMode === "preview" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
-                <Eye className="h-4 w-4" />
-                Preview
-              </button>
-              <button type="button" onClick={() => setRowMode("open")} className={`flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-sm font-medium ${rowMode === "open" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
-                <ExternalLink className="h-4 w-4" />
-                Open
-              </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
+                <option value="all">All statuses</option>
+                {statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
+              </select>
+              <select value={filters.committee} onChange={(e) => setFilters({ ...filters, committee: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
+                <option value="all">All committees</option>
+                {committeeOptions.map((committee) => <option key={committee} value={committee}>{committee}</option>)}
+              </select>
+              <select value={filters.sponsorId} onChange={(e) => setFilters({ ...filters, sponsorId: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
+                <option value="all">All sponsors</option>
+                {sponsorOptions.map((sponsor) => <option key={sponsor.id} value={sponsor.id}>{sponsor.name}</option>)}
+              </select>
+              <select value={filters.cosponsorId} onChange={(e) => setFilters({ ...filters, cosponsorId: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
+                <option value="all">All cosponsors</option>
+                {cosponsorOptions.map((cosponsor) => <option key={cosponsor.id} value={cosponsor.id}>{cosponsor.name}</option>)}
+              </select>
+              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
+                <option value="number">Sort: Bill number</option>
+                <option value="newest">Sort: Newest</option>
+                <option value="oldest">Sort: Oldest</option>
+                <option value="title">Sort: Title</option>
+                <option value="sponsor">Sort: Sponsor</option>
+                <option value="status">Sort: Status</option>
+                <option value="cosponsors">Sort: Cosponsors</option>
+              </select>
+              <button onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
             </div>
-          </div>
-          <div className="mt-3 flex items-center justify-between text-xs text-gray-500">
-            <div className="flex items-center gap-1">
-              <ArrowUpDown className="h-3.5 w-3.5" />
-              Filtering and sorting apply to this class only.
-            </div>
-            <button onClick={resetFilters} className="font-medium text-blue-600 hover:text-blue-700">Reset</button>
           </div>
         </div>
 
@@ -278,7 +308,7 @@ export function TessBills() {
                         <div className="min-w-0 flex-1">
                           <div className="mb-2 flex flex-wrap items-center gap-2">
                             <span className="font-mono text-sm font-semibold text-gray-900">{bill.number}</span>
-                            <span className={`rounded px-2 py-1 text-xs font-medium ${statusClass(bill.status)}`}>{statusLabel(bill.status)}</span>
+                            {bill.status !== "submitted" && <span className={`rounded px-2 py-1 text-xs font-medium ${statusClass(bill.status)}`}>{statusLabel(bill.status)}</span>}
                             {bill.committee && <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{bill.committee}</span>}
                           </div>
                           <h2 className="mb-2 text-base font-semibold text-gray-900">{bill.title}</h2>
@@ -297,6 +327,7 @@ export function TessBills() {
                             <span className="text-gray-300">|</span>
                             <span>{bill.cosponsorCount} cosponsor{bill.cosponsorCount === 1 ? "" : "s"}</span>
                           </div>
+                          <BillTracker bill={bill} />
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-2 text-gray-400">
                           {rowMode === "preview" ? <FileText className="h-4 w-4" /> : <ExternalLink className="h-4 w-4" />}

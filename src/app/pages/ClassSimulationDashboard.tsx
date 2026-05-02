@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { AnnouncementsFeed } from "../components/AnnouncementsFeed";
 import { QuickLinks } from "../components/QuickLinks";
@@ -31,6 +32,8 @@ export function ClassSimulationDashboard() {
   const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
   const [myBills, setMyBills] = useState<BillRecord[]>([]);
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; bill_id: string; scheduled_at: string; duration_minutes: number; bill: BillRecord }>>([]);
+  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => new Date());
 
   useEffect(() => {
     const load = async () => {
@@ -182,7 +185,7 @@ export function ClassSimulationDashboard() {
         if ((pRow as any)?.role !== "teacher") {
           const [mine, calendar] = await Promise.all([fetchMyBillsForCurrentClass(), fetchCalendaredBillsForCurrentClass()]);
           setMyBills(mine.slice(0, 12));
-          setCalendarItems(calendar.slice(0, 8));
+          setCalendarItems(calendar);
         }
       } catch (e: any) {
         toast.error(e.message || "Could not load dashboard");
@@ -205,6 +208,32 @@ export function ClassSimulationDashboard() {
   );
 
   const statusLabel = (value: string) => value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+  const dateKey = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+  const selectedDateKey = dateKey(selectedCalendarDate);
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, typeof calendarItems>();
+    for (const item of calendarItems) {
+      const key = dateKey(new Date(item.scheduled_at));
+      map.set(key, [...(map.get(key) ?? []), item]);
+    }
+    return map;
+  }, [calendarItems]);
+  const monthDays = useMemo(() => {
+    const start = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+    const firstGridDay = new Date(start);
+    firstGridDay.setDate(start.getDate() - start.getDay());
+    return Array.from({ length: 42 }, (_, index) => {
+      const day = new Date(firstGridDay);
+      day.setDate(firstGridDay.getDate() + index);
+      return day;
+    });
+  }, [calendarMonth]);
+  const selectedEvents = eventsByDay.get(selectedDateKey) ?? [];
 
   if (loading) {
     return (
@@ -229,38 +258,6 @@ export function ClassSimulationDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <AnnouncementsFeed announcements={announcements} />
-
-            {profile?.role !== "teacher" && (
-              <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="mb-4 flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Floor Calendar</h2>
-                    <p className="text-sm text-gray-600">Calendared bills scheduled for floor debate</p>
-                  </div>
-                  <Link to="/calendar" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-                    Full calendar
-                  </Link>
-                </div>
-                {calendarItems.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-500">No bills are calendared yet.</div>
-                ) : (
-                  <div className="space-y-3">
-                    {calendarItems.map((item) => (
-                      <Link key={item.id} to={`/bills/${item.bill_id}`} className="flex items-center justify-between gap-4 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
-                        <div className="min-w-0">
-                          <div className="font-mono text-sm font-semibold text-gray-900">{item.bill.hr_label}</div>
-                          <div className="truncate text-sm text-gray-700">{item.bill.title}</div>
-                        </div>
-                        <div className="flex-shrink-0 text-right text-xs text-gray-500">
-                          <div>{new Date(item.scheduled_at).toLocaleDateString()}</div>
-                          <div>{new Date(item.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div>
-                        </div>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </section>
-            )}
 
             {profile?.role !== "teacher" && (
               <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -293,6 +290,91 @@ export function ClassSimulationDashboard() {
                     ))}
                   </div>
                 )}
+              </section>
+            )}
+
+            {profile?.role !== "teacher" && (
+              <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Floor Calendar</h2>
+                    <p className="text-sm text-gray-600">Calendared bills scheduled for floor debate</p>
+                  </div>
+                  <Link to="/calendar" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                    Full calendar
+                  </Link>
+                </div>
+                <div className="rounded-md border border-gray-200">
+                  <div className="flex items-center justify-between border-b border-gray-200 p-3">
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
+                      className="rounded p-1 text-gray-600 hover:bg-gray-100"
+                      aria-label="Previous month"
+                    >
+                      <ChevronLeft className="h-5 w-5" />
+                    </button>
+                    <div className="font-semibold text-gray-900">
+                      {calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
+                      className="rounded p-1 text-gray-600 hover:bg-gray-100"
+                      aria-label="Next month"
+                    >
+                      <ChevronRight className="h-5 w-5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
+                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                      <div key={day} className="py-2">{day}</div>
+                    ))}
+                  </div>
+                  <div className="grid grid-cols-7">
+                    {monthDays.map((day) => {
+                      const key = dateKey(day);
+                      const hasEvents = Boolean(eventsByDay.get(key)?.length);
+                      const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                      const isSelected = key === selectedDateKey;
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => setSelectedCalendarDate(day)}
+                          className={`min-h-14 border-b border-r border-gray-100 p-1.5 text-left text-xs transition-colors last:border-r-0 ${
+                            isSelected ? "bg-blue-100 text-blue-900" : hasEvents ? "bg-blue-50 text-gray-900 hover:bg-blue-100" : "hover:bg-gray-50"
+                          } ${isCurrentMonth ? "" : "text-gray-300"}`}
+                        >
+                          <span className="font-medium">{day.getDate()}</span>
+                          {hasEvents && <div className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-600" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <h3 className="mb-2 text-sm font-semibold text-gray-900">
+                    {selectedCalendarDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
+                  </h3>
+                  {selectedEvents.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">Nothing calendared for this day.</div>
+                  ) : (
+                    <div className="space-y-2">
+                      {selectedEvents.map((item) => (
+                        <Link key={item.id} to={`/bills/${item.bill_id}`} className="flex items-center justify-between gap-4 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
+                          <div className="min-w-0">
+                            <div className="font-mono text-sm font-semibold text-gray-900">{item.bill.hr_label}</div>
+                            <div className="truncate text-sm text-gray-700">{item.bill.title}</div>
+                          </div>
+                          <div className="flex-shrink-0 text-xs text-gray-500">
+                            {new Date(item.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </section>
             )}
           </div>
