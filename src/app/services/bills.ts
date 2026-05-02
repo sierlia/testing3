@@ -23,16 +23,39 @@ export async function fetchBillsForCurrentClass() {
     .order('bill_number', { ascending: true });
   if (error) throw error;
 
+  const billIds = (data ?? []).map((b: any) => b.id);
+  const { data: cosponsorRows, error: cosponsorError } = billIds.length
+    ? await supabase.from('bill_cosponsors').select('bill_id,user_id').in('bill_id', billIds)
+    : ({ data: [] } as any);
+  if (cosponsorError) throw cosponsorError;
+
+  const { data: referralRows, error: referralError } = billIds.length
+    ? await supabase.from('bill_referrals').select('bill_id,committees(name)').eq('class_id', classId).in('bill_id', billIds)
+    : ({ data: [] } as any);
+  if (referralError) throw referralError;
+
   const authorIds = [...new Set((data ?? []).map((b: any) => b.author_user_id))];
+  const cosponsorIds = [...new Set((cosponsorRows ?? []).map((r: any) => r.user_id))];
+  const profileIds = [...new Set([...authorIds, ...cosponsorIds])];
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('user_id, display_name, party')
-    .in('user_id', authorIds);
+    .select('user_id, display_name, party, constituency_name')
+    .in('user_id', profileIds.length ? profileIds : ['00000000-0000-0000-0000-000000000000']);
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+  const cosponsorsByBill = new Map<string, any[]>();
+  for (const row of cosponsorRows ?? []) {
+    const billId = (row as any).bill_id as string;
+    const profile = profileMap.get((row as any).user_id);
+    cosponsorsByBill.set(billId, [...(cosponsorsByBill.get(billId) ?? []), profile ?? { user_id: (row as any).user_id, display_name: 'Unknown', party: null }]);
+  }
+  const committeeByBill = new Map((referralRows ?? []).map((r: any) => [r.bill_id, r.committees?.name ?? null]));
 
   return (data ?? []).map((b: any) => ({
     ...b,
     profiles: profileMap.get(b.author_user_id) ?? null,
+    committee_name: committeeByBill.get(b.id) ?? null,
+    cosponsor_count: cosponsorsByBill.get(b.id)?.length ?? 0,
+    cosponsors: cosponsorsByBill.get(b.id) ?? [],
   })) as BillRecord[];
 }
 

@@ -10,7 +10,17 @@ export interface BillRecord {
   author_user_id: string;
   class_id?: string;
   profiles?: {
+    user_id?: string;
     display_name: string | null;
     party: string | null;
+    constituency_name?: string | null;
   } | null;
+  committee_name?: string | null;
+  cosponsor_count?: number;
+  cosponsors?: Array<{
+    user_id: string;
+    display_name: string | null;
+    party: string | null;
+    constituency_name?: string | null;
+  }>;
 }
