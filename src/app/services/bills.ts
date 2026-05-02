@@ -195,3 +195,97 @@ export async function toggleCosponsor(billId: string, shouldCosponsor: boolean) 
     if (error) throw error;
   }
 }
+
+export async function getCurrentProfileClass() {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new Error('Not signed in');
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('class_id,role,display_name,party')
+    .eq('user_id', me)
+    .maybeSingle();
+  if (error) throw error;
+  const classId = (profile as any)?.class_id as string | null;
+  if (!classId) throw new Error('Select a class first');
+  return { userId: me, classId, profile: profile as any };
+}
+
+export async function fetchCalendaredBillsForCurrentClass() {
+  const { classId } = await getCurrentProfileClass();
+  const { data: rows, error } = await supabase
+    .from('bill_calendar')
+    .select('id,bill_id,scheduled_at,duration_minutes,published')
+    .eq('class_id', classId)
+    .eq('published', true)
+    .order('scheduled_at', { ascending: true });
+  if (error) throw error;
+  const billIds = (rows ?? []).map((r: any) => r.bill_id);
+  const { data: bills, error: billError } = await supabase
+    .from('bill_display')
+    .select('id,hr_label,title,status,author_user_id,class_id,created_at,legislative_text,supporting_text,bill_number')
+    .in('id', billIds.length ? billIds : ['00000000-0000-0000-0000-000000000000']);
+  if (billError) throw billError;
+  const billMap = new Map((bills ?? []).map((b: any) => [b.id, b]));
+  const authorIds = Array.from(new Set((bills ?? []).map((b: any) => b.author_user_id).filter(Boolean)));
+  const { data: profiles } = await supabase
+    .from('profiles')
+    .select('user_id,display_name,party')
+    .in('user_id', authorIds.length ? authorIds : ['00000000-0000-0000-0000-000000000000']);
+  const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+  return (rows ?? []).map((r: any) => ({
+    id: r.id as string,
+    bill_id: r.bill_id as string,
+    scheduled_at: r.scheduled_at as string,
+    duration_minutes: r.duration_minutes as number,
+    bill: {
+      ...billMap.get(r.bill_id),
+      profiles: profileMap.get(billMap.get(r.bill_id)?.author_user_id) ?? null,
+    } as BillRecord,
+  })).filter((r) => r.bill?.id);
+}
+
+export async function fetchReportedBillsForTeacherCalendar() {
+  const { classId } = await getCurrentProfileClass();
+  const [{ data: bills, error: bErr }, { data: calendar, error: cErr }, { data: referrals }] = await Promise.all([
+    supabase
+      .from('bill_display')
+      .select('id,hr_label,title,status,created_at,legislative_text,supporting_text,author_user_id,bill_number,class_id')
+      .eq('class_id', classId)
+      .in('status', ['reported', 'calendared', 'floor']),
+    supabase.from('bill_calendar').select('id,bill_id,scheduled_at,duration_minutes,published').eq('class_id', classId),
+    supabase.from('bill_referrals').select('bill_id,committees(name)').eq('class_id', classId),
+  ]);
+  if (bErr) throw bErr;
+  if (cErr) throw cErr;
+  const calendarMap = new Map((calendar ?? []).map((r: any) => [r.bill_id, r]));
+  const committeeMap = new Map((referrals ?? []).map((r: any) => [r.bill_id, r.committees?.name ?? 'Committee']));
+  return (bills ?? []).map((bill: any) => ({
+    ...bill,
+    calendar: calendarMap.get(bill.id) ?? null,
+    committee_name: committeeMap.get(bill.id) ?? '',
+  }));
+}
+
+export async function saveBillCalendarEntry(billId: string, scheduledAt: string, durationMinutes = 30) {
+  const { userId, classId } = await getCurrentProfileClass();
+  const { error } = await supabase.from('bill_calendar').upsert(
+    {
+      class_id: classId,
+      bill_id: billId,
+      scheduled_at: scheduledAt,
+      duration_minutes: durationMinutes,
+      published: true,
+      created_by: userId,
+    } as any,
+    { onConflict: 'class_id,bill_id' },
+  );
+  if (error) throw error;
+  await supabase.from('bills').update({ status: 'calendared' } as any).eq('id', billId).eq('class_id', classId);
+}
+
+export async function reportBillFromCommittee(billId: string) {
+  const { classId } = await getCurrentProfileClass();
+  const { error } = await supabase.from('bills').update({ status: 'reported' } as any).eq('id', billId).eq('class_id', classId);
+  if (error) throw error;
+}

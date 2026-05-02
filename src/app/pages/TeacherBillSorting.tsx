@@ -151,8 +151,8 @@ export function TeacherBillSorting() {
         }
 
         const [{ data: committeeRows, error: cErr }, { data: billRows, error: bErr }, { data: referralRows, error: rErr }] = await Promise.all([
-          supabase.from("committees").select("id,name").order("created_at", { ascending: true }),
-          supabase.from("bill_display").select("id,hr_label,title,legislative_text").order("bill_number", { ascending: true }),
+          supabase.from("committees").select("id,name").eq("class_id", cid).order("created_at", { ascending: true }),
+          supabase.from("bill_display").select("id,hr_label,title,legislative_text").eq("class_id", cid).neq("status", "draft").order("bill_number", { ascending: true }),
           supabase.from("bill_referrals").select("bill_id,committee_id").eq("class_id", cid),
         ]);
         if (cErr) throw cErr;
@@ -199,6 +199,7 @@ export function TeacherBillSorting() {
       if (toDelete.length) {
         const { error: dErr } = await supabase.from("bill_referrals").delete().eq("class_id", classId).in("bill_id", toDelete);
         if (dErr) throw dErr;
+        await supabase.from("bills").update({ status: "submitted" } as any).eq("class_id", classId).in("id", toDelete);
       }
 
       if (assigned.length) {
@@ -211,6 +212,7 @@ export function TeacherBillSorting() {
         }));
         const { error } = await supabase.from("bill_referrals").upsert(rows as any, { onConflict: "bill_id" });
         if (error) throw error;
+        await supabase.from("bills").update({ status: "in_committee" } as any).eq("class_id", classId).in("id", assigned.map((b) => b.id));
       }
 
       toast.success("Bill referrals saved");
@@ -339,4 +341,3 @@ export function TeacherBillSorting() {
     </DndProvider>
   );
 }
-

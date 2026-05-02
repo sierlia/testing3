@@ -30,19 +30,6 @@ export function CreateClassPage() {
     name: '',
     description: '',
     classCode: generateClassCode(),
-    allowedParties: ['Democrat', 'Republican'] as string[],
-    allowStudentCreatedParties: false,
-    committeeAssignmentMode: 'preference',
-    chairElectionMode: 'elected',
-    chairVoteThresholdPct: '50',
-    billTabs: ['legislative text', 'supporting text'] as string[],
-    committees: [
-      'Education Committee',
-      'Environment & Energy Committee',
-      'Healthcare Committee',
-      'Judiciary Committee',
-      'Agriculture Committee',
-    ] as string[],
   });
 
   const canSubmit = useMemo(() => formData.name.trim().length > 0 && formData.classCode.length === 6, [formData]);
@@ -56,21 +43,30 @@ export function CreateClassPage() {
 
       await ensureClassesTableExists();
 
-        const settings = {
-          description: formData.description,
-          parties: {
-            allowed: formData.allowedParties,
-            allowStudentCreated: formData.allowStudentCreatedParties,
-            requireApproval: true,
-          },
-        committees: {
-          enabled: formData.committees,
-          assignmentMode: formData.committeeAssignmentMode,
-          allowSelfJoin: formData.committeeAssignmentMode === 'self-join',
-          chairElectionMode: formData.chairElectionMode,
-          chairVoteThresholdPct: Number(formData.chairVoteThresholdPct),
+      const defaultParties = ['Democrat', 'Republican'];
+      const defaultCommittees = [
+        'Education Committee',
+        'Environment & Energy Committee',
+        'Healthcare Committee',
+        'Judiciary Committee',
+        'Agriculture Committee',
+      ];
+      const settings = {
+        description: formData.description,
+        parties: {
+          allowed: defaultParties,
+          allowStudentCreated: false,
+          requireApproval: true,
         },
-        bills: { tabs: formData.billTabs },
+        committees: {
+          enabled: defaultCommittees,
+          assignmentMode: 'preference',
+          allowSelfJoin: false,
+          chairElectionMode: 'elected',
+          chairVoteThresholdPct: 50,
+        },
+        bills: { tabs: ['legislative text', 'supporting text'], assignmentAuthority: 'teacher' },
+        floor: { binding: true, calendarAutoPublish: true },
       };
 
       const { data: createdClass, error } = await supabase.from('classes').insert({
@@ -91,9 +87,9 @@ export function CreateClassPage() {
       });
 
       // Seed committees and parties from settings so they appear on Organizations pages
-      if (formData.committees.length > 0) {
+      if (defaultCommittees.length > 0) {
         await supabase.from('committees').insert(
-          formData.committees.map((name) => ({
+          defaultCommittees.map((name) => ({
             class_id: createdClass.id,
             name,
             description: '',
@@ -101,9 +97,9 @@ export function CreateClassPage() {
         );
       }
 
-      if (formData.allowedParties.length > 0) {
+      if (defaultParties.length > 0) {
         await supabase.from('parties').insert(
-          formData.allowedParties.map((name) => ({
+          defaultParties.map((name) => ({
             class_id: createdClass.id,
             name,
             platform: '',
@@ -132,14 +128,11 @@ export function CreateClassPage() {
           <div className="space-y-2"><Label htmlFor="description">Description</Label><Textarea id="description" value={formData.description} onChange={(e) => setFormData({ ...formData, description: e.target.value })} rows={3} /></div>
           <div className="space-y-2"><Label>Class Code</Label><div className="flex gap-2"><Input value={formData.classCode} onChange={(e) => setFormData({ ...formData, classCode: e.target.value.toUpperCase().slice(0, 6) })} /><Button type="button" variant="outline" onClick={() => setFormData({ ...formData, classCode: generateClassCode() })}><WandSparkles className="w-4 h-4 mr-2" />Regenerate</Button></div></div>
 
-          <div className="space-y-2"><Label>Allowed Parties (comma-separated)</Label><Input value={formData.allowedParties.join(', ')} onChange={(e) => setFormData({ ...formData, allowedParties: e.target.value.split(',').map(v => v.trim()).filter(Boolean) })} /></div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div><Label>Committee Assignment</Label><select className="mt-1 w-full border rounded-md px-3 py-2" value={formData.committeeAssignmentMode} onChange={(e) => setFormData({ ...formData, committeeAssignmentMode: e.target.value })}><option value="preference">Preference Assigned</option><option value="random">Random</option><option value="self-join">Student Self-Join</option></select></div>
-            <div><Label>Chair Selection</Label><select className="mt-1 w-full border rounded-md px-3 py-2" value={formData.chairElectionMode} onChange={(e) => setFormData({ ...formData, chairElectionMode: e.target.value })}><option value="elected">Member Vote</option><option value="teacher-assigned">Teacher Assigned</option></select></div>
+          <div className="rounded-md border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900">
+            Simulation options are configured after creation from the teacher setup dashboard.
           </div>
 
-          <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => navigate('/teacher/dashboard')} className="flex-1">Cancel</Button><Button type="submit" disabled={loading || !canSubmit} className="flex-1">{loading ? 'Creating...' : 'Create Class & Save Settings'}</Button></div>
+          <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => navigate('/teacher/dashboard')} className="flex-1">Cancel</Button><Button type="submit" disabled={loading || !canSubmit} className="flex-1">{loading ? 'Creating...' : 'Create Class'}</Button></div>
         </form>
       </CardContent></Card></div></main>
     </div>

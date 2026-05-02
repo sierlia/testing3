@@ -4,6 +4,7 @@ import { Building2, Check, ClipboardList, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
+import { Link } from "react-router";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 
 type CommitteeRow = { id: string; name: string; description: string | null; created_at: string };
@@ -173,6 +174,13 @@ export function CommitteesHome() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
+                      <Link
+                        to={`/committee/${c.id}/leadership`}
+                        onClick={(event) => event.stopPropagation()}
+                        className="inline-flex items-center rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Leadership
+                      </Link>
                       {canSelfJoin && (
                         <button
                           onClick={(event) => {

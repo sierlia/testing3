@@ -8,7 +8,7 @@ import { MyStatusCard } from "../components/MyStatusCard";
 import { TeacherAdminShortcuts } from "../components/TeacherAdminShortcuts";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
-import { fetchMyBillsForCurrentClass } from "../services/bills";
+import { fetchCalendaredBillsForCurrentClass, fetchMyBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 
 type Profile = {
@@ -30,6 +30,7 @@ export function ClassSimulationDashboard() {
   const [className, setClassName] = useState("");
   const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
   const [myBills, setMyBills] = useState<BillRecord[]>([]);
+  const [calendarItems, setCalendarItems] = useState<Array<{ id: string; bill_id: string; scheduled_at: string; duration_minutes: number; bill: BillRecord }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -179,7 +180,9 @@ export function ClassSimulationDashboard() {
         window.localStorage.setItem(seenKey, String(Date.now()));
 
         if ((pRow as any)?.role !== "teacher") {
-          setMyBills((await fetchMyBillsForCurrentClass()).slice(0, 12));
+          const [mine, calendar] = await Promise.all([fetchMyBillsForCurrentClass(), fetchCalendaredBillsForCurrentClass()]);
+          setMyBills(mine.slice(0, 12));
+          setCalendarItems(calendar.slice(0, 8));
         }
       } catch (e: any) {
         toast.error(e.message || "Could not load dashboard");
@@ -226,6 +229,38 @@ export function ClassSimulationDashboard() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
             <AnnouncementsFeed announcements={announcements} />
+
+            {profile?.role !== "teacher" && (
+              <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Floor Calendar</h2>
+                    <p className="text-sm text-gray-600">Calendared bills scheduled for floor debate</p>
+                  </div>
+                  <Link to="/calendar" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                    Full calendar
+                  </Link>
+                </div>
+                {calendarItems.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-500">No bills are calendared yet.</div>
+                ) : (
+                  <div className="space-y-3">
+                    {calendarItems.map((item) => (
+                      <Link key={item.id} to={`/bills/${item.bill_id}`} className="flex items-center justify-between gap-4 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
+                        <div className="min-w-0">
+                          <div className="font-mono text-sm font-semibold text-gray-900">{item.bill.hr_label}</div>
+                          <div className="truncate text-sm text-gray-700">{item.bill.title}</div>
+                        </div>
+                        <div className="flex-shrink-0 text-right text-xs text-gray-500">
+                          <div>{new Date(item.scheduled_at).toLocaleDateString()}</div>
+                          <div>{new Date(item.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
 
             {profile?.role !== "teacher" && (
               <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
