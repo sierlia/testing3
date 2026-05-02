@@ -145,17 +145,19 @@ for insert with check (
 
 drop policy if exists "class members read party announcements" on public.party_announcements;
 create policy "class members read party announcements" on public.party_announcements
-for select using (class_id = public.my_class_id());
+for select using (party_announcements.class_id = public.my_class_id());
 
 drop policy if exists "party members post announcements" on public.party_announcements;
 create policy "party members post announcements" on public.party_announcements
 for insert with check (
   author_user_id = auth.uid()
-  and class_id = public.my_class_id()
+  and party_announcements.class_id = public.my_class_id()
   and exists (
     select 1 from public.parties pa
     join public.profiles p on p.user_id = auth.uid()
-    where pa.id = party_id and pa.name = p.party and pa.class_id = class_id
+    where pa.id = party_announcements.party_id
+      and pa.name = p.party
+      and pa.class_id = party_announcements.class_id
   )
 );
 
@@ -188,12 +190,15 @@ drop policy if exists "party members cast leadership votes" on public.party_lead
 create policy "party members cast leadership votes" on public.party_leadership_votes
 for insert with check (
   voter_user_id = auth.uid()
-  and class_id = public.my_class_id()
+  and party_leadership_votes.class_id = public.my_class_id()
   and exists (
     select 1 from public.parties pa
     join public.profiles voter on voter.user_id = auth.uid()
-    join public.profiles candidate on candidate.user_id = candidate_user_id
-    where pa.id = party_id and pa.class_id = class_id and voter.party = pa.name and candidate.party = pa.name
+    join public.profiles candidate on candidate.user_id = party_leadership_votes.candidate_user_id
+    where pa.id = party_leadership_votes.party_id
+      and pa.class_id = party_leadership_votes.class_id
+      and voter.party = pa.name
+      and candidate.party = pa.name
   )
 );
 
@@ -202,12 +207,15 @@ create policy "party members update own leadership votes" on public.party_leader
 for update using (voter_user_id = auth.uid() and class_id = public.my_class_id())
 with check (
   voter_user_id = auth.uid()
-  and class_id = public.my_class_id()
+  and party_leadership_votes.class_id = public.my_class_id()
   and exists (
     select 1 from public.parties pa
     join public.profiles voter on voter.user_id = auth.uid()
-    join public.profiles candidate on candidate.user_id = candidate_user_id
-    where pa.id = party_id and pa.class_id = class_id and voter.party = pa.name and candidate.party = pa.name
+    join public.profiles candidate on candidate.user_id = party_leadership_votes.candidate_user_id
+    where pa.id = party_leadership_votes.party_id
+      and pa.class_id = party_leadership_votes.class_id
+      and voter.party = pa.name
+      and candidate.party = pa.name
   )
 );
 
