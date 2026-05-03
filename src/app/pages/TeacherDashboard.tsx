@@ -13,7 +13,7 @@ interface ClassData {
   class_code: string;
   student_count: number;
   created_at: string;
-  invite_status?: string;
+  invite_status?: "approved" | "invited" | "pending";
 }
 
 export function TeacherDashboard() {
@@ -50,15 +50,20 @@ export function TeacherDashboard() {
             .order('created_at', { ascending: false }),
           supabase
             .from('class_memberships')
-            .select('class_id,status,classes(id,name,class_code,created_at)')
+            .select('class_id,status')
             .eq('user_id', session.user.id)
             .eq('role', 'teacher'),
         ]);
         if (error) throw error;
+        const membershipClassIds = [...new Set((membershipRows ?? []).map((row: any) => row.class_id).filter(Boolean))];
+        const { data: membershipClasses } = membershipClassIds.length
+          ? await supabase.from('classes').select('id,name,class_code,created_at').in('id', membershipClassIds)
+          : ({ data: [] } as any);
+        const membershipClassMap = new Map((membershipClasses ?? []).map((row: any) => [row.id, row]));
         const classMap = new Map<string, any>();
         for (const c of ownedRows ?? []) classMap.set((c as any).id, { ...(c as any), invite_status: "approved" });
         for (const row of membershipRows ?? []) {
-          const cls = (row as any).classes;
+          const cls = membershipClassMap.get((row as any).class_id);
           if (cls) classMap.set(cls.id, { ...cls, invite_status: (row as any).status ?? "approved" });
         }
         const classRows = Array.from(classMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
@@ -119,6 +124,7 @@ export function TeacherDashboard() {
           .eq('user_id', user.id)
       : await supabase.from('class_memberships').delete().eq('class_id', classId).eq('user_id', user.id);
     if (error) return toast.error(error.message || 'Could not update invitation');
+    if (accepted) await setActiveClass(classId);
     toast.success(accepted ? 'Invitation accepted' : 'Invitation declined');
     await loadUserAndClasses();
   };
@@ -193,15 +199,15 @@ export function TeacherDashboard() {
                 key={classItem.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => classItem.invite_status === 'invited' ? undefined : void openClass(classItem.id)}
+                onClick={() => classItem.invite_status === 'approved' ? void openClass(classItem.id) : undefined}
                 onKeyDown={(event) => {
-                  if ((event.key === "Enter" || event.key === " ") && classItem.invite_status !== 'invited') void openClass(classItem.id);
+                  if ((event.key === "Enter" || event.key === " ") && classItem.invite_status === 'approved') void openClass(classItem.id);
                 }}
                 className="flex w-full flex-col gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 hover:bg-gray-50 md:flex-row md:items-center md:justify-between"
               >
                 <div className="min-w-0">
                   <h3 className="truncate text-lg font-semibold text-gray-900">{classItem.name}</h3>
-                  {classItem.invite_status === 'invited' && <p className="mt-1 text-sm font-medium text-blue-700">You have been invited to teach this class.</p>}
+                  {classItem.invite_status !== 'approved' && <p className="mt-1 text-sm font-medium text-blue-700">Pending teacher invitation</p>}
                   <p className="text-sm text-gray-500">Created {new Date(classItem.created_at).toLocaleDateString()}</p>
                   <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
                     <Users className="w-4 h-4" />
@@ -210,7 +216,7 @@ export function TeacherDashboard() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  {classItem.invite_status === 'invited' && (
+                  {classItem.invite_status !== 'approved' && (
                     <div className="flex gap-2">
                       <Button onClick={(event) => { event.stopPropagation(); void updateInvitation(classItem.id, true); }}>Accept</Button>
                       <Button variant="outline" onClick={(event) => { event.stopPropagation(); void updateInvitation(classItem.id, false); }}>Decline</Button>

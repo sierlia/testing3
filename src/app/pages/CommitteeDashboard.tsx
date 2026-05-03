@@ -12,7 +12,7 @@ import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "..
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
-type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null; role?: string | null };
+type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null; role?: string | null; organization_role?: MembershipRole | null };
 
 type Announcement = { id: string; committee_id: string; author_user_id: string; title: string; body: string; created_at: string; author?: ProfileLite | null };
 type Comment = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; parent_comment_id?: string | null; author?: ProfileLite | null };
@@ -45,6 +45,7 @@ function leadershipLabel(role: MembershipRole) {
 }
 
 function authorLinkClass(author: ProfileLite | null | undefined) {
+  if (author?.organization_role && author.organization_role !== "member") return "text-purple-700 hover:underline";
   return author?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline";
 }
 
@@ -186,8 +187,9 @@ export function CommitteeDashboard() {
         const nextMembers = (mRows ?? []).map((m: any) => ({
             user_id: m.user_id,
             role: m.role as MembershipRole,
-            profile: (pMap.get(m.user_id) as ProfileLite) ?? null,
+            profile: pMap.get(m.user_id) ? ({ ...(pMap.get(m.user_id) as ProfileLite), organization_role: m.role as MembershipRole }) : null,
           }));
+        const memberRoleMap = new Map(nextMembers.map((member) => [member.user_id, member.role]));
         setMembers(nextMembers);
         const nextMyRole = me ? ((mRows ?? []).find((r: any) => r.user_id === me)?.role as any) ?? null : null;
         setMyRole(nextMyRole);
@@ -208,7 +210,9 @@ export function CommitteeDashboard() {
 
         const mappedAnnouncements: Announcement[] = (aRows ?? []).map((a: any) => ({
           ...(a as any),
-          author: (aAuthorMap.get(a.author_user_id) as ProfileLite) ?? null,
+          author: aAuthorMap.get(a.author_user_id)
+            ? ({ ...(aAuthorMap.get(a.author_user_id) as ProfileLite), organization_role: memberRoleMap.get(a.author_user_id) ?? null })
+            : null,
         }));
         setAnnouncements(mappedAnnouncements);
         const requestedAnnouncement = searchParams.get("announcement");
@@ -236,7 +240,11 @@ export function CommitteeDashboard() {
 
           const grouped: Record<string, ThreadComment[]> = {};
           for (const row of cRows ?? []) {
-            const comment: ThreadComment = { ...(row as any), author: (cAuthorMap.get((row as any).author_user_id) as any) ?? null };
+            const author = cAuthorMap.get((row as any).author_user_id) as ProfileLite | undefined;
+            const comment: ThreadComment = {
+              ...(row as any),
+              author: author ? ({ ...author, organization_role: memberRoleMap.get((row as any).author_user_id) ?? null } as any) : null,
+            };
             grouped[comment.announcement_id] = [...(grouped[comment.announcement_id] ?? []), comment];
           }
           setCommentsByAnnouncement(grouped);
@@ -1100,11 +1108,12 @@ export function CommitteeDashboard() {
                   )}
                     <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
-                      <Link to={`/profile/${m.user_id}`} className={m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
+                      <Link to={`/profile/${m.user_id}`} className={m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
                         {m.profile?.display_name ?? "Member"}
                       </Link>
                     </div>
                     {m.profile?.role !== "teacher" && <div className="text-xs text-gray-500 truncate">{memberDescriptor(m.profile)}</div>}
+                    {m.role !== "member" && <div className="mt-1 inline-flex rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">{leadershipLabel(m.role)}</div>}
                   </div>
                   {isTeacher ? (
                     <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
@@ -1148,8 +1157,6 @@ export function CommitteeDashboard() {
                         </div>
                       )}
                     </div>
-                  ) : leadershipLabel(m.role) ? (
-                    <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{leadershipLabel(m.role)}</div>
                   ) : null}
                 </div>
               ))}

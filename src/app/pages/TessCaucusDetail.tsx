@@ -19,6 +19,7 @@ type ProfileLite = {
   constituency_name: string | null;
   avatar_url: string | null;
   role?: string | null;
+  organization_role?: MembershipRole | null;
 };
 
 type Announcement = {
@@ -47,6 +48,7 @@ function displayAuthorName(author: ProfileLite | null | undefined, fallback = "U
 }
 
 function authorLinkClass(author: ProfileLite | null | undefined) {
+  if (author?.organization_role && author.organization_role !== "member") return "text-purple-700 hover:underline";
   return author?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline";
 }
 
@@ -196,8 +198,9 @@ export function TessCaucusDetail() {
         const mappedMembers = (mRows ?? []).map((m: any) => ({
           user_id: m.user_id,
           role: m.role as MembershipRole,
-          profile: (pMap.get(m.user_id) as ProfileLite) ?? null,
+          profile: pMap.get(m.user_id) ? ({ ...(pMap.get(m.user_id) as ProfileLite), organization_role: m.role as MembershipRole }) : null,
         }));
+        const memberRoleMap = new Map(mappedMembers.map((member) => [member.user_id, member.role]));
         setMembers(mappedMembers);
         setMyRole(me ? ((mRows ?? []).find((r: any) => r.user_id === me)?.role as any) ?? null : null);
 
@@ -217,7 +220,9 @@ export function TessCaucusDetail() {
 
         const mappedAnnouncements: Announcement[] = (aRows ?? []).map((a: any) => ({
           ...a,
-          author: (aAuthorMap.get(a.author_user_id) as ProfileLite) ?? null,
+          author: aAuthorMap.get(a.author_user_id)
+            ? ({ ...(aAuthorMap.get(a.author_user_id) as ProfileLite), organization_role: memberRoleMap.get(a.author_user_id) ?? null })
+            : null,
         }));
         setAnnouncements(mappedAnnouncements);
         const requestedAnnouncement = searchParams.get("announcement");
@@ -246,7 +251,11 @@ export function TessCaucusDetail() {
 
           const grouped: Record<string, ThreadComment[]> = {};
           for (const row of cRows ?? []) {
-            const comment: ThreadComment = { ...(row as any), author: (cAuthorMap.get((row as any).author_user_id) as any) ?? null };
+            const author = cAuthorMap.get((row as any).author_user_id) as ProfileLite | undefined;
+            const comment: ThreadComment = {
+              ...(row as any),
+              author: author ? ({ ...author, organization_role: memberRoleMap.get((row as any).author_user_id) ?? null } as any) : null,
+            };
             grouped[comment.announcement_id] = [...(grouped[comment.announcement_id] ?? []), comment];
           }
           setCommentsByAnnouncement(grouped);
@@ -1071,7 +1080,7 @@ export function TessCaucusDetail() {
                   {visibleMembers.map((m) => (
                     <div key={`election:${m.user_id}`} className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
                       <div className="min-w-0">
-                        <Link to={`/profile/${m.user_id}`} className={`truncate text-sm font-medium ${m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}`}>
+                        <Link to={`/profile/${m.user_id}`} className={`truncate text-sm font-medium ${m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}`}>
                           {m.profile?.display_name ?? "Member"}
                         </Link>
                         <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.profile?.party)}-{formatConstituency(m.profile?.constituency_name) || "N/A"}</div>
@@ -1125,13 +1134,14 @@ export function TessCaucusDetail() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        <Link to={`/profile/${m.user_id}`} className={m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
+                        <Link to={`/profile/${m.user_id}`} className={m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
                           {m.profile?.display_name ?? "Member"}
                         </Link>
                       </div>
                       {m.profile?.role !== "teacher" && <div className="text-xs text-gray-500 truncate">
                         Rep.-{partyAbbr(m.profile?.party)}-{formatConstituency(m.profile?.constituency_name) || "N/A"}
                       </div>}
+                      {m.role !== "member" && <div className="mt-1 inline-flex rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">{leadershipLabel(m.role)}</div>}
                     </div>
                     <div className="flex items-center gap-2">
                       {isTeacher ? (
@@ -1145,9 +1155,7 @@ export function TessCaucusDetail() {
                           <option value="co_chair">Co-chair</option>
                           <option value="ranking_member">Ranking member</option>
                         </select>
-                      ) : m.role !== "member" ? (
-                        <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>
-                      ) : null}
+                        ) : null}
                       {isChair && !isTeacher && m.role !== "chair" && (
                         <button
                           type="button"

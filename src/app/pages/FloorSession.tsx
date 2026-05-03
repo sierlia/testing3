@@ -6,10 +6,22 @@ import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type VoteChoice = "yea" | "nay" | "present";
+type FloorMode = "election" | "bills";
 type CalendarItem = Awaited<ReturnType<typeof fetchCalendaredBillsForCurrentClass>>[number];
-type SessionRow = { id: string; bill_id: string; status: "open" | "closed"; opened_at: string | null; closed_at: string | null };
+type ManualCounts = { yea: number; nay: number; present: number; not_voted: number };
+type SessionRow = {
+  id: string;
+  bill_id: string;
+  status: "open" | "closed";
+  opened_at: string | null;
+  closed_at: string | null;
+  manual_counts?: ManualCounts | null;
+  posted_result?: "passed" | "failed" | null;
+  results_posted_at?: string | null;
+};
 type VoteRow = { session_id: string; bill_id: string; user_id: string; vote: VoteChoice };
 type SpeakerCandidate = { id: string; name: string; party?: string | null; constituency?: string | null };
 type SpeakerVoteRow = { class_id: string; voter_user_id: string; candidate_user_id: string };
@@ -48,6 +60,10 @@ export function FloorSession() {
   const [speakerOptOuts, setSpeakerOptOuts] = useState<SpeakerOptOutRow[]>([]);
   const [speakerSearch, setSpeakerSearch] = useState("");
   const [speakerPartyFilter, setSpeakerPartyFilter] = useState("all");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [manualCounts, setManualCounts] = useState<ManualCounts>({ yea: 0, nay: 0, present: 0, not_voted: 0 });
+  const [resultMode, setResultMode] = useState<"counts" | "decision">("counts");
+  const [manualDecision, setManualDecision] = useState<"passed" | "failed">("passed");
 
   const load = async () => {
     setLoading(true);
@@ -58,7 +74,7 @@ export function FloorSession() {
       setClassId(current.classId);
       const [calendarRows, sessionRows, voteRows, directory, classRow, speakerVoteRows, speakerOptOutRows] = await Promise.all([
         fetchCalendaredBillsForCurrentClass(),
-        supabase.from("bill_floor_sessions").select("id,bill_id,status,opened_at,closed_at").eq("class_id", current.classId),
+        supabase.from("bill_floor_sessions").select("id,bill_id,status,opened_at,closed_at,manual_counts,posted_result,results_posted_at").eq("class_id", current.classId),
         supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", current.classId),
         supabase.rpc("class_directory", { target_class: current.classId } as any),
         supabase.from("classes").select("settings").eq("id", current.classId).maybeSingle(),
@@ -134,8 +150,45 @@ export function FloorSession() {
     };
   }, [classId, meId]);
 
+  useEffect(() => {
+    if (!classId) return;
+    const channel = supabase
+      .channel(`floor:${classId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bill_floor_sessions", filter: `class_id=eq.${classId}` },
+        (payload: any) => {
+          const nextRow = payload.new as SessionRow | undefined;
+          const oldRow = payload.old as SessionRow | undefined;
+          setSessions((prev) => {
+            if (payload.eventType === "DELETE" && oldRow) return prev.filter((row) => row.id !== oldRow.id);
+            if (!nextRow) return prev;
+            return [...prev.filter((row) => row.id !== nextRow.id), nextRow];
+          });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bill_floor_votes", filter: `class_id=eq.${classId}` },
+        (payload: any) => {
+          const nextRow = payload.new as VoteRow | undefined;
+          const oldRow = payload.old as VoteRow | undefined;
+          setVotes((prev) => {
+            if (payload.eventType === "DELETE" && oldRow) return prev.filter((row) => !(row.session_id === oldRow.session_id && row.user_id === oldRow.user_id));
+            if (!nextRow) return prev;
+            return [...prev.filter((row) => !(row.session_id === nextRow.session_id && row.user_id === nextRow.user_id)), nextRow];
+          });
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [classId]);
+
   const speakerConcluded = Boolean(classSettings?.elections?.speakerConcluded);
   const speakerOpen = classSettings?.elections?.speakerOpen ?? Boolean(classSettings?.elections?.open);
+  const floorMode = (classSettings?.floor?.mode as FloorMode | undefined) ?? (speakerConcluded ? "bills" : "election");
   const activeItem = useMemo(() => {
     if (items.length === 0) return null;
     const now = Date.now();
@@ -149,7 +202,7 @@ export function FloorSession() {
   const nextItems = activeItem ? items.filter((item) => item.bill_id !== activeItem.bill_id).slice(0, 8) : items.slice(0, 8);
   const sessionVotes = activeSession ? votes.filter((v) => v.session_id === activeSession.id) : [];
   const myVote = meId ? sessionVotes.find((v) => v.user_id === meId)?.vote ?? null : null;
-  const counts = useMemo(
+  const liveCounts = useMemo(
     () =>
       sessionVotes.reduce(
         (acc, row) => ({ ...acc, [row.vote]: (acc[row.vote] ?? 0) + 1 }),
@@ -157,7 +210,11 @@ export function FloorSession() {
       ),
     [sessionVotes],
   );
+  const displayedCounts = activeSession?.manual_counts ?? liveCounts;
+  const counts = { yea: displayedCounts.yea ?? 0, nay: displayedCounts.nay ?? 0, present: displayedCounts.present ?? 0 };
+  const displayedNotVoted = activeSession?.manual_counts?.not_voted ?? Math.max(0, studentCount - counts.yea - counts.nay - counts.present);
   const totalVoted = counts.yea + counts.nay + counts.present;
+  const displayedEligible = Math.max(studentCount, totalVoted + displayedNotVoted);
   const speakerParties = useMemo(
     () => [...new Set(speakerCandidates.map((candidate) => candidate.party || "No party"))].sort((a, b) => a.localeCompare(b)),
     [speakerCandidates],
@@ -176,6 +233,49 @@ export function FloorSession() {
     const [winner] = [...speakerCandidates].sort((a, b) => speakerVoteCount(b.id) - speakerVoteCount(a.id) || a.name.localeCompare(b.name));
     return winner && speakerVoteCount(winner.id) > 0 ? winner : null;
   }, [speakerCandidates, speakerVotes, speakerOptOuts]);
+
+  useEffect(() => {
+    if (!activeSession) {
+      setManualCounts({ yea: liveCounts.yea, nay: liveCounts.nay, present: liveCounts.present, not_voted: Math.max(0, studentCount - liveCounts.yea - liveCounts.nay - liveCounts.present) });
+      return;
+    }
+    const nextCounts = activeSession.manual_counts ?? { yea: liveCounts.yea, nay: liveCounts.nay, present: liveCounts.present, not_voted: Math.max(0, studentCount - liveCounts.yea - liveCounts.nay - liveCounts.present) };
+    setManualCounts({
+      yea: Number(nextCounts.yea ?? 0),
+      nay: Number(nextCounts.nay ?? 0),
+      present: Number(nextCounts.present ?? 0),
+      not_voted: Number(nextCounts.not_voted ?? 0),
+    });
+    if (activeSession.posted_result) setManualDecision(activeSession.posted_result);
+  }, [activeSession?.id, activeSession?.manual_counts, activeSession?.posted_result, liveCounts.yea, liveCounts.nay, liveCounts.present, studentCount]);
+
+  const setFloorMode = async (mode: FloorMode) => {
+    if (!classId || role !== "teacher" || floorMode === mode) return;
+    setBusy(true);
+    try {
+      const nextSettings = { ...classSettings, floor: { ...(classSettings.floor ?? {}), mode } };
+      const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
+      if (error) throw error;
+      setClassSettings(nextSettings);
+      toast.success(mode === "election" ? "Floor set to election" : "Floor set to bills");
+    } catch (e: any) {
+      toast.error(e.message || "Could not update floor mode");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmFloorMode = (mode: FloorMode) => {
+    setConfirmDialog({
+      title: mode === "election" ? "Switch floor to election?" : "Switch floor to bills?",
+      message:
+        mode === "election"
+          ? "Students will see the Speaker election area instead of floor bills."
+          : "Students will see active floor bills and floor vote controls instead of the Speaker election.",
+      confirmLabel: "Switch",
+      onConfirm: () => setFloorMode(mode),
+    });
+  };
 
   const postSpeakerResults = async () => {
     if (!classId || role !== "teacher") return;
@@ -296,14 +396,44 @@ export function FloorSession() {
     if (!activeSession || !activeItem || !classId) return;
     setBusy(true);
     try {
-      const passed = counts.yea > counts.nay;
       const { error } = await supabase.from("bill_floor_sessions").update({ status: "closed", closed_at: new Date().toISOString() } as any).eq("id", activeSession.id);
       if (error) throw error;
-      await supabase.from("bills").update({ status: passed ? "passed" : "failed" } as any).eq("id", activeItem.bill_id).eq("class_id", classId);
-      toast.success(`Vote closed: bill ${passed ? "passed" : "failed"}`);
+      toast.success("Floor vote closed");
       await load();
     } catch (e: any) {
       toast.error(e.message || "Could not close vote");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const postFloorResults = async () => {
+    if (!activeItem || !classId || !meId) return;
+    setBusy(true);
+    try {
+      const result = resultMode === "decision" ? manualDecision : manualCounts.yea > manualCounts.nay ? "passed" : "failed";
+      const sessionPayload: any = {
+        class_id: classId,
+        bill_id: activeItem.bill_id,
+        calendar_id: activeItem.id,
+        status: "closed",
+        closed_at: new Date().toISOString(),
+        manual_counts: resultMode === "counts" ? manualCounts : null,
+        posted_result: result,
+        results_posted_at: new Date().toISOString(),
+      };
+      if (!activeSession) {
+        sessionPayload.opened_by = meId;
+        sessionPayload.opened_at = new Date().toISOString();
+      }
+      const { error } = await supabase.from("bill_floor_sessions").upsert(sessionPayload, { onConflict: "class_id,bill_id" });
+      if (error) throw error;
+      const { error: billError } = await supabase.from("bills").update({ status: result } as any).eq("id", activeItem.bill_id).eq("class_id", classId);
+      if (billError) throw billError;
+      toast.success(`Floor results posted: bill ${result}`);
+      await load();
+    } catch (e: any) {
+      toast.error(e.message || "Could not post floor results");
     } finally {
       setBusy(false);
     }
@@ -335,13 +465,37 @@ export function FloorSession() {
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
-          <h1 className="mb-2 text-3xl font-bold text-gray-900">Floor</h1>
-          <p className="text-gray-600">Speaker election, active floor text, and floor votes.</p>
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h1 className="mb-2 text-3xl font-bold text-gray-900">Floor</h1>
+              <p className="text-gray-600">Speaker election, active floor text, and floor votes.</p>
+            </div>
+            {role === "teacher" && (
+              <div className="inline-flex overflow-hidden rounded-t-xl border border-b-0 border-gray-200 bg-white shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => confirmFloorMode("election")}
+                  disabled={busy || floorMode === "election"}
+                  className={`px-5 py-2 text-sm font-semibold ${floorMode === "election" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"} disabled:opacity-80`}
+                >
+                  Election
+                </button>
+                <button
+                  type="button"
+                  onClick={() => confirmFloorMode("bills")}
+                  disabled={busy || floorMode === "bills"}
+                  className={`border-l border-gray-200 px-5 py-2 text-sm font-semibold ${floorMode === "bills" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"} disabled:opacity-80`}
+                >
+                  Bills
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {loading ? (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">Loading floor...</div>
-        ) : !speakerConcluded ? (
+        ) : floorMode === "election" ? (
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -349,7 +503,7 @@ export function FloorSession() {
                   <Trophy className="h-5 w-5 text-blue-600" />
                   <h2 className="text-xl font-semibold text-gray-900">Speaker of the House Election</h2>
                 </div>
-                <p className="text-sm text-gray-600">{speakerOpen ? "Voting is open." : "Voting is closed."} Floor bills will appear after Speaker results are posted.</p>
+                <p className="text-sm text-gray-600">{speakerOpen ? "Voting is open." : "Voting is closed."}</p>
               </div>
               {role === "teacher" && (
                 <div className="flex flex-wrap items-center gap-2">
@@ -429,20 +583,10 @@ export function FloorSession() {
             )}
           </div>
         ) : items.length === 0 ? (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="text-sm font-semibold text-gray-900">Speaker results posted</div>
-              <div className="mt-1 text-sm text-gray-600">Winner: {speakerWinner?.name ?? "No winner"}</div>
-            </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No calendared bills are ready for floor session.</div>
-          </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No calendared bills are ready for floor session.</div>
         ) : activeItem ? (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="space-y-6">
-              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="text-sm font-semibold text-gray-900">Speaker results posted</div>
-                <div className="mt-1 text-sm text-gray-600">Winner: {speakerWinner?.name ?? "No winner"}</div>
-              </div>
               <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
@@ -454,20 +598,20 @@ export function FloorSession() {
                     {sessionLabel(activeSession)}
                   </span>
                 </div>
-                <div className="prose max-w-none rounded-md border border-gray-200 bg-white p-5" dangerouslySetInnerHTML={{ __html: activeItem.bill.legislative_text || "<p><em>No legislative text</em></p>" }} />
-              </div>
-
-              <div className="overflow-hidden rounded-lg border-2 border-blue-300 bg-white shadow-sm">
-                <div className="bg-blue-600 p-6 text-white">
-                  <div className="mb-4 flex items-center justify-between">
+                <div className="mb-5 overflow-hidden rounded-lg border-2 border-blue-300 bg-white shadow-sm">
+                  <div className="bg-blue-600 p-6 text-white">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
                       <Vote className="h-6 w-6" />
                       <h2 className="text-xl font-semibold">Floor Vote</h2>
                     </div>
                     {role === "teacher" && (
-                      <div className="flex items-center gap-2">
-                        <button type="button" onClick={() => void openVote()} disabled={busy || activeSession?.status === "open"} className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">Open vote</button>
-                        <button type="button" onClick={() => void closeVote()} disabled={busy || activeSession?.status !== "open"} className="rounded-md bg-red-600 px-3 py-2 text-sm font-medium text-white disabled:opacity-50">Close vote</button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex overflow-hidden rounded-md border border-white/30">
+                          <button type="button" onClick={() => void openVote()} disabled={busy || activeSession?.status === "open"} className={`px-3 py-2 text-sm font-medium disabled:opacity-50 ${activeSession?.status === "open" ? "bg-white text-blue-700" : "bg-blue-500 text-white hover:bg-blue-400"}`}>Open</button>
+                          <button type="button" onClick={() => void closeVote()} disabled={busy || activeSession?.status !== "open"} className={`border-l border-white/30 px-3 py-2 text-sm font-medium disabled:opacity-50 ${activeSession?.status === "closed" ? "bg-white text-blue-700" : "bg-blue-500 text-white hover:bg-blue-400"}`}>Close</button>
+                        </div>
+                        <button type="button" onClick={() => void postFloorResults()} disabled={busy} className="rounded-md bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50">Post results</button>
                       </div>
                     )}
                   </div>
@@ -483,20 +627,57 @@ export function FloorSession() {
                     </div>
                   )}
                   {myVote && <div className="mt-4 text-center text-sm">Your vote: <strong>{myVote.toUpperCase()}</strong></div>}
-                </div>
-                <div className="bg-gray-50 p-6">
-                  <h3 className="mb-4 font-semibold text-gray-900">Live Results</h3>
-                  <div className="mb-6 grid grid-cols-4 gap-4">
-                    <div className="text-center"><div className="text-3xl font-bold text-green-600">{counts.yea}</div><div className="text-sm text-gray-600">Yea</div></div>
-                    <div className="text-center"><div className="text-3xl font-bold text-red-600">{counts.nay}</div><div className="text-sm text-gray-600">Nay</div></div>
-                    <div className="text-center"><div className="text-3xl font-bold text-gray-600">{counts.present}</div><div className="text-sm text-gray-600">Present</div></div>
-                    <div className="text-center"><div className="text-3xl font-bold text-gray-400">{Math.max(0, studentCount - totalVoted)}</div><div className="text-sm text-gray-600">Not Voted</div></div>
                   </div>
-                  <div className="h-3 overflow-hidden rounded-full bg-gray-200">
-                    <div className="h-3 rounded-full bg-blue-600" style={{ width: `${studentCount ? (totalVoted / studentCount) * 100 : 0}%` }} />
+                  <div className="bg-gray-50 p-6">
+                    <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                      <h3 className="font-semibold text-gray-900">{activeSession?.manual_counts ? "Posted Results" : "Live Results"}</h3>
+                      {activeSession?.posted_result && <span className={`rounded px-2 py-1 text-xs font-semibold ${activeSession.posted_result === "passed" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>Bill {activeSession.posted_result}</span>}
+                    </div>
+                    <div className="mb-6 grid grid-cols-4 gap-4">
+                      <div className="text-center"><div className="text-3xl font-bold text-green-600">{counts.yea}</div><div className="text-sm text-gray-600">Yea</div></div>
+                      <div className="text-center"><div className="text-3xl font-bold text-red-600">{counts.nay}</div><div className="text-sm text-gray-600">Nay</div></div>
+                      <div className="text-center"><div className="text-3xl font-bold text-gray-600">{counts.present}</div><div className="text-sm text-gray-600">Present</div></div>
+                      <div className="text-center"><div className="text-3xl font-bold text-gray-400">{displayedNotVoted}</div><div className="text-sm text-gray-600">Not Voted</div></div>
+                    </div>
+                    {role === "teacher" && (
+                      <div className="mb-5 rounded-md border border-gray-200 bg-white p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                          <div className="text-sm font-semibold text-gray-900">Teacher result entry</div>
+                          <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                            <button type="button" onClick={() => setResultMode("counts")} className={`px-3 py-1.5 text-sm font-medium ${resultMode === "counts" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>Counts</button>
+                            <button type="button" onClick={() => setResultMode("decision")} className={`border-l border-gray-300 px-3 py-1.5 text-sm font-medium ${resultMode === "decision" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>Pass/fail</button>
+                          </div>
+                        </div>
+                        {resultMode === "counts" ? (
+                          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                            {(["yea", "nay", "present", "not_voted"] as const).map((key) => (
+                              <label key={key} className="block">
+                                <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-gray-500">{key === "not_voted" ? "Not voted" : key}</span>
+                                <input
+                                  type="number"
+                                  min={0}
+                                  value={manualCounts[key]}
+                                  onChange={(event) => setManualCounts((prev) => ({ ...prev, [key]: Math.max(0, Number(event.target.value) || 0) }))}
+                                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                            <button type="button" onClick={() => setManualDecision("passed")} className={`px-4 py-2 text-sm font-semibold ${manualDecision === "passed" ? "bg-green-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>Pass</button>
+                            <button type="button" onClick={() => setManualDecision("failed")} className={`border-l border-gray-300 px-4 py-2 text-sm font-semibold ${manualDecision === "failed" ? "bg-red-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>Fail</button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    <div className="h-3 overflow-hidden rounded-full bg-gray-200">
+                      <div className="h-3 rounded-full bg-blue-600" style={{ width: `${displayedEligible ? (totalVoted / displayedEligible) * 100 : 0}%` }} />
+                    </div>
+                    <div className="mt-2 text-right text-xs text-gray-500">{totalVoted} / {displayedEligible} votes cast</div>
                   </div>
-                  <div className="mt-2 text-right text-xs text-gray-500">{totalVoted} / {studentCount} votes cast</div>
                 </div>
+                <div className="prose max-w-none rounded-md border border-gray-200 bg-white p-5" dangerouslySetInnerHTML={{ __html: activeItem.bill.legislative_text || "<p><em>No legislative text</em></p>" }} />
               </div>
             </div>
 
@@ -519,6 +700,7 @@ export function FloorSession() {
           </div>
         ) : null}
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

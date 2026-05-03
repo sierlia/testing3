@@ -8,6 +8,8 @@ export type ProfileLite = {
   user_id: string;
   display_name: string | null;
   avatar_url?: string | null;
+  role?: string | null;
+  organization_role?: string | null;
 };
 
 export type ThreadComment = {
@@ -89,7 +91,16 @@ export function ThreadedComments({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm">
-                <Link to={`/profile/${comment.author_user_id}`} className={`font-semibold hover:underline ${comment.author?.role === "teacher" ? "text-green-700" : "text-gray-900"}`}>
+                <Link
+                  to={`/profile/${comment.author_user_id}`}
+                  className={`font-semibold hover:underline ${
+                    comment.author?.organization_role && comment.author.organization_role !== "member"
+                      ? "text-purple-700"
+                      : comment.author?.role === "teacher"
+                        ? "text-green-700"
+                        : "text-gray-900"
+                  }`}
+                >
                   {comment.author?.display_name ?? "Member"}{comment.author?.role === "teacher" ? " (Teacher)" : ""}
                 </Link>
                 <span className="text-gray-500 text-xs ml-2">{formatDate(comment.created_at)}</span>

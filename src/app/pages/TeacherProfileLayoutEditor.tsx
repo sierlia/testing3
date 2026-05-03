@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type DragEvent } from "react";
-import { FileText, GripVertical, Layout, Mail, Maximize2, Minimize2, Plus, Save, Trash2, Users } from "lucide-react";
+import { FileText, GripVertical, Layout, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -277,7 +277,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
                       className="rounded p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
                       aria-label={section.width === "full" ? "Make half width" : "Make full width"}
                     >
-                      {section.width === "full" ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                      {section.width === "full" ? <PanelLeft className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
                     </button>
                     <button type="button" onClick={() => void requestDelete(section)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete section">
                       <Trash2 className="h-4 w-4" />
