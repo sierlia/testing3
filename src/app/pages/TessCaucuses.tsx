@@ -5,6 +5,7 @@ import { Link, useNavigate } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { OrganizationsLayout } from "./OrganizationsLayout";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 interface Caucus {
   id: string;
@@ -32,6 +33,7 @@ export function TessCaucuses() {
   const [creating, setCreating] = useState(false);
   const [createName, setCreateName] = useState("");
   const [createDescription, setCreateDescription] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const [caucuses, setCaucuses] = useState<Caucus[]>([]);
 
@@ -149,7 +151,27 @@ export function TessCaucuses() {
         if (!existing) return;
 
         if (existing.isMember) {
-          if (!window.confirm(`Leave ${existing.name}?`)) return;
+          setConfirmDialog({
+            title: "Leave caucus?",
+            message: `Leave ${existing.name}?`,
+            confirmLabel: "Leave",
+            danger: true,
+            onConfirm: () => updateCaucusMembership(caucusId, true, me),
+          });
+          return;
+        } else {
+          await updateCaucusMembership(caucusId, false, me);
+        }
+      } catch (e: any) {
+        toast.error(e.message || "Could not update membership");
+      }
+    };
+    void run();
+  };
+
+  const updateCaucusMembership = async (caucusId: string, leaving: boolean, me: string) => {
+    try {
+        if (leaving) {
           const { error } = await supabase.from("caucus_members").delete().eq("caucus_id", caucusId).eq("user_id", me);
           if (error) throw error;
           setCaucuses(
@@ -169,8 +191,6 @@ export function TessCaucuses() {
       } catch (e: any) {
         toast.error(e.message || "Could not update membership");
       }
-    };
-    void run();
   };
 
   const handleCreate = () => {
@@ -374,6 +394,7 @@ export function TessCaucuses() {
         </div>
         </OrganizationsLayout>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

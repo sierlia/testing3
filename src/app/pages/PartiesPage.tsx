@@ -6,6 +6,7 @@ import { Navigation } from "../components/Navigation";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { PartyCreateForm, NewParty, defaultPartyColor } from "../components/PartyCreateForm";
 import { supabase } from "../utils/supabase";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type PartyRow = { id: string; name: string; platform: string; color: string; approved: boolean; created_at: string };
 type MemberProfile = { user_id: string; display_name: string | null; party: string | null };
@@ -63,6 +64,7 @@ export function PartiesPage() {
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<NewParty>({ name: "", platform: "", color: "#2563eb" });
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   useEffect(() => {
     if (partiesPageCache) {
@@ -170,11 +172,11 @@ export function PartiesPage() {
       const aCount = memberCount(a.name);
       const bCount = memberCount(b.name);
       if (aCount !== bCount) return bCount - aCount;
-      if (!hasMembers) {
+      if (!hasMembers || (aCount === 0 && bCount === 0)) {
         const priority = (name: string) => {
           const normalized = name.toLowerCase();
-          if (normalized.includes("democrat")) return 0;
-          if (normalized.includes("republican")) return 1;
+          if (normalized.includes("republican")) return 0;
+          if (normalized.includes("democrat")) return 1;
           return 2;
         };
         const priorityDiff = priority(a.name) - priority(b.name);
@@ -221,8 +223,30 @@ export function PartiesPage() {
 
   const updateMyParty = async (partyName: string | null) => {
     if (!meId) return;
-    if (partyName === null && currentPartyName && !window.confirm(`Leave ${currentPartyName}?`)) return;
-    if (partyName && currentPartyName && currentPartyName !== partyName && !window.confirm(`Switch from ${currentPartyName} to ${partyName}?`)) return;
+    if (partyName === null && currentPartyName) {
+      setConfirmDialog({
+        title: "Leave party?",
+        message: `Leave ${currentPartyName}?`,
+        confirmLabel: "Leave",
+        danger: true,
+        onConfirm: () => updateMyPartyConfirmed(null),
+      });
+      return;
+    }
+    if (partyName && currentPartyName && currentPartyName !== partyName) {
+      setConfirmDialog({
+        title: "Switch party?",
+        message: `Switch from ${currentPartyName} to ${partyName}?`,
+        confirmLabel: "Switch",
+        onConfirm: () => updateMyPartyConfirmed(partyName),
+      });
+      return;
+    }
+    await updateMyPartyConfirmed(partyName);
+  };
+
+  const updateMyPartyConfirmed = async (partyName: string | null) => {
+    if (!meId) return;
     try {
       const { error } = await supabase.from("profiles").update({ party: partyName }).eq("user_id", meId);
       if (error) throw error;
@@ -376,6 +400,7 @@ export function PartiesPage() {
           )}
         </OrganizationsLayout>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

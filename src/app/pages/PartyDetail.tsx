@@ -6,6 +6,7 @@ import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
 type MemberRow = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
@@ -32,6 +33,7 @@ export function PartyDetail() {
   const [votes, setVotes] = useState<Array<{ position: "chair" | "whip"; voter_user_id: string; candidate_user_id: string }>>([]);
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const isMember = !!party && myParty === party.name;
   const isTeacher = viewerRole === "teacher";
@@ -138,8 +140,30 @@ export function PartyDetail() {
   const joinOrSwitch = async () => {
     if (!party || !meId) return;
     const nextParty = isMember ? null : party.name;
-    if (isMember && !window.confirm(`Leave ${party.name}?`)) return;
-    if (myParty && myParty !== party.name && !window.confirm(`Switch from ${myParty} to ${party.name}?`)) return;
+    if (isMember) {
+      setConfirmDialog({
+        title: "Leave party?",
+        message: `Leave ${party.name}?`,
+        confirmLabel: "Leave",
+        danger: true,
+        onConfirm: () => updatePartyMembership(nextParty),
+      });
+      return;
+    }
+    if (myParty && myParty !== party.name) {
+      setConfirmDialog({
+        title: "Switch party?",
+        message: `Switch from ${myParty} to ${party.name}?`,
+        confirmLabel: "Switch",
+        onConfirm: () => updatePartyMembership(nextParty),
+      });
+      return;
+    }
+    await updatePartyMembership(nextParty);
+  };
+
+  const updatePartyMembership = async (nextParty: string | null) => {
+    if (!meId) return;
     try {
       const { error } = await supabase.from("profiles").update({ party: nextParty } as any).eq("user_id", meId);
       if (error) throw error;
@@ -199,7 +223,16 @@ export function PartyDetail() {
 
   const deleteAnnouncement = async (announcementId: string) => {
     if (!isTeacher) return;
-    if (!window.confirm("Delete this announcement? This cannot be undone.")) return;
+    setConfirmDialog({
+      title: "Delete announcement?",
+      message: "This announcement and its comments will be removed for everyone.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => deleteAnnouncementConfirmed(announcementId),
+    });
+  };
+
+  const deleteAnnouncementConfirmed = async (announcementId: string) => {
     try {
       const { error } = await supabase.from("party_announcements").delete().eq("id", announcementId);
       if (error) throw error;
@@ -218,7 +251,17 @@ export function PartyDetail() {
 
   const deleteComment = async (commentId: string) => {
     if (!isTeacher || !selectedAnnouncement) return;
-    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
+    setConfirmDialog({
+      title: "Delete comment?",
+      message: "This comment will be removed for everyone.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => deleteCommentConfirmed(commentId),
+    });
+  };
+
+  const deleteCommentConfirmed = async (commentId: string) => {
+    if (!selectedAnnouncement) return;
     try {
       const { error } = await supabase.from("party_comments").delete().eq("id", commentId);
       if (error) throw error;
@@ -435,6 +478,7 @@ export function PartyDetail() {
           </>
         )}
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

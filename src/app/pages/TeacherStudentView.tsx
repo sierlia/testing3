@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import tessLinImage from "figma:asset/966ec4d05f8fbeb48998b857574fc6613b388aae.png";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 function statusLabel(status: string) {
   return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -25,6 +26,7 @@ function statusLabel(status: string) {
 export function TeacherStudentView() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("profile");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const studentData = {
     id: "6",
@@ -110,17 +112,28 @@ export function TeacherStudentView() {
   };
 
   const handleDeleteComment = (commentId: number) => {
-    if (confirm("Delete this comment?")) {
-      console.log("Deleting comment:", commentId);
-      alert("Comment deleted");
-    }
+    setConfirmDialog({
+      title: "Delete comment?",
+      message: "This comment will be removed.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => {
+        console.log("Deleting comment:", commentId);
+        alert("Comment deleted");
+      },
+    });
   };
 
   const handleWarnStudent = (commentId: number) => {
-    if (confirm("Send a warning to this student about this comment?")) {
-      console.log("Warning student about comment:", commentId);
-      alert("Warning sent to student");
-    }
+    setConfirmDialog({
+      title: "Send warning?",
+      message: "Send a warning to this student about this comment?",
+      confirmLabel: "Send warning",
+      onConfirm: () => {
+        console.log("Warning student about comment:", commentId);
+        alert("Warning sent to student");
+      },
+    });
   };
 
   return (
@@ -502,6 +515,7 @@ export function TeacherStudentView() {
           </TabsContent>
         </Tabs>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

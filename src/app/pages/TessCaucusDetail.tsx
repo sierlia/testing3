@@ -8,6 +8,7 @@ import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/Rea
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -70,6 +71,7 @@ export function TessCaucusDetail() {
 
   const [announcementsSplitPct, setAnnouncementsSplitPct] = useState(40);
   const [draggingSplit, setDraggingSplit] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const isLeader = myRole === "chair" || myRole === "co_chair";
   const isChair = myRole === "chair";
@@ -378,7 +380,21 @@ export function TessCaucusDetail() {
 
   const joinLeave = async () => {
     if (!meId) return;
-    if (myRole && !window.confirm("Leave this caucus?")) return;
+    if (myRole) {
+      setConfirmDialog({
+        title: "Leave caucus?",
+        message: `Leave ${caucus?.title ?? "this caucus"}?`,
+        confirmLabel: "Leave",
+        danger: true,
+        onConfirm: updateCaucusMembership,
+      });
+      return;
+    }
+    await updateCaucusMembership();
+  };
+
+  const updateCaucusMembership = async () => {
+    if (!meId) return;
     try {
       if (myRole) {
         const { error } = await supabase.from("caucus_members").delete().eq("caucus_id", caucusId).eq("user_id", meId);
@@ -471,7 +487,16 @@ export function TessCaucusDetail() {
 
   const deleteAnnouncement = async (announcementId: string) => {
     if (!isTeacher) return;
-    if (!window.confirm("Delete this announcement? This cannot be undone.")) return;
+    setConfirmDialog({
+      title: "Delete announcement?",
+      message: "This announcement and its comments will be removed for everyone.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => deleteAnnouncementConfirmed(announcementId),
+    });
+  };
+
+  const deleteAnnouncementConfirmed = async (announcementId: string) => {
     try {
       const { error } = await supabase.from("caucus_announcements").delete().eq("id", announcementId);
       if (error) throw error;
@@ -490,7 +515,17 @@ export function TessCaucusDetail() {
 
   const deleteComment = async (commentId: string) => {
     if (!isTeacher || !selectedAnnouncementId) return;
-    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
+    setConfirmDialog({
+      title: "Delete comment?",
+      message: "This comment will be removed for everyone.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => deleteCommentConfirmed(commentId),
+    });
+  };
+
+  const deleteCommentConfirmed = async (commentId: string) => {
+    if (!selectedAnnouncementId) return;
     try {
       const { error } = await supabase.from("caucus_comments").delete().eq("id", commentId);
       if (error) throw error;
@@ -924,6 +959,7 @@ export function TessCaucusDetail() {
           </div>
         </div>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

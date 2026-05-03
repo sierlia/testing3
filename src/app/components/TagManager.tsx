@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Plus, Edit2, Trash2, Check, X } from "lucide-react";
+import { ConfirmDialog, ConfirmDialogState } from "./ConfirmDialog";
 
 interface Tag {
   id: string;
@@ -28,6 +29,7 @@ export function TagManager({ onTagsChange }: TagManagerProps) {
     null,
   );
   const [editName, setEditName] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const handleCreate = () => {
     if (newTagName.trim()) {
@@ -65,9 +67,13 @@ export function TagManager({ onTagsChange }: TagManagerProps) {
   };
 
   const handleDelete = (id: string) => {
-    if (confirm("Are you sure you want to delete this tag?")) {
-      setTags(tags.filter((t) => t.id !== id));
-    }
+    setConfirmDialog({
+      title: "Delete tag?",
+      message: "This tag will be removed.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => setTags(tags.filter((t) => t.id !== id)),
+    });
   };
 
   return (
@@ -166,6 +172,7 @@ export function TagManager({ onTagsChange }: TagManagerProps) {
           Create Tag
         </button>
       )}
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

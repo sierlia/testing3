@@ -9,6 +9,7 @@ import { ThreadedComments, ThreadComment } from "../components/ThreadedComments"
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { CommitteeTabs, markCommitteeSeenIds } from "../components/CommitteeTabs";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
@@ -88,6 +89,7 @@ export function CommitteeDashboard() {
 
   const [announcementsSplitPct, setAnnouncementsSplitPct] = useState(40);
   const [draggingSplit, setDraggingSplit] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const isLeader = myRole === "chair" || myRole === "co_chair" || myRole === "ranking_member";
   const isTeacher = viewerRole === "teacher";
@@ -513,7 +515,16 @@ export function CommitteeDashboard() {
 
   const deleteAnnouncement = async (announcementId: string) => {
     if (!isTeacher) return;
-    if (!window.confirm("Delete this announcement? This cannot be undone.")) return;
+    setConfirmDialog({
+      title: "Delete announcement?",
+      message: "This announcement and its comments will be removed for everyone.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => deleteAnnouncementConfirmed(announcementId),
+    });
+  };
+
+  const deleteAnnouncementConfirmed = async (announcementId: string) => {
     try {
       const { error } = await supabase.from("committee_announcements").delete().eq("id", announcementId);
       if (error) throw error;
@@ -532,7 +543,17 @@ export function CommitteeDashboard() {
 
   const deleteComment = async (commentId: string) => {
     if (!isTeacher || !selectedAnnouncementId) return;
-    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
+    setConfirmDialog({
+      title: "Delete comment?",
+      message: "This comment will be removed for everyone.",
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: () => deleteCommentConfirmed(commentId),
+    });
+  };
+
+  const deleteCommentConfirmed = async (commentId: string) => {
+    if (!selectedAnnouncementId) return;
     try {
       const { error } = await supabase.from("committee_comments").delete().eq("id", commentId);
       if (error) throw error;
@@ -689,7 +710,17 @@ export function CommitteeDashboard() {
 
   const leave = async () => {
     if (!meId || !myRole) return;
-    if (!window.confirm("Leave this committee?")) return;
+    setConfirmDialog({
+      title: "Leave committee?",
+      message: `You will lose access to member-only areas of ${committee?.name ?? "this committee"}.`,
+      confirmLabel: "Leave",
+      danger: true,
+      onConfirm: leaveConfirmed,
+    });
+  };
+
+  const leaveConfirmed = async () => {
+    if (!meId || !myRole) return;
     setLeaving(true);
     try {
       const { error } = await supabase
@@ -977,6 +1008,7 @@ export function CommitteeDashboard() {
           </div>
         </div>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

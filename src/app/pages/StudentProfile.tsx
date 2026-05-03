@@ -29,6 +29,7 @@ import {
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituencyFull, normalizeConstituencyId } from "../utils/constituency";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type EditingSection = "personal_statement" | "constituency_description" | "key_issues" | null;
 
@@ -88,6 +89,7 @@ export function StudentProfile() {
   const [showConstituencyModal, setShowConstituencyModal] = useState(false);
   const [constituencyDraftId, setConstituencyDraftId] = useState<string | null>(null);
   const [unavailableConstituencies, setUnavailableConstituencies] = useState<string[]>([]);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -370,8 +372,29 @@ export function StudentProfile() {
       const { data: party } = await supabase.from("parties").select("name").eq("id", partyDraftId).maybeSingle();
       partyName = (party as any)?.name ?? null;
     }
-    if (profile.party && partyName && profile.party !== partyName && !window.confirm(`Switch from ${profile.party} to ${partyName}?`)) return;
-    if (profile.party && !partyName && !window.confirm(`Leave ${profile.party}?`)) return;
+    if (profile.party && partyName && profile.party !== partyName) {
+      setConfirmDialog({
+        title: "Switch party?",
+        message: `Switch from ${profile.party} to ${partyName}?`,
+        confirmLabel: "Switch",
+        onConfirm: () => applyPartySelection(savedPartyId, partyName),
+      });
+      return;
+    }
+    if (profile.party && !partyName) {
+      setConfirmDialog({
+        title: "Leave party?",
+        message: `Leave ${profile.party}?`,
+        confirmLabel: "Leave",
+        danger: true,
+        onConfirm: () => applyPartySelection(savedPartyId, partyName),
+      });
+      return;
+    }
+    await applyPartySelection(savedPartyId, partyName);
+  };
+
+  const applyPartySelection = async (savedPartyId: string | null, partyName: string | null) => {
     mergeWrittenResponses({ party_id: savedPartyId, new_party: undefined });
     await saveProfile({ party: partyName } as any);
     setShowPartyModal(false);
@@ -872,6 +895,7 @@ export function StudentProfile() {
           </div>
         </div>
       )}
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

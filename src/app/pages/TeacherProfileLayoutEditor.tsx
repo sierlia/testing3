@@ -15,6 +15,7 @@ import {
   Settings,
 } from "lucide-react";
 import tessLinImage from "figma:asset/966ec4d05f8fbeb48998b857574fc6613b388aae.png";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 interface ProfileSection {
   id: string;
@@ -201,6 +202,7 @@ export function TeacherProfileLayoutEditor() {
       editable: false,
     },
   ]);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const moveSection = (dragIndex: number, hoverIndex: number) => {
     const draggedSection = sections[dragIndex];
@@ -232,8 +234,13 @@ export function TeacherProfileLayoutEditor() {
   };
 
   const resetLayout = () => {
-    if (confirm("Reset to default layout? This will remove all custom sections.")) {
-      setSections([
+    setConfirmDialog({
+      title: "Reset layout?",
+      message: "This will remove all custom sections and restore the default profile layout.",
+      confirmLabel: "Reset",
+      danger: true,
+      onConfirm: () => {
+        setSections([
         {
           id: "personal-statement",
           title: "Personal Statement",
@@ -276,8 +283,9 @@ export function TeacherProfileLayoutEditor() {
           width: "full",
           editable: false,
         },
-      ]);
-    }
+        ]);
+      },
+    });
   };
 
   const saveLayout = () => {
@@ -375,6 +383,7 @@ export function TeacherProfileLayoutEditor() {
             ))}
           </div>
         </main>
+        <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
       </div>
     </DndProvider>
   );

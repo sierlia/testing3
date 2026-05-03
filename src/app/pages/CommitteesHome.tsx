@@ -5,6 +5,7 @@ import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
 import { OrganizationsLayout } from "./OrganizationsLayout";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type CommitteeRow = { id: string; name: string; description: string | null; created_at: string };
 type CommitteesCache = {
@@ -34,6 +35,7 @@ export function CommitteesHome() {
   const [joiningCommitteeId, setJoiningCommitteeId] = useState<string | null>(null);
   const [leavingCommitteeId, setLeavingCommitteeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   useEffect(() => {
     if (committeesHomeCache) {
@@ -180,7 +182,18 @@ export function CommitteesHome() {
 
   const leaveCommittee = async (committeeId: string) => {
     if (!meId || !joinedCommitteeIds.has(committeeId)) return;
-    if (!window.confirm("Leave this committee?")) return;
+    const committeeName = committees.find((committee) => committee.id === committeeId)?.name ?? "this committee";
+    setConfirmDialog({
+      title: "Leave committee?",
+      message: `Leave ${committeeName}?`,
+      confirmLabel: "Leave",
+      danger: true,
+      onConfirm: () => leaveCommitteeConfirmed(committeeId),
+    });
+  };
+
+  const leaveCommitteeConfirmed = async (committeeId: string) => {
+    if (!meId || !joinedCommitteeIds.has(committeeId)) return;
     setLeavingCommitteeId(committeeId);
     try {
       const { error } = await supabase.from("committee_members").delete().eq("committee_id", committeeId).eq("user_id", meId);
@@ -290,6 +303,7 @@ export function CommitteesHome() {
           </div>
         </OrganizationsLayout>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }
