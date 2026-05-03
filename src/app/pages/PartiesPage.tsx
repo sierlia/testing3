@@ -22,7 +22,7 @@ function PartyIcon({ name }: { name: string }) {
       <img
         src="https://commons.wikimedia.org/wiki/Special:FilePath/Democratic%20Disc.svg"
         alt="Democratic Party donkey"
-        className="h-9 w-9 object-contain"
+        className="h-9 w-9 rounded-full object-cover"
       />
     );
   }
@@ -31,7 +31,7 @@ function PartyIcon({ name }: { name: string }) {
       <img
         src="https://commons.wikimedia.org/wiki/Special:FilePath/Republican%20Disc.svg"
         alt="Republican Party elephant"
-        className="h-9 w-9 object-contain"
+        className="h-9 w-9 rounded-full object-cover"
       />
     );
   }

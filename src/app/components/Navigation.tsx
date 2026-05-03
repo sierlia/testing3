@@ -101,12 +101,28 @@ export function Navigation() {
       cacheAvatar(user.id, nextAvatar);
       let classId = routeClassId ?? (data as any)?.class_id ?? null;
       if ((user.user_metadata as any)?.role === "teacher") {
-        const { data: classes } = await supabase
-          .from("classes")
-          .select("id,name")
-          .eq("teacher_id", user.id)
-          .order("created_at", { ascending: false });
-        const rows = ((classes ?? []) as any[]).map((c) => ({ id: c.id, name: c.name }));
+        const [{ data: ownedClasses }, { data: membershipRows }] = await Promise.all([
+          supabase
+            .from("classes")
+            .select("id,name,created_at")
+            .eq("teacher_id", user.id)
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("class_memberships")
+            .select("status,classes(id,name,created_at)")
+            .eq("user_id", user.id)
+            .eq("role", "teacher")
+            .eq("status", "approved"),
+        ]);
+        const classMap = new Map<string, any>();
+        for (const c of ownedClasses ?? []) classMap.set((c as any).id, c);
+        for (const row of membershipRows ?? []) {
+          const c = (row as any).classes;
+          if (c) classMap.set(c.id, c);
+        }
+        const rows = Array.from(classMap.values())
+          .sort((a, b) => new Date(b.created_at ?? 0).getTime() - new Date(a.created_at ?? 0).getTime())
+          .map((c) => ({ id: c.id, name: c.name }));
         setTeacherClasses(rows);
         cacheTeacherClasses(user.id, rows);
         if (!classId && rows[0]) {
@@ -382,7 +398,7 @@ export function Navigation() {
                   className="flex min-w-[180px] items-center justify-between gap-3 rounded-md px-3 py-2 text-left text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
                 >
                   <span className="min-w-0">
-                    <span className="block min-h-[20px] truncate text-sm font-semibold text-gray-900">{activeClassName}</span>
+                    <span className="block min-h-[20px] truncate text-sm font-semibold text-gray-900">{activeClassName || "N/A"}</span>
                     <span className="block text-xs text-gray-500">Switch classes</span>
                   </span>
                   <ChevronDown className={`h-4 w-4 flex-shrink-0 transition-transform ${classMenuOpen ? "rotate-180" : ""}`} />
@@ -395,7 +411,7 @@ export function Navigation() {
                     </div>
                     <div className="max-h-72 overflow-y-auto py-1">
                       {teacherClasses.length === 0 ? (
-                        <div className="px-4 py-3 text-sm text-gray-500">No classes yet</div>
+                        <div className="px-4 py-3 text-sm text-gray-500">N/A</div>
                       ) : (
                         teacherClasses.map((c) => (
                           <button

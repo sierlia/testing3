@@ -5,13 +5,25 @@ import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../services/bills";
 import { supabase } from "../utils/supabase";
+import { formatConstituency } from "../utils/constituency";
 
 type VoteChoice = "yea" | "nay" | "present";
 type CalendarItem = Awaited<ReturnType<typeof fetchCalendaredBillsForCurrentClass>>[number];
 type SessionRow = { id: string; bill_id: string; status: "open" | "closed"; opened_at: string | null; closed_at: string | null };
 type VoteRow = { session_id: string; bill_id: string; user_id: string; vote: VoteChoice };
-type SpeakerCandidate = { id: string; name: string; party?: string | null };
+type SpeakerCandidate = { id: string; name: string; party?: string | null; constituency?: string | null };
 type SpeakerVoteRow = { class_id: string; voter_user_id: string; candidate_user_id: string };
+type SpeakerOptOutRow = { class_id: string; user_id: string };
+
+function partyAbbr(party: string | null | undefined) {
+  const normalized = String(party ?? "").toLowerCase();
+  if (normalized.includes("democrat")) return "D";
+  if (normalized.includes("republican")) return "R";
+  if (normalized.includes("independent")) return "I";
+  if (normalized.includes("green")) return "G";
+  if (normalized.includes("libertarian")) return "L";
+  return party?.trim()?.slice(0, 1).toUpperCase() || "I";
+}
 
 function sessionLabel(session: SessionRow | null) {
   if (!session) return "Vote unopened";
@@ -33,6 +45,7 @@ export function FloorSession() {
   const [speakerVote, setSpeakerVote] = useState<string | null>(null);
   const [speakerCandidates, setSpeakerCandidates] = useState<SpeakerCandidate[]>([]);
   const [speakerVotes, setSpeakerVotes] = useState<SpeakerVoteRow[]>([]);
+  const [speakerOptOuts, setSpeakerOptOuts] = useState<SpeakerOptOutRow[]>([]);
   const [speakerSearch, setSpeakerSearch] = useState("");
   const [speakerPartyFilter, setSpeakerPartyFilter] = useState("all");
 
@@ -43,28 +56,31 @@ export function FloorSession() {
       setRole(current.profile.role ?? null);
       setMeId(current.userId);
       setClassId(current.classId);
-      const [calendarRows, sessionRows, voteRows, directory, classRow, speakerVoteRows] = await Promise.all([
+      const [calendarRows, sessionRows, voteRows, directory, classRow, speakerVoteRows, speakerOptOutRows] = await Promise.all([
         fetchCalendaredBillsForCurrentClass(),
         supabase.from("bill_floor_sessions").select("id,bill_id,status,opened_at,closed_at").eq("class_id", current.classId),
         supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", current.classId),
         supabase.rpc("class_directory", { target_class: current.classId } as any),
         supabase.from("classes").select("settings").eq("id", current.classId).maybeSingle(),
         supabase.from("class_speaker_votes").select("class_id,voter_user_id,candidate_user_id").eq("class_id", current.classId),
+        supabase.from("class_speaker_opt_outs").select("class_id,user_id").eq("class_id", current.classId),
       ]);
       if (sessionRows.error) throw sessionRows.error;
       if (voteRows.error) throw voteRows.error;
       if (classRow.error) throw classRow.error;
       if (speakerVoteRows.error) throw speakerVoteRows.error;
+      if (speakerOptOutRows.error) throw speakerOptOutRows.error;
       const students = ((directory.data ?? []) as any[]).filter((person) => person.role !== "teacher");
       setItems([...calendarRows].sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()));
       setSessions((sessionRows.data ?? []) as any);
       setVotes((voteRows.data ?? []) as any);
       setStudentCount(students.length);
       setClassSettings((classRow.data as any)?.settings ?? {});
-      setSpeakerCandidates(students.map((student) => ({ id: student.user_id, name: student.display_name ?? "Student", party: student.party })));
+      setSpeakerCandidates(students.map((student) => ({ id: student.user_id, name: student.display_name ?? "Student", party: student.party, constituency: student.constituency_name })));
       const nextSpeakerVotes = (speakerVoteRows.data ?? []) as any[];
       setSpeakerVotes(nextSpeakerVotes);
       setSpeakerVote(nextSpeakerVotes.find((row) => row.voter_user_id === current.userId)?.candidate_user_id ?? null);
+      setSpeakerOptOuts((speakerOptOutRows.data ?? []) as any[]);
     } catch (e: any) {
       toast.error(e.message || "Could not load floor");
     } finally {
@@ -96,12 +112,30 @@ export function FloorSession() {
         },
       )
       .subscribe();
+    const optOutChannel = supabase
+      .channel(`speaker-opt-outs:${classId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "class_speaker_opt_outs", filter: `class_id=eq.${classId}` },
+        (payload: any) => {
+          const nextRow = payload.new as SpeakerOptOutRow | undefined;
+          const oldRow = payload.old as SpeakerOptOutRow | undefined;
+          setSpeakerOptOuts((prev) => {
+            if (payload.eventType === "DELETE" && oldRow) return prev.filter((row) => row.user_id !== oldRow.user_id);
+            if (!nextRow) return prev;
+            return [...prev.filter((row) => row.user_id !== nextRow.user_id), nextRow];
+          });
+        },
+      )
+      .subscribe();
     return () => {
       void supabase.removeChannel(channel);
+      void supabase.removeChannel(optOutChannel);
     };
   }, [classId, meId]);
 
   const speakerConcluded = Boolean(classSettings?.elections?.speakerConcluded);
+  const speakerOpen = classSettings?.elections?.speakerOpen ?? Boolean(classSettings?.elections?.open);
   const activeItem = useMemo(() => {
     if (items.length === 0) return null;
     const now = Date.now();
@@ -128,14 +162,20 @@ export function FloorSession() {
     () => [...new Set(speakerCandidates.map((candidate) => candidate.party || "No party"))].sort((a, b) => a.localeCompare(b)),
     [speakerCandidates],
   );
+  const speakerOptedOut = (candidateId: string) => speakerOptOuts.some((row) => row.user_id === candidateId);
+  const speakerVoteCount = (candidateId: string) => speakerOptedOut(candidateId) ? 0 : speakerVotes.filter((row) => row.candidate_user_id === candidateId).length;
   const visibleSpeakerCandidates = useMemo(() => {
     const query = speakerSearch.trim().toLowerCase();
     return speakerCandidates.filter((candidate) => {
       const party = candidate.party || "No party";
-      return (!query || candidate.name.toLowerCase().includes(query) || party.toLowerCase().includes(query)) && (speakerPartyFilter === "all" || party === speakerPartyFilter);
-    });
-  }, [speakerCandidates, speakerPartyFilter, speakerSearch]);
-  const speakerVoteCount = (candidateId: string) => speakerVotes.filter((row) => row.candidate_user_id === candidateId).length;
+      const district = formatConstituency(candidate.constituency);
+      return (!query || candidate.name.toLowerCase().includes(query) || party.toLowerCase().includes(query) || district.toLowerCase().includes(query)) && (speakerPartyFilter === "all" || party === speakerPartyFilter);
+    }).sort((a, b) => speakerVoteCount(b.id) - speakerVoteCount(a.id) || a.name.localeCompare(b.name));
+  }, [speakerCandidates, speakerPartyFilter, speakerSearch, speakerVotes, speakerOptOuts]);
+  const speakerWinner = useMemo(() => {
+    const [winner] = [...speakerCandidates].sort((a, b) => speakerVoteCount(b.id) - speakerVoteCount(a.id) || a.name.localeCompare(b.name));
+    return winner && speakerVoteCount(winner.id) > 0 ? winner : null;
+  }, [speakerCandidates, speakerVotes, speakerOptOuts]);
 
   const concludeSpeakerElection = async () => {
     if (!classId || role !== "teacher") return;
@@ -143,7 +183,7 @@ export function FloorSession() {
     try {
       const nextSettings = {
         ...classSettings,
-        elections: { ...(classSettings.elections ?? {}), speakerConcluded: true },
+        elections: { ...(classSettings.elections ?? {}), speakerConcluded: true, speakerOpen: false },
       };
       const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
       if (error) throw error;
@@ -156,8 +196,52 @@ export function FloorSession() {
     }
   };
 
+  const setSpeakerElectionOpen = async (open: boolean) => {
+    if (!classId || role !== "teacher" || speakerConcluded) return;
+    setBusy(true);
+    try {
+      const nextSettings = { ...classSettings, elections: { ...(classSettings.elections ?? {}), speakerOpen: open } };
+      const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
+      if (error) throw error;
+      setClassSettings(nextSettings);
+      toast.success(open ? "Speaker election opened" : "Speaker election closed");
+    } catch (e: any) {
+      toast.error(e.message || "Could not update Speaker election");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleSpeakerOptOut = async () => {
+    if (!classId || !meId || role === "teacher" || speakerConcluded || !speakerOpen) return;
+    const optedOut = speakerOptedOut(meId);
+    setBusy(true);
+    try {
+      if (optedOut) {
+        const { error } = await supabase.from("class_speaker_opt_outs").delete().eq("class_id", classId).eq("user_id", meId);
+        if (error) throw error;
+        setSpeakerOptOuts((prev) => prev.filter((row) => row.user_id !== meId));
+        toast.success("Opt-out removed");
+      } else {
+        const [{ error: optError }, { error: voteError }] = await Promise.all([
+          supabase.from("class_speaker_opt_outs").upsert({ class_id: classId, user_id: meId } as any, { onConflict: "class_id,user_id" }),
+          supabase.from("class_speaker_votes").delete().eq("class_id", classId).eq("candidate_user_id", meId),
+        ]);
+        if (optError || voteError) throw optError ?? voteError;
+        setSpeakerOptOuts((prev) => [...prev.filter((row) => row.user_id !== meId), { class_id: classId, user_id: meId }]);
+        setSpeakerVotes((prev) => prev.filter((row) => row.candidate_user_id !== meId));
+        setSpeakerVote((prev) => (prev === meId ? null : prev));
+        toast.success("Opted out");
+      }
+    } catch (e: any) {
+      toast.error(e.message || "Could not update opt-out");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const castSpeakerVote = async (candidateId: string) => {
-    if (!classId || !meId || role === "teacher") return;
+    if (!classId || !meId || role === "teacher" || !speakerOpen || speakerConcluded || speakerOptedOut(candidateId)) return;
     setBusy(true);
     try {
       if (speakerVote === candidateId) {
@@ -265,18 +349,36 @@ export function FloorSession() {
                   <Trophy className="h-5 w-5 text-blue-600" />
                   <h2 className="text-xl font-semibold text-gray-900">Speaker of the House Election</h2>
                 </div>
-                <p className="text-sm text-gray-600">Floor bills will appear after the Speaker election is concluded.</p>
+                <p className="text-sm text-gray-600">{speakerOpen ? "Voting is open." : "Voting is closed."} Floor bills will appear after the Speaker election is concluded.</p>
               </div>
               {role === "teacher" && (
-                <button type="button" onClick={() => void concludeSpeakerElection()} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                  Conclude Speaker election
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button type="button" onClick={() => void setSpeakerElectionOpen(!speakerOpen)} disabled={busy} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                    {speakerOpen ? "Close election" : "Open election"}
+                  </button>
+                  <button type="button" onClick={() => void concludeSpeakerElection()} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                    Conclude
+                  </button>
+                </div>
               )}
             </div>
             {speakerCandidates.length === 0 ? (
               <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">No student candidates are available yet.</div>
             ) : (
               <div className="space-y-4">
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-gray-200 bg-gray-50 p-3">
+                  <div className="text-sm text-gray-700">Leader: <span className="font-semibold text-gray-900">{speakerWinner?.name ?? "No votes yet"}</span></div>
+                  {role !== "teacher" && (
+                    <button
+                      type="button"
+                      onClick={() => void toggleSpeakerOptOut()}
+                      disabled={busy || !speakerOpen}
+                      className={`rounded-md px-3 py-1.5 text-sm font-medium ${meId && speakerOptedOut(meId) ? "bg-gray-900 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"} disabled:opacity-50`}
+                    >
+                      {meId && speakerOptedOut(meId) ? "Opted out" : "Opt out"}
+                    </button>
+                  )}
+                </div>
                 <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -298,18 +400,21 @@ export function FloorSession() {
                     key={candidate.id}
                     type="button"
                     onClick={() => void castSpeakerVote(candidate.id)}
-                    disabled={busy || role === "teacher"}
+                    disabled={busy || role === "teacher" || !speakerOpen || speakerOptedOut(candidate.id)}
                     className={`flex w-full items-center justify-between gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 disabled:cursor-default ${
-                      speakerVote === candidate.id ? "bg-blue-50" : "bg-white hover:bg-gray-50"
+                      speakerVote === candidate.id ? "bg-blue-50" : speakerOptedOut(candidate.id) ? "bg-gray-50" : "bg-white hover:bg-gray-50"
                     }`}
                   >
                     <div className="min-w-0">
                       <div className="font-semibold text-gray-900">{candidate.name}</div>
-                      <div className="text-sm text-gray-500">{candidate.party ?? "No party"}</div>
+                      <div className="text-sm text-gray-500">
+                        {partyAbbr(candidate.party)}-{formatConstituency(candidate.constituency) || "N/A"}
+                        {speakerOptedOut(candidate.id) ? " - Opted out" : ""}
+                      </div>
                     </div>
                     <div className="text-right">
                       <div className="text-lg font-bold text-blue-700">{speakerVoteCount(candidate.id)}</div>
-                      <div className="text-xs text-gray-500">{speakerVote === candidate.id ? "Selected" : "votes"}</div>
+                      <div className="text-xs text-gray-500">{speakerVote === candidate.id ? "Selected" : speakerOptedOut(candidate.id) ? "opted out" : "votes"}</div>
                     </div>
                   </button>
                 ))}
@@ -319,10 +424,20 @@ export function FloorSession() {
             )}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No calendared bills are ready for floor session.</div>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+              <div className="text-sm font-semibold text-gray-900">Speaker election concluded</div>
+              <div className="mt-1 text-sm text-gray-600">Winner: {speakerWinner?.name ?? "No winner"}</div>
+            </div>
+            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No calendared bills are ready for floor session.</div>
+          </div>
         ) : activeItem ? (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="space-y-6">
+              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+                <div className="text-sm font-semibold text-gray-900">Speaker election concluded</div>
+                <div className="mt-1 text-sm text-gray-600">Winner: {speakerWinner?.name ?? "No winner"}</div>
+              </div>
               <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>

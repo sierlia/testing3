@@ -282,15 +282,18 @@ export function ClassDashboard() {
 
   const inviteTeacher = async () => {
     if (!classId || !inviteEmail.trim()) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) {
+      toast.error("please enter a valid email address");
+      return;
+    }
     setInviteBusy(true);
     try {
       const { error } = await supabase.rpc("invite_teacher_to_class", { target_class: classId, teacher_email: inviteEmail.trim() });
       if (error) throw error;
-      toast.success("Teacher invited");
+      toast.success("invitation sent if user exists");
       setInviteEmail("");
     } catch (e: any) {
-      const message = e.message === "TEACHER_NOT_FOUND" ? "No teacher account found with that email." : e.message || "Could not invite teacher";
-      toast.error(message);
+      toast.error(e.message === "EMAIL_REQUIRED" ? "please enter a valid email address" : "invitation sent if user exists");
     } finally {
       setInviteBusy(false);
     }
@@ -320,11 +323,6 @@ export function ClassDashboard() {
     });
     return () => window.cancelAnimationFrame(frame);
   }, [currentIndex, timelineExpanded, visibleWorkflowSteps.length]);
-
-  const ActivityActionLink = ({ activity }: { activity: ClassActivity }) => {
-    if (!activity.targetUrl) return <>{activity.action}</>;
-    return <Link to={activity.targetUrl} className="font-medium text-gray-900 hover:text-blue-600">{activity.action}</Link>;
-  };
 
   const workflowAction = (stepId: string) => {
     if (stepId === "setup") {
@@ -616,16 +614,20 @@ export function ClassDashboard() {
               <CardContent className="p-0">
                 <div className="divide-y divide-gray-100">
                   {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3 p-4">
+                    <Link
+                      key={activity.id}
+                      to={activity.targetUrl || `/profile/${activity.studentId}`}
+                      className="flex items-start gap-3 p-4 transition-colors hover:bg-gray-50"
+                    >
                       <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50">{getActivityIcon(activity.type)}</div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-gray-900">
-                          <Link to={`/profile/${activity.studentId}`} className="font-semibold transition-colors hover:text-blue-600">{activity.studentName}</Link>{" "}
-                          <ActivityActionLink activity={activity} />
+                          <span className="font-semibold">{activity.studentName}</span>{" "}
+                          <span className="font-medium text-gray-900">{activity.action}</span>
                         </p>
                         <p className="mt-0.5 text-xs text-gray-500">{formatTimestamp(activity.timestamp)}</p>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                   {recentActivity.length === 0 && <div className="p-4 text-sm text-gray-500">No recent activity.</div>}
                 </div>

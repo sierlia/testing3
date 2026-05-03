@@ -21,6 +21,7 @@ type LeadershipCache = {
   committee: { id: string; class_id: string; name: string; description: string | null } | null;
   members: Member[];
   votes: Array<{ position: LeadershipPosition; voter_user_id: string; candidate_user_id: string }>;
+  optOuts: Array<{ position: LeadershipPosition; user_id: string }>;
 };
 
 const leadershipPageCache = new Map<string, LeadershipCache>();
@@ -53,6 +54,7 @@ export function CommitteeLeadership() {
   const [committee, setCommittee] = useState<{ id: string; class_id: string; name: string; description: string | null } | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [votes, setVotes] = useState<Array<{ position: LeadershipPosition; voter_user_id: string; candidate_user_id: string }>>([]);
+  const [optOuts, setOptOuts] = useState<Array<{ position: LeadershipPosition; user_id: string }>>([]);
   const [classSettings, setClassSettings] = useState<any>({});
 
   const load = async () => {
@@ -63,6 +65,7 @@ export function CommitteeLeadership() {
       setCommittee(cached.committee);
       setMembers(cached.members);
       setVotes(cached.votes);
+      setOptOuts(cached.optOuts);
       setLoading(false);
     } else {
       setLoading(true);
@@ -92,18 +95,24 @@ export function CommitteeLeadership() {
       const nextMembers = (memberRows ?? []).map((m: any) => ({ ...m, profile: profileMap.get(m.user_id) ?? null })) as Member[];
       setMembers(nextMembers);
 
-      const { data: voteRows } = await supabase
-        .from("committee_leadership_votes")
-        .select("position,voter_user_id,candidate_user_id")
-        .eq("committee_id", committeeId);
+      const [{ data: voteRows }, { data: optOutRows }] = await Promise.all([
+        supabase
+          .from("committee_leadership_votes")
+          .select("position,voter_user_id,candidate_user_id")
+          .eq("committee_id", committeeId),
+        supabase.from("committee_leadership_opt_outs").select("position,user_id").eq("committee_id", committeeId),
+      ]);
       const nextVotes = (voteRows ?? []) as any;
+      const nextOptOuts = (optOutRows ?? []) as any;
       setVotes(nextVotes);
+      setOptOuts(nextOptOuts);
       leadershipPageCache.set(committeeId, {
         meId: uid,
         role: (prof as any)?.role ?? null,
         committee: c as any,
         members: nextMembers,
         votes: nextVotes,
+        optOuts: nextOptOuts,
       });
     } catch (e: any) {
       toast.error(e.message || "Could not load committee leadership");
@@ -120,6 +129,7 @@ export function CommitteeLeadership() {
   const isMember = !!meId && members.some((m) => m.user_id === meId);
   const isTeacher = role === "teacher";
   const electionOpen = classSettings?.elections?.committeeOpenById?.[committeeId] ?? Boolean(classSettings?.elections?.open);
+  const electionConcluded = Boolean(classSettings?.elections?.committeeConcludedById?.[committeeId]);
   const majorityParty = useMemo(() => {
     const counts = new Map<string, number>();
     for (const member of members) counts.set(memberParty(member), (counts.get(memberParty(member)) ?? 0) + 1);
@@ -133,17 +143,20 @@ export function CommitteeLeadership() {
   const chairCandidates = majorityParty ? members.filter((member) => memberParty(member) === majorityParty) : members;
   const rankingCandidates = majorityParty ? members.filter((member) => memberParty(member) !== majorityParty) : [];
 
-  const voteCount = (position: LeadershipPosition, candidateId: string) => votes.filter((vote) => vote.position === position && vote.candidate_user_id === candidateId).length;
+  const hasOptedOut = (position: LeadershipPosition, userId: string) => optOuts.some((row) => row.position === position && row.user_id === userId);
+  const voteCount = (position: LeadershipPosition, candidateId: string) => hasOptedOut(position, candidateId) ? 0 : votes.filter((vote) => vote.position === position && vote.candidate_user_id === candidateId).length;
   const myVote = (position: LeadershipPosition) => votes.find((vote) => vote.position === position && vote.voter_user_id === meId)?.candidate_user_id ?? null;
   const winnerFor = (position: LeadershipPosition) => {
     const counts = new Map<string, number>();
-    for (const vote of votes.filter((row) => row.position === position)) counts.set(vote.candidate_user_id, (counts.get(vote.candidate_user_id) ?? 0) + 1);
+    for (const vote of votes.filter((row) => row.position === position && !hasOptedOut(position, row.candidate_user_id))) counts.set(vote.candidate_user_id, (counts.get(vote.candidate_user_id) ?? 0) + 1);
     const winner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     return winner ? members.find((member) => member.user_id === winner) ?? null : null;
   };
 
   const castVote = async (position: LeadershipPosition, candidateId: string) => {
     if (!committee || !meId || !isMember) return;
+    if (electionConcluded || !electionOpen) return;
+    if (hasOptedOut(position, candidateId)) return toast.error("This candidate opted out");
     try {
       if (myVote(position) === candidateId) {
         const { error } = await supabase
@@ -185,17 +198,69 @@ export function CommitteeLeadership() {
     }
   };
 
-  const applyWinners = async () => {
+  const toggleOptOut = async (position: LeadershipPosition) => {
+    if (!committee || !meId || !isMember || electionConcluded || !electionOpen) return;
+    const optedOut = hasOptedOut(position, meId);
+    try {
+      if (optedOut) {
+        const { error } = await supabase.from("committee_leadership_opt_outs").delete().eq("committee_id", committee.id).eq("user_id", meId).eq("position", position);
+        if (error) throw error;
+        setOptOuts((prev) => {
+          const next = prev.filter((row) => !(row.user_id === meId && row.position === position));
+          const cached = leadershipPageCache.get(committeeId);
+          if (cached) leadershipPageCache.set(committeeId, { ...cached, optOuts: next });
+          return next;
+        });
+        toast.success("Opt-out removed");
+        return;
+      }
+      const [{ error: optError }, { error: voteError }] = await Promise.all([
+        supabase.from("committee_leadership_opt_outs").upsert({ committee_id: committee.id, class_id: committee.class_id, user_id: meId, position } as any, { onConflict: "committee_id,user_id,position" }),
+        supabase.from("committee_leadership_votes").delete().eq("committee_id", committee.id).eq("candidate_user_id", meId).eq("position", position),
+      ]);
+      if (optError || voteError) throw optError ?? voteError;
+      setOptOuts((prev) => {
+        const next = [...prev.filter((row) => !(row.user_id === meId && row.position === position)), { user_id: meId, position }];
+        const cached = leadershipPageCache.get(committeeId);
+        if (cached) leadershipPageCache.set(committeeId, { ...cached, optOuts: next });
+        return next;
+      });
+      setVotes((prev) => {
+        const next = prev.filter((vote) => !(vote.candidate_user_id === meId && vote.position === position));
+        const cached = leadershipPageCache.get(committeeId);
+        if (cached) leadershipPageCache.set(committeeId, { ...cached, votes: next });
+        return next;
+      });
+      toast.success("Opted out");
+    } catch (e: any) {
+      toast.error(e.message || "Could not update opt-out");
+    }
+  };
+
+  const concludeElection = async () => {
     if (role !== "teacher") return;
     const chair = winnerFor("chair");
     const ranking = winnerFor("ranking_member");
     try {
       if (chair) await supabase.from("committee_members").update({ role: "chair" } as any).eq("committee_id", committeeId).eq("user_id", chair.user_id);
       if (ranking) await supabase.from("committee_members").update({ role: "ranking_member" } as any).eq("committee_id", committeeId).eq("user_id", ranking.user_id);
-      toast.success("Leadership roles applied");
+      if (committee) {
+        const nextSettings = {
+          ...classSettings,
+          elections: {
+            ...(classSettings.elections ?? {}),
+            committeeConcludedById: { ...(classSettings.elections?.committeeConcludedById ?? {}), [committee.id]: true },
+            committeeOpenById: { ...(classSettings.elections?.committeeOpenById ?? {}), [committee.id]: false },
+          },
+        };
+        const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", committee.class_id);
+        if (error) throw error;
+        setClassSettings(nextSettings);
+      }
+      toast.success("Committee election concluded");
       await load();
     } catch (e: any) {
-      toast.error(e.message || "Could not apply winners");
+      toast.error(e.message || "Could not conclude election");
     }
   };
 
@@ -219,10 +284,20 @@ export function CommitteeLeadership() {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
-          <p className="text-sm text-gray-600">{electionOpen ? "Voting is open." : "Voting is closed."} Winner so far: {winnerFor(position)?.profile?.display_name ?? "No votes yet"}</p>
+          <p className="text-sm text-gray-600">{electionConcluded ? "Winner" : electionOpen ? "Voting is open." : "Voting is closed."}: {winnerFor(position)?.profile?.display_name ?? "No votes yet"}</p>
         </div>
         <Vote className="h-5 w-5 text-blue-600" />
       </div>
+      {isMember && !electionConcluded && (
+        <button
+          type="button"
+          onClick={() => void toggleOptOut(position)}
+          disabled={!electionOpen}
+          className={`mb-3 rounded-md px-3 py-1.5 text-xs font-medium ${hasOptedOut(position, meId ?? "") ? "bg-gray-900 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"} disabled:opacity-50`}
+        >
+          {hasOptedOut(position, meId ?? "") ? "Opted out" : "Opt out"}
+        </button>
+      )}
       <div className="space-y-3">
         {candidates.length === 0 && <div className="text-sm text-gray-500">No eligible candidates for this election.</div>}
         {candidates.map((member) => (
@@ -232,11 +307,12 @@ export function CommitteeLeadership() {
               <div className="min-w-0">
                 <Link to={`/profile/${member.user_id}`} className="truncate text-sm font-medium text-blue-600 hover:underline">{member.profile?.display_name ?? "Member"}</Link>
                 <div className="text-xs text-gray-500">{memberDescriptor(member)}</div>
+                {hasOptedOut(position, member.user_id) && <div className="text-xs text-gray-500">Opted out</div>}
               </div>
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-600">{voteCount(position, member.user_id)} votes</span>
-              {isMember && electionOpen && (
+              {isMember && electionOpen && !electionConcluded && !hasOptedOut(position, member.user_id) && (
                 <button
                   onClick={() => void castVote(position, member.user_id)}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium ${myVote(position) === member.user_id ? "bg-blue-600 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
@@ -263,12 +339,12 @@ export function CommitteeLeadership() {
               <h1 className="text-3xl font-bold text-gray-900">{committee.name}</h1>
               {isTeacher && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={() => void setCommitteeElectionOpen(!electionOpen)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  <button onClick={() => void setCommitteeElectionOpen(!electionOpen)} disabled={electionConcluded} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                     {electionOpen ? "Close election" : "Open election"}
                   </button>
-                  <button onClick={() => void applyWinners()} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+                  <button onClick={() => void concludeElection()} disabled={electionConcluded} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
                     <CheckCircle className="h-4 w-4" />
-                    Apply winners
+                    Conclude
                   </button>
                 </div>
               )}

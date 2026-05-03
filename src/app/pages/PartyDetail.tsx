@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router";
-import { Flag, LogOut, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
+import { CheckCircle, Flag, LogOut, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -32,10 +32,10 @@ function displayAuthorName(author: MemberRow | null | undefined, fallback = "Mem
 function PartyIcon({ name }: { name: string }) {
   const normalized = name.toLowerCase();
   if (normalized.includes("democrat")) {
-    return <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Democratic%20Disc.svg" alt="Democratic Party donkey" className="h-5 w-5 object-contain" />;
+    return <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Democratic%20Disc.svg" alt="Democratic Party donkey" className="h-8 w-8 rounded-full object-cover" />;
   }
   if (normalized.includes("republican")) {
-    return <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Republican%20Disc.svg" alt="Republican Party elephant" className="h-5 w-5 object-contain" />;
+    return <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Republican%20Disc.svg" alt="Republican Party elephant" className="h-8 w-8 rounded-full object-cover" />;
   }
   return <Flag className="h-4 w-4" />;
 }
@@ -58,6 +58,7 @@ export function PartyDetail() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "district">("name");
   const [votes, setVotes] = useState<Array<{ position: "chair" | "whip"; voter_user_id: string; candidate_user_id: string }>>([]);
+  const [optOuts, setOptOuts] = useState<Array<{ position: "chair" | "whip"; user_id: string }>>([]);
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
   const [editingName, setEditingName] = useState(false);
@@ -135,8 +136,12 @@ export function PartyDetail() {
         setComments({});
       }
 
-      const { data: voteRows } = await supabase.from("party_leadership_votes").select("position,voter_user_id,candidate_user_id").eq("party_id", partyId);
+      const [{ data: voteRows }, { data: optOutRows }] = await Promise.all([
+        supabase.from("party_leadership_votes").select("position,voter_user_id,candidate_user_id").eq("party_id", partyId),
+        supabase.from("party_leadership_opt_outs").select("position,user_id").eq("party_id", partyId),
+      ]);
       setVotes((voteRows ?? []) as any);
+      setOptOuts((optOutRows ?? []) as any);
     } catch (e: any) {
       toast.error(e.message || "Could not load party");
     } finally {
@@ -163,9 +168,11 @@ export function PartyDetail() {
       );
   }, [members, searchQuery, sortBy]);
 
+  const hasOptedOut = (position: "chair" | "whip", userId: string) => optOuts.some((row) => row.position === position && row.user_id === userId);
+
   const leaderFor = (position: "chair" | "whip") => {
     const counts = new Map<string, number>();
-    for (const vote of votes.filter((v) => v.position === position)) counts.set(v.candidate_user_id, (counts.get(v.candidate_user_id) ?? 0) + 1);
+    for (const vote of votes.filter((v) => v.position === position && !hasOptedOut(position, v.candidate_user_id))) counts.set(v.candidate_user_id, (counts.get(v.candidate_user_id) ?? 0) + 1);
     const winner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     return winner ? members.find((m) => m.user_id === winner) ?? null : null;
   };
@@ -326,7 +333,15 @@ export function PartyDetail() {
 
   const castLeadershipVote = async (position: "chair" | "whip", candidateId: string) => {
     if (!party || !meId || !isMember) return;
+    if (hasOptedOut(position, candidateId)) return toast.error("This candidate opted out");
     try {
+      if (myLeadershipVote(position) === candidateId) {
+        const { error } = await supabase.from("party_leadership_votes").delete().eq("party_id", party.id).eq("voter_user_id", meId).eq("position", position);
+        if (error) throw error;
+        setVotes((prev) => prev.filter((v) => !(v.voter_user_id === meId && v.position === position)));
+        toast.success("Vote withdrawn");
+        return;
+      }
       const { error } = await supabase.from("party_leadership_votes").upsert(
         {
           party_id: party.id,
@@ -345,9 +360,34 @@ export function PartyDetail() {
     }
   };
 
-  const voteCount = (position: "chair" | "whip", candidateId: string) => votes.filter((v) => v.position === position && v.candidate_user_id === candidateId).length;
+  const toggleOptOut = async (position: "chair" | "whip") => {
+    if (!party || !meId || !isMember) return;
+    const optedOut = hasOptedOut(position, meId);
+    try {
+      if (optedOut) {
+        const { error } = await supabase.from("party_leadership_opt_outs").delete().eq("party_id", party.id).eq("user_id", meId).eq("position", position);
+        if (error) throw error;
+        setOptOuts((prev) => prev.filter((row) => !(row.user_id === meId && row.position === position)));
+        toast.success("Opt-out removed");
+        return;
+      }
+      const [{ error: optError }, { error: voteError }] = await Promise.all([
+        supabase.from("party_leadership_opt_outs").upsert({ party_id: party.id, class_id: party.class_id, user_id: meId, position } as any, { onConflict: "party_id,user_id,position" }),
+        supabase.from("party_leadership_votes").delete().eq("party_id", party.id).eq("candidate_user_id", meId).eq("position", position),
+      ]);
+      if (optError || voteError) throw optError ?? voteError;
+      setOptOuts((prev) => [...prev.filter((row) => !(row.user_id === meId && row.position === position)), { user_id: meId, position }]);
+      setVotes((prev) => prev.filter((vote) => !(vote.candidate_user_id === meId && vote.position === position)));
+      toast.success("Opted out");
+    } catch (e: any) {
+      toast.error(e.message || "Could not update opt-out");
+    }
+  };
+
+  const voteCount = (position: "chair" | "whip", candidateId: string) => hasOptedOut(position, candidateId) ? 0 : votes.filter((v) => v.position === position && v.candidate_user_id === candidateId).length;
   const myLeadershipVote = (position: "chair" | "whip") => votes.find((v) => v.position === position && v.voter_user_id === meId)?.candidate_user_id ?? null;
   const electionOpen = classSettings?.elections?.partyOpenById?.[partyId] ?? Boolean(classSettings?.elections?.open);
+  const electionConcluded = Boolean(classSettings?.elections?.partyConcludedById?.[partyId]);
 
   const setPartyElectionOpen = async (open: boolean) => {
     if (!party || !isTeacher) return;
@@ -364,6 +404,22 @@ export function PartyDetail() {
     toast.success(open ? "Party election opened" : "Party election closed");
   };
 
+  const concludePartyElection = async () => {
+    if (!party || !isTeacher) return;
+    const nextSettings = {
+      ...classSettings,
+      elections: {
+        ...(classSettings.elections ?? {}),
+        partyConcludedById: { ...(classSettings.elections?.partyConcludedById ?? {}), [party.id]: true },
+        partyOpenById: { ...(classSettings.elections?.partyOpenById ?? {}), [party.id]: false },
+      },
+    };
+    const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", party.class_id);
+    if (error) return toast.error(error.message || "Could not conclude election");
+    setClassSettings(nextSettings);
+    toast.success("Party election concluded");
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -378,7 +434,7 @@ export function PartyDetail() {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ backgroundColor: party.color || "#2563eb" }}>
+                    <span className="inline-flex h-8 w-8 items-center justify-center overflow-hidden rounded-full text-white" style={{ backgroundColor: party.color || "#2563eb" }}>
                       <PartyIcon name={party.name} />
                     </span>
                     {editingName ? (
@@ -524,29 +580,57 @@ export function PartyDetail() {
                       <Vote className="h-5 w-5 text-[var(--party-color)]" />
                       <div>
                         <h2 className="text-lg font-semibold text-gray-900">Party Leadership Elections</h2>
-                        <p className="text-sm text-gray-500">{electionOpen ? "Voting is open." : "Voting is closed."}</p>
+                        <p className="text-sm text-gray-500">{electionConcluded ? "Winners are final." : electionOpen ? "Voting is open." : "Voting is closed."}</p>
                       </div>
                     </div>
                     {isTeacher && (
-                      <button
-                        type="button"
-                        onClick={() => void setPartyElectionOpen(!electionOpen)}
-                        className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                      >
-                        {electionOpen ? "Close election" : "Open election"}
-                      </button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void setPartyElectionOpen(!electionOpen)}
+                          disabled={electionConcluded}
+                          className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          {electionOpen ? "Close election" : "Open election"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void concludePartyElection()}
+                          disabled={electionConcluded}
+                          className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                        >
+                          <CheckCircle className="h-4 w-4" />
+                          Conclude
+                        </button>
+                      </div>
                     )}
                   </div>
                   {(["chair", "whip"] as const).map((position) => (
                     <div key={position} className="mb-5 last:mb-0">
-                      <h3 className="mb-2 text-sm font-semibold capitalize text-gray-700">{position}</h3>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <h3 className="text-sm font-semibold capitalize text-gray-700">{position}</h3>
+                        <div className="text-sm text-gray-500">Winner: {leaderFor(position)?.display_name ?? "No votes yet"}</div>
+                      </div>
+                      {isMember && !electionConcluded && (
+                        <button
+                          type="button"
+                          onClick={() => void toggleOptOut(position)}
+                          disabled={!electionOpen}
+                          className={`mb-3 rounded-md px-3 py-1.5 text-xs font-medium ${hasOptedOut(position, meId ?? "") ? "bg-gray-900 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"} disabled:opacity-50`}
+                        >
+                          {hasOptedOut(position, meId ?? "") ? "Opted out" : "Opt out"}
+                        </button>
+                      )}
                       <div className="space-y-2">
                         {members.map((member) => (
                           <div key={`${position}:${member.user_id}`} className="flex items-center justify-between rounded-md border border-gray-200 p-3">
-                            <div className="text-sm font-medium text-gray-900">{member.display_name ?? "Member"}</div>
+                            <div>
+                              <div className="text-sm font-medium text-gray-900">{member.display_name ?? "Member"}</div>
+                              {hasOptedOut(position, member.user_id) && <div className="text-xs text-gray-500">Opted out</div>}
+                            </div>
                             <div className="flex items-center gap-3">
                               <span className="text-xs text-gray-500">{voteCount(position, member.user_id)} votes</span>
-                              {isMember && electionOpen && (
+                              {isMember && electionOpen && !electionConcluded && !hasOptedOut(position, member.user_id) && (
                                 <button
                                   onClick={() => void castLeadershipVote(position, member.user_id)}
                                   className={`rounded px-3 py-1.5 text-xs font-medium ${myLeadershipVote(position) === member.user_id ? "text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}

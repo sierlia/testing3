@@ -94,9 +94,10 @@ export function TessCaucusDetail() {
     [announcements, selectedAnnouncementId],
   );
   const electionOpen = classSettings?.elections?.caucusOpenById?.[caucusId] ?? Boolean(classSettings?.elections?.open);
+  const electionConcluded = Boolean(classSettings?.elections?.caucusConcludedById?.[caucusId]);
 
   const setCaucusElectionOpen = async (open: boolean) => {
-    if (!caucus || !isTeacher) return;
+    if (!caucus || !isTeacher || electionConcluded) return;
     const nextSettings = {
       ...classSettings,
       elections: {
@@ -108,6 +109,22 @@ export function TessCaucusDetail() {
     if (error) return toast.error(error.message || "Could not update election");
     setClassSettings(nextSettings);
     toast.success(open ? "Caucus election opened" : "Caucus election closed");
+  };
+
+  const concludeCaucusElection = async () => {
+    if (!caucus || !isTeacher) return;
+    const nextSettings = {
+      ...classSettings,
+      elections: {
+        ...(classSettings.elections ?? {}),
+        caucusConcludedById: { ...(classSettings.elections?.caucusConcludedById ?? {}), [caucus.id]: true },
+        caucusOpenById: { ...(classSettings.elections?.caucusOpenById ?? {}), [caucus.id]: false },
+      },
+    };
+    const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", caucus.class_id);
+    if (error) return toast.error(error.message || "Could not conclude election");
+    setClassSettings(nextSettings);
+    toast.success("Caucus election concluded");
   };
 
   useEffect(() => {
@@ -468,6 +485,7 @@ export function TessCaucusDetail() {
   };
 
   const setMemberRole = async (userId: string, role: MembershipRole) => {
+    if (electionConcluded) return;
     try {
       const { error } = await supabase.from("caucus_members").update({ role }).eq("caucus_id", caucusId).eq("user_id", userId);
       if (error) throw error;
@@ -978,16 +996,27 @@ export function TessCaucusDetail() {
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h2 className="text-lg font-semibold text-gray-900">Caucus Leadership Election</h2>
-                    <p className="text-sm text-gray-500">{electionOpen ? "Voting is open." : "Voting is closed."}</p>
+                    <p className="text-sm text-gray-500">{electionConcluded ? "Winners are final." : electionOpen ? "Voting is open." : "Voting is closed."}</p>
                   </div>
                   {isTeacher && (
-                    <button
-                      type="button"
-                      onClick={() => void setCaucusElectionOpen(!electionOpen)}
-                      className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      {electionOpen ? "Close election" : "Open election"}
-                    </button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => void setCaucusElectionOpen(!electionOpen)}
+                        disabled={electionConcluded}
+                        className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        {electionOpen ? "Close election" : "Open election"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => void concludeCaucusElection()}
+                        disabled={electionConcluded}
+                        className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                      >
+                        Conclude
+                      </button>
+                    </div>
                   )}
                 </div>
                 <div className="space-y-3">
@@ -1001,7 +1030,7 @@ export function TessCaucusDetail() {
                       </div>
                       <div className="flex items-center gap-2">
                         {m.role !== "member" && <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">{m.role.replace("_", " ")}</span>}
-                        {isChair && electionOpen && m.role !== "chair" && (
+                        {isChair && electionOpen && !electionConcluded && m.role !== "chair" && (
                           <button
                             type="button"
                             onClick={() => void setMemberRole(m.user_id, m.role === "co_chair" ? "member" : "co_chair")}

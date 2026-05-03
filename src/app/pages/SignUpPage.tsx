@@ -104,6 +104,7 @@ export function SignUpPage() {
 }
 
 function TeacherSignUp({ onBack }: { onBack: () => void }) {
+  const navigate = useNavigate();
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -138,11 +139,16 @@ function TeacherSignUp({ onBack }: { onBack: () => void }) {
       });
 
       if (error) throw error;
+      if (data.user?.id) {
+        await supabase.from("profiles").upsert({
+          user_id: data.user.id,
+          role: "teacher",
+          display_name: formData.name.trim(),
+        } as any);
+      }
 
       toast.success('Account created successfully!');
-      
-      // Redirect to teacher dashboard
-      window.location.href = '/teacher/dashboard';
+      navigate('/teacher/dashboard');
     } catch (error: any) {
       console.error('Signup error:', error);
       toast.error(error.message || 'Failed to create account');
@@ -275,6 +281,13 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
       });
 
       if (error) throw error;
+      if (data.user?.id) {
+        await supabase.from("profiles").upsert({
+          user_id: data.user.id,
+          role: "student",
+          display_name: formData.name.trim(),
+        } as any);
+      }
 
       toast.success('Account created successfully!');
       
