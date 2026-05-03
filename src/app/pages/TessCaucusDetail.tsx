@@ -132,7 +132,7 @@ export function TessCaucusDetail() {
     toast.success(open ? "Caucus election opened" : "Caucus election closed");
   };
 
-  const concludeCaucusElection = async () => {
+  const postCaucusElectionResults = async () => {
     if (!caucus || !isTeacher) return;
     const nextSettings = {
       ...classSettings,
@@ -143,9 +143,9 @@ export function TessCaucusDetail() {
       },
     };
     const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", caucus.class_id);
-    if (error) return toast.error(error.message || "Could not conclude election");
+    if (error) return toast.error(error.message || "Could not post results");
     setClassSettings(nextSettings);
-    toast.success("Caucus election concluded");
+    toast.success("Election results posted");
   };
 
   useEffect(() => {
@@ -1033,21 +1033,31 @@ export function TessCaucusDetail() {
                   </div>
                   {isTeacher && (
                     <div className="flex flex-wrap items-center gap-2">
+                      <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                        <button
+                          type="button"
+                          onClick={() => void setCaucusElectionOpen(true)}
+                          disabled={electionConcluded}
+                          className={`px-3 py-2 text-sm font-medium disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          Open
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void setCaucusElectionOpen(false)}
+                          disabled={electionConcluded}
+                          className={`border-l border-gray-300 px-3 py-2 text-sm font-medium disabled:opacity-50 ${!electionOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          Close
+                        </button>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => void setCaucusElectionOpen(!electionOpen)}
-                        disabled={electionConcluded}
-                        className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                      >
-                        {electionOpen ? "Close election" : "Open election"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void concludeCaucusElection()}
+                        onClick={() => void postCaucusElectionResults()}
                         disabled={electionConcluded}
                         className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                       >
-                        Conclude
+                        Post results
                       </button>
                     </div>
                   )}

@@ -248,9 +248,9 @@ export function ClassDashboard() {
     const next: any = {
       workflow: { ...(classSettings.workflow ?? {}), stage },
       ...(stage === "setup" ? { class: { ...(classSettings.class ?? {}), joinEnabled: false } } : {}),
-      ...(stage === "elections" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: false } } : {}),
-      ...(stage === "assign_committees" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: true } } : {}),
-      ...(stage === "legislation" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: true } } : {}),
+      ...(stage === "elections" ? { elections: { ...(classSettings.elections ?? {}), open: false } } : {}),
+      ...(stage === "assign_committees" ? { elections: { ...(classSettings.elections ?? {}), open: false } } : {}),
+      ...(stage === "legislation" ? { elections: { ...(classSettings.elections ?? {}), open: false } } : {}),
     };
     await updateClassSettings(next);
   };
@@ -273,9 +273,9 @@ export function ClassDashboard() {
     });
   };
 
-  const concludeElections = async () => {
+  const closeElections = async () => {
     await updateClassSettings({
-      elections: { ...(classSettings.elections ?? {}), open: false, concluded: true },
+      elections: { ...(classSettings.elections ?? {}), open: false },
       workflow: { ...(classSettings.workflow ?? {}), stage: "elections" },
     });
   };
@@ -287,7 +287,7 @@ export function ClassDashboard() {
         ? "This will open the Speaker election and every organization leadership election for the class. To open only one election, use the controls in that specific floor, party, committee, or caucus area."
         : "This will close the Speaker election and every organization leadership election for the class. To close only one election, use the controls in that specific floor, party, committee, or caucus area.",
       confirmLabel: open ? "Open all elections" : "Close all elections",
-      onConfirm: open ? openElections : concludeElections,
+      onConfirm: open ? openElections : closeElections,
     });
   };
 
@@ -367,7 +367,7 @@ export function ClassDashboard() {
               className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-gray-900 text-white shadow-sm" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
             >
               <Vote className="h-5 w-5" />
-              Closed
+              Close
             </button>
           </div>
         </div>

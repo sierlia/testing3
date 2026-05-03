@@ -418,7 +418,7 @@ export function PartyDetail() {
     toast.success(open ? "Party election opened" : "Party election closed");
   };
 
-  const concludePartyElection = async () => {
+  const postPartyElectionResults = async () => {
     if (!party || !isTeacher) return;
     const nextSettings = {
       ...classSettings,
@@ -429,9 +429,9 @@ export function PartyDetail() {
       },
     };
     const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", party.class_id);
-    if (error) return toast.error(error.message || "Could not conclude election");
+    if (error) return toast.error(error.message || "Could not post results");
     setClassSettings(nextSettings);
-    toast.success("Party election concluded");
+    toast.success("Election results posted");
   };
 
   return (
@@ -605,22 +605,32 @@ export function PartyDetail() {
                     </div>
                     {isTeacher && (
                       <div className="flex flex-wrap items-center gap-2">
+                        <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                          <button
+                            type="button"
+                            onClick={() => void setPartyElectionOpen(true)}
+                            disabled={electionConcluded}
+                            className={`px-3 py-2 text-sm font-medium disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                          >
+                            Open
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void setPartyElectionOpen(false)}
+                            disabled={electionConcluded}
+                            className={`border-l border-gray-300 px-3 py-2 text-sm font-medium disabled:opacity-50 ${!electionOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                          >
+                            Close
+                          </button>
+                        </div>
                         <button
                           type="button"
-                          onClick={() => void setPartyElectionOpen(!electionOpen)}
-                          disabled={electionConcluded}
-                          className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          {electionOpen ? "Close election" : "Open election"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void concludePartyElection()}
+                          onClick={() => void postPartyElectionResults()}
                           disabled={electionConcluded}
                           className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
                         >
                           <CheckCircle className="h-4 w-4" />
-                          Conclude
+                          Post results
                         </button>
                       </div>
                     )}

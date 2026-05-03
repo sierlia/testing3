@@ -177,7 +177,7 @@ export function FloorSession() {
     return winner && speakerVoteCount(winner.id) > 0 ? winner : null;
   }, [speakerCandidates, speakerVotes, speakerOptOuts]);
 
-  const concludeSpeakerElection = async () => {
+  const postSpeakerResults = async () => {
     if (!classId || role !== "teacher") return;
     setBusy(true);
     try {
@@ -188,9 +188,9 @@ export function FloorSession() {
       const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
       if (error) throw error;
       setClassSettings(nextSettings);
-      toast.success("Speaker election concluded");
+      toast.success("Speaker election results posted");
     } catch (e: any) {
-      toast.error(e.message || "Could not conclude Speaker election");
+      toast.error(e.message || "Could not post Speaker results");
     } finally {
       setBusy(false);
     }
@@ -349,15 +349,20 @@ export function FloorSession() {
                   <Trophy className="h-5 w-5 text-blue-600" />
                   <h2 className="text-xl font-semibold text-gray-900">Speaker of the House Election</h2>
                 </div>
-                <p className="text-sm text-gray-600">{speakerOpen ? "Voting is open." : "Voting is closed."} Floor bills will appear after the Speaker election is concluded.</p>
+                <p className="text-sm text-gray-600">{speakerOpen ? "Voting is open." : "Voting is closed."} Floor bills will appear after Speaker results are posted.</p>
               </div>
               {role === "teacher" && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button type="button" onClick={() => void setSpeakerElectionOpen(!speakerOpen)} disabled={busy} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                    {speakerOpen ? "Close election" : "Open election"}
-                  </button>
-                  <button type="button" onClick={() => void concludeSpeakerElection()} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                    Conclude
+                  <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                    <button type="button" onClick={() => void setSpeakerElectionOpen(true)} disabled={busy} className={`px-4 py-2 text-sm font-medium disabled:opacity-50 ${speakerOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                      Open
+                    </button>
+                    <button type="button" onClick={() => void setSpeakerElectionOpen(false)} disabled={busy} className={`border-l border-gray-300 px-4 py-2 text-sm font-medium disabled:opacity-50 ${!speakerOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                      Close
+                    </button>
+                  </div>
+                  <button type="button" onClick={() => void postSpeakerResults()} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                    Post results
                   </button>
                 </div>
               )}
@@ -426,7 +431,7 @@ export function FloorSession() {
         ) : items.length === 0 ? (
           <div className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-              <div className="text-sm font-semibold text-gray-900">Speaker election concluded</div>
+              <div className="text-sm font-semibold text-gray-900">Speaker results posted</div>
               <div className="mt-1 text-sm text-gray-600">Winner: {speakerWinner?.name ?? "No winner"}</div>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No calendared bills are ready for floor session.</div>
@@ -435,7 +440,7 @@ export function FloorSession() {
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="space-y-6">
               <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="text-sm font-semibold text-gray-900">Speaker election concluded</div>
+                <div className="text-sm font-semibold text-gray-900">Speaker results posted</div>
                 <div className="mt-1 text-sm text-gray-600">Winner: {speakerWinner?.name ?? "No winner"}</div>
               </div>
               <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">

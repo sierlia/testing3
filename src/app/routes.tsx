@@ -54,6 +54,7 @@ import { CommitteeVote } from "./pages/CommitteeVote";
 import { CommitteeReportPage } from "./pages/CommitteeReportPage";
 import { ClassSimulationDashboard } from "./pages/ClassSimulationDashboard";
 import { ClassActivityPage } from "./pages/ClassActivityPage";
+import { HelpPage } from "./pages/HelpPage";
 
 export const router = createHashRouter([
   {
@@ -263,6 +264,10 @@ export const router = createHashRouter([
   {
     path: "/settings/classes",
     Component: SettingsClasses,
+  },
+  {
+    path: "/help",
+    Component: HelpPage,
   },
   {
     path: "/notification-settings",

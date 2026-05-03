@@ -237,7 +237,7 @@ export function CommitteeLeadership() {
     }
   };
 
-  const concludeElection = async () => {
+  const postElectionResults = async () => {
     if (role !== "teacher") return;
     const chair = winnerFor("chair");
     const ranking = winnerFor("ranking_member");
@@ -257,10 +257,10 @@ export function CommitteeLeadership() {
         if (error) throw error;
         setClassSettings(nextSettings);
       }
-      toast.success("Committee election concluded");
+      toast.success("Election results posted");
       await load();
     } catch (e: any) {
-      toast.error(e.message || "Could not conclude election");
+      toast.error(e.message || "Could not post results");
     }
   };
 
@@ -339,12 +339,17 @@ export function CommitteeLeadership() {
               <h1 className="text-3xl font-bold text-gray-900">{committee.name}</h1>
               {isTeacher && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <button onClick={() => void setCommitteeElectionOpen(!electionOpen)} disabled={electionConcluded} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                    {electionOpen ? "Close election" : "Open election"}
-                  </button>
-                  <button onClick={() => void concludeElection()} disabled={electionConcluded} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
+                  <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                    <button onClick={() => void setCommitteeElectionOpen(true)} disabled={electionConcluded} className={`px-4 py-2 text-sm font-medium disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                      Open
+                    </button>
+                    <button onClick={() => void setCommitteeElectionOpen(false)} disabled={electionConcluded} className={`border-l border-gray-300 px-4 py-2 text-sm font-medium disabled:opacity-50 ${!electionOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                      Close
+                    </button>
+                  </div>
+                  <button onClick={() => void postElectionResults()} disabled={electionConcluded} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">
                     <CheckCircle className="h-4 w-4" />
-                    Conclude
+                    Post results
                   </button>
                 </div>
               )}

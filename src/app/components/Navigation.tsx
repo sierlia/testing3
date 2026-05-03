@@ -1,4 +1,4 @@
-import { ChevronDown, Building2, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
+import { ChevronDown, Building2, CircleHelp, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
@@ -484,6 +484,14 @@ export function Navigation() {
                   >
                     <Settings className="w-4 h-4" />
                     Settings
+                  </Link>
+                  <Link
+                    to="/help"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    onClick={() => setUserMenuOpen(false)}
+                  >
+                    <CircleHelp className="w-4 h-4" />
+                    Help
                   </Link>
                   <button
                     onClick={handleSignOut}

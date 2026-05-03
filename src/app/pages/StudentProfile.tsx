@@ -27,7 +27,7 @@ import { formatConstituencyFull, normalizeConstituencyId } from "../utils/consti
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
 
-type EditingSection = "personal_statement" | "constituency_description" | "key_issues" | null;
+type EditingSection = string | null;
 
 function statusLabel(status: string) {
   return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -50,6 +50,25 @@ type ProfileRow = {
   class_id?: string | null;
 };
 
+type ProfileSectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters";
+type ProfileSectionRow = {
+  id?: string;
+  section_key: string;
+  title: string;
+  section_type: ProfileSectionType;
+  width: "full" | "half";
+  position: number;
+};
+
+const defaultProfileSections: ProfileSectionRow[] = [
+  { section_key: "personal_statement", title: "Personal Statement", section_type: "long_response", width: "full", position: 0 },
+  { section_key: "constituency_description", title: "Constituency Description", section_type: "long_response", width: "full", position: 1 },
+  { section_key: "key_issues", title: "Key Issues", section_type: "long_response", width: "full", position: 2 },
+  { section_key: "legislation_written", title: "Legislation Written", section_type: "legislation_written", width: "half", position: 3 },
+  { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "full", position: 4 },
+  { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", position: 5 },
+];
+
 const PROFILE_COLLAPSE_WORDS = 150;
 
 function countWords(text: string) {
@@ -70,6 +89,7 @@ export function StudentProfile() {
   const [billsCosponsored, setBillsCosponsored] = useState<any[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [orgs, setOrgs] = useState<{ committees: Array<{ id: string; name: string }>; caucuses: Array<{ id: string; name: string }> }>({ committees: [], caucuses: [] });
+  const [profileSections, setProfileSections] = useState<ProfileSectionRow[]>(defaultProfileSections);
 
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
   const [editingContent, setEditingContent] = useState<string>("");
@@ -160,8 +180,20 @@ export function StudentProfile() {
           .map((row) => normalizeConstituencyId(row.constituency_name))
           .filter(Boolean) as string[];
         setUnavailableConstituencies(taken);
+
+        const { data: sections } = await supabase
+          .from("class_profile_sections")
+          .select("id,section_key,title,section_type,width,position")
+          .eq("class_id", pr.class_id)
+          .order("position", { ascending: true });
+        const rows = ((sections ?? []) as ProfileSectionRow[]).map((section) => ({
+          ...section,
+          width: section.section_type === "organizations" ? "full" : section.width,
+        }));
+        setProfileSections(rows.length ? rows : defaultProfileSections);
       } else {
         setUnavailableConstituencies([]);
+        setProfileSections(defaultProfileSections);
       }
 
       const { data: cm } = await supabase
@@ -178,6 +210,22 @@ export function StudentProfile() {
       });
     })();
   }, [id]);
+
+  useEffect(() => {
+    if (teacherProfileTab !== "example" || !profile?.class_id) return;
+    (async () => {
+      const { data: sections } = await supabase
+        .from("class_profile_sections")
+        .select("id,section_key,title,section_type,width,position")
+        .eq("class_id", profile.class_id)
+        .order("position", { ascending: true });
+      const rows = ((sections ?? []) as ProfileSectionRow[]).map((section) => ({
+        ...section,
+        width: section.section_type === "organizations" ? "full" : section.width,
+      }));
+      setProfileSections(rows.length ? rows : defaultProfileSections);
+    })();
+  }, [teacherProfileTab, profile?.class_id]);
 
   const isMe = authUserId !== null && profile?.user_id === authUserId;
   const canChooseRepresentation = isMe && profile?.role !== "teacher";
@@ -367,6 +415,171 @@ export function StudentProfile() {
         .filter(Boolean);
   const isTeacherProfile = profile.role === "teacher";
   const sampleBadge = isTeacherProfile && !isMe ? <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">Sample work</span> : null;
+  const exampleEmptyText = isTeacherProfile && isMe ? "Input example response." : emptySectionText;
+
+  const sectionTextValue = (sectionKey: string) => {
+    if (sectionKey === "personal_statement") return profile.personal_statement || "";
+    const raw = (profile.written_responses || {})[sectionKey];
+    if (Array.isArray(raw)) return raw.filter(Boolean).join("\n");
+    return String(raw || "");
+  };
+
+  const renderLongResponseSection = (section: ProfileSectionRow) => {
+    const value = sectionTextValue(section.section_key);
+    const lines = value
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean);
+
+    return (
+      <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+          <div className="flex items-center gap-3">
+            {sampleBadge}
+            <div className="text-xs italic text-gray-500">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
+            {isMe && editingSection !== section.section_key && (
+              <button onClick={() => startEdit(section.section_key)} className="text-blue-600 transition-colors hover:text-blue-700">
+                <Pencil className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
+        {editingSection === section.section_key ? (
+          <div className="space-y-3">
+            <textarea
+              ref={setTextareaRef}
+              value={editingContent}
+              onChange={(e) => setEditingContent(e.target.value)}
+              placeholder={isTeacherProfile && isMe ? "Input example response." : `Enter ${section.title.toLowerCase()}...`}
+              rows={section.width === "full" ? 10 : 7}
+              className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
+            />
+            {section.section_key === "key_issues" && <div className="text-xs text-gray-500">Enter one issue per line.</div>}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => void saveEdit(section.section_key)}
+                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                <Save className="h-4 w-4" />
+                Save
+              </button>
+              <button onClick={cancelEdit} className="flex items-center gap-2 px-4 py-2 text-gray-700 transition-colors hover:text-gray-900">
+                <X className="h-4 w-4" />
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : value.trim() ? (
+          section.section_key === "key_issues" ? (
+            <ul className="space-y-2">
+              {lines.map((issue, index) => (
+                <li key={`${section.section_key}-${index}`} className="flex items-start text-gray-700">
+                  <span className="mr-2">&bull;</span>
+                  <span>{issue}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <div className="space-y-4 text-gray-700">
+              {value.split("\n\n").map((para, index) => (
+                <p key={`${section.section_key}-${index}`} className="whitespace-pre-line">
+                  {para}
+                </p>
+              ))}
+            </div>
+          )
+        ) : (
+          <p className="italic text-gray-400">{exampleEmptyText}</p>
+        )}
+      </section>
+    );
+  };
+
+  const renderLegislationSection = (section: ProfileSectionRow) => (
+    <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
+      <div className="mb-4 flex items-center gap-2">
+        <FileText className="h-5 w-5 text-blue-600" />
+        <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+      </div>
+      <div className="space-y-3">
+        {billsAuthored.length ? (
+          billsAuthored.map((bill: any) => (
+            <Link key={bill.id} to={`/bills/${bill.id}`} className="block rounded-md bg-gray-50 p-3 transition-colors hover:bg-gray-100">
+              <div className="mb-1 flex items-center gap-2">
+                <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
+                <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-700">{statusLabel(bill.status)}</span>
+              </div>
+              <p className="text-sm text-gray-700">{bill.title}</p>
+            </Link>
+          ))
+        ) : (
+          <p className="text-sm text-gray-500">No legislation yet</p>
+        )}
+      </div>
+    </section>
+  );
+
+  const renderOrganizationsSection = (section: ProfileSectionRow) => (
+    <section key={section.section_key} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm md:col-span-2">
+      <div className="mb-4 flex items-center gap-2">
+        <Users className="h-5 w-5 text-blue-600" />
+        <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+      </div>
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div>
+          <div className="mb-2 text-sm font-medium text-gray-900">Committees</div>
+          {orgs.committees.length === 0 ? (
+            <div className="text-sm text-gray-500">None</div>
+          ) : (
+            <ul className="space-y-1">
+              {orgs.committees.map((c) => (
+                <li key={c.id} className="text-sm">
+                  <Link to={`/committees/${c.id}`} className="text-blue-600 hover:underline">
+                    {c.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+        <div>
+          <div className="mb-2 text-sm font-medium text-gray-900">Caucuses</div>
+          {orgs.caucuses.length === 0 ? (
+            <div className="text-sm text-gray-500">None</div>
+          ) : (
+            <ul className="space-y-1">
+              {orgs.caucuses.map((c) => (
+                <li key={c.id} className="text-sm">
+                  <Link to={`/caucuses/${c.id}`} className="text-blue-600 hover:underline">
+                    {c.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+
+  const renderLettersSection = (section: ProfileSectionRow) => (
+    <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
+      <div className="mb-3 flex items-center gap-2">
+        <Mail className="h-5 w-5 text-blue-600" />
+        <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+      </div>
+      <p className="text-gray-600">Coming soon</p>
+    </section>
+  );
+
+  const renderProfileSection = (section: ProfileSectionRow) => {
+    if (section.section_type === "legislation_written") return renderLegislationSection(section);
+    if (section.section_type === "organizations") return renderOrganizationsSection(section);
+    if (section.section_type === "dear_colleague_letters") return renderLettersSection(section);
+    return renderLongResponseSection(section);
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -466,34 +679,34 @@ export function StudentProfile() {
         </div>
 
         {isTeacherProfile && isMe && (
-          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-            <div className="flex flex-wrap gap-2">
+          <div className="mb-6 rounded-full border border-gray-200 bg-white p-1 shadow-sm">
+            <div className="grid grid-cols-2 gap-1">
               <button
                 type="button"
                 onClick={() => setTeacherProfileTab("example")}
-                className={`rounded-md px-4 py-2 text-sm font-medium ${teacherProfileTab === "example" ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${teacherProfileTab === "example" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
               >
                 Example profile
               </button>
               <button
                 type="button"
                 onClick={() => setTeacherProfileTab("layout")}
-                className={`rounded-md px-4 py-2 text-sm font-medium ${teacherProfileTab === "layout" ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+                className={`rounded-full px-4 py-2 text-sm font-medium ${teacherProfileTab === "layout" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
               >
                 Edit profile layout
               </button>
             </div>
-            {teacherProfileTab === "example" && (
-              <p className="mt-3 text-sm text-gray-600">
-                Write example responses here to show students what strong work can look like for each profile box.
-              </p>
-            )}
           </div>
         )}
 
         {isTeacherProfile && isMe && teacherProfileTab === "layout" ? (
           <ProfileLayoutEditor embedded />
         ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {profileSections.map(renderProfileSection)}
+          </div>
+        )}
+        {false && (
         <>
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">

@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, FileText, GripVertical, Layout, Mail, Plus, Save, Trash2, Users } from "lucide-react";
+import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { FileText, GripVertical, Layout, Mail, Maximize2, Minimize2, Plus, Save, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -22,7 +22,7 @@ const defaultSections: Array<Omit<ProfileSection, "class_id">> = [
   { section_key: "constituency_description", title: "Constituency Description", section_type: "long_response", width: "full", is_editable: true, position: 1 },
   { section_key: "key_issues", title: "Key Issues", section_type: "long_response", width: "full", is_editable: true, position: 2 },
   { section_key: "legislation_written", title: "Legislation Written", section_type: "legislation_written", width: "half", is_editable: false, position: 3 },
-  { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "half", is_editable: false, position: 4 },
+  { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "full", is_editable: false, position: 4 },
   { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", is_editable: false, position: 5 },
 ];
 
@@ -46,6 +46,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   const [sections, setSections] = useState<ProfileSection[]>([]);
   const [saving, setSaving] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [draggingKey, setDraggingKey] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -82,22 +83,34 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   );
 
   const updateSection = (sectionKey: string, patch: Partial<ProfileSection>) => {
-    setSections((prev) => prev.map((section) => (section.section_key === sectionKey ? { ...section, ...patch } : section)));
+    setSections((prev) =>
+      prev.map((section) => {
+        if (section.section_key !== sectionKey) return section;
+        const next = { ...section, ...patch };
+        if (next.section_type === "organizations") next.width = "full";
+        return next;
+      }),
+    );
   };
 
-  const moveSection = (index: number, direction: -1 | 1) => {
+  const moveSectionTo = (fromKey: string, toKey: string) => {
     setSections((prev) => {
       const next = [...prev];
-      const target = index + direction;
-      if (target < 0 || target >= next.length) return prev;
-      const [item] = next.splice(index, 1);
-      next.splice(target, 0, item);
+      const from = next.findIndex((section) => section.section_key === fromKey);
+      const to = next.findIndex((section) => section.section_key === toKey);
+      if (from < 0 || to < 0 || from === to) return prev;
+      const [item] = next.splice(from, 1);
+      next.splice(to, 0, item);
       return next;
     });
   };
 
   const addSection = (type: SectionType = "long_response") => {
     if (!classId) return;
+    if (type !== "long_response" && sections.some((section) => section.section_type === type)) {
+      toast.error(`${typeLabels[type]} can only be added once`);
+      return;
+    }
     const stamp = Date.now();
     setSections((prev) => [
       ...prev,
@@ -106,7 +119,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         section_key: `custom_${stamp}`,
         title: type === "long_response" ? "New Response Section" : typeLabels[type],
         section_type: type,
-        width: "full",
+        width: type === "organizations" ? "full" : "full",
         is_editable: true,
         position: prev.length,
       },
@@ -122,7 +135,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         section_key: section.section_key,
         title: section.title.trim() || "Untitled section",
         section_type: section.section_type,
-        width: section.width,
+        width: section.section_type === "organizations" ? "full" : section.width,
         is_editable: section.is_editable,
         position: section.position,
       }));
@@ -154,12 +167,21 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
       const { data } = await supabase.rpc("profile_section_work_count", { target_class: classId, target_section_key: section.section_key } as any);
       count = Number(data ?? 0);
     }
+    const finalDelete = () => {
+      setConfirmDialog({
+        title: "Delete section?",
+        message: "This section will be removed from every student profile in this class.",
+        confirmLabel: "Delete section",
+        danger: true,
+        onConfirm: () => removeSectionNow(section),
+      });
+    };
     if (!count) {
-      void removeSectionNow(section);
+      finalDelete();
       return;
     }
     setConfirmDialog({
-      title: "Delete section?",
+      title: "Delete section with student work?",
       message: `${count} student${count === 1 ? " has" : "s have"} written work in this box. Deleting it will permanently delete that work.`,
       confirmLabel: "Proceed",
       danger: true,
@@ -177,6 +199,21 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
     });
   };
 
+  const onDragStart = (event: DragEvent<HTMLDivElement>, sectionKey: string) => {
+    setDraggingKey(sectionKey);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", sectionKey);
+  };
+
+  const onDrop = (event: DragEvent<HTMLDivElement>, sectionKey: string) => {
+    event.preventDefault();
+    const fromKey = event.dataTransfer.getData("text/plain") || draggingKey;
+    if (fromKey) moveSectionTo(fromKey, sectionKey);
+    setDraggingKey(null);
+  };
+
+  const usedSingleTypes = new Set(sections.filter((section) => section.section_type !== "long_response").map((section) => section.section_type));
+
   const content = (
     <main className={embedded ? "space-y-5" : "mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"}>
       <div className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -190,8 +227,9 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         <div className="flex flex-wrap gap-2">
           {(["long_response", "legislation_written", "organizations", "dear_colleague_letters"] as SectionType[]).map((type) => {
             const Icon = sectionIcon(type);
+            const disabled = type !== "long_response" && usedSingleTypes.has(type);
             return (
-              <button key={type} type="button" onClick={() => addSection(type)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+              <button key={type} type="button" onClick={() => addSection(type)} disabled={disabled} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
                 <Plus className="h-4 w-4" />
                 <Icon className="h-4 w-4" />
                 {typeLabels[type]}
@@ -212,10 +250,18 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
           {normalizedSections.map((section, index) => {
             const Icon = sectionIcon(section.section_type);
             return (
-              <div key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm ${section.width === "full" ? "col-span-2" : ""}`}>
+              <div
+                key={section.section_key}
+                draggable
+                onDragStart={(event) => onDragStart(event, section.section_key)}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => onDrop(event, section.section_key)}
+                onDragEnd={() => setDraggingKey(null)}
+                className={`rounded-lg border bg-white p-4 shadow-sm transition ${section.width === "full" ? "col-span-2" : ""} ${draggingKey === section.section_key ? "border-blue-300 opacity-60" : "border-gray-200"}`}
+              >
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <GripVertical className="h-4 w-4 text-gray-400" />
+                    <GripVertical className="h-4 w-4 cursor-grab text-gray-400" />
                     <Icon className="h-4 w-4 text-blue-600" />
                     <input
                       value={section.title}
@@ -223,22 +269,29 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
                       className="min-w-0 flex-1 border-b border-transparent bg-transparent text-base font-semibold text-gray-900 outline-none hover:border-gray-300 focus:border-blue-500"
                     />
                   </div>
-                  <button type="button" onClick={() => void requestDelete(section)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete section">
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-[1fr_8rem_7rem]">
-                  <select value={section.section_type} onChange={(event) => updateSection(section.section_key, { section_type: event.target.value as SectionType })} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                    {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                  </select>
-                  <select value={section.width} onChange={(event) => updateSection(section.section_key, { width: event.target.value as "full" | "half" })} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                    <option value="full">Full</option>
-                    <option value="half">Half</option>
-                  </select>
-                  <div className="flex gap-1">
-                    <button type="button" onClick={() => moveSection(index, -1)} disabled={index === 0} className="flex-1 rounded-md border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 disabled:opacity-40" aria-label="Move up"><ArrowUp className="mx-auto h-4 w-4" /></button>
-                    <button type="button" onClick={() => moveSection(index, 1)} disabled={index === normalizedSections.length - 1} className="flex-1 rounded-md border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 disabled:opacity-40" aria-label="Move down"><ArrowDown className="mx-auto h-4 w-4" /></button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => updateSection(section.section_key, { width: section.width === "full" ? "half" : "full" })}
+                      disabled={section.section_type === "organizations"}
+                      className="rounded p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      aria-label={section.width === "full" ? "Make half width" : "Make full width"}
+                    >
+                      {section.width === "full" ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                    </button>
+                    <button type="button" onClick={() => void requestDelete(section)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete section">
+                      <Trash2 className="h-4 w-4" />
+                    </button>
                   </div>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-1">
+                  <select value={section.section_type} onChange={(event) => updateSection(section.section_key, { section_type: event.target.value as SectionType })} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
+                    {Object.entries(typeLabels).map(([value, label]) => (
+                      <option key={value} value={value} disabled={value !== section.section_type && value !== "long_response" && usedSingleTypes.has(value as SectionType)}>
+                        {label}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
             );
