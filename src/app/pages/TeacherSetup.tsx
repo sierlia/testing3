@@ -351,7 +351,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-5">
           <Toggle checked={settings.calendarAutoPublish} onChange={(v) => setSettings({ calendarAutoPublish: v })} title="Publish calendared bills immediately" description="Students see bills as soon as the teacher calendars them." />
-          <div className="rounded-md border border-gray-200 bg-white p-4 text-sm text-gray-700">Teachers calendar bills from the Floor Calendar page after committees report them.</div>
+          <div className="rounded-md border border-gray-200 bg-white p-4 text-sm text-gray-700">Teachers calendar bills from the Calendar page after committees report them.</div>
         </div>
       );
     }

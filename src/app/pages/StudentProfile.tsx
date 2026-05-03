@@ -178,6 +178,7 @@ export function StudentProfile() {
   }, [id]);
 
   const isMe = authUserId !== null && profile?.user_id === authUserId;
+  const canChooseRepresentation = isMe && profile?.role !== "teacher";
   const emptySectionText = isMe ? "Fill out this section to complete your profile." : "No content";
 
   const saveProfile = async (patch: Partial<ProfileRow>, syncName = false) => {
@@ -410,7 +411,7 @@ export function StudentProfile() {
                   <div className="flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
                     <span>{formatConstituencyFull(profile.constituency_name)}</span>
-                    {isMe && (
+                    {canChooseRepresentation && (
                       <button
                         onClick={() => setShowConstituencyModal(true)}
                         className="text-blue-600 hover:text-blue-700 transition-colors"
@@ -422,7 +423,7 @@ export function StudentProfile() {
                   <div className="flex items-center gap-2">
                     <Flag className="w-4 h-4" />
                     <span>{profile.party || "N/A"}</span>
-                    {isMe && (
+                    {canChooseRepresentation && (
                       <button
                         onClick={() => setShowPartyModal(true)}
                         className="text-blue-600 hover:text-blue-700 transition-colors"

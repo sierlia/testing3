@@ -63,6 +63,7 @@ export function Navigation() {
   const [teacherClasses, setTeacherClasses] = useState<TeacherClass[]>([]);
   const [unreadLetters, setUnreadLetters] = useState(0);
   const classMenuRef = useRef<HTMLDivElement | null>(null);
+  const userMenuRef = useRef<HTMLDivElement | null>(null);
   const orgCloseTimerRef = useRef<number | null>(null);
   const legislationCloseTimerRef = useRef<number | null>(null);
 
@@ -138,6 +139,17 @@ export function Navigation() {
     document.addEventListener("pointerdown", closeOnOutsideClick);
     return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
   }, [classMenuOpen]);
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && userMenuRef.current?.contains(target)) return;
+      setUserMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [userMenuOpen]);
 
   const switchClass = async (classId: string) => {
     if (!user?.id) return;
@@ -421,7 +433,7 @@ export function Navigation() {
                 )}
               </div>
             )}
-            <div className="relative">
+            <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="w-8 h-8 rounded-full flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all overflow-hidden"

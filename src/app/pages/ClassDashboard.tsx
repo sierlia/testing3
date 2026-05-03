@@ -153,10 +153,37 @@ export function ClassDashboard() {
   };
 
   const getEventIcon = (type: string) => {
-    if (type === "deadline") return <Clock className="h-4 w-4 text-red-600" />;
+    if (type === "deadline") return <Clock className="h-4 w-4 text-sky-600" />;
     if (type === "election") return <Vote className="h-4 w-4 text-purple-600" />;
     return <CalendarIcon className="h-4 w-4 text-blue-600" />;
   };
+
+  const dayKey = (date: Date) => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, "0");
+    const day = String(date.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const currentWeekDays = useMemo(() => {
+    const today = new Date();
+    const start = new Date(today);
+    start.setDate(today.getDate() - today.getDay());
+    return Array.from({ length: 7 }, (_, index) => {
+      const day = new Date(start);
+      day.setDate(start.getDate() + index);
+      return day;
+    });
+  }, []);
+
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const event of upcomingEvents) {
+      const key = dayKey(event.date);
+      map.set(key, [...(map.get(key) ?? []), event]);
+    }
+    return map;
+  }, [upcomingEvents]);
 
   const saveClassName = async () => {
     if (!classId || !classNameDraft.trim()) return;
@@ -412,7 +439,7 @@ export function ClassDashboard() {
       title: "Legislation",
       actions: [
         { label: "Sort Bills into Committees", href: "/teacher/bill-sorting", icon: FileText },
-        { label: "Calendar Bills", href: "/calendar", icon: CalendarIcon },
+        { label: "Calendar Bills", href: "/calendar?schedule=1", icon: CalendarIcon },
       ],
     },
     {
@@ -460,27 +487,54 @@ export function ClassDashboard() {
                     <CardTitle>Upcoming Events & Deadlines</CardTitle>
                     <CardDescription>Manage your class schedule and deadlines</CardDescription>
                   </div>
-                  <Button onClick={() => navigate("/teacher/deadlines")}><Plus className="mr-2 h-4 w-4" />Add Deadline</Button>
+                  <Button onClick={() => navigate("/teacher/deadlines?add=1")}><Plus className="mr-2 h-4 w-4" />Add Deadline</Button>
                 </div>
               </CardHeader>
               <CardContent>
+                <div className="mb-4 grid grid-cols-7 gap-2">
+                  {currentWeekDays.map((day) => {
+                    const events = eventsByDay.get(dayKey(day)) ?? [];
+                    const isToday = dayKey(day) === dayKey(new Date());
+                    return (
+                      <div key={dayKey(day)} className="group relative">
+                        <div className={`flex min-h-16 flex-col items-center justify-center rounded-full border text-center text-xs ${events.length ? "border-sky-200 bg-sky-50 text-sky-800" : isToday ? "border-gray-200 bg-gray-100 text-gray-800" : "border-gray-200 bg-white text-gray-500"}`}>
+                          <span className="font-semibold">{day.toLocaleDateString(undefined, { weekday: "short" })}</span>
+                          <span className="text-lg font-bold">{day.getDate()}</span>
+                        </div>
+                        {events.length > 0 && (
+                          <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-56 -translate-x-1/2 space-y-2 rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg group-hover:block">
+                            {events.map((event) => (
+                              <div key={event.id}>
+                                <div className="font-semibold text-gray-900">{event.title}</div>
+                                <div className="mt-0.5 text-gray-500">{formatEventDate(event.date)}</div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
                 <div className="space-y-3">
                   {upcomingEvents.length === 0 ? (
                     <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">No upcoming events.</div>
                   ) : (
                     upcomingEvents.map((event) => (
-                      <div key={event.id} className="flex items-start gap-3 rounded-lg bg-gray-50 p-3 transition-colors hover:bg-gray-100">
+                      <div key={event.id} className="flex items-start gap-3 rounded-lg bg-sky-50 p-3 transition-colors hover:bg-sky-100">
                         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
                         <div className="min-w-0 flex-1">
                           <h4 className="text-sm font-semibold text-gray-900">{event.title}</h4>
                           <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
                         </div>
-                        <span className="rounded-full bg-red-100 px-2 py-1 text-xs text-red-700">{event.type}</span>
+                        <span className="rounded-full bg-sky-100 px-2 py-1 text-xs text-sky-700">{event.type}</span>
                       </div>
                     ))
                   )}
                 </div>
-                <Button variant="outline" className="mt-4 w-full" onClick={() => navigate("/calendar")}>View Full Calendar</Button>
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                  <Button variant="outline" onClick={() => navigate("/teacher/deadlines")}>Manage deadlines</Button>
+                  <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
+                </div>
               </CardContent>
             </Card>
 

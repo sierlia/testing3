@@ -30,6 +30,7 @@ export function ClassSimulationDashboard() {
   const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
   const [myBills, setMyBills] = useState<BillRecord[]>([]);
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; bill_id: string; scheduled_at: string; duration_minutes: number; bill: BillRecord }>>([]);
+  const [deadlineItems, setDeadlineItems] = useState<Array<{ id: string; title: string; due_at: string; task_type: string }>>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -124,6 +125,7 @@ export function ClassSimulationDashboard() {
           supabase
             .from("class_tasks")
             .select("id,task_type,title,description,due_at,created_at,created_by")
+            .eq("class_id", classId)
             .order("created_at", { ascending: false })
             .limit(10),
         ]);
@@ -135,6 +137,11 @@ export function ClassSimulationDashboard() {
         ]
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
           .slice(0, 10);
+        setDeadlineItems(
+          (((taskRows as any).data ?? []) as any[])
+            .filter((task) => task.due_at)
+            .map((task) => ({ id: task.id, title: task.title, due_at: task.due_at, task_type: task.task_type })),
+        );
 
         const authorIds = Array.from(
           new Set(
@@ -200,13 +207,17 @@ export function ClassSimulationDashboard() {
     return `${year}-${month}-${day}`;
   };
   const eventsByDay = useMemo(() => {
-    const map = new Map<string, typeof calendarItems>();
+    const map = new Map<string, Array<{ kind: "bill"; item: (typeof calendarItems)[number] } | { kind: "deadline"; item: (typeof deadlineItems)[number] }>>();
     for (const item of calendarItems) {
       const key = dateKey(new Date(item.scheduled_at));
-      map.set(key, [...(map.get(key) ?? []), item]);
+      map.set(key, [...(map.get(key) ?? []), { kind: "bill", item }]);
+    }
+    for (const item of deadlineItems) {
+      const key = dateKey(new Date(item.due_at));
+      map.set(key, [...(map.get(key) ?? []), { kind: "deadline", item }]);
     }
     return map;
-  }, [calendarItems]);
+  }, [calendarItems, deadlineItems]);
   const dashboardAnnouncements = useMemo(
     () => [...announcements].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 3),
     [announcements],
@@ -303,7 +314,7 @@ export function ClassSimulationDashboard() {
                       <button
                         type="button"
                         className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
-                          events.length ? "bg-blue-50 text-blue-800 hover:bg-blue-100" : isToday ? "bg-gray-100 text-gray-900" : "bg-white text-gray-700 hover:bg-gray-50"
+                          events.length ? "bg-sky-50 text-sky-800 hover:bg-sky-100" : isToday ? "bg-gray-100 text-gray-900" : "bg-white text-gray-700 hover:bg-gray-50"
                         }`}
                       >
                         {day.getDate()}
@@ -312,8 +323,16 @@ export function ClassSimulationDashboard() {
                         <div className="mb-1 font-semibold text-gray-900">{day.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>
                         {events.length ? (
                           events.map((event) => (
-                            <div key={event.id} className="py-0.5">
-                              <span className="font-mono">{event.bill.hr_label}</span> at {new Date(event.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                            <div key={`${event.kind}:${event.item.id}`} className={`rounded px-1 py-0.5 ${event.kind === "deadline" ? "bg-sky-50 text-sky-800" : ""}`}>
+                              {event.kind === "bill" ? (
+                                <>
+                                  <span className="font-mono">{event.item.bill.hr_label}</span> at {new Date(event.item.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                                </>
+                              ) : (
+                                <>
+                                  {event.item.title} at {new Date(event.item.due_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                                </>
+                              )}
                             </div>
                           ))
                         ) : (

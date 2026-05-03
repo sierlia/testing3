@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Plus, X, Calendar, Users, ClipboardList } from "lucide-react";
+import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -18,7 +19,15 @@ type TaskRow = {
   created_at: string;
 };
 
+function displayPartyName(name: string) {
+  const normalized = name.trim();
+  if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
+  if (/republican( party)?$/i.test(normalized)) return "Republican Party";
+  return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
 export function TeacherDeadlines() {
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [showModal, setShowModal] = useState(false);
@@ -42,19 +51,24 @@ export function TeacherDeadlines() {
       const uid = auth.user?.id;
       if (!uid) return;
 
+      const { data: profile } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
+      const classId = (profile as any)?.class_id as string | null;
+      if (!classId) return;
+
       const [{ data: tRows, error: tErr }, { data: pRows }, { data: cRows }, { data: caRows }] = await Promise.all([
         supabase
           .from("class_tasks")
           .select("id,task_type,title,description,due_at,audience_type,audience_id,created_at")
+          .eq("class_id", classId)
           .order("due_at", { ascending: true, nullsFirst: false })
           .order("created_at", { ascending: false }),
-        supabase.from("parties").select("id,name").order("name"),
-        supabase.from("committees").select("id,name").order("name"),
-        supabase.from("caucuses").select("id,name").order("name"),
+        supabase.from("parties").select("id,name").eq("class_id", classId).order("name"),
+        supabase.from("committees").select("id,name").eq("class_id", classId).order("name"),
+        supabase.from("caucuses").select("id,name").eq("class_id", classId).order("name"),
       ]);
       if (tErr) throw tErr;
       setTasks((tRows ?? []) as any);
-      setParties((pRows ?? []) as any);
+      setParties(((pRows ?? []) as any[]).map((party) => ({ ...party, name: displayPartyName(party.name) })));
       setCommittees((cRows ?? []) as any);
       setCaucuses((caRows ?? []) as any);
     } catch (e: any) {
@@ -67,6 +81,10 @@ export function TeacherDeadlines() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (searchParams.get("add") === "1") setShowModal(true);
+  }, [searchParams]);
 
   const resetModal = () => {
     setShowModal(false);
@@ -150,7 +168,7 @@ export function TeacherDeadlines() {
     const caucusMap = new Map(caucuses.map((c) => [c.id, c.name]));
     return (t: TaskRow) => {
       if (t.audience_type === "all") return "All students";
-      if (t.audience_type === "party") return `Party: ${partyMap.get(t.audience_id || "") || "Unknown"}`;
+      if (t.audience_type === "party") return `Party: ${displayPartyName(partyMap.get(t.audience_id || "") || "Unknown")}`;
       if (t.audience_type === "committee") return `Committee: ${committeeMap.get(t.audience_id || "") || "Unknown"}`;
       if (t.audience_type === "caucus") return `Caucus: ${caucusMap.get(t.audience_id || "") || "Unknown"}`;
       return t.audience_type;
@@ -175,17 +193,17 @@ export function TeacherDeadlines() {
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
           >
             <Plus className="w-5 h-5" />
-            Add Task
+            Add Deadline
           </button>
         </div>
 
         {loading ? (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-sm text-gray-600">Loadingâ€¦</div>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 text-sm text-gray-600">Loading...</div>
         ) : tasks.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-12 text-center">
             <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-3" />
             <h3 className="text-lg font-medium text-gray-900 mb-1">No tasks yet</h3>
-            <p className="text-gray-600">Click "Add Task" to create your first deadline or assignment</p>
+            <p className="text-gray-600">Click "Add Deadline" to create your first deadline or assignment</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -228,9 +246,10 @@ export function TeacherDeadlines() {
             <div className="p-6 border-b border-gray-200 flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ClipboardList className="w-5 h-5 text-blue-600" />
-                <h2 className="text-xl font-semibold text-gray-900">Add Task</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Add Deadline</h2>
               </div>
-              <button onClick={resetModal} className="text-gray-400 hover:text-gray-600 transition-colors">
+              <button onClick={resetModal} className="rounded-md p-1 text-[0px] text-gray-400 hover:bg-gray-100 hover:text-gray-600 transition-colors" aria-label="Close">
+                <X className="h-5 w-5" />
                 Ã—
               </button>
             </div>
@@ -291,25 +310,29 @@ export function TeacherDeadlines() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Assigned To</label>
-                <select
-                  value={newAudienceType}
-                  onChange={(e) => {
-                    setNewAudienceType(e.target.value as AudienceType);
-                    setNewAudienceId("");
-                  }}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                >
-                  <option value="all">All students</option>
-                  <option value="party">Specific party</option>
-                  <option value="committee">Specific committee</option>
-                  <option value="caucus">Specific caucus</option>
-                </select>
+                <div className="mb-2 flex flex-wrap items-center gap-3">
+                  <label className="text-sm font-medium text-gray-700">Assigned To</label>
+                  <div className="flex gap-1.5">
+                    {(["all", "party", "committee", "caucus"] as AudienceType[]).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => {
+                          setNewAudienceType(type);
+                          setNewAudienceId("");
+                        }}
+                        className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${newAudienceType === type ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                      >
+                        {type === "all" ? "All students" : type === "party" ? "Parties" : type === "committee" ? "Committees" : "Caucuses"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
 
               {newAudienceType !== "all" && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Select</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Search</label>
                   <select
                     value={newAudienceId}
                     onChange={(e) => setNewAudienceId(e.target.value)}
@@ -336,7 +359,7 @@ export function TeacherDeadlines() {
                 className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
               >
                 <Plus className="w-4 h-4" />
-                Create
+                Add Deadline
               </button>
             </div>
           </div>
@@ -345,4 +368,3 @@ export function TeacherDeadlines() {
     </div>
   );
 }
-

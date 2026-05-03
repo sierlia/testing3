@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Calendar, ChevronLeft, ChevronRight, Clock, Save } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, fetchReportedBillsForTeacherCalendar, getCurrentProfileClass, saveBillCalendarEntry } from "../services/bills";
 import { toast } from "sonner";
+import { supabase } from "../utils/supabase";
 
 type TeacherBill = {
   id: string;
@@ -21,6 +22,13 @@ type CalendarEntry = {
   duration_minutes: number;
   status?: string;
   bill: { hr_label: string; title: string };
+};
+
+type CalendarTask = {
+  id: string;
+  title: string;
+  due_at: string;
+  task_type: string;
 };
 
 function localDateTimeValue(iso?: string | null) {
@@ -42,13 +50,21 @@ export function CalendarScheduling() {
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => new Date());
   const [viewMode, setViewMode] = useState<"calendar" | "all">("calendar");
-  const scheduleSectionRef = useRef<HTMLDivElement | null>(null);
+  const [teacherListMode, setTeacherListMode] = useState<"uncalendared" | "calendared">("uncalendared");
+  const [taskItems, setTaskItems] = useState<CalendarTask[]>([]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const { profile } = await getCurrentProfileClass();
+      const { profile, classId } = await getCurrentProfileClass();
       setRole(profile.role ?? null);
+      const { data: tasks } = await supabase
+        .from("class_tasks")
+        .select("id,title,task_type,due_at")
+        .eq("class_id", classId)
+        .not("due_at", "is", null)
+        .order("due_at", { ascending: true });
+      setTaskItems(((tasks ?? []) as any[]).filter((task) => task.due_at));
       if (profile.role === "teacher") {
         const rows = await fetchReportedBillsForTeacherCalendar();
         setTeacherBills(rows as any);
@@ -72,10 +88,10 @@ export function CalendarScheduling() {
   }, []);
 
   useEffect(() => {
-    if (loading || searchParams.get("schedule") !== "1") return;
-    const frame = window.requestAnimationFrame(() => scheduleSectionRef.current?.scrollIntoView({ block: "start" }));
-    return () => window.cancelAnimationFrame(frame);
-  }, [loading, searchParams]);
+    if (searchParams.get("schedule") !== "1") return;
+    setViewMode("all");
+    setTeacherListMode("uncalendared");
+  }, [searchParams]);
 
   const publishedItems = useMemo<CalendarEntry[]>(() => {
     if (role === "teacher") {
@@ -108,6 +124,14 @@ export function CalendarScheduling() {
     }
     return map;
   }, [publishedItems]);
+  const tasksByDay = useMemo(() => {
+    const map = new Map<string, CalendarTask[]>();
+    for (const task of taskItems) {
+      const key = dateKey(new Date(task.due_at));
+      map.set(key, [...(map.get(key) ?? []), task]);
+    }
+    return map;
+  }, [taskItems]);
   const monthDays = useMemo(() => {
     const start = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
     const firstGridDay = new Date(start);
@@ -119,6 +143,7 @@ export function CalendarScheduling() {
     });
   }, [calendarMonth]);
   const selectedEvents = eventsByDay.get(selectedDateKey) ?? [];
+  const selectedTasks = tasksByDay.get(selectedDateKey) ?? [];
 
   const saveSchedule = async (billId: string) => {
     const value = draftTimes[billId];
@@ -140,7 +165,7 @@ export function CalendarScheduling() {
       <div className="border-b border-gray-200 p-5">
         <div className="flex items-center gap-2">
           <Calendar className="h-5 w-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-900">Published Calendar</h2>
+          <h2 className="text-lg font-semibold text-gray-900">Calendar</h2>
         </div>
       </div>
       <div className="p-5">
@@ -175,6 +200,7 @@ export function CalendarScheduling() {
             {monthDays.map((day, index) => {
               const key = dateKey(day);
               const events = eventsByDay.get(key) ?? [];
+              const tasks = tasksByDay.get(key) ?? [];
               const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
               const isSelected = key === selectedDateKey;
               return (
@@ -183,7 +209,7 @@ export function CalendarScheduling() {
                   type="button"
                   onClick={() => setSelectedCalendarDate(day)}
                   className={`min-h-20 border-b border-r border-gray-100 p-1.5 text-left text-xs transition-colors ${
-                    isSelected ? "bg-blue-100 text-blue-900" : events.length ? "bg-blue-50 text-gray-900 hover:bg-blue-100" : "hover:bg-gray-50"
+                    isSelected ? "bg-blue-100 text-blue-900" : events.length || tasks.length ? "bg-blue-50 text-gray-900 hover:bg-blue-100" : "hover:bg-gray-50"
                   } ${isCurrentMonth ? "" : "text-gray-300"}`}
                 >
                   <span className="font-medium">{day.getDate()}</span>
@@ -193,7 +219,12 @@ export function CalendarScheduling() {
                         {new Date(event.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} {event.bill.hr_label}
                       </div>
                     ))}
-                    {events.length > 2 && <div className="text-[10px] font-medium text-blue-700">+{events.length - 2} more</div>}
+                    {tasks.slice(0, Math.max(0, 2 - events.length)).map((task) => (
+                      <div key={task.id} className="truncate rounded bg-sky-100 px-1 py-0.5 text-[10px] text-sky-800">
+                        {new Date(task.due_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} {task.title}
+                      </div>
+                    ))}
+                    {events.length + tasks.length > 2 && <div className="text-[10px] font-medium text-blue-700">+{events.length + tasks.length - 2} more</div>}
                   </div>
                 </button>
               );
@@ -205,20 +236,21 @@ export function CalendarScheduling() {
     </div>
   );
 
-  const renderScheduledList = (items: CalendarEntry[], title: string, subtitle: string, emptyText: string) => (
+  const renderScheduledList = (items: CalendarEntry[], title: string, subtitle: string, emptyText: string, tasks: CalendarTask[] = []) => (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 p-5">
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
         <p className="mt-1 text-sm text-gray-500">{subtitle}</p>
       </div>
       <div className="max-h-[640px] divide-y divide-gray-100 overflow-y-auto">
-        {items.length === 0 ? (
+        {items.length === 0 && tasks.length === 0 ? (
           <div className="p-5 text-sm text-gray-500">{emptyText}</div>
         ) : (
-          items
-            .slice()
-            .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-            .map((item) => (
+          <>
+            {items
+              .slice()
+              .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+              .map((item) => (
               <Link key={item.id} to={`/bills/${item.bill_id}`} className="block p-4 hover:bg-gray-50">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
@@ -230,7 +262,77 @@ export function CalendarScheduling() {
                 <div className="mt-2 text-xs font-medium text-gray-500">{new Date(item.scheduled_at).toLocaleString()}</div>
                 {item.status && <div className="mt-1 text-xs capitalize text-gray-500">{item.status.replace("_", " ")}</div>}
               </Link>
-            ))
+              ))}
+            {tasks.map((task) => (
+              <div key={task.id} className="block bg-sky-50 p-4">
+                <div className="text-sm font-semibold text-gray-900">{task.title}</div>
+                <div className="mt-1 text-xs font-medium text-sky-700">{new Date(task.due_at).toLocaleString()}</div>
+                <div className="mt-1 text-xs capitalize text-gray-500">{task.task_type}</div>
+              </div>
+            ))}
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderTeacherSchedulingList = (items: TeacherBill[], emptyText: string) => (
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900">{teacherListMode === "uncalendared" ? "Uncalendared Bills" : "Calendared Bills"}</h2>
+            <p className="mt-1 text-sm text-gray-500">Set or update floor date and time.</p>
+          </div>
+          <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+            {(["uncalendared", "calendared"] as const).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setTeacherListMode(mode)}
+                className={`rounded px-3 py-1.5 text-sm font-semibold capitalize transition ${teacherListMode === mode ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
+              >
+                {mode}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="divide-y divide-gray-100">
+        {items.length === 0 ? (
+          <div className="p-5 text-sm text-gray-500">{emptyText}</div>
+        ) : (
+          items.map((bill) => (
+            <div key={bill.id} className="p-4">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <Link to={`/bills/${bill.id}`} className="block truncate text-sm font-semibold text-gray-900 hover:text-blue-600">
+                    <span className="font-mono">{bill.hr_label}</span>
+                    <span className="text-gray-500"> - </span>
+                    {bill.title}
+                  </Link>
+                  <div className="mt-1 text-xs text-gray-500">{bill.committee_name || "No committee listed"}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="datetime-local"
+                    value={draftTimes[bill.id] ?? ""}
+                    onChange={(event) => setDraftTimes((prev) => ({ ...prev, [bill.id]: event.target.value }))}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => void saveSchedule(bill.id)}
+                    disabled={savingId === bill.id}
+                    className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+                  >
+                    <Save className="h-4 w-4" />
+                    {savingId === bill.id ? "Saving" : bill.calendar ? "Update" : "Calendar"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))
         )}
       </div>
     </div>
@@ -238,9 +340,10 @@ export function CalendarScheduling() {
 
   const selectedDayList = renderScheduledList(
     selectedEvents,
-    "Scheduled Bills",
+    "Scheduled on",
     selectedCalendarDate.toLocaleDateString(undefined, { month: "long", day: "numeric" }),
     "No bills are scheduled for this day.",
+    selectedTasks,
   );
 
   const allScheduledList = renderScheduledList(
@@ -250,13 +353,20 @@ export function CalendarScheduling() {
     "No bills have been calendared.",
   );
 
+  const teacherUncalendaredBills = teacherBills.filter((bill) => !bill.calendar?.scheduled_at);
+  const teacherCalendaredBills = teacherBills.filter((bill) => bill.calendar?.scheduled_at);
+  const teacherAllList = renderTeacherSchedulingList(
+    teacherListMode === "uncalendared" ? teacherUncalendaredBills : teacherCalendaredBills,
+    teacherListMode === "uncalendared" ? "No reported bills are waiting to be calendared." : "No bills have been calendared.",
+  );
+
   const calendarLayout = (
     viewMode === "calendar" ? (
       <div className="grid gap-6 lg:grid-cols-[3fr_1fr]">
         {publishedCalendar}
         {selectedDayList}
       </div>
-    ) : allScheduledList
+    ) : role === "teacher" ? teacherAllList : allScheduledList
   );
 
   return (
@@ -265,7 +375,7 @@ export function CalendarScheduling() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="mb-2 text-3xl font-bold text-gray-900">Floor Calendar</h1>
+            <h1 className="mb-2 text-3xl font-bold text-gray-900">Calendar</h1>
             <p className="text-gray-600">{role === "teacher" ? "Calendar reported bills for floor debate" : "View bills scheduled for floor debate"}</p>
           </div>
           <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
@@ -287,47 +397,6 @@ export function CalendarScheduling() {
         ) : role === "teacher" ? (
           <div className="space-y-6">
             {calendarLayout}
-            <div ref={scheduleSectionRef} className="scroll-mt-8 space-y-3">
-              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 className="text-xl font-semibold text-gray-900">Calendar Bills</h2>
-                <p className="mt-1 text-sm text-gray-600">Set or update the floor date and time for reported bills.</p>
-              </div>
-              {teacherBills.length === 0 ? (
-                <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No reported bills are ready to calendar.</div>
-              ) : (
-                teacherBills.map((bill) => (
-                  <div key={bill.id} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="min-w-0">
-                        <div className="mb-1 flex items-center gap-2">
-                          <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
-                          <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{bill.status.replace("_", " ")}</span>
-                        </div>
-                        <Link to={`/bills/${bill.id}`} className="font-semibold text-gray-900 hover:text-blue-600">{bill.title}</Link>
-                        <div className="mt-1 text-sm text-gray-600">{bill.committee_name || "No committee listed"}</div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="datetime-local"
-                          value={draftTimes[bill.id] ?? ""}
-                          onChange={(event) => setDraftTimes((prev) => ({ ...prev, [bill.id]: event.target.value }))}
-                          className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => void saveSchedule(bill.id)}
-                          disabled={savingId === bill.id}
-                          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
-                        >
-                          <Save className="h-4 w-4" />
-                          {savingId === bill.id ? "Saving" : bill.calendar ? "Update" : "Calendar"}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
           </div>
         ) : (
           calendarLayout

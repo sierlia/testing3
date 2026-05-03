@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Navigation } from "../components/Navigation";
-import { FileText, Eye, GripVertical, Check, Search } from "lucide-react";
+import { FileText, BookOpen, GripVertical, Check, Search } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 
@@ -24,7 +24,7 @@ interface DragItem {
   type: string;
 }
 
-function DraggableBill({ bill, onViewText }: { bill: Bill; onViewText: (bill: Bill) => void }) {
+function DraggableBill({ bill, onViewText, assigned = false }: { bill: Bill; onViewText: (bill: Bill) => void; assigned?: boolean }) {
   const [{ isDragging }, drag, preview] = useDrag({
     type: "bill",
     item: { id: bill.id, type: "bill" },
@@ -32,21 +32,24 @@ function DraggableBill({ bill, onViewText }: { bill: Bill; onViewText: (bill: Bi
   });
 
   return (
-    <div ref={preview} className={`rounded-md border border-gray-200 bg-white p-3 transition-all hover:border-blue-200 hover:bg-blue-50 ${isDragging ? "opacity-50" : ""}`}>
+    <div ref={preview} className={`rounded-md border ${assigned ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-white"} p-2.5 transition-all hover:border-blue-200 hover:bg-blue-50 ${isDragging ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-3">
         <div ref={drag} className="cursor-move">
           <GripVertical className="w-5 h-5 text-gray-400" />
         </div>
-        <div className="flex-1">
-          <div className="font-mono text-sm font-semibold text-gray-900">{bill.number}</div>
-          <div className="text-sm text-gray-700">{bill.title}</div>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm text-gray-900">
+            <span className="font-mono font-semibold">{bill.number}</span>
+            <span className="text-gray-500"> - </span>
+            <span>{bill.title}</span>
+          </div>
         </div>
         <button
           onClick={() => onViewText(bill)}
           className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-100 transition-colors"
         >
-          <Eye className="w-3 h-3" />
-          View
+          <BookOpen className="w-3 h-3" />
+          Read
         </button>
       </div>
     </div>
@@ -81,23 +84,7 @@ function CommitteeDropZone({
 
       <div className="space-y-3">
         {assignedBills.length > 0 ? (
-          assignedBills.map((bill) => (
-            <div key={bill.id} className="rounded-md border border-blue-200 bg-blue-50 p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex-1">
-                  <div className="font-mono text-sm font-semibold text-gray-900">{bill.number}</div>
-                  <div className="text-sm text-gray-700">{bill.title}</div>
-                </div>
-                <button
-                  onClick={() => onViewText(bill)}
-                  className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-100 transition-colors"
-                >
-                  <Eye className="w-3 h-3" />
-                  View
-                </button>
-              </div>
-            </div>
-          ))
+          assignedBills.map((bill) => <DraggableBill key={bill.id} bill={bill} onViewText={onViewText} assigned />)
         ) : (
           <div className="text-center py-12 text-gray-400">
             <FileText className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -119,6 +106,23 @@ function UnassignedDropZone({ count, onDrop }: { count: number; onDrop: (billId:
   return (
     <div ref={drop} className={`mt-4 rounded-lg border-2 border-dashed p-3 text-xs text-gray-600 ${isOver ? "border-blue-400 bg-blue-50" : "border-gray-200 bg-gray-50"}`}>
       Drop here to unassign • {count} unassigned
+    </div>
+  );
+}
+
+function UnassignedBillsPanel({ count, onDrop, children }: { count: number; onDrop: (billId: string) => void; children: ReactNode }) {
+  const [{ isOver }, drop] = useDrop<DragItem, void, { isOver: boolean }>({
+    accept: "bill",
+    drop: (item: DragItem) => onDrop(item.id),
+    collect: (monitor) => ({ isOver: monitor.isOver() }),
+  });
+
+  return (
+    <div ref={drop} className={`max-h-[70vh] space-y-2 overflow-y-auto p-4 transition-colors ${isOver ? "bg-blue-50" : ""}`}>
+      {children}
+      <div className={`rounded-lg border-2 border-dashed p-3 text-xs text-gray-600 ${isOver ? "border-blue-400 bg-blue-100" : "border-gray-200 bg-gray-50"}`}>
+        Drop here to unassign - {count} unassigned
+      </div>
     </div>
   );
 }
@@ -268,7 +272,7 @@ export function TeacherBillSorting() {
                     />
                   </div>
                 </div>
-                <div className="max-h-[70vh] p-4 space-y-2 overflow-y-auto">
+                <UnassignedBillsPanel count={unassignedBills.length} onDrop={handleDropUnassigned}>
                   {loading ? (
                     <div className="text-sm text-gray-500">Loading…</div>
                   ) : unassignedBills.length > 0 ? (
@@ -279,8 +283,7 @@ export function TeacherBillSorting() {
                       <p className="text-sm">All bills assigned!</p>
                     </div>
                   )}
-                  <UnassignedDropZone count={unassignedBills.length} onDrop={handleDropUnassigned} />
-                </div>
+                </UnassignedBillsPanel>
               </div>
             </div>
 
