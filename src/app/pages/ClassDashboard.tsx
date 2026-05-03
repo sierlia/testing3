@@ -306,44 +306,48 @@ export function ClassDashboard() {
             </Button>
           </div>
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Class timeline</div>
-          <div className="flex items-stretch gap-0 overflow-x-auto pb-2">
-            <div className="min-w-[520px] flex-[2] rounded-lg border border-blue-200 bg-blue-50 p-5">
-              <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
-              <h2 className="mt-1 text-xl font-bold text-gray-900">{currentWorkflowStep.label}</h2>
-              <p className="mt-1 text-sm text-gray-600">{currentWorkflowStep.description}</p>
-              {workflowAction(currentWorkflowStep.id)}
-            </div>
-            {futureWorkflowSteps.map((step, index) => (
-              <div key={step.id} className="flex items-stretch">
-                <div className="mt-9 h-0 min-w-8 border-t-2 border-dashed border-gray-300" />
-                <button
-                  type="button"
-                  onClick={() => confirmWorkflowStage(step.id, index === 0 ? "advance" : "skip")}
-                  className="min-w-[260px] flex-1 rounded-lg border border-gray-200 bg-gray-50 p-5 text-left opacity-60 transition hover:opacity-100"
-                >
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{index === 0 ? "After that" : "Future"}</div>
-                  <h3 className="mt-1 font-semibold text-gray-700">{step.label}</h3>
-                  <p className="mt-1 text-sm text-gray-500">{step.description}</p>
-                </button>
+          <div className="overflow-x-auto pb-2">
+            <div className="flex w-max items-stretch gap-0">
+              <div className="w-[520px] flex-shrink-0 rounded-lg border border-blue-200 bg-blue-50 p-5">
+                <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
+                <h2 className="mt-1 text-xl font-bold text-gray-900">{currentWorkflowStep.label}</h2>
+                <p className="mt-1 text-sm text-gray-600">{currentWorkflowStep.description}</p>
+                {workflowAction(currentWorkflowStep.id)}
               </div>
-            ))}
-          </div>
-          {timelineExpanded && (
-            <div className="mt-4 flex gap-0 overflow-x-auto">
-              {visibleWorkflowSteps.map((step, index) => (
-                <div key={step.id} className="flex items-start">
-                  {index > 0 && <div className="mt-6 h-0 w-8 border-t-2 border-dashed border-gray-300" />}
+              {futureWorkflowSteps.map((step, index) => (
+                <div key={step.id} className="flex flex-shrink-0 items-stretch">
+                  <div className="mt-9 h-0 w-8 border-t-2 border-dashed border-gray-300" />
                   <button
                     type="button"
-                    onClick={() => index < currentIndex ? confirmWorkflowStage(step.id, "revert") : index > currentIndex ? confirmWorkflowStage(step.id, "skip") : undefined}
-                    className={`min-h-28 min-w-56 rounded-md border p-3 text-left text-sm transition ${index < currentIndex ? "border-gray-200 bg-gray-50 text-gray-400 hover:bg-gray-100" : index === currentIndex ? "border-blue-300 bg-white text-gray-900" : "border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
+                    onClick={() => confirmWorkflowStage(step.id, index === 0 ? "advance" : "skip")}
+                    className="w-[260px] flex-shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-5 text-left opacity-60 transition hover:opacity-100"
                   >
-                    <div className="font-semibold">{step.label}</div>
-                    <div className="mt-1 text-xs font-medium">{index < currentIndex ? "Revert here" : index === currentIndex ? "Next" : "Skip here"}</div>
-                    <p className="mt-2 line-clamp-2 text-xs opacity-80">{step.description}</p>
+                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{index === 0 ? "After that" : "Future"}</div>
+                    <h3 className="mt-1 font-semibold text-gray-700">{step.label}</h3>
+                    <p className="mt-1 text-sm text-gray-500">{step.description}</p>
                   </button>
                 </div>
               ))}
+            </div>
+          </div>
+          {timelineExpanded && (
+            <div className="mt-4 overflow-x-auto">
+              <div className="flex w-max gap-0">
+                {visibleWorkflowSteps.map((step, index) => (
+                  <div key={step.id} className="flex flex-shrink-0 items-start">
+                    {index > 0 && <div className="mt-6 h-0 w-8 border-t-2 border-dashed border-gray-300" />}
+                    <button
+                      type="button"
+                      onClick={() => index < currentIndex ? confirmWorkflowStage(step.id, "revert") : index > currentIndex ? confirmWorkflowStage(step.id, "skip") : undefined}
+                      className={`min-h-28 w-56 flex-shrink-0 rounded-md border p-3 text-left text-sm transition ${index < currentIndex ? "border-gray-200 bg-gray-50 text-gray-400 hover:bg-gray-100" : index === currentIndex ? "border-blue-300 bg-white text-gray-900" : "border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
+                    >
+                      <div className="font-semibold">{step.label}</div>
+                      <div className="mt-1 text-xs font-medium">{index < currentIndex ? "Revert here" : index === currentIndex ? "Next" : "Skip here"}</div>
+                      <p className="mt-2 line-clamp-2 text-xs opacity-80">{step.description}</p>
+                    </button>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </CardContent>

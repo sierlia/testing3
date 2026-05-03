@@ -198,21 +198,21 @@ export function ClassManagePage() {
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1>
-            <p className="mt-1 text-sm text-gray-600">Student roster</p>
-          </div>
-          <div className="flex flex-col items-end gap-3">
-            <TeacherClassTabs classId={classId} active="roster" />
-            <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-              <div className="text-right">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Join code</div>
-                <div className="font-mono text-xl font-bold text-blue-700">{classDetails.classCode}</div>
-              </div>
-              <button type="button" onClick={() => void copyJoinCode()} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Copy join code">
+          <div className="flex flex-wrap items-start gap-3">
+            <div className="inline-flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 shadow-sm">
+              <span className="text-sm font-semibold text-gray-600">Join code:</span>
+              <span className="font-mono text-base font-bold text-blue-700">{classDetails.classCode}</span>
+              <button type="button" onClick={() => void copyJoinCode()} className="rounded p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Copy join code">
                 <Copy className="h-4 w-4" />
               </button>
             </div>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1>
+              <p className="mt-1 text-sm text-gray-600">Student roster</p>
+            </div>
+          </div>
+          <div className="flex flex-col items-end gap-3">
+            <TeacherClassTabs classId={classId} active="roster" />
           </div>
         </div>
 
