@@ -22,6 +22,7 @@ function fromBase64(b64: string) {
 }
 
 type DocKey = { committeeId: string; billId: string; classId: string; documentId?: string; storageColumn?: string };
+const docSnapshotCache = new Map<string, string>();
 
 export class YjsSupabaseProvider {
   doc: Y.Doc;
@@ -50,6 +51,16 @@ export class YjsSupabaseProvider {
     this.channel = supabase.channel(`doc:${key.committeeId}:${documentId}`, { config: { broadcast: { ack: true } } });
 
     this.awareness.setLocalStateField("user", { id: user.id, name: user.name, color: user.color });
+
+    const cachedB64 = docSnapshotCache.get(this.cacheKey());
+    if (cachedB64) {
+      const cachedUpdate = fromBase64(cachedB64);
+      if (cachedUpdate.length) {
+        Y.applyUpdate(this.doc, cachedUpdate, this);
+        this.lastPersistedB64 = cachedB64;
+        this.hadSnapshot = true;
+      }
+    }
 
     this.channel
       .on("broadcast", { event: "yjs-update" }, (payload) => {
@@ -175,6 +186,7 @@ export class YjsSupabaseProvider {
     this.lastSeenUpdatedAt = ((data as any)?.updated_at as string | undefined) ?? null;
     if (b64) {
       this.lastPersistedB64 = b64;
+      docSnapshotCache.set(this.cacheKey(), b64);
       const update = fromBase64(b64);
       // Tag hydration update as provider-origin so we don't re-broadcast it as "local"
       // which can cause reload to overwrite other clients.
@@ -208,6 +220,7 @@ export class YjsSupabaseProvider {
     if (!b64 || !updatedAt || updatedAt === this.lastSeenUpdatedAt || b64 === this.lastPersistedB64) return;
     this.lastSeenUpdatedAt = updatedAt;
     this.lastPersistedB64 = b64;
+    docSnapshotCache.set(this.cacheKey(), b64);
     const update = fromBase64(b64);
     if (update.length) Y.applyUpdate(this.doc, update, this);
   }
@@ -254,11 +267,16 @@ export class YjsSupabaseProvider {
       return;
     }
     this.lastPersistedB64 = b64;
+    docSnapshotCache.set(this.cacheKey(), b64);
     this.lastSeenUpdatedAt = ((data as any)?.updated_at as string | undefined) ?? this.lastSeenUpdatedAt;
   }
 
   private storageColumn() {
     return this.key.storageColumn ?? "ydoc_base64";
+  }
+
+  private cacheKey() {
+    return `${this.key.classId}:${this.key.committeeId}:${this.key.billId}:${this.storageColumn()}`;
   }
 
   destroy() {

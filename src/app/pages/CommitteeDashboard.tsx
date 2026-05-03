@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link, useSearchParams } from "react-router";
+import { useParams, Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
-import { Users, Send, Pencil, Save, X, UserPlus } from "lucide-react";
+import { LogOut, Users, Send, Pencil, Save, X, UserPlus } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -56,6 +56,7 @@ const dashboardCache = new Map<
 
 export function CommitteeDashboard() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const committeeId = id!;
 
@@ -70,6 +71,7 @@ export function CommitteeDashboard() {
   const [myRole, setMyRole] = useState<MembershipRole | null>(null);
   const [viewerRole, setViewerRole] = useState<"teacher" | "student" | null>(null);
   const [joining, setJoining] = useState(false);
+  const [leaving, setLeaving] = useState(false);
   const [allowSelfJoin, setAllowSelfJoin] = useState(false);
 
   const [editingAbout, setEditingAbout] = useState(false);
@@ -612,10 +614,47 @@ export function CommitteeDashboard() {
       if (error) throw error;
       setMyRole("member");
       setMembers((prev) => (prev.some((m) => m.user_id === meId) ? prev : [...prev, { user_id: meId, role: "member", profile: meProfile }]));
+      const cached = dashboardCache.get(committeeId);
+      if (cached) {
+        dashboardCache.set(committeeId, {
+          ...cached,
+          myRole: "member",
+          members: cached.members.some((m) => m.user_id === meId) ? cached.members : [...cached.members, { user_id: meId, role: "member", profile: meProfile }],
+        });
+      }
     } catch (e: any) {
       toast.error(e.message || "Could not update membership");
     } finally {
       setJoining(false);
+    }
+  };
+
+  const leave = async () => {
+    if (!meId || !myRole) return;
+    setLeaving(true);
+    try {
+      const { error } = await supabase
+        .from("committee_members")
+        .delete()
+        .eq("committee_id", committeeId)
+        .eq("user_id", meId);
+      if (error) throw error;
+      setMyRole(null);
+      setMembers((prev) => prev.filter((member) => member.user_id !== meId));
+      const cached = dashboardCache.get(committeeId);
+      if (cached) {
+        dashboardCache.set(committeeId, {
+          ...cached,
+          myRole: null,
+          members: cached.members.filter((member) => member.user_id !== meId),
+        });
+      }
+      toast.success("Left committee");
+      navigate("/committees");
+    } catch (e: any) {
+      toast.error(e.message || "Could not leave committee");
+    } finally {
+      setLeaving(false);
     }
   };
 
@@ -656,6 +695,16 @@ export function CommitteeDashboard() {
             <h1 className="text-3xl font-bold text-gray-900 mb-1">{committee.name}</h1>
           </div>
           <div className="flex items-center gap-2">
+            {myRole && (
+              <button
+                onClick={() => void leave()}
+                disabled={leaving}
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 bg-red-100 text-red-700 hover:bg-red-200"
+              >
+                <LogOut className="w-4 h-4" />
+                {leaving ? "Leaving" : "Leave"}
+              </button>
+            )}
             {!myRole && allowSelfJoin && viewerRole === "student" && (
               <button
                 onClick={() => void join()}

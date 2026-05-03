@@ -12,6 +12,65 @@ type CountData = {
 
 const defaultCounts: Counts = { dashboard: 0, review: 0, vote: 0 };
 const defaultIds: Record<TabId, string[]> = { dashboard: [], review: [], vote: [] };
+const countDataCache = new Map<string, CountData>();
+
+function cloneCountData(data: CountData): CountData {
+  return {
+    counts: { ...data.counts },
+    ids: {
+      dashboard: [...data.ids.dashboard],
+      review: [...data.ids.review],
+      vote: [...data.ids.vote],
+    },
+  };
+}
+
+function countStorageKey(committeeId: string) {
+  return `committee:${committeeId}:tabCounts`;
+}
+
+function emptyCountData(): CountData {
+  return { counts: { ...defaultCounts }, ids: { dashboard: [], review: [], vote: [] } };
+}
+
+function readCachedCountData(committeeId: string): CountData {
+  const cached = countDataCache.get(committeeId);
+  if (cached) return cloneCountData(cached);
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(countStorageKey(committeeId)) || "null") as CountData | null;
+    if (parsed?.counts && parsed?.ids) {
+      const normalized = {
+        counts: { ...defaultCounts, ...parsed.counts },
+        ids: {
+          dashboard: Array.isArray(parsed.ids.dashboard) ? parsed.ids.dashboard : [],
+          review: Array.isArray(parsed.ids.review) ? parsed.ids.review : [],
+          vote: Array.isArray(parsed.ids.vote) ? parsed.ids.vote : [],
+        },
+      };
+      countDataCache.set(committeeId, normalized);
+      return cloneCountData(normalized);
+    }
+  } catch {
+    // ignore
+  }
+  return emptyCountData();
+}
+
+function writeCachedCountData(committeeId: string, data: CountData) {
+  const normalized = cloneCountData(data);
+  countDataCache.set(committeeId, normalized);
+  try {
+    window.localStorage.setItem(countStorageKey(committeeId), JSON.stringify(normalized));
+  } catch {
+    // ignore
+  }
+}
+
+export function updateCommitteeTabCounts(committeeId: string, updater: (current: CountData) => CountData) {
+  const next = updater(readCachedCountData(committeeId));
+  writeCachedCountData(committeeId, next);
+  window.dispatchEvent(new CustomEvent("committee-counts-updated", { detail: { committeeId } }));
+}
 
 export function committeeSeenStorageKey(committeeId: string, tab: TabId) {
   return `committee:${committeeId}:seenIds:${tab}`;
@@ -33,11 +92,12 @@ export function markCommitteeSeenIds(committeeId: string, tab: TabId, ids: strin
 }
 
 export function CommitteeTabs({ committeeId, active }: { committeeId: string; active: TabId }) {
-  const [countData, setCountData] = useState<CountData>({ counts: defaultCounts, ids: defaultIds });
+  const [countData, setCountData] = useState<CountData>(() => readCachedCountData(committeeId));
   const [seenVersion, setSeenVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
+    setCountData(readCachedCountData(committeeId));
     const load = async () => {
       const [{ data: announcements }, { data: refs }] = await Promise.all([
         supabase
@@ -49,7 +109,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
       const billIds = (refs ?? []).map((row: any) => row.bill_id);
       const { data: statusRows } = billIds.length
         ? await supabase
-            .from("bill_display")
+            .from("bills")
             .select("id,status")
             .in("id", billIds)
         : ({ data: [] } as any);
@@ -57,7 +117,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
       const reviewIds = (statusRows ?? []).filter((row: any) => row.status === "in_committee").map((row: any) => row.id);
       const voteIds = (statusRows ?? []).filter((row: any) => row.status === "committee_vote").map((row: any) => row.id);
       if (!cancelled) {
-        setCountData({
+        const next = {
           counts: {
             dashboard: dashboardIds.length,
             review: reviewIds.length,
@@ -68,7 +128,9 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
             review: reviewIds,
             vote: voteIds,
           },
-        });
+        };
+        writeCachedCountData(committeeId, next);
+        setCountData(next);
       }
     };
     void load();
@@ -82,11 +144,19 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
       const detail = (event as CustomEvent).detail as { committeeId?: string } | undefined;
       if (!detail?.committeeId || detail.committeeId === committeeId) setSeenVersion((value) => value + 1);
     };
+    const onCounts = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { committeeId?: string } | undefined;
+      if (!detail?.committeeId || detail.committeeId === committeeId) setCountData(readCachedCountData(committeeId));
+    };
     window.addEventListener("committee-seen-updated", onSeen);
+    window.addEventListener("committee-counts-updated", onCounts);
     window.addEventListener("storage", onSeen);
+    window.addEventListener("storage", onCounts);
     return () => {
       window.removeEventListener("committee-seen-updated", onSeen);
+      window.removeEventListener("committee-counts-updated", onCounts);
       window.removeEventListener("storage", onSeen);
+      window.removeEventListener("storage", onCounts);
     };
   }, [committeeId]);
 

@@ -3,14 +3,14 @@ import { useParams } from "react-router";
 import { CheckCircle2, FileText, Pencil, Save, Sparkles, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { CommitteeTabs, markCommitteeSeenIds } from "../components/CommitteeTabs";
+import { CommitteeTabs, markCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
 import { closeCommitteeVote, submitCommitteeReport } from "../services/bills";
 
 type BillRow = {
   id: string;
-  hr_label: string;
+  bill_number: number | null;
   title: string;
   legislative_text: string;
   author_user_id: string;
@@ -100,8 +100,8 @@ export function CommitteeVote() {
         }
 
         const { data: billRows, error: bErr } = await supabase
-          .from("bill_display")
-          .select("id,hr_label,title,legislative_text,author_user_id,status")
+          .from("bills")
+          .select("id,bill_number,title,legislative_text,author_user_id,status")
           .in("id", billIds)
           .eq("status", "committee_vote")
           .order("bill_number", { ascending: true });
@@ -116,7 +116,7 @@ export function CommitteeVote() {
 
         const mapped = ((billRows ?? []) as BillRow[]).map((bill) => ({
           id: bill.id,
-          number: bill.hr_label,
+          number: `H.R. ${bill.bill_number ?? ""}`.trim(),
           title: bill.title,
           sponsor: sponsorMap.get(bill.author_user_id) ?? "Member",
           legislativeHtml: bill.legislative_text,
@@ -234,6 +234,13 @@ export function CommitteeVote() {
         setSelectedBillId(next[0]?.id ?? null);
         const cached = votePageCache.get(committeeId);
         if (cached) votePageCache.set(committeeId, { ...cached, bills: next, selectedBillId: next[0]?.id ?? null });
+        updateCommitteeTabCounts(committeeId, (current) => {
+          const voteIds = current.ids.vote.filter((id) => id !== selected.id);
+          return {
+            counts: { ...current.counts, vote: voteIds.length },
+            ids: { ...current.ids, vote: voteIds },
+          };
+        });
         return next;
       });
       toast.success(approved ? "Vote closed; bill calendared" : "Vote closed; bill rejected");
@@ -407,12 +414,16 @@ export function CommitteeVote() {
                           </button>
                         </div>
                       </div>
-                      {textView === "edited" && (
-                        <CollaborativeBillEditor classId={classId} committeeId={committeeId} billId={selected.id} initialHtml={selected.legislativeHtml} editable={false} />
-                      )}
-                      {textView === "clean" && (
-                        <CollaborativeBillEditor classId={classId} committeeId={committeeId} billId={selected.id} initialHtml={selected.legislativeHtml} editable={false} displayMode="clean" />
-                      )}
+                      <div className={textView === "original" ? "hidden" : ""}>
+                        <CollaborativeBillEditor
+                          classId={classId}
+                          committeeId={committeeId}
+                          billId={selected.id}
+                          initialHtml={selected.legislativeHtml}
+                          editable={false}
+                          displayMode={textView === "clean" ? "clean" : "tracked"}
+                        />
+                      </div>
                       {textView === "original" && (
                         <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
                           <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />

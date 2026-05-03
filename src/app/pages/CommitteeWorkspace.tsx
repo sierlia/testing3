@@ -6,12 +6,12 @@ import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { DefaultAvatar } from "../components/DefaultAvatar";
-import { CommitteeTabs, markCommitteeSeenIds, readCommitteeSeenIds } from "../components/CommitteeTabs";
+import { CommitteeTabs, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { proposeBillForCommitteeVote } from "../services/bills";
 
 type BillRow = {
   id: string;
-  hr_label: string;
+  bill_number: number | null;
   title: string;
   legislative_text: string;
   author_user_id: string;
@@ -97,9 +97,10 @@ export function CommitteeWorkspace() {
         }
 
         const { data: billRows, error: bErr } = await supabase
-          .from("bill_display")
-          .select("id,hr_label,title,legislative_text,author_user_id,status")
+          .from("bills")
+          .select("id,bill_number,title,legislative_text,author_user_id,status")
           .in("id", billIds)
+          .eq("status", "in_committee")
           .order("bill_number", { ascending: true });
         if (bErr) throw bErr;
 
@@ -112,12 +113,12 @@ export function CommitteeWorkspace() {
 
         const mapped = (billRows as any[]).map((b: BillRow) => ({
           id: b.id,
-          number: b.hr_label,
+          number: `H.R. ${b.bill_number ?? ""}`.trim(),
           title: b.title,
           sponsor: sponsorMap.get(b.author_user_id) ?? "Member",
           legislativeHtml: b.legislative_text,
           status: b.status,
-        })).filter((bill) => bill.status === "in_committee");
+        }));
         setBills(mapped);
         const nextSelectedBillId = selectedBillId && mapped.some((bill) => bill.id === selectedBillId) ? selectedBillId : mapped[0]?.id ?? null;
         setSelectedBillId(nextSelectedBillId);
@@ -161,6 +162,14 @@ export function CommitteeWorkspace() {
         setSelectedBillId(next[0]?.id ?? null);
         const cached = workspaceCache.get(committeeId);
         if (cached) workspaceCache.set(committeeId, { ...cached, bills: next, selectedBillId: next[0]?.id ?? null });
+        updateCommitteeTabCounts(committeeId, (current) => {
+          const reviewIds = current.ids.review.filter((id) => id !== selected.id);
+          const voteIds = Array.from(new Set([...current.ids.vote, selected.id]));
+          return {
+            counts: { ...current.counts, review: reviewIds.length, vote: voteIds.length },
+            ids: { ...current.ids, review: reviewIds, vote: voteIds },
+          };
+        });
         return next;
       });
       toast.success("Bill proposed for committee vote");
@@ -168,30 +177,6 @@ export function CommitteeWorkspace() {
       toast.error(e.message || "Could not propose bill for vote");
     } finally {
       setProposing(false);
-    }
-  };
-
-  const saveReport = async () => {
-    if (!selected || !classId) return;
-    setReportSaving(true);
-    setReportSaved(false);
-    try {
-      const { error } = await supabase.from("committee_bill_docs").upsert(
-        {
-          bill_id: selected.id,
-          committee_id: committeeId,
-          class_id: classId,
-          committee_report: reportDraft,
-        } as any,
-        { onConflict: "bill_id,committee_id" },
-      );
-      if (error) throw error;
-      setReportSaved(true);
-      toast.success("Committee report saved");
-    } catch (e: any) {
-      toast.error(e.message || "Could not save committee report");
-    } finally {
-      setReportSaving(false);
     }
   };
 
@@ -394,7 +379,7 @@ export function CommitteeWorkspace() {
                             }`}
                           >
                             <Pencil className="w-4 h-4" />
-                            Edited Text
+                            Edited
                           </button>
                           <button
                             type="button"
@@ -414,7 +399,7 @@ export function CommitteeWorkspace() {
                             }`}
                           >
                             <FileText className="w-4 h-4" />
-                            Original Text
+                            Original
                           </button>
                         </div>
                           <button
@@ -431,37 +416,21 @@ export function CommitteeWorkspace() {
                   </div>
                   <div className="p-5 space-y-6">
                     <div>
-                      {textView === "edited" && (
+                      <div className={textView === "original" ? "hidden" : ""}>
                         <CollaborativeBillEditor
                           classId={classId}
                           committeeId={committeeId}
                           billId={selected.id}
                           initialHtml={selected.legislativeHtml}
-                          editable
+                          editable={textView === "edited"}
+                          displayMode={textView === "clean" ? "clean" : "tracked"}
                         />
-                      )}
-                      {textView === "clean" && (
-                        <CollaborativeBillEditor
-                          classId={classId}
-                          committeeId={committeeId}
-                          billId={selected.id}
-                          initialHtml={selected.legislativeHtml}
-                          editable={false}
-                          displayMode="clean"
-                        />
-                      )}
+                      </div>
                       {textView === "original" && (
                         <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
                           <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
                         </div>
                       )}
-                      <div className="text-xs text-gray-500 mt-3">
-                        {textView === "edited"
-                          ? "Changes sync live to other committee members and are persisted in Supabase."
-                          : textView === "clean"
-                            ? "Clean text shows accepted edits without highlights or struck text."
-                            : "Original bill text is read-only."}
-                      </div>
                     </div>
                   </div>
                 </>

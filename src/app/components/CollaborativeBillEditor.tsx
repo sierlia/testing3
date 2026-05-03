@@ -633,7 +633,12 @@ export function CollaborativeBillEditor({
         setCollabStatus("fallback");
       }
     }
-  }, [ready, editable, localUser.id, localUser.name, localUser.color, initialHtml, trackDeletes]);
+  }, [ready, localUser.id, localUser.name, localUser.color, initialHtml, trackDeletes]);
+
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    editor.setEditable(editable);
+  }, [editor, editable]);
 
   useEffect(() => {
     if (!editor) return;
