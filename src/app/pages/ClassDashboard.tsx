@@ -25,13 +25,15 @@ import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
+import { fetchCalendaredBillsForCurrentClass } from "../services/bills";
 import { supabase } from "../utils/supabase";
 
 interface CalendarEvent {
   id: string;
   title: string;
   date: Date;
-  type: "deadline" | "session" | "election";
+  type: "deadline" | "session" | "election" | "bill";
+  href?: string;
 }
 
 const workflowSteps = [
@@ -103,13 +105,23 @@ export function ClassDashboard() {
         .gte("due_at", nowIso)
         .order("due_at", { ascending: true })
         .limit(6);
+      const calendaredBills = await fetchCalendaredBillsForCurrentClass();
       setUpcomingEvents(
-        (taskRows ?? []).map((task: any) => ({
+        [
+          ...(taskRows ?? []).map((task: any) => ({
           id: task.id,
           title: `${task.task_type === "assignment" ? "Assignment" : "Deadline"}: ${task.title}`,
           date: new Date(task.due_at),
           type: "deadline",
         })),
+          ...calendaredBills.map((item) => ({
+            id: `bill-${item.id}`,
+            title: `${item.bill.hr_label}: ${item.bill.title}`,
+            date: new Date(item.scheduled_at),
+            type: "bill" as const,
+            href: `/bills/${item.bill_id}`,
+          })),
+        ].sort((a, b) => a.date.getTime() - b.date.getTime()),
       );
 
       const activity = await fetchClassActivity(classId, 12);
@@ -155,6 +167,7 @@ export function ClassDashboard() {
 
   const getEventIcon = (type: string) => {
     if (type === "deadline") return <Clock className="h-4 w-4 text-sky-600" />;
+    if (type === "bill") return <FileText className="h-4 w-4 text-blue-600" />;
     if (type === "election") return <Vote className="h-4 w-4 text-purple-600" />;
     return <CalendarIcon className="h-4 w-4 text-blue-600" />;
   };
@@ -547,7 +560,13 @@ export function ClassDashboard() {
                       <div key={event.id} className="flex items-start gap-3 rounded-lg bg-sky-50 p-3 transition-colors hover:bg-sky-100">
                         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
                         <div className="min-w-0 flex-1">
-                          <h4 className="text-sm font-semibold text-gray-900">{event.title}</h4>
+                          {event.href ? (
+                            <Link to={event.href} className="text-sm font-semibold text-gray-900 hover:text-blue-600">
+                              {event.title}
+                            </Link>
+                          ) : (
+                            <h4 className="text-sm font-semibold text-gray-900">{event.title}</h4>
+                          )}
                           <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
                         </div>
                         <span className="rounded-full bg-sky-100 px-2 py-1 text-xs text-sky-700">{event.type}</span>
