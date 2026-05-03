@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useParams, useSearchParams } from "react-router";
 import { AlertCircle, BookOpen, FileText, MessageSquare, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
@@ -15,12 +15,17 @@ function activityIcon(type: string) {
 
 export function ClassActivityPage() {
   const { classId } = useParams();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [activities, setActivities] = useState<ClassActivity[]>([]);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(() => searchParams.get("student") ?? "");
   const [typeFilter, setTypeFilter] = useState("all");
   const [contextFilter, setContextFilter] = useState("all");
   const [sortMode, setSortMode] = useState<SortMode>("newest");
+
+  useEffect(() => {
+    setSearchQuery(searchParams.get("student") ?? "");
+  }, [searchParams]);
 
   useEffect(() => {
     const load = async () => {

@@ -37,7 +37,7 @@ const settingsTabIds: TabId[] = ["bills", "floor", "leadership", "calendar", "pr
 
 function Toggle({ checked, onChange, title, description }: { checked: boolean; onChange: (next: boolean) => void; title: string; description: string }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-gray-50 p-4 transition-colors hover:bg-blue-50">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600" />
       <span>
         <span className="block text-sm font-semibold text-gray-900">{title}</span>
@@ -51,7 +51,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const params = useParams();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>(mode === "setup" ? "parties" : "bills");
-  const [activeClassId, setActiveClassId] = useState<string | null>(null);
+  const [activeClassId, setActiveClassId] = useState<string | null>(params.classId ?? null);
   const [hasChanges, setHasChanges] = useState(false);
   const [settings, setSettingsState] = useState({
     allowedParties: ["Democratic Party", "Republican Party"],

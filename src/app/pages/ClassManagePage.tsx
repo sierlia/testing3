@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router";
-import { Check, Copy, Search, UserX, Users } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router";
+import { Activity, Check, Copy, Search, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -178,6 +178,13 @@ export function ClassManagePage() {
                       Approve
                     </Button>
                   )}
+                  <Link
+                    to={`/teacher/class/${classId}/activity?student=${encodeURIComponent(student.name)}`}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+                  >
+                    <Activity className="h-4 w-4" />
+                    View activity
+                  </Link>
                   <Button variant="ghost" size="sm" onClick={() => removeStudent(student)} className="text-red-600 hover:text-red-700">
                     <UserX className="h-4 w-4" />
                   </Button>
@@ -190,7 +197,27 @@ export function ClassManagePage() {
     )
   );
 
-  if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;
+  if (!classDetails && loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+          <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <div className="h-9 w-64 animate-pulse rounded bg-gray-200" />
+              <p className="mt-2 text-sm text-gray-500">Student roster</p>
+            </div>
+            <TeacherClassTabs classId={classId} active="roster" />
+          </div>
+          <Card>
+            <CardContent>
+              <div className="py-10 text-center text-sm text-gray-500">Loading students...</div>
+            </CardContent>
+          </Card>
+        </main>
+      </div>
+    );
+  }
   if (!classDetails) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Button onClick={() => navigate("/teacher/dashboard")}>Back</Button></div>;
 
   return (
@@ -229,14 +256,18 @@ export function ClassManagePage() {
             </div>
           </CardHeader>
           <CardContent>
-            <Tabs defaultValue="students">
-              <TabsList>
-                <TabsTrigger value="students">Students</TabsTrigger>
-                <TabsTrigger value="pending">Pending</TabsTrigger>
-              </TabsList>
-              <TabsContent value="students">{rosterTable(approvedStudents)}</TabsContent>
-              <TabsContent value="pending">{rosterTable(pendingStudents, true)}</TabsContent>
-            </Tabs>
+            {loading ? (
+              <div className="py-10 text-center text-sm text-gray-500">Loading students...</div>
+            ) : (
+              <Tabs defaultValue="students">
+                <TabsList>
+                  <TabsTrigger value="students">Students</TabsTrigger>
+                  <TabsTrigger value="pending">Pending</TabsTrigger>
+                </TabsList>
+                <TabsContent value="students">{rosterTable(approvedStudents)}</TabsContent>
+                <TabsContent value="pending">{rosterTable(pendingStudents, true)}</TabsContent>
+              </Tabs>
+            )}
           </CardContent>
         </Card>
       </main>
