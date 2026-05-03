@@ -18,6 +18,12 @@ type TrackerStep = { label: string; status: TrackerStatus; date?: string | null;
 type TrackerItem = TrackerStep | { kind: "split"; steps: [TrackerStep, TrackerStep] };
 type BillAction = { label: string; detail?: string; date: string };
 type CommitteeOption = { id: string; name: string };
+type TrackerOverrideDraft = {
+  step: TrackerStep;
+  committeeId: string;
+  scheduledAt: string;
+  finalStatus: "passed" | "failed";
+};
 
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleDateString() : "";
@@ -107,7 +113,7 @@ function TrackerPoint({ step, compact = false, onSelect }: { step: TrackerStep; 
   );
   if (onSelect) {
     return (
-      <button type="button" onClick={() => onSelect(step)} className="flex min-w-0 items-start gap-2 rounded-md text-left hover:bg-gray-50">
+      <button type="button" onClick={() => onSelect(step)} className="flex min-w-0 items-start gap-2 rounded-md border border-dashed border-gray-300 p-1 text-left hover:border-blue-300 hover:bg-blue-50">
         {content}
       </button>
     );
@@ -174,6 +180,8 @@ export function BillDetail() {
   const [cosponsorSearch, setCosponsorSearch] = useState("");
   const [cosponsorPartyFilter, setCosponsorPartyFilter] = useState("all");
   const [cosponsorSort, setCosponsorSort] = useState<"newest" | "oldest" | "name">("newest");
+  const [trackerOverrideDraft, setTrackerOverrideDraft] = useState<TrackerOverrideDraft | null>(null);
+  const [trackerOverrideSaving, setTrackerOverrideSaving] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -362,29 +370,8 @@ export function BillDetail() {
     setClassSettings(res.classSettings ?? {});
   };
 
-  const chooseCommitteeId = () => {
-    if (committeeOptions.length === 0) {
-      toast.error("No committees are configured for this class");
-      return null;
-    }
-    if (committeeOptions.length === 1) return committeeOptions[0].id;
-    const list = committeeOptions.map((committee, index) => `${index + 1}. ${committee.name}`).join("\n");
-    const raw = window.prompt(`Choose a committee:\n${list}`, referral?.committee_name ?? "1");
-    if (!raw) return null;
-    const byNumber = Number(raw.trim());
-    if (Number.isInteger(byNumber) && committeeOptions[byNumber - 1]) return committeeOptions[byNumber - 1].id;
-    const match = committeeOptions.find((committee) => committee.name.toLowerCase() === raw.trim().toLowerCase());
-    if (!match) {
-      toast.error("No matching committee");
-      return null;
-    }
-    return match.id;
-  };
-
-  const ensureTeacherReferral = async () => {
+  const upsertTeacherReferral = async (committeeId: string) => {
     if (!bill) return null;
-    const committeeId = chooseCommitteeId();
-    if (!committeeId) return null;
     const { error: referralError } = await supabase.from("bill_referrals").upsert(
       {
         bill_id: bill.id,
@@ -399,17 +386,37 @@ export function BillDetail() {
     return committeeId;
   };
 
-  const handleTeacherTrackerSelect = async (step: TrackerStep) => {
+  const openTeacherTrackerOverride = (step: TrackerStep) => {
     if (userRole !== "teacher" || !bill) return;
+    if (committeeOptions.length === 0 && ["Referred", "Marked up", "Reported"].includes(step.label)) {
+      toast.error("No committees are configured for this class");
+      return;
+    }
+    const defaultCommitteeId = referral?.committee_id ?? committeeOptions[0]?.id ?? "";
+    setTrackerOverrideDraft({
+      step,
+      committeeId: defaultCommitteeId,
+      scheduledAt: new Date().toISOString().slice(0, 16),
+      finalStatus: "passed",
+    });
+  };
+
+  const handleTeacherTrackerOverride = async () => {
+    if (userRole !== "teacher" || !bill || !trackerOverrideDraft) return;
+    const { step, committeeId, scheduledAt, finalStatus } = trackerOverrideDraft;
+    if (["Referred", "Marked up", "Reported"].includes(step.label) && !committeeId) {
+      toast.error("Choose a committee");
+      return;
+    }
+    setTrackerOverrideSaving(true);
     try {
       if (step.label === "Introduced") {
         const { error } = await supabase.from("bills").update({ status: "submitted" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (error) throw error;
       } else if (step.label === "Referred") {
-        await ensureTeacherReferral();
+        await upsertTeacherReferral(committeeId);
       } else if (step.label === "Marked up") {
-        const committeeId = referral?.committee_id ?? (await ensureTeacherReferral());
-        if (!committeeId) return;
+        await upsertTeacherReferral(committeeId);
         const now = new Date().toISOString();
         const { error: docError } = await supabase.from("committee_bill_docs").upsert(
           { bill_id: bill.id, committee_id: committeeId, class_id: bill.class_id, committee_markup_posted_at: now } as any,
@@ -419,8 +426,7 @@ export function BillDetail() {
         const { error: billError } = await supabase.from("bills").update({ status: "committee_vote" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (billError) throw billError;
       } else if (step.label === "Reported") {
-        const committeeId = referral?.committee_id ?? (await ensureTeacherReferral());
-        if (!committeeId) return;
+        await upsertTeacherReferral(committeeId);
         const { error: docError } = await supabase.from("committee_bill_docs").upsert(
           { bill_id: bill.id, committee_id: committeeId, class_id: bill.class_id, committee_vote_finalized_at: new Date().toISOString() } as any,
           { onConflict: "bill_id,committee_id" },
@@ -429,10 +435,9 @@ export function BillDetail() {
         const { error } = await supabase.from("bills").update({ status: "reported" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (error) throw error;
       } else if (step.label === "Calendared") {
-        const scheduledAt = window.prompt("Schedule this bill for the calendar:", new Date().toISOString());
         if (!scheduledAt) return;
         const { error: calendarError } = await supabase.from("bill_calendar").upsert(
-          { bill_id: bill.id, class_id: bill.class_id, scheduled_at: scheduledAt, duration_minutes: 30, published: true, created_by: currentUserId } as any,
+          { bill_id: bill.id, class_id: bill.class_id, scheduled_at: new Date(scheduledAt).toISOString(), duration_minutes: 30, published: true, created_by: currentUserId } as any,
           { onConflict: "class_id,bill_id" },
         );
         if (calendarError) throw calendarError;
@@ -448,21 +453,21 @@ export function BillDetail() {
         const { error } = await supabase.from("bills").update({ status: "floor" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (error) throw error;
       } else if (step.label === "Final") {
-        const raw = window.prompt("Final result: passed or failed?", "passed");
-        if (!raw) return;
-        const nextStatus = raw.toLowerCase().startsWith("p") ? "passed" : "failed";
         const { error: sessionError } = await supabase.from("bill_floor_sessions").upsert(
           { bill_id: bill.id, class_id: bill.class_id, status: "closed", closed_at: new Date().toISOString() } as any,
           { onConflict: "class_id,bill_id" },
         );
         if (sessionError) throw sessionError;
-        const { error } = await supabase.from("bills").update({ status: nextStatus } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+        const { error } = await supabase.from("bills").update({ status: finalStatus } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (error) throw error;
       }
       await refreshBillState();
+      setTrackerOverrideDraft(null);
       toast.success("Bill tracker updated");
     } catch (e: any) {
       toast.error(e.message || "Could not update bill tracker");
+    } finally {
+      setTrackerOverrideSaving(false);
     }
   };
 
@@ -517,7 +522,13 @@ export function BillDetail() {
             </div>
             <div><span className="font-semibold text-gray-900">Latest action:</span> {latestAction ? `${latestAction.label} - ${formatDate(latestAction.date)}` : "No action yet"}</div>
           </div>
-          <HorizontalTracker steps={tracker} onSelectStep={userRole === "teacher" ? handleTeacherTrackerSelect : undefined} />
+          {userRole === "teacher" && (
+            <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+              <span>Teacher override is enabled. Click a tracker stage to review and confirm a manual status change.</span>
+            </div>
+          )}
+          <HorizontalTracker steps={tracker} onSelectStep={userRole === "teacher" ? openTeacherTrackerOverride : undefined} />
         </div>
 
         {bill.status === "draft" && (
@@ -650,6 +661,72 @@ export function BillDetail() {
           </aside>
         </div>
       </main>
+      {trackerOverrideDraft && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+            <div className="border-b border-gray-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">Confirm teacher override</h2>
+              <p className="mt-1 text-sm text-gray-600">Update this bill to {trackerOverrideDraft.step.label}.</p>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              {["Referred", "Marked up", "Reported"].includes(trackerOverrideDraft.step.label) && (
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">Committee</span>
+                  <select
+                    value={trackerOverrideDraft.committeeId}
+                    onChange={(event) => setTrackerOverrideDraft((draft) => draft ? { ...draft, committeeId: event.target.value } : draft)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    {committeeOptions.map((committee) => (
+                      <option key={committee.id} value={committee.id}>{committee.name}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {trackerOverrideDraft.step.label === "Calendared" && (
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">Schedule for</span>
+                  <input
+                    type="datetime-local"
+                    value={trackerOverrideDraft.scheduledAt}
+                    onChange={(event) => setTrackerOverrideDraft((draft) => draft ? { ...draft, scheduledAt: event.target.value } : draft)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  />
+                </label>
+              )}
+              {trackerOverrideDraft.step.label === "Final" && (
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">Final result</span>
+                  <select
+                    value={trackerOverrideDraft.finalStatus}
+                    onChange={(event) => setTrackerOverrideDraft((draft) => draft ? { ...draft, finalStatus: event.target.value as "passed" | "failed" } : draft)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                  >
+                    <option value="passed">Passed</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </label>
+              )}
+              <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                This will directly change the bill tracker and may create or update related committee, calendar, or floor records.
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-5 py-4">
+              <button type="button" onClick={() => setTrackerOverrideDraft(null)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleTeacherTrackerOverride()}
+                disabled={trackerOverrideSaving}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
+              >
+                {trackerOverrideSaving ? "Updating" : "Confirm update"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

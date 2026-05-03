@@ -15,16 +15,30 @@ export function ReactionsBar({
   size = "sm",
 }: {
   summary: ReactionsSummary | undefined;
-  onToggle: (emoji: ReactionEmoji) => void;
+  onToggle: (emoji: ReactionEmoji) => void | Promise<void>;
   size?: "sm" | "md";
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pendingEmoji, setPendingEmoji] = useState<ReactionEmoji | null>(null);
+  const pendingRef = useRef(false);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const counts = summary?.counts ?? { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 };
   const mine = summary?.mine ?? new Set<ReactionEmoji>();
   const baseClass = size === "md" ? "px-3 py-1.5 text-sm" : "px-2 py-1 text-xs";
 
   const shown = EMOJIS.filter((e) => (counts[e] ?? 0) > 0 || mine.has(e));
+
+  const toggle = async (emoji: ReactionEmoji) => {
+    if (pendingRef.current) return;
+    pendingRef.current = true;
+    setPendingEmoji(emoji);
+    try {
+      await Promise.resolve(onToggle(emoji));
+    } finally {
+      pendingRef.current = false;
+      setPendingEmoji(null);
+    }
+  };
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -44,10 +58,11 @@ export function ReactionsBar({
           <button
             key={emoji}
             type="button"
-            onClick={() => onToggle(emoji)}
+            onClick={() => void toggle(emoji)}
+            disabled={pendingEmoji === emoji}
             className={`${baseClass} rounded-md border transition-colors ${
               active ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 hover:bg-gray-50 text-gray-700"
-            }`}
+            } disabled:opacity-60`}
             title="React"
           >
             <span className="mr-1">{emoji}</span>
@@ -71,10 +86,11 @@ export function ReactionsBar({
                 key={emoji}
                 type="button"
                 onClick={() => {
-                  onToggle(emoji);
+                  void toggle(emoji);
                   setMenuOpen(false);
                 }}
-                className="px-2 py-1 rounded hover:bg-gray-100 text-sm"
+                disabled={pendingEmoji === emoji}
+                className="px-2 py-1 rounded hover:bg-gray-100 text-sm disabled:opacity-60"
                 title="React"
               >
                 {emoji}

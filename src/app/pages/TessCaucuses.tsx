@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Search, Plus, Users, ArrowUpDown, Vote } from "lucide-react";
+import { Search, Plus, Users, ArrowUpDown, Vote, LogOut, UserPlus } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -149,6 +149,7 @@ export function TessCaucuses() {
         if (!existing) return;
 
         if (existing.isMember) {
+          if (!window.confirm(`Leave ${existing.name}?`)) return;
           const { error } = await supabase.from("caucus_members").delete().eq("caucus_id", caucusId).eq("user_id", me);
           if (error) throw error;
           setCaucuses(
@@ -228,7 +229,7 @@ export function TessCaucuses() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OrganizationsLayout active="caucuses">
         {showCreateForm && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
@@ -303,7 +304,7 @@ export function TessCaucuses() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {loading ? (
             <div className="col-span-full text-center py-12 text-gray-500">Loading caucuses...</div>
           ) : sortedCaucuses.length === 0 ? (
@@ -336,10 +337,11 @@ export function TessCaucuses() {
                       event.stopPropagation();
                       handleJoinLeave(caucus.id);
                     }}
-                    className={`px-4 py-1.5 rounded-md font-medium text-sm transition-colors ${
+                    className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-md font-medium text-sm transition-colors ${
                       caucus.isMember ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
                     }`}
                   >
+                    {caucus.isMember ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
                     {caucus.isMember ? "Leave" : "Join"}
                   </button>
                 </div>

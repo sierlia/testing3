@@ -513,6 +513,7 @@ export function CommitteeDashboard() {
 
   const deleteAnnouncement = async (announcementId: string) => {
     if (!isTeacher) return;
+    if (!window.confirm("Delete this announcement? This cannot be undone.")) return;
     try {
       const { error } = await supabase.from("committee_announcements").delete().eq("id", announcementId);
       if (error) throw error;
@@ -531,6 +532,7 @@ export function CommitteeDashboard() {
 
   const deleteComment = async (commentId: string) => {
     if (!isTeacher || !selectedAnnouncementId) return;
+    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
     try {
       const { error } = await supabase.from("committee_comments").delete().eq("id", commentId);
       if (error) throw error;
@@ -687,6 +689,7 @@ export function CommitteeDashboard() {
 
   const leave = async () => {
     if (!meId || !myRole) return;
+    if (!window.confirm("Leave this committee?")) return;
     setLeaving(true);
     try {
       const { error } = await supabase
@@ -886,7 +889,7 @@ export function CommitteeDashboard() {
                           <ReactionsBar
                             size="md"
                             summary={announcementReactions[selectedAnnouncement.id]}
-                            onToggle={(emoji) => void toggleAnnouncementReaction(selectedAnnouncement.id, emoji)}
+                            onToggle={(emoji) => toggleAnnouncementReaction(selectedAnnouncement.id, emoji)}
                           />
                         </div>
                       </div>
@@ -897,7 +900,7 @@ export function CommitteeDashboard() {
                           comments={visibleComments}
                           meId={canComment ? meId : null}
                           reactionsByCommentId={commentReactions}
-                          onToggleReaction={(commentId, emoji) => void toggleCommentReaction(commentId, emoji)}
+                          onToggleReaction={(commentId, emoji) => toggleCommentReaction(commentId, emoji)}
                           onSubmitComment={submitComment}
                           canDeleteComments={isTeacher}
                           onDeleteComment={deleteComment}

@@ -41,6 +41,14 @@ function PartyIcon({ name }: { name: string }) {
   );
 }
 
+function fadedPartyColor(color: string) {
+  const hex = color.trim();
+  const match = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  if (!match) return "#fee2e2";
+  const [, r, g, b] = match;
+  return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, 0.14)`;
+}
+
 export function PartiesPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -154,7 +162,27 @@ export function PartiesPage() {
     const query = searchQuery.trim().toLowerCase();
     return parties.filter((party) => !query || party.name.toLowerCase().includes(query) || (party.platform ?? "").toLowerCase().includes(query));
   }, [parties, searchQuery]);
-  const approvedParties = useMemo(() => filteredParties.filter((party) => party.approved), [filteredParties]);
+  const memberCount = (partyName: string) => members.filter((member) => member.party === partyName).length;
+  const approvedParties = useMemo(() => {
+    const rows = filteredParties.filter((party) => party.approved);
+    const hasMembers = rows.some((party) => memberCount(party.name) > 0);
+    return rows.sort((a, b) => {
+      const aCount = memberCount(a.name);
+      const bCount = memberCount(b.name);
+      if (aCount !== bCount) return bCount - aCount;
+      if (!hasMembers) {
+        const priority = (name: string) => {
+          const normalized = name.toLowerCase();
+          if (normalized.includes("democrat")) return 0;
+          if (normalized.includes("republican")) return 1;
+          return 2;
+        };
+        const priorityDiff = priority(a.name) - priority(b.name);
+        if (priorityDiff) return priorityDiff;
+      }
+      return a.name.localeCompare(b.name);
+    });
+  }, [filteredParties, members]);
   const pendingParties = useMemo(() => parties.filter((party) => !party.approved), [parties]);
   const currentPartyName = useMemo(() => members.find((member) => member.user_id === meId)?.party ?? null, [meId, members]);
   const twoPartyMajorityName = useMemo(() => {
@@ -171,7 +199,6 @@ export function PartiesPage() {
     return democraticCount > republicanCount ? democratic?.[0] ?? null : republican?.[0] ?? null;
   }, [members]);
 
-  const memberCount = (partyName: string) => members.filter((member) => member.party === partyName).length;
   const leadershipLabels = (partyName: string) => {
     const normalized = partyName.toLowerCase();
     const isMajorParty = normalized.includes("democrat") || normalized.includes("republican");
@@ -194,6 +221,8 @@ export function PartiesPage() {
 
   const updateMyParty = async (partyName: string | null) => {
     if (!meId) return;
+    if (partyName === null && currentPartyName && !window.confirm(`Leave ${currentPartyName}?`)) return;
+    if (partyName && currentPartyName && currentPartyName !== partyName && !window.confirm(`Switch from ${currentPartyName} to ${partyName}?`)) return;
     try {
       const { error } = await supabase.from("profiles").update({ party: partyName }).eq("user_id", meId);
       if (error) throw error;
@@ -239,7 +268,7 @@ export function PartiesPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <OrganizationsLayout active="parties">
           <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -314,11 +343,9 @@ export function PartiesPage() {
                             void updateMyParty(isCurrentParty ? null : party.name);
                           }}
                           className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                            isCurrentParty
-                              ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                              : "text-white hover:opacity-90"
+                            isCurrentParty ? "border hover:opacity-90" : "text-white hover:opacity-90"
                           }`}
-                          style={isCurrentParty ? undefined : { backgroundColor: party.color }}
+                          style={isCurrentParty ? { backgroundColor: fadedPartyColor(party.color), borderColor: party.color, color: party.color } : { backgroundColor: party.color }}
                         >
                           {isCurrentParty ? <LogOut className="h-3.5 w-3.5" /> : currentPartyName ? <Repeat2 className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
                           {isCurrentParty ? "Leave" : currentPartyName ? "Switch" : "Join"}

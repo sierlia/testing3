@@ -5,10 +5,8 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { AnnouncementsFeed } from "../components/AnnouncementsFeed";
 import { QuickLinks } from "../components/QuickLinks";
-import { MyStatusCard } from "../components/MyStatusCard";
 import { TeacherAdminShortcuts } from "../components/TeacherAdminShortcuts";
 import { supabase } from "../utils/supabase";
-import { formatConstituency } from "../utils/constituency";
 import { fetchCalendaredBillsForCurrentClass, fetchMyBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 
@@ -182,10 +180,11 @@ export function ClassSimulationDashboard() {
         );
         window.localStorage.setItem(seenKey, String(Date.now()));
 
+        const calendar = await fetchCalendaredBillsForCurrentClass();
+        setCalendarItems(calendar);
         if ((pRow as any)?.role !== "teacher") {
-          const [mine, calendar] = await Promise.all([fetchMyBillsForCurrentClass(), fetchCalendaredBillsForCurrentClass()]);
+          const mine = await fetchMyBillsForCurrentClass();
           setMyBills(mine.slice(0, 12));
-          setCalendarItems(calendar);
         }
       } catch (e: any) {
         toast.error(e.message || "Could not load dashboard");
@@ -196,16 +195,6 @@ export function ClassSimulationDashboard() {
 
     void load();
   }, [classId, navigate]);
-
-  const status = useMemo(
-    () => ({
-      party: profile?.party ?? "N/A",
-      constituency: formatConstituency(profile?.constituency_name),
-      committees: committeeNames,
-      leadershipRoles,
-    }),
-    [profile?.party, profile?.constituency_name, committeeNames, leadershipRoles],
-  );
 
   const statusLabel = (value: string) => value.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
   const dateKey = (date: Date) => {
@@ -234,6 +223,19 @@ export function ClassSimulationDashboard() {
     });
   }, [calendarMonth]);
   const selectedEvents = eventsByDay.get(selectedDateKey) ?? [];
+  const dashboardAnnouncements = useMemo(
+    () => [...announcements].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 3),
+    [announcements],
+  );
+  const miniCalendarDays = useMemo(() => {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), 1);
+    return Array.from({ length: new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate() }, (_, index) => {
+      const day = new Date(start);
+      day.setDate(index + 1);
+      return day;
+    });
+  }, []);
 
   if (loading) {
     return (
@@ -257,7 +259,7 @@ export function ClassSimulationDashboard() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
-            <AnnouncementsFeed announcements={announcements} />
+            <AnnouncementsFeed announcements={dashboardAnnouncements} />
 
             {profile?.role !== "teacher" && (
               <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -383,7 +385,49 @@ export function ClassSimulationDashboard() {
           <div className="lg:col-span-1 space-y-6">
             {profile?.role === "teacher" && <TeacherAdminShortcuts />}
             <QuickLinks classId={classId} />
-            <MyStatusCard status={status} />
+            <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <h2 className="text-lg font-semibold text-gray-900">Floor Calendar</h2>
+                <Link to="/calendar" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+                  Full calendar
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </Link>
+              </div>
+              <div className="mb-3 text-sm font-medium text-gray-700">
+                {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+              </div>
+              <div className="grid grid-cols-7 gap-1.5">
+                {miniCalendarDays.map((day) => {
+                  const key = dateKey(day);
+                  const events = eventsByDay.get(key) ?? [];
+                  const isToday = key === dateKey(new Date());
+                  return (
+                    <div key={key} className="group relative flex justify-center">
+                      <button
+                        type="button"
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
+                          events.length ? "bg-blue-600 text-white hover:bg-blue-700" : isToday ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                        }`}
+                      >
+                        {day.getDate()}
+                      </button>
+                      <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-gray-200 bg-white p-2 text-left text-xs text-gray-700 shadow-lg group-hover:block">
+                        <div className="mb-1 font-semibold text-gray-900">{day.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>
+                        {events.length ? (
+                          events.map((event) => (
+                            <div key={event.id} className="py-0.5">
+                              <span className="font-mono">{event.bill.hr_label}</span> at {new Date(event.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-gray-500">Nothing scheduled</div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
           </div>
         </div>
       </main>

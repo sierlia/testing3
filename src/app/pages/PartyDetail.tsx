@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
-import { Flag, Pencil, Save, Send, Trash2, Users, Vote } from "lucide-react";
+import { Flag, LogOut, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -137,11 +137,14 @@ export function PartyDetail() {
 
   const joinOrSwitch = async () => {
     if (!party || !meId) return;
+    const nextParty = isMember ? null : party.name;
+    if (isMember && !window.confirm(`Leave ${party.name}?`)) return;
+    if (myParty && myParty !== party.name && !window.confirm(`Switch from ${myParty} to ${party.name}?`)) return;
     try {
-      const { error } = await supabase.from("profiles").update({ party: party.name } as any).eq("user_id", meId);
+      const { error } = await supabase.from("profiles").update({ party: nextParty } as any).eq("user_id", meId);
       if (error) throw error;
-      setMyParty(party.name);
-      toast.success(myParty ? "Party switched" : "Joined party");
+      setMyParty(nextParty);
+      toast.success(nextParty ? (myParty ? "Party switched" : "Joined party") : "Left party");
       await load();
     } catch (e: any) {
       toast.error(e.message || "Could not update party");
@@ -196,6 +199,7 @@ export function PartyDetail() {
 
   const deleteAnnouncement = async (announcementId: string) => {
     if (!isTeacher) return;
+    if (!window.confirm("Delete this announcement? This cannot be undone.")) return;
     try {
       const { error } = await supabase.from("party_announcements").delete().eq("id", announcementId);
       if (error) throw error;
@@ -214,6 +218,7 @@ export function PartyDetail() {
 
   const deleteComment = async (commentId: string) => {
     if (!isTeacher || !selectedAnnouncement) return;
+    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
     try {
       const { error } = await supabase.from("party_comments").delete().eq("id", commentId);
       if (error) throw error;
@@ -276,11 +281,11 @@ export function PartyDetail() {
                 </div>
                 <button
                   onClick={() => void joinOrSwitch()}
-                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                  disabled={isMember}
-                  style={{ backgroundColor: isMember ? undefined : party.color || "#2563eb" }}
+                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                  style={{ backgroundColor: party.color || "#2563eb" }}
                 >
-                  {isMember ? "Joined" : myParty ? "Switch to party" : "Join party"}
+                  {isMember ? <LogOut className="h-4 w-4" /> : myParty ? <Repeat2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                  {isMember ? "Leave" : myParty ? "Switch to party" : "Join party"}
                 </button>
               </div>
               <div className="mt-5 border-t border-gray-200 pt-5">

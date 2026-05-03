@@ -370,6 +370,8 @@ export function StudentProfile() {
       const { data: party } = await supabase.from("parties").select("name").eq("id", partyDraftId).maybeSingle();
       partyName = (party as any)?.name ?? null;
     }
+    if (profile.party && partyName && profile.party !== partyName && !window.confirm(`Switch from ${profile.party} to ${partyName}?`)) return;
+    if (profile.party && !partyName && !window.confirm(`Leave ${profile.party}?`)) return;
     mergeWrittenResponses({ party_id: savedPartyId, new_party: undefined });
     await saveProfile({ party: partyName } as any);
     setShowPartyModal(false);
@@ -441,7 +443,7 @@ export function StudentProfile() {
               <div>
                 {isMe ? (
                   <input
-                    className="text-2xl font-bold text-gray-900 mb-2 w-full bg-transparent outline-none"
+                    className="mb-2 w-full rounded-md border border-dashed border-gray-300 bg-transparent px-2 py-1 text-2xl font-bold text-gray-900 outline-none hover:border-blue-300 focus:border-blue-500"
                     value={profile.display_name || ""}
                     onChange={(e) => setProfile({ ...profile, display_name: e.target.value })}
                     onBlur={() => void saveProfile({ display_name: profile.display_name } as any, true)}
@@ -486,10 +488,7 @@ export function StudentProfile() {
                 </div>
               </div>
             </div>
-            <div className="flex flex-col items-end gap-3">
-              <div className="text-xs italic text-gray-500 whitespace-nowrap">
-                {updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}
-              </div>
+            <div className="flex flex-wrap items-center justify-end gap-3">
               {!isMe && (
                 <Link
                   to={`/dear-colleague/compose?to=${encodeURIComponent(profile.user_id)}`}
@@ -499,6 +498,9 @@ export function StudentProfile() {
                   Send letter
                 </Link>
               )}
+              <div className="text-xs italic text-gray-500 whitespace-nowrap">
+                {updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}
+              </div>
             </div>
           </div>
         </div>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { ClipboardList, Search, UserPlus, Users } from "lucide-react";
+import { ClipboardList, LogOut, Search, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
@@ -180,6 +180,7 @@ export function CommitteesHome() {
 
   const leaveCommittee = async (committeeId: string) => {
     if (!meId || !joinedCommitteeIds.has(committeeId)) return;
+    if (!window.confirm("Leave this committee?")) return;
     setLeavingCommitteeId(committeeId);
     try {
       const { error } = await supabase.from("committee_members").delete().eq("committee_id", committeeId).eq("user_id", meId);
@@ -210,7 +211,7 @@ export function CommitteesHome() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OrganizationsLayout active="committees">
           <div className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -277,7 +278,7 @@ export function CommitteesHome() {
                               : "bg-blue-600 text-white hover:bg-blue-700"
                           }`}
                         >
-                          {!joinedCommitteeIds.has(c.id) && <UserPlus className="w-4 h-4" />}
+                          {joinedCommitteeIds.has(c.id) ? <LogOut className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
                           {joinedCommitteeIds.has(c.id) ? (leavingCommitteeId === c.id ? "Leaving" : "Leave") : joiningCommitteeId === c.id ? "Joining" : "Join"}
                         </button>
                       )}

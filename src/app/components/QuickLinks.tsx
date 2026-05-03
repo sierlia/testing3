@@ -67,7 +67,7 @@ export function QuickLinks({ classId }: { classId?: string }) {
 
   const section = (label: string, icon: JSX.Element, items: QuickOrgLink[], hrefFor: (id: string) => string) => (
     <div className="border-t border-gray-200 pt-4">
-      <div className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-900">
+      <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
         <span className="text-blue-600">{icon}</span>
         {label}
       </div>
@@ -79,9 +79,10 @@ export function QuickLinks({ classId }: { classId?: string }) {
             <Link
               key={item.id}
               to={hrefFor(item.id)}
-              className="block rounded-md px-3 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
+              className="flex items-center gap-3 rounded-md px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 hover:text-gray-900"
             >
-              {item.name}
+              <span className="h-5 w-5 flex-shrink-0" />
+              <span>{item.name}</span>
             </Link>
           ))
         )}
@@ -96,7 +97,7 @@ export function QuickLinks({ classId }: { classId?: string }) {
       <div className="space-y-4">
         <Link
           to="/bills/create"
-          className="flex items-center gap-3 rounded-md border border-transparent px-4 py-3 text-gray-700 transition-colors hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+          className="flex items-center gap-3 rounded-md border border-transparent px-4 py-3 text-sm font-medium text-gray-700 transition-colors hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
         >
           <div className="text-blue-600">
             <PlusCircle className="w-5 h-5" />

@@ -37,7 +37,7 @@ export function ThreadedComments({
   comments: ThreadComment[];
   meId: string | null;
   reactionsByCommentId: Record<string, ReactionsSummary | undefined>;
-  onToggleReaction: (commentId: string, emoji: ReactionEmoji) => void;
+  onToggleReaction: (commentId: string, emoji: ReactionEmoji) => void | Promise<void>;
   onSubmitComment: (body: string, parentCommentId: string | null) => Promise<void>;
   canDeleteComments?: boolean;
   onDeleteComment?: (commentId: string) => Promise<void>;

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Save, X, Users as UsersIcon, Send, Pencil, Trash2 } from "lucide-react";
+import { Save, X, Users as UsersIcon, Send, Pencil, Trash2, LogOut, UserPlus } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -378,6 +378,7 @@ export function TessCaucusDetail() {
 
   const joinLeave = async () => {
     if (!meId) return;
+    if (myRole && !window.confirm("Leave this caucus?")) return;
     try {
       if (myRole) {
         const { error } = await supabase.from("caucus_members").delete().eq("caucus_id", caucusId).eq("user_id", meId);
@@ -470,6 +471,7 @@ export function TessCaucusDetail() {
 
   const deleteAnnouncement = async (announcementId: string) => {
     if (!isTeacher) return;
+    if (!window.confirm("Delete this announcement? This cannot be undone.")) return;
     try {
       const { error } = await supabase.from("caucus_announcements").delete().eq("id", announcementId);
       if (error) throw error;
@@ -488,6 +490,7 @@ export function TessCaucusDetail() {
 
   const deleteComment = async (commentId: string) => {
     if (!isTeacher || !selectedAnnouncementId) return;
+    if (!window.confirm("Delete this comment? This cannot be undone.")) return;
     try {
       const { error } = await supabase.from("caucus_comments").delete().eq("id", commentId);
       if (error) throw error;
@@ -681,10 +684,11 @@ export function TessCaucusDetail() {
             </div>
             <button
               onClick={joinLeave}
-              className={`px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+              className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
                 myRole ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
               }`}
             >
+              {myRole ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
               {myRole ? "Leave" : "Join"}
             </button>
           </div>
@@ -817,7 +821,7 @@ export function TessCaucusDetail() {
                           <ReactionsBar
                             size="md"
                             summary={announcementReactions[selectedAnnouncement.id]}
-                            onToggle={(emoji) => void toggleAnnouncementReaction(selectedAnnouncement.id, emoji)}
+                            onToggle={(emoji) => toggleAnnouncementReaction(selectedAnnouncement.id, emoji)}
                           />
                         </div>
                       </div>
@@ -828,7 +832,7 @@ export function TessCaucusDetail() {
                           comments={visibleComments}
                           meId={canComment ? meId : null}
                           reactionsByCommentId={commentReactions}
-                          onToggleReaction={(commentId, emoji) => void toggleCommentReaction(commentId, emoji)}
+                          onToggleReaction={(commentId, emoji) => toggleCommentReaction(commentId, emoji)}
                           onSubmitComment={submitComment}
                           canDeleteComments={isTeacher}
                           onDeleteComment={deleteComment}
