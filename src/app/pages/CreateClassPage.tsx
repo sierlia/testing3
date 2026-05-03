@@ -43,7 +43,7 @@ export function CreateClassPage() {
 
       await ensureClassesTableExists();
 
-      const defaultParties = ['Democrat', 'Republican'];
+      const defaultParties = ['Democratic Party', 'Republican Party'];
       const defaultCommittees = [
         'Education Committee',
         'Environment & Energy Committee',

@@ -177,24 +177,24 @@ export function PartiesPage() {
     const query = searchQuery.trim().toLowerCase();
     return parties.filter((party) => !query || party.name.toLowerCase().includes(query) || (party.platform ?? "").toLowerCase().includes(query));
   }, [parties, searchQuery]);
-  const memberCount = (partyName: string) => members.filter((member) => member.party === partyName).length;
+  const memberCount = (partyName: string) => {
+    const comparable = comparablePartyName(partyName);
+    return members.filter((member) => member.party && comparablePartyName(member.party) === comparable).length;
+  };
   const approvedParties = useMemo(() => {
     const rows = filteredParties.filter((party) => party.approved);
-    const hasMembers = rows.some((party) => memberCount(party.name) > 0);
     return rows.sort((a, b) => {
       const aCount = memberCount(a.name);
       const bCount = memberCount(b.name);
       if (aCount !== bCount) return bCount - aCount;
-      if (!hasMembers || (aCount === 0 && bCount === 0)) {
-        const priority = (name: string) => {
-          const normalized = name.toLowerCase();
-          if (normalized.includes("republican")) return 0;
-          if (normalized.includes("democrat")) return 1;
-          return 2;
-        };
-        const priorityDiff = priority(a.name) - priority(b.name);
-        if (priorityDiff) return priorityDiff;
-      }
+      const priority = (name: string) => {
+        const normalized = displayPartyName(name).toLowerCase();
+        if (normalized.includes("republican")) return 0;
+        if (normalized.includes("democratic")) return 1;
+        return 2;
+      };
+      const priorityDiff = priority(a.name) - priority(b.name);
+      if (priorityDiff) return priorityDiff;
       return a.name.localeCompare(b.name);
     });
   }, [filteredParties, members]);

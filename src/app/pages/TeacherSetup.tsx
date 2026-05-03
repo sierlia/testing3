@@ -7,7 +7,7 @@ import { defaultPartyColor } from "../components/PartyCreateForm";
 
 type TabId = "parties" | "committees" | "bills" | "floor" | "leadership" | "calendar" | "profiles" | "notifications";
 
-const allParties = ["Democrat", "Republican", "Green", "Libertarian", "Independent"];
+const allParties = ["Democratic Party", "Republican Party", "Green Party", "Libertarian Party", "Independent Party"];
 const allCommittees = [
   "Education Committee",
   "Environment & Energy Committee",
@@ -48,7 +48,7 @@ export function TeacherSetup() {
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [settings, setSettingsState] = useState({
-    allowedParties: ["Democrat", "Republican"],
+    allowedParties: ["Democratic Party", "Republican Party"],
     allowStudentCreatedParties: false,
     requirePartyApproval: true,
     autoApproveParties: [] as string[],

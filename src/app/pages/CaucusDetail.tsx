@@ -29,8 +29,8 @@ export function CaucusDetail() {
 
   const members = [
     { id: "1", name: "Emma Davis", role: "Chair", party: "Green" },
-    { id: "2", name: "Alice Johnson", role: "Member", party: "Democratic" },
-    { id: "3", name: "Frank Wilson", role: "Member", party: "Democratic" },
+    { id: "2", name: "Alice Johnson", role: "Member", party: "Democratic Party" },
+    { id: "3", name: "Frank Wilson", role: "Member", party: "Democratic Party" },
   ];
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([

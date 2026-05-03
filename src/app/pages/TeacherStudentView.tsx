@@ -41,7 +41,7 @@ export function TeacherStudentView() {
     },
     constituencyDescription: {
       content:
-        "Representative: David Valadao, Republican\n\nDistribution: Largely rural, with half of cities/CDPs having a population under 10,000 and only one city with a population over 70,000.\n\nPopulation: 770,684\n\nMedian household income: $60,072",
+        "Representative: David Valadao, Republican Party\n\nDistribution: Largely rural, with half of cities/CDPs having a population under 10,000 and only one city with a population over 70,000.\n\nPopulation: 770,684\n\nMedian household income: $60,072",
       lastEdited: "2/23/2026",
     },
     keyIssues: {

@@ -93,6 +93,10 @@ export function markCommitteeSeenIds(committeeId: string, tab: CountedTabId, ids
   window.dispatchEvent(new CustomEvent("committee-seen-updated", { detail: { committeeId, tab } }));
 }
 
+export function committeeNameStorageKey(committeeId: string) {
+  return `committee:${committeeId}:name`;
+}
+
 export function CommitteeTabs({ committeeId, active }: { committeeId: string; active: TabId }) {
   const [countData, setCountData] = useState<CountData>(() => readCachedCountData(committeeId));
   const [seenVersion, setSeenVersion] = useState(0);
@@ -197,12 +201,12 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
   if (!tabs.length) return null;
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
       {tabs.map((tab) => (
         <Link
           key={tab.id}
           to={tab.to}
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-colors ${
             active === tab.id ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
           }`}
         >

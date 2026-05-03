@@ -6,7 +6,7 @@ import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { DefaultAvatar } from "../components/DefaultAvatar";
-import { CommitteeTabs, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
+import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { postCommitteeProgress, proposeBillForCommitteeVote } from "../services/bills";
 
 type BillRow = {
@@ -36,7 +36,7 @@ export function CommitteeWorkspace() {
   const [loading, setLoading] = useState(true);
   const [classId, setClassId] = useState<string | null>(null);
   const [myCommitteeRole, setMyCommitteeRole] = useState<string | null>(null);
-  const [committeeName, setCommitteeName] = useState<string>("Committee");
+  const [committeeName, setCommitteeName] = useState<string>(() => window.localStorage.getItem(committeeNameStorageKey(committeeId)) || "Committee");
 
   const [bills, setBills] = useState<Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string }>>([]);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
@@ -72,7 +72,9 @@ export function CommitteeWorkspace() {
         const { data: committee, error: cErr } = await supabase.from("committees").select("name,class_id").eq("id", committeeId).maybeSingle();
         if (cErr) throw cErr;
         const cid = (committee as any)?.class_id ?? null;
-        setCommitteeName((committee as any)?.name ?? "Committee");
+        const nextCommitteeName = (committee as any)?.name ?? window.localStorage.getItem(committeeNameStorageKey(committeeId)) ?? "Committee";
+        setCommitteeName(nextCommitteeName);
+        window.localStorage.setItem(committeeNameStorageKey(committeeId), nextCommitteeName);
         setClassId(cid);
         if (cid) {
           const desiredRole = (auth.user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
@@ -125,7 +127,7 @@ export function CommitteeWorkspace() {
         setSelectedBillId(nextSelectedBillId);
         workspaceCache.set(committeeId, {
           classId: cid,
-          committeeName: (committee as any)?.name ?? "Committee",
+          committeeName: nextCommitteeName,
           myCommitteeRole: (myMembership as any)?.role ?? null,
           bills: mapped,
           selectedBillId: nextSelectedBillId,

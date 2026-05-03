@@ -114,7 +114,7 @@ function DraggableSection({
         )}
         {section.type === "constituency" && (
           <div className="text-gray-700 whitespace-pre-line">
-            Representative: David Valadao, Republican{"\n"}
+            Representative: David Valadao, Republican Party{"\n"}
             Population: 770,684{"\n"}
             Median household income: $60,072
           </div>

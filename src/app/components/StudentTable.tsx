@@ -39,7 +39,7 @@ export function StudentTable({
       id: "1",
       name: "Alice Johnson",
       tags: ["Mr. Litzenberger Period 6"],
-      party: "Democratic",
+      party: "Democratic Party",
       committee: "Education Committee",
       leadershipRoles: ["Committee Chair"],
     },
@@ -47,7 +47,7 @@ export function StudentTable({
       id: "2",
       name: "Bob Smith",
       tags: ["Mr. Litzenberger Period 6", "Advanced Civics"],
-      party: "Republican",
+      party: "Republican Party",
       committee: "Environment & Energy Committee",
       leadershipRoles: [],
     },
@@ -55,7 +55,7 @@ export function StudentTable({
       id: "3",
       name: "Carol Martinez",
       tags: ["Ms. Beito Period 2"],
-      party: "Democratic",
+      party: "Democratic Party",
       committee: "Healthcare Committee",
       leadershipRoles: ["Party Whip"],
     },
@@ -63,7 +63,7 @@ export function StudentTable({
       id: "6",
       name: "Tess Lin",
       tags: ["Mr. Litzenberger Period 6"],
-      party: "Democratic",
+      party: "Democratic Party",
       committee: "Agriculture Committee",
       leadershipRoles: [],
     },
@@ -120,8 +120,8 @@ export function StudentTable({
           className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
         >
           <option value="all">All Parties</option>
-          <option value="Democratic">Democratic</option>
-          <option value="Republican">Republican</option>
+          <option value="Democratic Party">Democratic Party</option>
+          <option value="Republican Party">Republican Party</option>
         </select>
 
         <select

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router";
 import { Flag, LogOut, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,21 @@ function displayPartyName(name: string) {
   if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
   if (/republican( party)?$/i.test(normalized)) return "Republican Party";
   return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
+function comparablePartyName(name: string | null | undefined) {
+  return displayPartyName(String(name ?? "")).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function PartyIcon({ name }: { name: string }) {
+  const normalized = name.toLowerCase();
+  if (normalized.includes("democrat")) {
+    return <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Democratic%20Disc.svg" alt="Democratic Party donkey" className="h-5 w-5 object-contain" />;
+  }
+  if (normalized.includes("republican")) {
+    return <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Republican%20Disc.svg" alt="Republican Party elephant" className="h-5 w-5 object-contain" />;
+  }
+  return <Flag className="h-4 w-4" />;
 }
 
 export function PartyDetail() {
@@ -43,8 +58,9 @@ export function PartyDetail() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [activeTab, setActiveTab] = useState<"dashboard" | "election">("dashboard");
 
-  const isMember = !!party && myParty === party.name;
+  const isMember = !!party && comparablePartyName(myParty) === comparablePartyName(party.name);
   const isTeacher = viewerRole === "teacher";
   const canUseBoard = isMember || isTeacher;
   const selectedAnnouncement = announcements.find((a) => a.id === selectedAnnouncementId) ?? null;
@@ -71,10 +87,9 @@ export function PartyDetail() {
         .from("profiles")
         .select("user_id,display_name,party,constituency_name,avatar_url")
         .eq("class_id", (p as any).class_id)
-        .eq("party", (p as any).name)
         .order("display_name", { ascending: true });
       if (memberErr) throw memberErr;
-      setMembers((memberRows ?? []) as any);
+      setMembers(((memberRows ?? []) as any[]).filter((member) => comparablePartyName(member.party) === comparablePartyName((p as any).name)) as any);
 
       const { data: aRows, error: aErr } = await supabase
         .from("party_announcements")
@@ -328,7 +343,7 @@ export function PartyDetail() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6" style={{ "--party-color": party?.color || "#2563eb" } as CSSProperties}>
         {loading || !party ? (
           <div className="text-sm text-gray-600">Loading...</div>
         ) : (
@@ -340,17 +355,17 @@ export function PartyDetail() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ backgroundColor: party.color || "#2563eb" }}>
-                      <Flag className="h-4 w-4" />
+                      <PartyIcon name={party.name} />
                     </span>
                     {editingName ? (
                       <>
                         <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} className="rounded-md border border-gray-300 px-2 py-1 text-2xl font-bold text-gray-900" />
-                        <button type="button" onClick={() => void saveName()} className="rounded-md p-1 text-blue-600 hover:bg-blue-50"><Save className="h-4 w-4" /></button>
+                        <button type="button" onClick={() => void saveName()} className="rounded-md p-1 text-[var(--party-color)] hover:bg-gray-100"><Save className="h-4 w-4" /></button>
                       </>
                     ) : (
                       <>
                         <h1 className="text-2xl font-bold text-gray-900">{displayPartyName(party.name)}</h1>
-                        {isTeacher && <button type="button" onClick={() => setEditingName(true)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100"><Pencil className="h-4 w-4" /></button>}
+                        {isTeacher && <button type="button" onClick={() => setEditingName(true)} className="rounded-md p-1 text-[var(--party-color)] hover:bg-gray-100"><Pencil className="h-4 w-4" /></button>}
                       </>
                     )}
                   </div>
@@ -371,13 +386,13 @@ export function PartyDetail() {
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-gray-900">About</h2>
                   {(isMember || isTeacher) && !editingAbout && (
-                    <button onClick={() => setEditingAbout(true)} className="text-blue-600 hover:text-blue-700"><Pencil className="h-4 w-4" /></button>
+                    <button onClick={() => setEditingAbout(true)} className="text-[var(--party-color)] hover:opacity-80"><Pencil className="h-4 w-4" /></button>
                   )}
                 </div>
                 {editingAbout ? (
                   <div className="space-y-3">
                     <textarea value={aboutDraft} onChange={(e) => setAboutDraft(e.target.value)} rows={4} className="w-full rounded-md border border-gray-300 px-3 py-2" />
-                    <button onClick={() => void saveAbout()} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"><Save className="h-4 w-4" />Save</button>
+                    <button onClick={() => void saveAbout()} className="inline-flex items-center gap-2 rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90"><Save className="h-4 w-4" />Save</button>
                   </div>
                 ) : (
                   <p className="whitespace-pre-line text-gray-700">{party.platform || "No platform yet."}</p>
@@ -386,17 +401,36 @@ export function PartyDetail() {
               </div>
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-3">
-              <div className="space-y-6 lg:col-span-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+              {(["dashboard", "election"] as const).map((tab) => (
+                <button
+                  key={tab}
+                  type="button"
+                  onClick={() => setActiveTab(tab)}
+                  className={`rounded-md px-4 py-2.5 text-sm font-medium capitalize transition-colors ${
+                    activeTab === tab ? "text-white" : "text-gray-700 hover:bg-gray-50"
+                  }`}
+                  style={activeTab === tab ? { backgroundColor: party.color || "#2563eb" } : undefined}
+                >
+                  {tab}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+              <div className="space-y-6">
+                {activeTab === "dashboard" ? (
                 <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
                   <div className="border-b border-gray-200 p-5">
                     <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
                   </div>
                   {canUseBoard && (
                     <div className="border-b border-gray-200 p-5">
-                      <div className="flex gap-3">
-                        <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} rows={3} placeholder="Post an announcement..." className="flex-1 rounded-md border border-gray-300 px-3 py-2" />
-                        <button onClick={() => void postAnnouncement()} disabled={!newAnnouncement.trim()} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"><Send className="h-4 w-4" />Post</button>
+                      <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
+                        <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} rows={3} placeholder="Post an announcement..." className="w-full resize-y border-0 p-0 text-sm outline-none" />
+                        <div className="mt-3 flex justify-end">
+                          <button onClick={() => void postAnnouncement()} disabled={!newAnnouncement.trim()} className="inline-flex items-center gap-2 rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Send className="h-4 w-4" />Post</button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -406,7 +440,7 @@ export function PartyDetail() {
                         <div className="p-5 text-sm text-gray-500">No announcements yet.</div>
                       ) : (
                         announcements.map((a) => (
-                          <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} className={`w-full border-b border-gray-100 bg-white p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "border-l-4 border-l-blue-500" : ""}`}>
+                          <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} style={selectedAnnouncementId === a.id ? { borderLeftColor: party.color || "#2563eb" } : undefined} className={`w-full border-b border-gray-100 bg-white p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "border-l-4" : ""}`}>
                             <div className="line-clamp-2 text-sm font-medium text-gray-900">{a.body}</div>
                             <div className="mt-1 text-xs text-gray-500">{a.author?.display_name ?? "Member"} • {new Date(a.created_at).toLocaleDateString()}</div>
                           </button>
@@ -447,7 +481,7 @@ export function PartyDetail() {
                           {canUseBoard && (
                             <div className="flex gap-2 border-t border-gray-200 pt-3">
                               <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={2} placeholder="Write a comment..." className="flex-1 rounded-md border border-gray-300 px-3 py-2" />
-                              <button onClick={() => void postComment()} disabled={!newComment.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Send</button>
+                              <button onClick={() => void postComment()} disabled={!newComment.trim()} className="rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">Send</button>
                             </div>
                           )}
                         </div>
@@ -457,10 +491,10 @@ export function PartyDetail() {
                     </div>
                   </div>
                 </div>
-
+                ) : (
                 <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                   <div className="mb-4 flex items-center gap-2">
-                    <Vote className="h-5 w-5 text-blue-600" />
+                    <Vote className="h-5 w-5 text-[var(--party-color)]" />
                     <h2 className="text-lg font-semibold text-gray-900">Party Leadership Elections</h2>
                   </div>
                   {(["chair", "whip"] as const).map((position) => (
@@ -473,7 +507,11 @@ export function PartyDetail() {
                             <div className="flex items-center gap-3">
                               <span className="text-xs text-gray-500">{voteCount(position, member.user_id)} votes</span>
                               {isMember && (
-                                <button onClick={() => void castLeadershipVote(position, member.user_id)} className={`rounded px-3 py-1.5 text-xs font-medium ${myLeadershipVote(position) === member.user_id ? "bg-blue-600 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
+                                <button
+                                  onClick={() => void castLeadershipVote(position, member.user_id)}
+                                  className={`rounded px-3 py-1.5 text-xs font-medium ${myLeadershipVote(position) === member.user_id ? "text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                                  style={myLeadershipVote(position) === member.user_id ? { backgroundColor: party.color || "#2563eb" } : undefined}
+                                >
                                   {myLeadershipVote(position) === member.user_id ? "Voted" : "Vote"}
                                 </button>
                               )}
@@ -484,11 +522,12 @@ export function PartyDetail() {
                     </div>
                   ))}
                 </div>
+                )}
               </div>
 
               <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center gap-2">
-                  <Users className="h-5 w-5 text-blue-600" />
+                  <Users className="h-5 w-5 text-[var(--party-color)]" />
                   <h2 className="text-lg font-semibold text-gray-900">Members</h2>
                 </div>
                 <div className="mb-4 flex gap-2">
@@ -503,7 +542,7 @@ export function PartyDetail() {
                     <div key={m.user_id} className="flex items-center gap-3">
                       {m.avatar_url ? <img src={m.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
                       <div className="min-w-0 flex-1">
-                        <Link to={`/profile/${m.user_id}`} className="truncate text-sm font-medium text-blue-600 hover:underline">{m.display_name ?? "Member"}</Link>
+                        <Link to={`/profile/${m.user_id}`} className="truncate text-sm font-medium text-[var(--party-color)] hover:underline">{m.display_name ?? "Member"}</Link>
                         <div className="truncate text-xs text-gray-500">{formatConstituency(m.constituency_name)}</div>
                       </div>
                     </div>

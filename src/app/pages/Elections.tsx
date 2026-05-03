@@ -15,7 +15,7 @@ interface Candidate {
 export function Elections() {
   const [phase, setPhase] = useState<ElectionPhase>('party');
   const [userRole] = useState<'student' | 'teacher'>('student');
-  const [userParty] = useState('Democratic');
+  const [userParty] = useState('Democratic Party');
   
   // Party elections state
   const [runningForLeader, setRunningForLeader] = useState(false);
@@ -28,17 +28,17 @@ export function Elections() {
 
   // Mock candidates
   const leaderCandidates: Candidate[] = [
-    { id: "1", name: "Alice Johnson", party: "Democratic" },
-    { id: "2", name: "Emma Davis", party: "Democratic" },
+    { id: "1", name: "Alice Johnson", party: "Democratic Party" },
+    { id: "2", name: "Emma Davis", party: "Democratic Party" },
   ];
 
   const whipCandidates: Candidate[] = [
-    { id: "3", name: "Carol Martinez", party: "Democratic" },
+    { id: "3", name: "Carol Martinez", party: "Democratic Party" },
   ];
 
   const speakerCandidates: Candidate[] = [
-    { id: "1", name: "Alice Johnson", party: "Democratic" },
-    { id: "4", name: "Bob Smith", party: "Republican" },
+    { id: "1", name: "Alice Johnson", party: "Democratic Party" },
+    { id: "4", name: "Bob Smith", party: "Republican Party" },
   ];
 
   const handleVote = (role: PartyRole | 'speaker', candidateId: string) => {
@@ -257,7 +257,7 @@ export function Elections() {
         {/* Results Phase */}
         {phase === 'results' && (
           <div className="space-y-6">
-            {/* Democratic Leader */}
+            {/* Democratic Party Leader */}
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Democratic Party Leader</h2>
               <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">

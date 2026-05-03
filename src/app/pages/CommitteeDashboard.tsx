@@ -8,7 +8,7 @@ import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/Rea
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
-import { CommitteeTabs, markCommitteeSeenIds } from "../components/CommitteeTabs";
+import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "../components/CommitteeTabs";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
@@ -145,6 +145,7 @@ export function CommitteeDashboard() {
           .single();
         if (cErr) throw cErr;
         setCommittee(c as any);
+        window.localStorage.setItem(committeeNameStorageKey(committeeId), (c as any).name ?? "Committee");
         setAboutDraft((c as any).description ?? "");
         setNameDraft((c as any).name ?? "Committee");
 
@@ -837,8 +838,8 @@ export function CommitteeDashboard() {
 
         <CommitteeTabs committeeId={committeeId} active="dashboard" />
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold text-gray-900">About</h2>
@@ -880,12 +881,14 @@ export function CommitteeDashboard() {
 
               {canPostAnnouncements && (
                 <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-start gap-3">
-                    <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} placeholder="Post an announcement..." rows={3} className="flex-1 px-3 py-2 border border-gray-300 rounded-md" />
+                  <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
+                    <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} placeholder="Post an announcement..." rows={3} className="w-full resize-y border-0 p-0 text-sm outline-none" />
+                    <div className="mt-3 flex justify-end">
                     <button onClick={() => void postAnnouncement()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50" disabled={!newAnnouncement.trim()}>
                       <Send className="w-4 h-4" />
                       Post
                     </button>
+                    </div>
                   </div>
                 </div>
               )}

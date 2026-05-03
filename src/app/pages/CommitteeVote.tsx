@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router";
 import { CheckCircle2, ExternalLink, FileText, Maximize2, Move, Pencil, Save, Send, Sparkles, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { CommitteeTabs, markCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
+import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
 import { closeCommitteeVote, finalizeCommitteeVote, submitCommitteeReport } from "../services/bills";
@@ -99,7 +99,7 @@ export function CommitteeVote() {
   const [classId, setClassId] = useState<string | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [myCommitteeRole, setMyCommitteeRole] = useState<string | null>(null);
-  const [committeeName, setCommitteeName] = useState("Committee");
+  const [committeeName, setCommitteeName] = useState(() => window.localStorage.getItem(committeeNameStorageKey(committeeId)) || "Committee");
   const [bills, setBills] = useState<CommitteeBill[]>([]);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [votes, setVotes] = useState<VoteRow[]>([]);
@@ -135,7 +135,9 @@ export function CommitteeVote() {
         const { data: committee, error: cErr } = await supabase.from("committees").select("name,class_id").eq("id", committeeId).maybeSingle();
         if (cErr) throw cErr;
         const cid = (committee as any)?.class_id ?? null;
-        setCommitteeName((committee as any)?.name ?? "Committee");
+        const nextCommitteeName = (committee as any)?.name ?? window.localStorage.getItem(committeeNameStorageKey(committeeId)) ?? "Committee";
+        setCommitteeName(nextCommitteeName);
+        window.localStorage.setItem(committeeNameStorageKey(committeeId), nextCommitteeName);
         setClassId(cid);
         if (!cid) return;
 
@@ -184,7 +186,7 @@ export function CommitteeVote() {
         setSelectedBillId(nextSelectedBillId);
         votePageCache.set(committeeId, {
           classId: cid,
-          committeeName: (committee as any)?.name ?? "Committee",
+          committeeName: nextCommitteeName,
           myCommitteeRole: (myMembership as any)?.role ?? null,
           bills: mapped,
           selectedBillId: nextSelectedBillId,

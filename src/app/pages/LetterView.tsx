@@ -12,13 +12,13 @@ export function LetterView() {
     sender: {
       id: "s1",
       name: "Alice Johnson",
-      party: "Democratic",
+      party: "Democratic Party",
       constituency: "District 1",
     },
     recipient: {
       id: "s2",
       name: "Bob Smith",
-      party: "Republican",
+      party: "Republican Party",
       constituency: "District 5",
     },
     subject: "Support for H.R. 101",

@@ -34,10 +34,10 @@ export function BillFilters({ filters, onFilterChange }: BillFiltersProps) {
 
   const parties = [
     "All Parties",
-    "Democratic",
-    "Republican",
-    "Green",
-    "Libertarian",
+    "Democratic Party",
+    "Republican Party",
+    "Green Party",
+    "Libertarian Party",
   ];
 
   return (

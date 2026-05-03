@@ -17,6 +17,8 @@ type Recipient = {
   district?: string | null;
 };
 
+const ALL_MEMBERS_RECIPIENT_ID = "__all_members__";
+
 function displayPartyName(name: string) {
   const normalized = name.trim();
   if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
@@ -117,9 +119,11 @@ export function CreateDearColleagueLetter() {
               formatConstituency(s.constituency_name).toLowerCase().includes(query),
           )
         : individuals;
-      return base
+      const memberSuggestions = base
         .slice(0, 20)
         .map((s) => ({ id: s.user_id, name: s.display_name || "Unknown", district: formatConstituency(s.constituency_name), image: s.avatar_url }));
+      const allMembers = { id: ALL_MEMBERS_RECIPIENT_ID, name: "All members", district: `${individuals.length} members`, image: null };
+      return !query || "all members".includes(query) ? [allMembers, ...memberSuggestions] : memberSuggestions;
     }
     if (recipientType === "caucus") {
       const base = query ? caucuses.filter((s: any) => (s.name ?? s.title ?? "").toLowerCase().includes(query)) : caucuses;
@@ -150,7 +154,13 @@ export function CreateDearColleagueLetter() {
 
       const recipientUserIds = new Set<string>();
       for (const r of recipients) {
-        if (r.type === "individual") recipientUserIds.add(r.id);
+        if (r.type === "individual") {
+          if (r.id === ALL_MEMBERS_RECIPIENT_ID) {
+            for (const member of individuals) recipientUserIds.add(member.user_id);
+          } else {
+            recipientUserIds.add(r.id);
+          }
+        }
         if (r.type === "caucus") {
           const { data } = await supabase.from("caucus_members").select("user_id").eq("caucus_id", r.id);
           for (const row of data ?? []) recipientUserIds.add((row as any).user_id);

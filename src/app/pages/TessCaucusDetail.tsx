@@ -74,6 +74,7 @@ export function TessCaucusDetail() {
   const [announcementsSplitPct, setAnnouncementsSplitPct] = useState(40);
   const [draggingSplit, setDraggingSplit] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [activeTab, setActiveTab] = useState<"dashboard" | "election">("dashboard");
 
   const isLeader = myRole === "chair" || myRole === "co_chair";
   const isChair = myRole === "chair";
@@ -678,7 +679,7 @@ export function TessCaucusDetail() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
-        <main className="max-w-6xl mx-auto px-4 py-10 text-gray-600">Loading...</main>
+        <main className="max-w-7xl mx-auto px-4 py-10 text-gray-600">Loading...</main>
       </div>
     );
   }
@@ -708,7 +709,7 @@ export function TessCaucusDetail() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -796,8 +797,24 @@ export function TessCaucusDetail() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 space-y-6">
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+          {(["dashboard", "election"] as const).map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              onClick={() => setActiveTab(tab)}
+              className={`rounded-md px-4 py-2.5 text-sm font-medium capitalize transition-colors ${
+                activeTab === tab ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="space-y-6">
+            {activeTab === "dashboard" ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
@@ -805,14 +822,15 @@ export function TessCaucusDetail() {
 
               {canPostAnnouncements && (
                 <div className="p-6 border-b border-gray-200">
-                  <div className="flex items-start gap-3">
+                  <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
                     <textarea
                       value={newAnnouncement}
                       onChange={(e) => setNewAnnouncement(e.target.value)}
                       placeholder="Post an announcement..."
                       rows={3}
-                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                      className="w-full resize-y border-0 p-0 text-sm outline-none"
                     />
+                    <div className="mt-3 flex justify-end">
                     <button
                       onClick={() => void postAnnouncement()}
                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
@@ -821,6 +839,7 @@ export function TessCaucusDetail() {
                       <Send className="w-4 h-4" />
                       Post
                     </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -927,6 +946,37 @@ export function TessCaucusDetail() {
                 </div>
               </div>
             </div>
+            ) : (
+              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Caucus Leadership Election</h2>
+                </div>
+                <div className="space-y-3">
+                  {visibleMembers.map((m) => (
+                    <div key={`election:${m.user_id}`} className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
+                      <div className="min-w-0">
+                        <Link to={`/profile/${m.user_id}`} className="truncate text-sm font-medium text-blue-600 hover:underline">
+                          {m.profile?.display_name ?? "Member"}
+                        </Link>
+                        <div className="truncate text-xs text-gray-500">{formatConstituency(m.profile?.constituency_name)} - {m.profile?.party ?? "N/A"}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {m.role !== "member" && <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">{m.role.replace("_", " ")}</span>}
+                        {isChair && m.role !== "chair" && (
+                          <button
+                            type="button"
+                            onClick={() => void setMemberRole(m.user_id, m.role === "co_chair" ? "member" : "co_chair")}
+                            className="rounded border border-gray-300 px-2 py-1 text-xs text-gray-700 hover:bg-gray-50"
+                          >
+                            {m.role === "co_chair" ? "Withdraw" : "Vote"}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
