@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
-import { Plus, Users, Copy, Check, ExternalLink } from 'lucide-react';
+import { Plus, Users, Copy, Check, Search } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 import { Navigation } from '../components/Navigation';
@@ -21,6 +21,7 @@ export function TeacherDashboard() {
   const [loading, setLoading] = useState(true);
   const [userName, setUserName] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     loadUserAndClasses();
@@ -87,6 +88,16 @@ export function TeacherDashboard() {
     }
   };
 
+  const openClass = async (classId: string) => {
+    await setActiveClass(classId);
+    navigate(`/teacher/class/${classId}`);
+  };
+
+  const visibleClasses = classes.filter((classItem) => {
+    const query = searchQuery.trim().toLowerCase();
+    return !query || classItem.name.toLowerCase().includes(query) || classItem.class_code.toLowerCase().includes(query);
+  });
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -115,6 +126,20 @@ export function TeacherDashboard() {
           </Button>
         </div>
 
+        {classes.length > 0 && (
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search classes..."
+                className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+        )}
+
         {classes.length === 0 ? (
           <Card className="max-w-2xl mx-auto">
             <CardContent className="py-16 text-center">
@@ -133,8 +158,17 @@ export function TeacherDashboard() {
           </Card>
         ) : (
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            {classes.map((classItem) => (
-              <div key={classItem.id} className="flex flex-col gap-4 border-b border-gray-200 p-4 last:border-b-0 md:flex-row md:items-center md:justify-between">
+            {visibleClasses.map((classItem) => (
+              <div
+                key={classItem.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => void openClass(classItem.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") void openClass(classItem.id);
+                }}
+                className="flex w-full flex-col gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 hover:bg-gray-50 md:flex-row md:items-center md:justify-between"
+              >
                 <div className="min-w-0">
                   <h3 className="truncate text-lg font-semibold text-gray-900">{classItem.name}</h3>
                   <p className="text-sm text-gray-500">Created {new Date(classItem.created_at).toLocaleDateString()}</p>
@@ -145,40 +179,34 @@ export function TeacherDashboard() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <div className="flex items-center justify-between rounded-md bg-blue-50 px-3 py-2">
+                  <div className="flex items-center justify-between gap-3 rounded-md bg-blue-50 px-3 py-2">
                       <div>
                         <p className="text-xs text-gray-600 mb-1">Join Code</p>
-                        <p className="font-mono text-xl font-bold text-blue-600">
-                          {classItem.class_code}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-mono text-xl font-bold text-blue-600">
+                            {classItem.class_code}
+                          </p>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              copyJoinCode(classItem.class_code);
+                            }}
+                          >
+                            {copiedCode === classItem.class_code ? (
+                              <Check className="w-4 h-4 text-green-600" />
+                            ) : (
+                              <Copy className="w-4 h-4" />
+                            )}
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => copyJoinCode(classItem.class_code)}
-                      >
-                        {copiedCode === classItem.class_code ? (
-                          <Check className="w-4 h-4 text-green-600" />
-                        ) : (
-                          <Copy className="w-4 h-4" />
-                        )}
-                      </Button>
                   </div>
-
-                  <Button
-                    size="sm"
-                    className="sm:w-28"
-                    onClick={async () => {
-                      await setActiveClass(classItem.id);
-                      navigate(`/teacher/class/${classItem.id}`);
-                    }}
-                  >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    Open
-                  </Button>
                 </div>
               </div>
             ))}
+            {visibleClasses.length === 0 && <div className="p-8 text-center text-sm text-gray-500">No classes match your search.</div>}
           </div>
         )}
       </main>

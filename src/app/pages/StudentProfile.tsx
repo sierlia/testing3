@@ -32,6 +32,10 @@ import { formatConstituencyFull, normalizeConstituencyId } from "../utils/consti
 
 type EditingSection = "personal_statement" | "constituency_description" | "key_issues" | null;
 
+function statusLabel(status: string) {
+  return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 type ProfileRow = {
   user_id: string;
   display_name: string | null;
@@ -721,7 +725,7 @@ export function StudentProfile() {
                   <Link key={bill.id} to={`/bills/${bill.id}`} className="block p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">{bill.status}</span>
+                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">{statusLabel(bill.status)}</span>
                     </div>
                     <p className="text-sm text-gray-700">{bill.title}</p>
                   </Link>
@@ -743,7 +747,7 @@ export function StudentProfile() {
                   <Link key={bill.id} to={`/bills/${bill.id}`} className="block p-3 bg-gray-50 rounded-md hover:bg-gray-100 transition-colors">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
-                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">{bill.status}</span>
+                      <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">{statusLabel(bill.status)}</span>
                     </div>
                     <p className="text-sm text-gray-700">{bill.title}</p>
                   </Link>

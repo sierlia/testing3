@@ -14,30 +14,7 @@ type PartiesCache = { settings: any; role: "teacher" | "student" | null; classId
 
 let partiesPageCache: PartiesCache | null = null;
 
-function PartyIcon({ name, color }: { name: string; color: string }) {
-  const normalized = name.toLowerCase();
-  if (normalized.includes("democrat")) {
-    return (
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white" style={{ backgroundColor: color }}>
-        D
-      </span>
-    );
-  }
-  if (normalized.includes("republican")) {
-    return (
-      <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-sm font-bold text-white" style={{ backgroundColor: color }}>
-        R
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ backgroundColor: color }}>
-      <Flag className="h-4 w-4" />
-    </span>
-  );
-}
-
-function PartyCornerIcon({ name }: { name: string }) {
+function PartyIcon({ name }: { name: string }) {
   const normalized = name.toLowerCase();
   if (normalized.includes("democrat")) {
     return (
@@ -57,7 +34,11 @@ function PartyCornerIcon({ name }: { name: string }) {
       />
     );
   }
-  return <Flag className="h-5 w-5 text-gray-300" />;
+  return (
+    <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-400">
+      <Flag className="h-4 w-4" />
+    </span>
+  );
 }
 
 export function PartiesPage() {
@@ -222,9 +203,9 @@ export function PartiesPage() {
       <Navigation />
       <main className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <OrganizationsLayout active="parties">
-          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <div className="relative flex-1">
+          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="flex-1 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={searchQuery}
@@ -233,16 +214,16 @@ export function PartiesPage() {
                   className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              {canCreate && (
-                <button
-                  onClick={() => setNewPartyOpen((open) => !open)}
-                  className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-                >
-                  <Plus className="h-4 w-4" />
-                  Create Party
-                </button>
-              )}
             </div>
+            {canCreate && (
+              <button
+                onClick={() => setNewPartyOpen((open) => !open)}
+                className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                Create Party
+              </button>
+            )}
           </div>
 
           {newPartyOpen && (
@@ -271,7 +252,7 @@ export function PartiesPage() {
                     <div className="p-5">
                       <div className="mb-4 flex items-start justify-between gap-4">
                         <div className="flex items-center gap-3">
-                          <PartyIcon name={party.name} color={party.color} />
+                          <PartyIcon name={party.name} />
                           <div>
                             <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-700">{party.name}</h3>
                             <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
@@ -280,7 +261,6 @@ export function PartiesPage() {
                             </div>
                           </div>
                         </div>
-                        <PartyCornerIcon name={party.name} />
                       </div>
                       <p className="line-clamp-3 text-sm text-gray-600">{party.platform || "No platform yet."}</p>
                       <div className="mt-4 grid gap-2 border-t border-gray-200 pt-4 text-sm">

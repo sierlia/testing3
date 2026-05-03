@@ -18,6 +18,10 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import tessLinImage from "figma:asset/966ec4d05f8fbeb48998b857574fc6613b388aae.png";
 
+function statusLabel(status: string) {
+  return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
 export function TeacherStudentView() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("profile");
@@ -237,7 +241,7 @@ export function TeacherStudentView() {
                             {bill.number}
                           </span>
                           <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                            {bill.status}
+                            {statusLabel(bill.status)}
                           </span>
                         </div>
                         <p className="text-sm text-gray-700">{bill.title}</p>
@@ -407,7 +411,7 @@ export function TeacherStudentView() {
                               {bill.number}
                             </span>
                             <span className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">
-                              {bill.status}
+                              {statusLabel(bill.status)}
                             </span>
                           </div>
                           <p className="text-sm text-gray-700">{bill.title}</p>

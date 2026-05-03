@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export type ReactionEmoji = "\u{1F44D}" | "\u{1F44E}" | "\u{1F389}";
 
@@ -18,11 +18,22 @@ export function ReactionsBar({
   onToggle: (emoji: ReactionEmoji) => void;
   size?: "sm" | "md";
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement | null>(null);
   const counts = summary?.counts ?? { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 };
   const mine = summary?.mine ?? new Set<ReactionEmoji>();
   const baseClass = size === "md" ? "px-3 py-1.5 text-sm" : "px-2 py-1 text-xs";
 
   const shown = EMOJIS.filter((e) => (counts[e] ?? 0) > 0 || mine.has(e));
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [menuOpen]);
 
   return (
     <div className="flex items-center gap-2">
@@ -44,31 +55,34 @@ export function ReactionsBar({
           </button>
         );
       })}
-      <details className="relative">
-        <summary
+      <div ref={menuRef} className="relative">
+        <button
+          type="button"
+          onClick={() => setMenuOpen((open) => !open)}
           className={`${baseClass} rounded-md border border-gray-200 hover:bg-gray-50 text-gray-700 cursor-pointer select-none`}
           title="Add reaction"
-          style={{ listStyle: "none" }}
         >
           +
-        </summary>
-        <div className="absolute right-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg p-2 z-20 flex gap-1">
-          {EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                onToggle(emoji);
-              }}
-              className="px-2 py-1 rounded hover:bg-gray-100 text-sm"
-              title="React"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      </details>
+        </button>
+        {menuOpen && (
+          <div className="absolute left-0 mt-2 bg-white border border-gray-200 rounded-md shadow-lg p-2 z-20 flex gap-1">
+            {EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => {
+                  onToggle(emoji);
+                  setMenuOpen(false);
+                }}
+                className="px-2 py-1 rounded hover:bg-gray-100 text-sm"
+                title="React"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

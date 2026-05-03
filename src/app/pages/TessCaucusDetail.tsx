@@ -183,10 +183,14 @@ export function TessCaucusDetail() {
           if (arErr) throw arErr;
 
           const announcementSummary: Record<string, ReactionsSummary> = {};
+          const seenAnnouncementReactions = new Set<string>();
           for (const r of arRows ?? []) {
             const id = (r as any).announcement_id as string;
             const emoji = (r as any).emoji as ReactionEmoji;
             const uid = (r as any).user_id as string;
+            const key = `${id}:${uid}:${emoji}`;
+            if (seenAnnouncementReactions.has(key)) continue;
+            seenAnnouncementReactions.add(key);
             const prev = announcementSummary[id] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
             prev.counts[emoji] = (prev.counts[emoji] ?? 0) + 1;
             if (uid === me) prev.mine.add(emoji);
@@ -202,10 +206,14 @@ export function TessCaucusDetail() {
               .in("comment_id", commentIds);
             if (crErr) throw crErr;
             const commentSummary: Record<string, ReactionsSummary> = {};
+            const seenCommentReactions = new Set<string>();
             for (const r of crRows ?? []) {
               const id = (r as any).comment_id as string;
               const emoji = (r as any).emoji as ReactionEmoji;
               const uid = (r as any).user_id as string;
+              const key = `${id}:${uid}:${emoji}`;
+              if (seenCommentReactions.has(key)) continue;
+              seenCommentReactions.add(key);
               const prev = commentSummary[id] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
               prev.counts[emoji] = (prev.counts[emoji] ?? 0) + 1;
               if (uid === me) prev.mine.add(emoji);
@@ -481,6 +489,12 @@ export function TessCaucusDetail() {
           .eq("emoji", emoji);
         if (error) throw error;
       } else {
+        await supabase
+          .from("caucus_announcement_reactions")
+          .delete()
+          .eq("announcement_id", announcementId)
+          .eq("user_id", meId)
+          .eq("emoji", emoji);
         const { error } = await supabase.from("caucus_announcement_reactions").insert({
           caucus_id: caucusId,
           announcement_id: announcementId,
@@ -536,6 +550,12 @@ export function TessCaucusDetail() {
           .eq("emoji", emoji);
         if (error) throw error;
       } else {
+        await supabase
+          .from("caucus_comment_reactions")
+          .delete()
+          .eq("comment_id", commentId)
+          .eq("user_id", meId)
+          .eq("emoji", emoji);
         const { error } = await supabase.from("caucus_comment_reactions").insert({
           comment_id: commentId,
           user_id: meId,
@@ -833,7 +853,7 @@ export function TessCaucusDetail() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>
+                      {m.role !== "member" && <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>}
                       {isChair && m.role !== "chair" && (
                         <button
                           type="button"

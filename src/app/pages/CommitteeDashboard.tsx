@@ -228,10 +228,14 @@ export function CommitteeDashboard() {
           if (arErr) throw arErr;
 
           const announcementSummary: Record<string, ReactionsSummary> = {};
+          const seenAnnouncementReactions = new Set<string>();
           for (const r of arRows ?? []) {
             const id = (r as any).announcement_id as string;
             const emoji = (r as any).emoji as ReactionEmoji;
             const uid = (r as any).user_id as string;
+            const key = `${id}:${uid}:${emoji}`;
+            if (seenAnnouncementReactions.has(key)) continue;
+            seenAnnouncementReactions.add(key);
             const prev = announcementSummary[id] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
             prev.counts[emoji] = (prev.counts[emoji] ?? 0) + 1;
             if (uid === me) prev.mine.add(emoji);
@@ -247,10 +251,14 @@ export function CommitteeDashboard() {
               .select("comment_id,user_id,emoji")
               .in("comment_id", commentIds);
             if (crErr) throw crErr;
+            const seenCommentReactions = new Set<string>();
             for (const r of crRows ?? []) {
               const id = (r as any).comment_id as string;
               const emoji = (r as any).emoji as ReactionEmoji;
               const uid = (r as any).user_id as string;
+              const key = `${id}:${uid}:${emoji}`;
+              if (seenCommentReactions.has(key)) continue;
+              seenCommentReactions.add(key);
               const prev = commentSummary[id] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
               prev.counts[emoji] = (prev.counts[emoji] ?? 0) + 1;
               if (uid === me) prev.mine.add(emoji);
@@ -526,6 +534,12 @@ export function CommitteeDashboard() {
           .eq("emoji", emoji);
         if (error) throw error;
       } else {
+        await supabase
+          .from("committee_announcement_reactions")
+          .delete()
+          .eq("announcement_id", announcementId)
+          .eq("user_id", meId)
+          .eq("emoji", emoji);
         const { error } = await supabase.from("committee_announcement_reactions").insert({
           committee_id: committeeId,
           announcement_id: announcementId,
@@ -578,6 +592,12 @@ export function CommitteeDashboard() {
           .eq("emoji", emoji);
         if (error) throw error;
       } else {
+        await supabase
+          .from("committee_comment_reactions")
+          .delete()
+          .eq("comment_id", commentId)
+          .eq("user_id", meId)
+          .eq("emoji", emoji);
         const { error } = await supabase.from("committee_comment_reactions").insert({
           comment_id: commentId,
           user_id: meId,
