@@ -35,15 +35,10 @@ function latestDate(rows: Array<{ created_at?: string | null; updated_at?: strin
     .sort((a, b) => new Date(String(b)).getTime() - new Date(String(a)).getTime())[0] as string | undefined;
 }
 
-function isPastStatus(status: string, step: string) {
-  const order = ["submitted", "in_committee", "committee_vote", "reported", "calendared", "floor", "passed", "failed"];
-  return order.indexOf(status) > order.indexOf(step);
-}
-
 function HorizontalTracker({ steps }: { steps: TrackerStep[] }) {
   return (
     <div className="pt-4">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-8">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {steps.map((step) => {
           const Icon = step.status === "completed" ? Check : step.status === "current" ? Clock : Circle;
           return (
@@ -131,15 +126,16 @@ export function BillDetail() {
 
   const actions = useMemo<BillAction[]>(() => {
     if (!bill) return [];
-    const rows: BillAction[] = [{ label: "Introduced", detail: `${bill.hr_label} introduced`, date: bill.created_at }];
-    if (referral?.referred_at) rows.push({ label: "Referred", detail: `Referred to ${referral.committee_name ?? "committee"}`, date: referral.referred_at });
-    if (committeeDoc?.ydoc_base64 && committeeDoc?.updated_at) rows.push({ label: "Marked up in committee", detail: `${referral?.committee_name ?? "Committee"} markup edited`, date: committeeDoc.updated_at });
+    const committeeName = referral?.committee_name ?? "Committee";
+    const rows: BillAction[] = [{ label: "Introduced", date: bill.created_at }];
+    if (referral?.referred_at) rows.push({ label: `Referred to ${committeeName}`, date: referral.referred_at });
+    if (committeeDoc?.committee_markup_posted_at) rows.push({ label: `Marked up in ${committeeName}`, date: committeeDoc.committee_markup_posted_at });
     const committeeVoteDate = latestDate(committeeVotes);
     if (committeeVoteDate) {
       const passed = committeeCounts.yea > committeeCounts.nay;
       const decided = ["reported", "calendared", "floor", "passed", "failed"].includes(bill.status);
       rows.push({
-        label: decided ? (passed ? "Passed committee" : "Failed in committee") : "Committee vote recorded",
+        label: decided ? (passed ? `Reported by ${committeeName}` : `Rejected by ${committeeName}`) : "Committee vote recorded",
         detail: `${committeeCounts.yea} yeas to ${committeeCounts.nay} nays${committeeCounts.present ? `, ${committeeCounts.present} present` : ""}`,
         date: committeeDoc?.committee_vote_finalized_at || committeeDoc?.committee_vote_closed_at || committeeVoteDate,
       });
@@ -147,30 +143,31 @@ export function BillDetail() {
     if (committeeDoc?.committee_vote_closed_at && !["reported", "calendared", "floor", "passed", "failed"].includes(bill.status)) {
       rows.push({ label: "Committee vote closed", detail: `${committeeCounts.yea} yeas to ${committeeCounts.nay} nays`, date: committeeDoc.committee_vote_closed_at });
     }
-    if (committeeDoc?.committee_report_submitted_at) rows.push({ label: "Committee report submitted", detail: referral?.committee_name ?? "Committee", date: committeeDoc.committee_report_submitted_at });
+    if (committeeDoc?.committee_report_submitted_at) rows.push({ label: `${committeeName} report submitted`, date: committeeDoc.committee_report_submitted_at });
     if (calendar?.created_at || calendar?.scheduled_at) rows.push({ label: "Calendared", detail: calendar?.scheduled_at ? `Scheduled for ${new Date(calendar.scheduled_at).toLocaleString()}` : undefined, date: calendar.created_at || calendar.scheduled_at });
     if (floorSession?.opened_at) rows.push({ label: "Floor debate opened", date: floorSession.opened_at });
     const floorVoteDate = latestDate(floorVotes);
     if (floorVoteDate) rows.push({ label: "Floor vote recorded", detail: `${floorCounts.yea} yeas to ${floorCounts.nay} nays${floorCounts.present ? `, ${floorCounts.present} present` : ""}`, date: floorVoteDate });
     if (floorSession?.closed_at) rows.push({ label: "Floor debate closed", date: floorSession.closed_at });
-    return rows.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [bill, calendar, committeeCounts, committeeDoc, committeeVotes, floorCounts, floorSession, floorVotes, referral]);
 
-  const latestAction = actions[actions.length - 1];
+  const latestAction = actions[0];
 
   const tracker = useMemo<TrackerStep[]>(() => {
     if (!bill) return [];
     const status = bill.status;
-    const beyondCommittee = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
+    const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
+    const calendared = Boolean(calendar);
+    const floor = Boolean(floorSession?.opened_at);
+    const final = ["passed", "failed"].includes(status);
     return [
       { label: "Introduced", status: "completed", date: bill.created_at },
-      { label: "Referred", status: referral ? "completed" : status === "submitted" ? "current" : "upcoming", date: referral?.referred_at },
-      { label: "Review", status: status === "in_committee" ? "current" : referral && isPastStatus(status, "in_committee") ? "completed" : "upcoming", date: committeeDoc?.updated_at },
-      { label: "Vote", status: status === "committee_vote" ? "current" : beyondCommittee ? "completed" : "upcoming", date: latestDate(committeeVotes) },
-      { label: "Report", status: committeeDoc?.committee_report_submitted_at ? "completed" : status === "committee_vote" ? "current" : "upcoming", date: committeeDoc?.committee_report_submitted_at, note: committeeDoc?.committee_report_submitted_at ? undefined : referral ? "WIP" : undefined },
-      { label: "Calendared", status: calendar ? (status === "calendared" ? "current" : ["floor", "passed", "failed"].includes(status) ? "completed" : "completed") : "upcoming", date: calendar?.created_at || calendar?.scheduled_at },
-      { label: "Floor", status: floorSession?.opened_at ? (status === "floor" ? "current" : ["passed", "failed"].includes(status) ? "completed" : "completed") : "upcoming", date: floorSession?.opened_at },
-      { label: "Final", status: ["passed", "failed"].includes(status) ? "completed" : "upcoming", date: floorSession?.closed_at, note: ["passed", "failed"].includes(status) ? statusLabel(status) : undefined },
+      { label: referral?.committee_name ? `Referred to ${referral.committee_name}` : "Referred", status: referral ? "completed" : status === "submitted" ? "current" : "upcoming", date: referral?.referred_at },
+      { label: "Reported", status: reported ? (calendared || floor || final ? "completed" : "current") : referral ? "upcoming" : "upcoming", date: committeeDoc?.committee_vote_finalized_at },
+      { label: "Calendared", status: calendared ? (floor || final ? "completed" : "current") : "upcoming", date: calendar?.created_at || calendar?.scheduled_at },
+      { label: "Floor", status: floor ? (final ? "completed" : "current") : "upcoming", date: floorSession?.opened_at },
+      { label: status === "failed" ? "Failed" : "Passed", status: final ? "completed" : "upcoming", date: floorSession?.closed_at },
     ];
   }, [bill, calendar, committeeDoc, committeeVotes, floorSession, referral]);
 
@@ -248,7 +245,7 @@ export function BillDetail() {
               <span className="font-semibold text-gray-900">Committee reports:</span>{" "}
               {referral?.committee_id ? (
                 <Link to={`/committee/${referral.committee_id}/reports/${bill.id}`} className="font-medium text-blue-600 hover:underline">
-                  {committeeReportStatus}
+                  {referral.committee_name ?? "Committee"} Report ({committeeReportStatus})
                 </Link>
               ) : (
                 committeeReportStatus

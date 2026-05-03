@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
-import { ChevronLeft, ChevronRight, FileText, Pencil, Sparkles, Vote } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Pencil, Send, Sparkles, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { CommitteeTabs, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
-import { proposeBillForCommitteeVote } from "../services/bills";
+import { postCommitteeProgress, proposeBillForCommitteeVote } from "../services/bills";
 
 type BillRow = {
   id: string;
@@ -44,6 +44,7 @@ export function CommitteeWorkspace() {
   const [textView, setTextView] = useState<"edited" | "clean" | "original">("edited");
   const [billListOpen, setBillListOpen] = useState(true);
   const [proposing, setProposing] = useState(false);
+  const [postingProgress, setPostingProgress] = useState(false);
   const [activeEditors, setActiveEditors] = useState<
     Array<{ id: string; name: string; color: string; avatar_url: string | null }>
   >([]);
@@ -177,6 +178,19 @@ export function CommitteeWorkspace() {
       toast.error(e.message || "Could not propose bill for vote");
     } finally {
       setProposing(false);
+    }
+  };
+
+  const postSelectedBillProgress = async () => {
+    if (!selected) return;
+    setPostingProgress(true);
+    try {
+      await postCommitteeProgress(selected.id, committeeId);
+      toast.success("Progress posted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not post progress");
+    } finally {
+      setPostingProgress(false);
     }
   };
 
@@ -402,6 +416,15 @@ export function CommitteeWorkspace() {
                             Original
                           </button>
                         </div>
+                          <button
+                            type="button"
+                            onClick={() => void postSelectedBillProgress()}
+                            disabled={postingProgress}
+                            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <Send className="w-4 h-4" />
+                            {postingProgress ? "Posting" : "Post progress"}
+                          </button>
                           <button
                             type="button"
                             onClick={() => void proposeSelectedBillForVote()}

@@ -4,15 +4,36 @@ import { CheckCircle, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { CommitteeTabs } from "../components/CommitteeTabs";
 import { supabase } from "../utils/supabase";
+import { formatConstituency } from "../utils/constituency";
 
 type Member = {
   user_id: string;
   role: "member" | "chair" | "co_chair" | "ranking_member";
-  profile: { display_name: string | null; party: string | null; avatar_url: string | null } | null;
+  profile: { display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null } | null;
 };
 
 type LeadershipPosition = "chair" | "ranking_member";
+
+function partyAbbr(party: string | null | undefined) {
+  const normalized = String(party ?? "").toLowerCase();
+  if (normalized.includes("democrat")) return "D";
+  if (normalized.includes("republican")) return "R";
+  if (normalized.includes("independent")) return "I";
+  if (normalized.includes("green")) return "G";
+  if (normalized.includes("libertarian")) return "L";
+  return party?.trim()?.slice(0, 1).toUpperCase() || "I";
+}
+
+function memberDescriptor(member: Member) {
+  const district = formatConstituency(member.profile?.constituency_name);
+  return `Rep.-${partyAbbr(member.profile?.party)}-${district || "N/A"}`;
+}
+
+function memberParty(member: Member) {
+  return String(member.profile?.party ?? "Independent").trim() || "Independent";
+}
 
 export function CommitteeLeadership() {
   const { id } = useParams();
@@ -43,7 +64,7 @@ export function CommitteeLeadership() {
       const memberIds = [...new Set((memberRows ?? []).map((m: any) => m.user_id))];
       const { data: profiles } = await supabase
         .from("profiles")
-        .select("user_id,display_name,party,avatar_url")
+        .select("user_id,display_name,party,constituency_name,avatar_url")
         .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]);
       const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
       setMembers((memberRows ?? []).map((m: any) => ({ ...m, profile: profileMap.get(m.user_id) ?? null })) as any);
@@ -69,13 +90,26 @@ export function CommitteeLeadership() {
   const currentChair = members.find((m) => m.role === "chair");
   const currentRanking = members.find((m) => m.role === "ranking_member");
 
-  const voteCount = (position: LeadershipPosition, candidateId: string) => votes.filter((v) => v.position === position && v.candidate_user_id === candidateId).length;
-  const myVote = (position: LeadershipPosition) => votes.find((v) => v.position === position && v.voter_user_id === meId)?.candidate_user_id ?? null;
+  const majorityParty = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const member of members) counts.set(memberParty(member), (counts.get(memberParty(member)) ?? 0) + 1);
+    const entries = [...counts.entries()];
+    if (!entries.length) return null;
+    if (new Set(entries.map(([, count]) => count)).size === 1) return null;
+    const sorted = entries.sort((a, b) => b[1] - a[1]);
+    return sorted[0][1] > (sorted[1]?.[1] ?? 0) ? sorted[0][0] : null;
+  }, [members]);
+
+  const chairCandidates = majorityParty ? members.filter((member) => memberParty(member) === majorityParty) : members;
+  const rankingCandidates = majorityParty ? members.filter((member) => memberParty(member) !== majorityParty) : [];
+
+  const voteCount = (position: LeadershipPosition, candidateId: string) => votes.filter((vote) => vote.position === position && vote.candidate_user_id === candidateId).length;
+  const myVote = (position: LeadershipPosition) => votes.find((vote) => vote.position === position && vote.voter_user_id === meId)?.candidate_user_id ?? null;
   const winnerFor = (position: LeadershipPosition) => {
     const counts = new Map<string, number>();
-    for (const vote of votes.filter((v) => v.position === position)) counts.set(v.candidate_user_id, (counts.get(v.candidate_user_id) ?? 0) + 1);
+    for (const vote of votes.filter((row) => row.position === position)) counts.set(vote.candidate_user_id, (counts.get(vote.candidate_user_id) ?? 0) + 1);
     const winner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-    return winner ? members.find((m) => m.user_id === winner) ?? null : null;
+    return winner ? members.find((member) => member.user_id === winner) ?? null : null;
   };
 
   const castVote = async (position: LeadershipPosition, candidateId: string) => {
@@ -92,7 +126,7 @@ export function CommitteeLeadership() {
         { onConflict: "committee_id,voter_user_id,position" },
       );
       if (error) throw error;
-      setVotes((prev) => [...prev.filter((v) => !(v.voter_user_id === meId && v.position === position)), { voter_user_id: meId, candidate_user_id: candidateId, position }]);
+      setVotes((prev) => [...prev.filter((vote) => !(vote.voter_user_id === meId && vote.position === position)), { voter_user_id: meId, candidate_user_id: candidateId, position }]);
       toast.success("Vote recorded");
     } catch (e: any) {
       toast.error(e.message || "Could not record vote");
@@ -113,7 +147,7 @@ export function CommitteeLeadership() {
     }
   };
 
-  const electionPanel = (position: LeadershipPosition, label: string) => (
+  const electionPanel = (position: LeadershipPosition, label: string, candidates: Member[]) => (
     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <div>
@@ -123,13 +157,14 @@ export function CommitteeLeadership() {
         <Vote className="h-5 w-5 text-blue-600" />
       </div>
       <div className="space-y-3">
-        {members.map((member) => (
+        {candidates.length === 0 && <div className="text-sm text-gray-500">No eligible candidates for this election.</div>}
+        {candidates.map((member) => (
           <div key={`${position}:${member.user_id}`} className="flex items-center justify-between rounded-md border border-gray-200 p-3">
             <div className="flex min-w-0 items-center gap-3">
               {member.profile?.avatar_url ? <img src={member.profile.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
               <div className="min-w-0">
                 <Link to={`/profile/${member.user_id}`} className="truncate text-sm font-medium text-blue-600 hover:underline">{member.profile?.display_name ?? "Member"}</Link>
-                <div className="text-xs text-gray-500">{member.profile?.party ?? "N/A"} • {member.role.replace("_", " ")}</div>
+                <div className="text-xs text-gray-500">{memberDescriptor(member)}</div>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -157,6 +192,8 @@ export function CommitteeLeadership() {
           <div className="text-sm text-gray-600">Loading...</div>
         ) : (
           <>
+            <CommitteeTabs committeeId={committeeId} active="election" />
+
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -164,7 +201,6 @@ export function CommitteeLeadership() {
                     <Users className="h-8 w-8 text-blue-600" />
                     <h1 className="text-3xl font-bold text-gray-900">{committee.name}</h1>
                   </div>
-                  <p className="mt-2 text-gray-600">{committee.description || "Committee leadership election"}</p>
                 </div>
                 {role === "teacher" && (
                   <button onClick={() => void applyWinners()} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
@@ -186,8 +222,8 @@ export function CommitteeLeadership() {
               </div>
             </div>
 
-            {electionPanel("chair", "Chair Election")}
-            {electionPanel("ranking_member", "Ranking Member Election")}
+            {electionPanel("chair", "Chair Election", chairCandidates)}
+            {majorityParty && electionPanel("ranking_member", "Ranking Member Election", rankingCandidates)}
           </>
         )}
       </main>

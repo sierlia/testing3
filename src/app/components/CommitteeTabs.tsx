@@ -2,16 +2,17 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 
-type TabId = "dashboard" | "review" | "vote";
+type TabId = "dashboard" | "review" | "vote" | "election";
 
-type Counts = Record<TabId, number>;
+type CountedTabId = "dashboard" | "review" | "vote";
+type Counts = Record<CountedTabId, number>;
 type CountData = {
   counts: Counts;
-  ids: Record<TabId, string[]>;
+  ids: Record<CountedTabId, string[]>;
 };
 
 const defaultCounts: Counts = { dashboard: 0, review: 0, vote: 0 };
-const defaultIds: Record<TabId, string[]> = { dashboard: [], review: [], vote: [] };
+const defaultIds: Record<CountedTabId, string[]> = { dashboard: [], review: [], vote: [] };
 const countDataCache = new Map<string, CountData>();
 
 function cloneCountData(data: CountData): CountData {
@@ -72,11 +73,11 @@ export function updateCommitteeTabCounts(committeeId: string, updater: (current:
   window.dispatchEvent(new CustomEvent("committee-counts-updated", { detail: { committeeId } }));
 }
 
-export function committeeSeenStorageKey(committeeId: string, tab: TabId) {
+export function committeeSeenStorageKey(committeeId: string, tab: CountedTabId) {
   return `committee:${committeeId}:seenIds:${tab}`;
 }
 
-export function readCommitteeSeenIds(committeeId: string, tab: TabId) {
+export function readCommitteeSeenIds(committeeId: string, tab: CountedTabId) {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(committeeSeenStorageKey(committeeId, tab)) || "[]");
     return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
@@ -85,7 +86,7 @@ export function readCommitteeSeenIds(committeeId: string, tab: TabId) {
   }
 }
 
-export function markCommitteeSeenIds(committeeId: string, tab: TabId, ids: string[]) {
+export function markCommitteeSeenIds(committeeId: string, tab: CountedTabId, ids: string[]) {
   const merged = Array.from(new Set([...readCommitteeSeenIds(committeeId, tab), ...ids.filter(Boolean)]));
   window.localStorage.setItem(committeeSeenStorageKey(committeeId, tab), JSON.stringify(merged));
   window.dispatchEvent(new CustomEvent("committee-seen-updated", { detail: { committeeId, tab } }));
@@ -94,18 +95,25 @@ export function markCommitteeSeenIds(committeeId: string, tab: TabId, ids: strin
 export function CommitteeTabs({ committeeId, active }: { committeeId: string; active: TabId }) {
   const [countData, setCountData] = useState<CountData>(() => readCachedCountData(committeeId));
   const [seenVersion, setSeenVersion] = useState(0);
+  const [isMember, setIsMember] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     setCountData(readCachedCountData(committeeId));
     const load = async () => {
-      const [{ data: announcements }, { data: refs }] = await Promise.all([
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      const [{ data: announcements }, { data: refs }, { data: membership }] = await Promise.all([
         supabase
           .from("committee_announcements")
           .select("id")
           .eq("committee_id", committeeId),
         supabase.from("bill_referrals").select("bill_id").eq("committee_id", committeeId),
+        uid
+          ? supabase.from("committee_members").select("user_id").eq("committee_id", committeeId).eq("user_id", uid).maybeSingle()
+          : ({ data: null } as any),
       ]);
+      if (!cancelled) setIsMember(Boolean(membership));
       const billIds = (refs ?? []).map((row: any) => row.bill_id);
       const { data: statusRows } = billIds.length
         ? await supabase
@@ -162,7 +170,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
 
   const counts = countData.counts;
   const newCounts = useMemo(() => {
-    const unseenCount = (tab: TabId) => {
+    const unseenCount = (tab: CountedTabId) => {
       const seen = new Set(readCommitteeSeenIds(committeeId, tab));
       return countData.ids[tab].filter((id) => !seen.has(id)).length;
     };
@@ -177,7 +185,8 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     { id: "dashboard" as const, label: "Dashboard", to: `/committees/${committeeId}` },
     { id: "review" as const, label: "Review", to: `/committee/${committeeId}/workspace` },
     { id: "vote" as const, label: "Vote", to: `/committee/${committeeId}/vote` },
-  ];
+    { id: "election" as const, label: "Election", to: `/committee/${committeeId}/leadership` },
+  ].filter((tab) => tab.id === "dashboard" || isMember);
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
@@ -190,13 +199,17 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
           }`}
         >
           {tab.label}
-          <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
-            {counts[tab.id]}
-          </span>
-          {newCounts[tab.id] > 0 && (
-            <span className={`rounded-full px-1.5 py-0.5 text-xs ${active === tab.id ? "bg-white text-blue-700" : "bg-blue-100 text-blue-700"}`}>
-              {newCounts[tab.id]} new
-            </span>
+          {tab.id !== "election" && (
+            <>
+              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
+                {counts[tab.id]}
+              </span>
+              {newCounts[tab.id] > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-xs ${active === tab.id ? "bg-white text-blue-700" : "bg-blue-100 text-blue-700"}`}>
+                  {newCounts[tab.id]} new
+                </span>
+              )}
+            </>
           )}
         </Link>
       ))}

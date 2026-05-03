@@ -196,7 +196,7 @@ export async function fetchBillDetail(billId: string) {
     referralCommitteeId
       ? supabase
           .from('committee_bill_docs')
-          .select('updated_at,committee_report_submitted_at,committee_vote_closed_at,committee_vote_finalized_at,ydoc_base64,committee_report_ydoc_base64')
+          .select('updated_at,committee_markup_posted_at,committee_report_submitted_at,committee_vote_closed_at,committee_vote_finalized_at,ydoc_base64,committee_report_ydoc_base64')
           .eq('bill_id', billId)
           .eq('committee_id', referralCommitteeId)
           .maybeSingle()
@@ -415,6 +415,20 @@ export async function submitCommitteeReport(billId: string, committeeId: string)
       committee_id: committeeId,
       class_id: classId,
       committee_report_submitted_at: new Date().toISOString(),
+    } as any,
+    { onConflict: 'bill_id,committee_id' },
+  );
+  if (error) throw error;
+}
+
+export async function postCommitteeProgress(billId: string, committeeId: string) {
+  const { classId } = await getCurrentProfileClass();
+  const { error } = await supabase.from('committee_bill_docs').upsert(
+    {
+      bill_id: billId,
+      committee_id: committeeId,
+      class_id: classId,
+      committee_markup_posted_at: new Date().toISOString(),
     } as any,
     { onConflict: 'bill_id,committee_id' },
   );

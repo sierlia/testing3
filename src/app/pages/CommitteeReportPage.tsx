@@ -64,7 +64,7 @@ export function CommitteeReportPage() {
           <div className="space-y-6">
             <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
               <div className="text-sm font-semibold text-gray-600">{committeeName}</div>
-              <h1 className="mt-1 text-2xl font-bold text-gray-900">Committee Report</h1>
+              <h1 className="mt-1 text-2xl font-bold text-gray-900">{committeeName} Report</h1>
               <div className="mt-2 text-sm text-gray-600">
                 <Link to={`/bills/${bill.id}`} className="font-medium text-blue-600 hover:underline">
                   {bill.hr_label}
