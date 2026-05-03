@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { AlertCircle, BookOpen, Check, Circle, Clock, FileText, Search, UserPlus, Users } from "lucide-react";
+import { generateHTML } from "@tiptap/core";
+import StarterKit from "@tiptap/starter-kit";
+import * as Y from "yjs";
+import { yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BillActions } from "../components/BillActions";
-import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
+import { DeleteHighlight, EditHighlight, LinkMark, TextAlignment, UnderlineMark } from "../components/CollaborativeBillEditor";
 import { fetchBillDetail, toggleCosponsor } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
@@ -35,6 +39,43 @@ function latestDate(rows: Array<{ created_at?: string | null; updated_at?: strin
     .map((row) => row.updated_at || row.created_at)
     .filter(Boolean)
     .sort((a, b) => new Date(String(b)).getTime() - new Date(String(a)).getTime())[0] as string | undefined;
+}
+
+function fromBase64(b64: string) {
+  if (!b64) return new Uint8Array();
+  if (typeof Buffer !== "undefined") return new Uint8Array(Buffer.from(b64, "base64"));
+  const bin = window.atob(b64);
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) u8[i] = bin.charCodeAt(i);
+  return u8;
+}
+
+function cleanRevisedHtml(html: string) {
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  doc.querySelectorAll("[data-delete-highlight]").forEach((node) => node.remove());
+  doc.querySelectorAll("[data-edit-highlight]").forEach((node) => {
+    const parent = node.parentNode;
+    if (!parent) return;
+    while (node.firstChild) parent.insertBefore(node.firstChild, node);
+    parent.removeChild(node);
+  });
+  return doc.body.innerHTML;
+}
+
+function revisedHtmlFromSnapshot(snapshot?: string | null) {
+  if (!snapshot) return null;
+  try {
+    const ydoc = new Y.Doc();
+    const update = fromBase64(snapshot);
+    if (!update.length) return null;
+    Y.applyUpdate(ydoc, update);
+    const json = yXmlFragmentToProsemirrorJSON(ydoc.getXmlFragment("default"));
+    const html = generateHTML(json, [StarterKit.configure({ history: false }), EditHighlight, DeleteHighlight, UnderlineMark, LinkMark, TextAlignment]);
+    ydoc.destroy();
+    return cleanRevisedHtml(html);
+  } catch {
+    return null;
+  }
 }
 
 function trackerBarClass(status: TrackerStatus) {
@@ -184,6 +225,7 @@ export function BillDetail() {
         return cosponsorSort === "oldest" ? aTime - bTime : bTime - aTime;
       });
   }, [cosponsorPartyFilter, cosponsorSearch, cosponsorSort, cosponsors]);
+  const revisedHtml = useMemo(() => revisedHtmlFromSnapshot(committeeDoc?.ydoc_base64) ?? bill?.legislative_text ?? "", [bill?.legislative_text, committeeDoc?.ydoc_base64]);
 
   useEffect(() => {
     if (!bill) return;
@@ -376,14 +418,7 @@ export function BillDetail() {
 
               <div className="p-6">
                 {activeTab === "revised" && showRevisedText && (
-                  <CollaborativeBillEditor
-                    classId={bill.class_id}
-                    committeeId={referral.committee_id}
-                    billId={bill.id}
-                    initialHtml={bill.legislative_text}
-                    editable={false}
-                    displayMode="clean"
-                  />
+                  <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: revisedHtml }} />
                 )}
                 {activeTab === "original" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: bill.legislative_text }} />}
                 {activeTab === "supporting" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: bill.supporting_text || "<p><em>No supporting text</em></p>" }} />}

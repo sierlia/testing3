@@ -46,7 +46,7 @@ function hexToRgba(hex: string, alpha: number) {
 
 const editAttributionPluginKey = new PluginKey("committeeEditAttribution");
 
-const EditHighlight = Mark.create({
+export const EditHighlight = Mark.create({
   name: "editHighlight",
   inclusive: false,
 
@@ -93,7 +93,7 @@ const EditHighlight = Mark.create({
   },
 });
 
-const DeleteHighlight = Mark.create({
+export const DeleteHighlight = Mark.create({
   name: "deleteHighlight",
   inclusive: false,
 
@@ -140,7 +140,7 @@ const DeleteHighlight = Mark.create({
   },
 });
 
-const UnderlineMark = Mark.create({
+export const UnderlineMark = Mark.create({
   name: "underline",
 
   parseHTML() {
@@ -153,7 +153,7 @@ const UnderlineMark = Mark.create({
   },
 });
 
-const LinkMark = Mark.create({
+export const LinkMark = Mark.create({
   name: "link",
   inclusive: false,
 
@@ -184,7 +184,7 @@ const LinkMark = Mark.create({
   },
 });
 
-const TextAlignment = Extension.create({
+export const TextAlignment = Extension.create({
   name: "textAlignment",
 
   addGlobalAttributes() {

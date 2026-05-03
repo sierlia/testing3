@@ -39,8 +39,24 @@ function PartyIcon({ name, color }: { name: string; color: string }) {
 
 function PartyCornerIcon({ name }: { name: string }) {
   const normalized = name.toLowerCase();
-  if (normalized.includes("democrat")) return <span className="text-2xl" aria-label="Democratic donkey">🫏</span>;
-  if (normalized.includes("republican")) return <span className="text-2xl" aria-label="Republican elephant">🐘</span>;
+  if (normalized.includes("democrat")) {
+    return (
+      <img
+        src="https://commons.wikimedia.org/wiki/Special:FilePath/Democratic%20Disc.svg"
+        alt="Democratic Party donkey"
+        className="h-9 w-9 object-contain"
+      />
+    );
+  }
+  if (normalized.includes("republican")) {
+    return (
+      <img
+        src="https://commons.wikimedia.org/wiki/Special:FilePath/Republican%20Disc.svg"
+        alt="Republican Party elephant"
+        className="h-9 w-9 object-contain"
+      />
+    );
+  }
   return <Flag className="h-5 w-5 text-gray-300" />;
 }
 
@@ -206,13 +222,9 @@ export function PartiesPage() {
       <Navigation />
       <main className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <OrganizationsLayout active="parties">
-          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Parties</h2>
-              <p className="text-sm text-gray-600">Class political parties and leadership</p>
-            </div>
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-              <div className="relative sm:w-72">
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={searchQuery}
@@ -224,7 +236,7 @@ export function PartiesPage() {
               {canCreate && (
                 <button
                   onClick={() => setNewPartyOpen((open) => !open)}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                  className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
                 >
                   <Plus className="h-4 w-4" />
                   Create Party

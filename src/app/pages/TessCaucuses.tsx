@@ -229,19 +229,6 @@ export function TessCaucuses() {
 
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OrganizationsLayout active="caucuses">
-          <div className="flex items-center justify-between mb-6">
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900">Caucuses</h2>
-            </div>
-            <button
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-            >
-              <Plus className="w-4 h-4" />
-              Create Caucus
-            </button>
-          </div>
-
         {showCreateForm && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Caucus</h2>
@@ -283,8 +270,8 @@ export function TessCaucuses() {
         )}
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex-1 relative">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -304,6 +291,13 @@ export function TessCaucuses() {
             </select>
             <button onClick={toggleSortOrder} className="p-2 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors">
               <ArrowUpDown className="w-4 h-4 text-gray-600" />
+            </button>
+            <button
+              onClick={() => setShowCreateForm(!showCreateForm)}
+              className="flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+            >
+              <Plus className="w-4 h-4" />
+              Create Caucus
             </button>
           </div>
         </div>

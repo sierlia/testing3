@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Building2, Check, ClipboardList, Search, UserPlus, Users } from "lucide-react";
+import { Check, ClipboardList, Search, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
@@ -183,12 +183,8 @@ export function CommitteesHome() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OrganizationsLayout active="committees">
           <div className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <Building2 className="w-5 h-5 text-blue-600" />
-                <h2 className="text-xl font-semibold text-gray-900">Committees</h2>
-              </div>
-              <div className="relative sm:w-72">
+            <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+              <div className="relative">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={searchQuery}
@@ -216,8 +212,8 @@ export function CommitteesHome() {
             ) : items.length === 0 ? (
               <div className="text-sm text-gray-500">No committees configured yet.</div>
             ) : (
-              <div className="space-y-3">
-                {items.map((c) => (
+              <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                {items.map((c, index) => (
                   <div
                     key={c.id}
                     role="button"
@@ -226,7 +222,7 @@ export function CommitteesHome() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") navigate(`/committees/${c.id}`);
                     }}
-                    className="border border-gray-200 rounded-lg bg-white p-4 shadow-sm flex items-start justify-between gap-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                    className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""}`}
                   >
                     <div className="min-w-0">
                       <div className="font-semibold text-gray-900 truncate">{c.name}</div>
