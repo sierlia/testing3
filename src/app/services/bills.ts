@@ -114,6 +114,35 @@ export async function fetchMyBillsForCurrentClass() {
   return (data ?? []) as BillRecord[];
 }
 
+export async function fetchMyCosponsoredBillsForCurrentClass() {
+  const { data: auth } = await supabase.auth.getUser();
+  const me = auth.user?.id;
+  if (!me) throw new Error('Not signed in');
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('class_id')
+    .eq('user_id', me)
+    .maybeSingle();
+  if (profileError) throw profileError;
+  const classId = (profile as any)?.class_id;
+  if (!classId) return [];
+
+  const { data, error } = await supabase
+    .from('bill_cosponsors')
+    .select('created_at,bills!inner(id,title,bill_number,status,class_id,created_at,legislative_text,supporting_text,author_user_id)')
+    .eq('user_id', me)
+    .eq('bills.class_id', classId)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  return (data ?? []).map((row: any) => ({
+    ...row.bills,
+    hr_label: `H.R. ${row.bills.bill_number}`,
+    cosponsored_at: row.created_at,
+  })) as BillRecord[];
+}
+
 export async function updateBillDraftForCurrentClass(
   billId: string,
   input: {
@@ -174,7 +203,7 @@ export async function fetchBillDetail(billId: string) {
 
   const { data: sponsor } = await supabase
     .from('profiles')
-    .select('user_id, display_name, party, constituency_name')
+    .select('user_id, display_name, party, constituency_name, role')
     .eq('user_id', (bill as any).author_user_id)
     .maybeSingle();
 
@@ -187,7 +216,7 @@ export async function fetchBillDetail(billId: string) {
   const cosponsorIds = (cos ?? []).map((r: any) => r.user_id);
   const { data: cosponsors } = await supabase
     .from('profiles')
-    .select('user_id, display_name, party, constituency_name')
+    .select('user_id, display_name, party, constituency_name, role')
     .in('user_id', cosponsorIds.length ? cosponsorIds : ['00000000-0000-0000-0000-000000000000']);
   const cosponsorMap = new Map((cosponsors ?? []).map((p: any) => [p.user_id, p]));
 
@@ -265,7 +294,7 @@ export async function toggleCosponsor(billId: string, shouldCosponsor: boolean) 
   if (shouldCosponsor) {
     const { error } = await supabase
       .from('bill_cosponsors')
-      .upsert({ bill_id: billId, user_id: me }, { onConflict: 'bill_id,user_id' });
+      .upsert({ bill_id: billId, user_id: me }, { onConflict: 'bill_id,user_id', ignoreDuplicates: true });
     if (error) throw error;
   } else {
     const { error } = await supabase.from('bill_cosponsors').delete().eq('bill_id', billId).eq('user_id', me);

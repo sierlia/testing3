@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { Check, Circle, Clock, ExternalLink, Eye, FileText, Plus, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BillPreviewPanel } from "../components/BillPreviewPanel";
@@ -123,6 +123,7 @@ const toBillView = (bill: BillRecord): BillView => ({
 
 export function TessBills() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const currentUserId = user?.id ?? "";
@@ -138,6 +139,7 @@ export function TessBills() {
     cosponsorId: "all",
   });
   const [sortBy, setSortBy] = useState<SortKey>("number");
+  const searchKey = searchParams.toString();
 
   useEffect(() => {
     const loadBills = async () => {
@@ -152,6 +154,17 @@ export function TessBills() {
     };
     void loadBills();
   }, []);
+
+  useEffect(() => {
+    const cosponsorId = searchParams.get("cosponsorId") || searchParams.get("cosponsor");
+    const sponsorId = searchParams.get("sponsorId") || searchParams.get("sponsor");
+    if (!cosponsorId && !sponsorId) return;
+    setFilters((prev) => ({
+      ...prev,
+      cosponsorId: cosponsorId || prev.cosponsorId,
+      sponsorId: sponsorId || prev.sponsorId,
+    }));
+  }, [searchKey]);
 
   const statusOptions = useMemo(() => Array.from(new Set(allBills.map((bill) => bill.status))).sort(), [allBills]);
   const committeeOptions = useMemo(() => Array.from(new Set(allBills.map((bill) => bill.committee).filter(Boolean))).sort(), [allBills]);

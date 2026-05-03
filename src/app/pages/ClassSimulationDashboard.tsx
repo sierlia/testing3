@@ -7,7 +7,7 @@ import { AnnouncementsFeed } from "../components/AnnouncementsFeed";
 import { QuickLinks } from "../components/QuickLinks";
 import { TeacherAdminShortcuts } from "../components/TeacherAdminShortcuts";
 import { supabase } from "../utils/supabase";
-import { fetchCalendaredBillsForCurrentClass, fetchMyBillsForCurrentClass } from "../services/bills";
+import { fetchCalendaredBillsForCurrentClass, fetchMyBillsForCurrentClass, fetchMyCosponsoredBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 
 type Profile = {
@@ -29,6 +29,7 @@ export function ClassSimulationDashboard() {
   const [className, setClassName] = useState("");
   const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
   const [myBills, setMyBills] = useState<BillRecord[]>([]);
+  const [cosponsoredBills, setCosponsoredBills] = useState<BillRecord[]>([]);
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; bill_id: string; scheduled_at: string; duration_minutes: number; bill: BillRecord }>>([]);
   const [deadlineItems, setDeadlineItems] = useState<Array<{ id: string; title: string; due_at: string; task_type: string }>>([]);
 
@@ -186,8 +187,9 @@ export function ClassSimulationDashboard() {
         const calendar = await fetchCalendaredBillsForCurrentClass();
         setCalendarItems(calendar);
         if ((pRow as any)?.role !== "teacher") {
-          const mine = await fetchMyBillsForCurrentClass();
+          const [mine, cosponsored] = await Promise.all([fetchMyBillsForCurrentClass(), fetchMyCosponsoredBillsForCurrentClass()]);
           setMyBills(mine.slice(0, 12));
+          setCosponsoredBills(cosponsored.slice(0, 12));
         }
       } catch (e: any) {
         toast.error(e.message || "Could not load dashboard");
@@ -257,6 +259,7 @@ export function ClassSimulationDashboard() {
             <AnnouncementsFeed announcements={dashboardAnnouncements} />
 
             {profile?.role !== "teacher" && (
+              <>
               <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex items-center justify-between gap-4">
                   <div>
@@ -289,6 +292,39 @@ export function ClassSimulationDashboard() {
                   </div>
                 )}
               </section>
+              <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <div className="mb-4 flex items-center justify-between gap-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Cosponsored Bills</h2>
+                    <p className="text-sm text-gray-600">Legislation you have cosponsored</p>
+                  </div>
+                  <Link to={`/bills?cosponsorId=${encodeURIComponent(meId ?? "")}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+                    All
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+                {cosponsoredBills.length === 0 ? (
+                  <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-500">No cosponsored bills yet.</div>
+                ) : (
+                  <div className="flex snap-x gap-3 overflow-x-auto pb-2">
+                    {cosponsoredBills.map((bill: any) => (
+                      <Link
+                        key={bill.id}
+                        to={`/bills/${bill.id}`}
+                        className="min-w-[240px] snap-start rounded-md border border-gray-200 bg-gray-50 p-4 hover:border-blue-200 hover:bg-blue-50"
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="font-mono text-xs font-semibold text-gray-900">{bill.hr_label}</span>
+                          <span className="rounded bg-white px-2 py-1 text-xs font-medium text-gray-700">{statusLabel(bill.status)}</span>
+                        </div>
+                        <h3 className="line-clamp-2 text-sm font-semibold text-gray-900">{bill.title}</h3>
+                        <p className="mt-3 text-xs text-gray-500">Cosponsored {bill.cosponsored_at ? new Date(bill.cosponsored_at).toLocaleDateString() : ""}</p>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </section>
+              </>
             )}
 
           </div>

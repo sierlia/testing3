@@ -1,4 +1,4 @@
-import { ChevronDown, Building2, CircleHelp, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
+import { ChevronDown, CircleHelp, Gavel, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
@@ -300,7 +300,7 @@ export function Navigation() {
             <div className="flex items-center gap-2">
               <Link to={dashboardLink}>
                 <div className="flex items-center gap-2">
-                  <Building2 className="w-6 h-6 text-blue-600" />
+                  <Gavel className="w-6 h-6 text-blue-600" />
                   <h1 className="text-xl font-semibold text-gray-900">
                     Gavel
                   </h1>

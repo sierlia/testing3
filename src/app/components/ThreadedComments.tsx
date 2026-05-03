@@ -110,7 +110,7 @@ export function ThreadedComments({
               {comment.body}
             </div>
             <div className="flex items-center gap-3 mt-2">
-              <ReactionsBar summary={reactionsByCommentId[comment.id]} onToggle={(e) => onToggleReaction(comment.id, e)} />
+              <ReactionsBar summary={reactionsByCommentId[comment.id]} onToggle={(e) => onToggleReaction(comment.id, e)} canReact={!!meId} />
               <button
                 type="button"
                 disabled={!canReply}

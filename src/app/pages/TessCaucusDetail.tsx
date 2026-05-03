@@ -373,6 +373,7 @@ export function TessCaucusDetail() {
           const announcementId = row.announcement_id as string;
           const emoji = row.emoji as ReactionEmoji;
           const uid = row.user_id as string;
+          if (uid === meId) return;
           setAnnouncementReactions((prev) => {
             const cur = prev[announcementId] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
             const mine = new Set(cur.mine);
@@ -391,6 +392,7 @@ export function TessCaucusDetail() {
           const announcementId = row.announcement_id as string;
           const emoji = row.emoji as ReactionEmoji;
           const uid = row.user_id as string;
+          if (uid === meId) return;
           setAnnouncementReactions((prev) => {
             const cur = prev[announcementId];
             if (!cur) return prev;
@@ -411,6 +413,7 @@ export function TessCaucusDetail() {
           const commentId = row.comment_id as string;
           const emoji = row.emoji as ReactionEmoji;
           const uid = row.user_id as string;
+          if (uid === meId) return;
           setCommentReactions((prev) => {
             const cur = prev[commentId] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
             const mine = new Set(cur.mine);
@@ -429,6 +432,7 @@ export function TessCaucusDetail() {
           const commentId = row.comment_id as string;
           const emoji = row.emoji as ReactionEmoji;
           const uid = row.user_id as string;
+          if (uid === meId) return;
           setCommentReactions((prev) => {
             const cur = prev[commentId];
             if (!cur) return prev;
@@ -631,7 +635,7 @@ export function TessCaucusDetail() {
   };
 
   const toggleAnnouncementReaction = async (announcementId: string, emoji: ReactionEmoji) => {
-    if (!meId) return;
+    if (!meId || !canComment) return;
     const mine = announcementReactions[announcementId]?.mine?.has(emoji) ?? false;
     // optimistic UI
     setAnnouncementReactions((prev) => {
@@ -693,7 +697,7 @@ export function TessCaucusDetail() {
   };
 
   const toggleCommentReaction = async (commentId: string, emoji: ReactionEmoji) => {
-    if (!meId) return;
+    if (!meId || !canComment) return;
     const mine = commentReactions[commentId]?.mine?.has(emoji) ?? false;
     setCommentReactions((prev) => {
       const cur = prev[commentId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
@@ -972,6 +976,7 @@ export function TessCaucusDetail() {
                             size="md"
                             summary={announcementReactions[selectedAnnouncement.id]}
                             onToggle={(emoji) => toggleAnnouncementReaction(selectedAnnouncement.id, emoji)}
+                            canReact={canComment}
                           />
                         </div>
                         {isTeacher && (
@@ -1111,7 +1116,8 @@ export function TessCaucusDetail() {
             <div className="space-y-3">
               {visibleMembers
                 .map((m) => (
-                  <div key={m.user_id} className="flex items-center gap-3">
+                  <div key={m.user_id} className="relative flex items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
+                    {m.profile?.role === "teacher" && <GraduationCap className="absolute right-2 top-2 h-4 w-4 text-green-600" />}
                     {m.profile?.avatar_url ? (
                       <img src={m.profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
                     ) : (
@@ -1123,9 +1129,9 @@ export function TessCaucusDetail() {
                           {m.profile?.display_name ?? "Member"}
                         </Link>
                       </div>
-                      <div className="text-xs text-gray-500 truncate">
+                      {m.profile?.role !== "teacher" && <div className="text-xs text-gray-500 truncate">
                         Rep.-{partyAbbr(m.profile?.party)}-{formatConstituency(m.profile?.constituency_name) || "N/A"}
-                      </div>
+                      </div>}
                     </div>
                     <div className="flex items-center gap-2">
                       {isTeacher ? (

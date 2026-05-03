@@ -54,11 +54,20 @@ select {
   cursor: pointer;
   border-color: rgb(209 213 219);
   background-color: white;
+  border-radius: 0.5rem;
+  padding-right: 2rem;
   box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
 }
 
 select:hover {
   background-color: rgb(249 250 251);
+}
+
+select:focus {
+  outline: none;
+  border-color: rgb(59 130 246);
+  box-shadow: 0 0 0 3px rgb(59 130 246 / 0.18);
 }
 
 /* Tiptap collaboration cursors (Google Docs-like) */

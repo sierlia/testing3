@@ -13,10 +13,12 @@ export function ReactionsBar({
   summary,
   onToggle,
   size = "sm",
+  canReact = true,
 }: {
   summary: ReactionsSummary | undefined;
   onToggle: (emoji: ReactionEmoji) => void | Promise<void>;
   size?: "sm" | "md";
+  canReact?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingEmoji, setPendingEmoji] = useState<ReactionEmoji | null>(null);
@@ -29,6 +31,7 @@ export function ReactionsBar({
   const shown = EMOJIS.filter((e) => (counts[e] ?? 0) > 0 || mine.has(e));
 
   const toggle = async (emoji: ReactionEmoji) => {
+    if (!canReact) return;
     if (pendingRef.current) return;
     pendingRef.current = true;
     setPendingEmoji(emoji);
@@ -59,10 +62,10 @@ export function ReactionsBar({
             key={emoji}
             type="button"
             onClick={() => void toggle(emoji)}
-            disabled={pendingEmoji === emoji}
+            disabled={!canReact || pendingEmoji === emoji}
             className={`${baseClass} rounded-md border transition-colors ${
               active ? "border-blue-400 bg-blue-50 text-blue-700" : "border-gray-200 hover:bg-gray-50 text-gray-700"
-            } disabled:opacity-60`}
+            } disabled:cursor-default disabled:opacity-70`}
             title="React"
           >
             <span className="mr-1">{emoji}</span>
@@ -70,6 +73,7 @@ export function ReactionsBar({
           </button>
         );
       })}
+      {canReact && (
       <div ref={menuRef} className="relative">
         <button
           type="button"
@@ -99,6 +103,7 @@ export function ReactionsBar({
           </div>
         )}
       </div>
+      )}
     </div>
   );
 }

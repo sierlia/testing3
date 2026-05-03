@@ -693,11 +693,12 @@ export function PartyDetail() {
                 </div>
                 <div className="space-y-3">
                   {visibleMembers.map((m) => (
-                    <div key={m.user_id} className="flex items-center gap-3">
+                    <div key={m.user_id} className="relative flex items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
+                      {m.role === "teacher" && <GraduationCap className="absolute right-2 top-2 h-4 w-4 text-green-600" />}
                       {m.avatar_url ? <img src={m.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
                       <div className="min-w-0 flex-1">
-                        <Link to={`/profile/${m.user_id}`} className="truncate text-sm font-medium text-[var(--party-color)] hover:underline">{m.display_name ?? "Member"}</Link>
-                        <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.party)}-{formatConstituency(m.constituency_name) || "N/A"}</div>
+                        <Link to={`/profile/${m.user_id}`} className={`truncate text-sm font-medium hover:underline ${m.role === "teacher" ? "text-green-700" : "text-[var(--party-color)]"}`}>{m.display_name ?? "Member"}</Link>
+                        {m.role !== "teacher" && <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.party)}-{formatConstituency(m.constituency_name) || "N/A"}</div>}
                       </div>
                     </div>
                   ))}

@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
-import { GraduationCap, LogOut, Users, Send, Pencil, Save, X, UserPlus, Trash2 } from "lucide-react";
+import { GraduationCap, LogOut, MoreHorizontal, Users, Send, Pencil, Save, X, UserPlus, Trash2, UserX } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -101,6 +101,7 @@ export function CommitteeDashboard() {
   const [announcementsSplitPct, setAnnouncementsSplitPct] = useState(40);
   const [draggingSplit, setDraggingSplit] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null);
 
   const isLeader = myRole === "chair" || myRole === "co_chair" || myRole === "ranking_member";
   const isTeacher = viewerRole === "teacher";
@@ -347,6 +348,13 @@ export function CommitteeDashboard() {
   }, [draggingSplit]);
 
   useEffect(() => {
+    if (!memberMenuOpen) return;
+    const close = () => setMemberMenuOpen(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [memberMenuOpen]);
+
+  useEffect(() => {
     if (!committeeId) return;
 
     const channel = supabase
@@ -393,6 +401,7 @@ export function CommitteeDashboard() {
           const announcementId = row.announcement_id as string;
           const emoji = row.emoji as ReactionEmoji;
           const uid = row.user_id as string;
+          if (uid === meId) return;
           setAnnouncementReactions((prev) => {
             const cur = prev[announcementId] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
             const mine = new Set(cur.mine);
@@ -411,6 +420,7 @@ export function CommitteeDashboard() {
           const announcementId = row.announcement_id as string;
           const emoji = row.emoji as ReactionEmoji;
           const uid = row.user_id as string;
+          if (uid === meId) return;
           setAnnouncementReactions((prev) => {
             const cur = prev[announcementId];
             if (!cur) return prev;
@@ -431,6 +441,7 @@ export function CommitteeDashboard() {
           const commentId = row.comment_id as string;
           const emoji = row.emoji as ReactionEmoji;
           const uid = row.user_id as string;
+          if (uid === meId) return;
           setCommentReactions((prev) => {
             const cur = prev[commentId] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
             const mine = new Set(cur.mine);
@@ -449,6 +460,7 @@ export function CommitteeDashboard() {
           const commentId = row.comment_id as string;
           const emoji = row.emoji as ReactionEmoji;
           const uid = row.user_id as string;
+          if (uid === meId) return;
           setCommentReactions((prev) => {
             const cur = prev[commentId];
             if (!cur) return prev;
@@ -595,7 +607,7 @@ export function CommitteeDashboard() {
   };
 
   const toggleAnnouncementReaction = async (announcementId: string, emoji: ReactionEmoji) => {
-    if (!meId) return;
+    if (!meId || !canComment) return;
     const mine = announcementReactions[announcementId]?.mine?.has(emoji) ?? false;
     setAnnouncementReactions((prev) => {
       const cur = prev[announcementId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
@@ -653,7 +665,7 @@ export function CommitteeDashboard() {
   };
 
   const toggleCommentReaction = async (commentId: string, emoji: ReactionEmoji) => {
-    if (!meId) return;
+    if (!meId || !canComment) return;
     const mine = commentReactions[commentId]?.mine?.has(emoji) ?? false;
     setCommentReactions((prev) => {
       const cur = prev[commentId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
@@ -797,6 +809,33 @@ export function CommitteeDashboard() {
       });
     }
     toast.success("Role updated");
+  };
+
+  const requestRemoveMember = (member: { user_id: string; role: MembershipRole; profile: ProfileLite | null }) => {
+    if (!isTeacher) return;
+    setConfirmDialog({
+      title: "Remove committee member?",
+      message: `Remove ${member.profile?.display_name ?? "this member"} from ${committee?.name ?? "this committee"}? They will lose access to member-only committee areas.`,
+      confirmLabel: "Remove",
+      danger: true,
+      onConfirm: () => removeMember(member.user_id),
+    });
+  };
+
+  const removeMember = async (userId: string) => {
+    const { error } = await supabase.from("committee_members").delete().eq("committee_id", committeeId).eq("user_id", userId);
+    if (error) return toast.error(error.message || "Could not remove member");
+    setMembers((prev) => prev.filter((member) => member.user_id !== userId));
+    if (userId === meId) setMyRole(null);
+    const cached = dashboardCache.get(committeeId);
+    if (cached) {
+      dashboardCache.set(committeeId, {
+        ...cached,
+        myRole: userId === meId ? null : cached.myRole,
+        members: cached.members.filter((member) => member.user_id !== userId),
+      });
+    }
+    toast.success("Member removed");
   };
 
   if (loading || !committee) {
@@ -980,6 +1019,7 @@ export function CommitteeDashboard() {
                             size="md"
                             summary={announcementReactions[selectedAnnouncement.id]}
                             onToggle={(emoji) => toggleAnnouncementReaction(selectedAnnouncement.id, emoji)}
+                            canReact={canComment}
                           />
                         </div>
                         {isTeacher && (
@@ -1051,7 +1091,8 @@ export function CommitteeDashboard() {
             </div>
             <div className="space-y-3">
               {visibleMembers.map((m) => (
-                <div key={m.user_id} className="flex items-center gap-3">
+                <div key={m.user_id} className="relative flex items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
+                  {m.profile?.role === "teacher" && <GraduationCap className="absolute right-2 top-2 h-4 w-4 text-green-600" />}
                   {m.profile?.avatar_url ? (
                     <img src={m.profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
                   ) : (
@@ -1059,23 +1100,54 @@ export function CommitteeDashboard() {
                   )}
                     <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
-                      <Link to={`/profile/${m.user_id}`} className="text-blue-600 hover:underline">
+                      <Link to={`/profile/${m.user_id}`} className={m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
                         {m.profile?.display_name ?? "Member"}
                       </Link>
                     </div>
-                    <div className="text-xs text-gray-500 truncate">{memberDescriptor(m.profile)}</div>
+                    {m.profile?.role !== "teacher" && <div className="text-xs text-gray-500 truncate">{memberDescriptor(m.profile)}</div>}
                   </div>
                   {isTeacher ? (
-                    <select
-                      value={m.role}
-                      onChange={(event) => requestRoleChange(m, event.target.value as MembershipRole)}
-                      className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700"
-                    >
-                      <option value="member">Member</option>
-                      <option value="chair">Chair</option>
-                      <option value="co_chair">Co-chair</option>
-                      <option value="ranking_member">Ranking member</option>
-                    </select>
+                    <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id))}
+                        className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                        aria-label="Member actions"
+                      >
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                      {memberMenuOpen === m.user_id && (
+                        <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
+                          {(["member", "chair", "co_chair", "ranking_member"] as MembershipRole[]).map((role) => (
+                            <button
+                              key={role}
+                              type="button"
+                              onClick={() => {
+                                setMemberMenuOpen(null);
+                                requestRoleChange(m, role);
+                              }}
+                              disabled={m.role === role}
+                              className="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-default disabled:bg-gray-50 disabled:text-gray-400"
+                            >
+                              <span>{leadershipLabel(role) || "Member"}</span>
+                              {m.role === role && <span className="text-xs">Current</span>}
+                            </button>
+                          ))}
+                          <div className="my-1 border-t border-gray-100" />
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMemberMenuOpen(null);
+                              requestRemoveMember(m);
+                            }}
+                            className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                          >
+                            <UserX className="h-4 w-4" />
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   ) : leadershipLabel(m.role) ? (
                     <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{leadershipLabel(m.role)}</div>
                   ) : null}

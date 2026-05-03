@@ -14,7 +14,7 @@ import { formatConstituency } from "../utils/constituency";
 
 type TextTab = "revised" | "original" | "supporting";
 type TrackerStatus = "completed" | "current" | "upcoming";
-type TrackerStep = { label: string; status: TrackerStatus; date?: string | null; note?: string };
+type TrackerStep = { label: string; status: TrackerStatus; date?: string | null; note?: string; overrideFilled?: boolean };
 type TrackerItem = TrackerStep | { kind: "split"; steps: [TrackerStep, TrackerStep] };
 type BillAction = { label: string; detail?: string; date: string; tone?: "teacher" };
 type CommitteeOption = { id: string; name: string };
@@ -43,8 +43,8 @@ function voteCounts(votes: Array<{ vote: string }>) {
 
 function overrideMessage(step: string) {
   if (step === "Introduced") return "This will return the bill to the introduced stage so it can be referred again.";
-  if (step === "Referred") return "This will refer the bill to the committee selected below.";
-  if (step === "Marked up") return "This will move the bill into committee vote for the committee selected below.";
+  if (step === "Referred") return "This will refer the bill to the committee selected above.";
+  if (step === "Marked up") return "This will move the bill into committee vote for the committee selected above.";
   if (step === "Reported") return "This will mark the current committee's work as reported and move the bill to await calendaring.";
   if (step === "Calendared") return "This will place the bill on the floor calendar for the selected date and time.";
   if (step === "Floor") return "This will move the bill into the floor queue.";
@@ -96,7 +96,22 @@ function revisedHtmlFromSnapshot(snapshot?: string | null) {
   }
 }
 
-function trackerBarClass(status: TrackerStatus) {
+function trackerRank(label: string) {
+  const ranks: Record<string, number> = {
+    Introduced: 0,
+    Referred: 1,
+    "Marked up": 2,
+    Reported: 3,
+    Calendared: 4,
+    Floor: 5,
+    Final: 6,
+  };
+  return ranks[label] ?? -1;
+}
+
+function trackerBarClass(step: TrackerStep) {
+  if (step.overrideFilled) return "bg-green-600";
+  const status = step.status;
   if (status === "completed") return "bg-blue-600";
   if (status === "current") return "bg-blue-300";
   return "bg-blue-100";
@@ -112,7 +127,7 @@ function TrackerPoint({ step, compact = false }: { step: TrackerStep; compact?: 
     <>
       <span
         className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
-          step.status === "completed" ? "bg-blue-600 text-white" : step.status === "current" ? "bg-blue-100 text-blue-700" : "bg-blue-50 text-blue-300"
+          step.overrideFilled ? "bg-green-600 text-white" : step.status === "completed" ? "bg-blue-600 text-white" : step.status === "current" ? "bg-blue-100 text-blue-700" : "bg-blue-50 text-blue-300"
         }`}
       >
         <Icon className="h-3 w-3" />
@@ -144,7 +159,7 @@ function HorizontalTracker({ steps, onSelectStep }: { steps: TrackerItem[]; onSe
                     className={`min-w-0 rounded-md ${onSelectStep ? "cursor-pointer border border-dashed border-gray-300 p-1 hover:border-blue-300 hover:bg-blue-50" : ""}`}
                     onClick={onSelectStep ? () => onSelectStep(item) : undefined}
                   >
-                    <div className={`mb-2 h-1.5 rounded-full ${trackerBarClass(item.status)}`} />
+                    <div className={`mb-2 h-1.5 rounded-full ${trackerBarClass(item)}`} />
                     <TrackerPoint step={item} compact />
                   </div>
                 ))}
@@ -157,7 +172,7 @@ function HorizontalTracker({ steps, onSelectStep }: { steps: TrackerItem[]; onSe
               className={`min-w-0 rounded-md ${onSelectStep ? "cursor-pointer border border-dashed border-gray-300 p-1 hover:border-blue-300 hover:bg-blue-50" : ""}`}
               onClick={onSelectStep ? () => onSelectStep(step) : undefined}
             >
-              <div className={`mb-2 h-1.5 rounded-full ${trackerBarClass(step.status)}`} />
+              <div className={`mb-2 h-1.5 rounded-full ${trackerBarClass(step)}`} />
               <TrackerPoint step={step} />
             </div>
           );
@@ -324,6 +339,16 @@ export function BillDetail() {
   const tracker = useMemo<TrackerItem[]>(() => {
     if (!bill) return [];
     const status = bill.status;
+    const overrideRank = Math.max(-1, ...teacherOverrideActions.map((override) => trackerRank(override.step)));
+    const latestOverrideTime = teacherOverrideActions.length ? new Date(teacherOverrideActions[0].created_at).getTime() : 0;
+    const markOverrideFilled = (step: TrackerStep) => ({
+      ...step,
+      overrideFilled:
+        overrideRank > trackerRank(step.label) &&
+        trackerRank(step.label) > 0 &&
+        step.status === "completed" &&
+        (!step.date || (latestOverrideTime > 0 && Math.abs(new Date(step.date).getTime() - latestOverrideTime) < 120000)),
+    });
     const markedUp = Boolean(committeeDoc?.committee_markup_posted_at || ["committee_vote", "reported", "calendared", "floor", "passed", "failed"].includes(status));
     const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
     const calendared = Boolean(calendar);
@@ -331,20 +356,20 @@ export function BillDetail() {
     const final = ["passed", "failed"].includes(status);
     const markupDate = committeeDoc?.committee_markup_posted_at || committeeDoc?.committee_vote_finalized_at || committeeDoc?.committee_vote_closed_at || latestDate(committeeVotes);
     return [
-      { label: "Introduced", status: "completed", date: bill.created_at },
+      markOverrideFilled({ label: "Introduced", status: "completed", date: bill.created_at }),
       {
         kind: "split",
         steps: [
-          { label: "Referred", status: referral ? "completed" : status === "submitted" ? "current" : "upcoming", date: referral?.referred_at },
-          { label: "Marked up", status: markedUp ? "completed" : referral ? "current" : "upcoming", date: markupDate },
+          markOverrideFilled({ label: "Referred", status: referral ? "completed" : status === "submitted" ? "current" : "upcoming", date: referral?.referred_at }),
+          markOverrideFilled({ label: "Marked up", status: markedUp ? "completed" : referral ? "current" : "upcoming", date: markupDate }),
         ],
       },
-      { label: "Reported", status: reported ? (calendared || floor || final ? "completed" : "current") : referral ? "upcoming" : "upcoming", date: committeeDoc?.committee_vote_finalized_at },
-      { label: "Calendared", status: calendared ? (floor || final ? "completed" : "current") : "upcoming", date: calendar?.created_at || calendar?.scheduled_at },
-      { label: "Floor", status: floor ? (final ? "completed" : "current") : "upcoming", date: floorSession?.opened_at },
-      { label: "Final", status: final ? "completed" : "upcoming", date: floorSession?.closed_at, note: final ? statusLabel(status) : undefined },
+      markOverrideFilled({ label: "Reported", status: reported ? (calendared || floor || final ? "completed" : "current") : referral ? "upcoming" : "upcoming", date: committeeDoc?.committee_vote_finalized_at }),
+      markOverrideFilled({ label: "Calendared", status: calendared ? (floor || final ? "completed" : "current") : "upcoming", date: calendar?.created_at || calendar?.scheduled_at }),
+      markOverrideFilled({ label: "Floor", status: floor ? (final ? "completed" : "current") : "upcoming", date: floorSession?.opened_at }),
+      markOverrideFilled({ label: "Final", status: final ? "completed" : "upcoming", date: floorSession?.closed_at, note: final ? statusLabel(status) : undefined }),
     ];
-  }, [bill, calendar, committeeDoc, committeeVotes, floorSession, referral]);
+  }, [bill, calendar, committeeDoc, committeeVotes, floorSession, referral, teacherOverrideActions]);
 
   const toggleCurrentUserCosponsor = async () => {
     if (!id || !cosponsorAllowed || cosponsorPending) return;
@@ -367,6 +392,7 @@ export function BillDetail() {
                   display_name: currentProfile?.display_name ?? "You",
                   party: currentProfile?.party ?? "Independent",
                   constituency_name: currentProfile?.constituency_name ?? null,
+                  role: currentProfile?.role ?? null,
                   cosponsored_at: new Date().toISOString(),
                 },
               ],
@@ -585,8 +611,8 @@ export function BillDetail() {
             <div><span className="font-semibold text-gray-900">Latest action:</span> {latestAction ? `${latestAction.label} - ${formatDate(latestAction.date)}` : "No action yet"}</div>
           </div>
           {userRole === "teacher" && (
-            <div className="mt-4 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+            <div className="mt-4 flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
+              <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-700" />
               <span>Teacher override is enabled. Click a tracker stage to review and confirm a manual status change.</span>
             </div>
           )}
@@ -697,10 +723,10 @@ export function BillDetail() {
                 ) : (
                   visibleCosponsors.map((cosponsor) => (
                     <div key={cosponsor.user_id} className="rounded-md border border-gray-200 bg-gray-50 p-3">
-                      <Link to={`/profile/${cosponsor.user_id}`} className="font-medium text-blue-600 hover:underline">
+                      <Link to={`/profile/${cosponsor.user_id}`} className={`font-medium hover:underline ${cosponsor.role === "teacher" ? "text-green-700" : "text-blue-600"}`}>
                         {cosponsor.display_name ?? "Unknown"}
                       </Link>
-                      <div className="text-xs text-gray-600">{cosponsor.party ?? "Independent"}{cosponsor.constituency_name ? ` - ${formatConstituency(cosponsor.constituency_name)}` : ""}</div>
+                      {cosponsor.role !== "teacher" && <div className="text-xs text-gray-600">{cosponsor.party ?? "Independent"}{cosponsor.constituency_name ? ` - ${formatConstituency(cosponsor.constituency_name)}` : ""}</div>}
                       <div className="mt-1 text-xs text-gray-500">Cosponsored {formatDate(cosponsor.cosponsored_at)}</div>
                     </div>
                   ))
@@ -712,8 +738,8 @@ export function BillDetail() {
               <h2 className="mb-4 font-semibold text-gray-900">Actions</h2>
               <div className="space-y-4">
                 {actions.map((action, index) => (
-                  <div key={`${action.label}-${action.date}-${index}`} className={`border-l-2 pl-3 ${action.tone === "teacher" ? "border-blue-700" : "border-blue-200"}`}>
-                    <div className={`text-sm font-medium ${action.tone === "teacher" ? "text-blue-900" : "text-gray-900"}`}>{action.label}</div>
+                  <div key={`${action.label}-${action.date}-${index}`} className={`border-l-2 pl-3 ${action.tone === "teacher" ? "border-green-600" : "border-blue-200"}`}>
+                    <div className={`text-sm font-medium ${action.tone === "teacher" ? "text-green-800" : "text-gray-900"}`}>{action.label}</div>
                     {action.detail && <div className="text-xs text-gray-600">{action.detail}</div>}
                     <div className="mt-1 text-xs text-gray-500">{new Date(action.date).toLocaleString()}</div>
                   </div>
@@ -726,9 +752,8 @@ export function BillDetail() {
       {trackerOverrideDraft && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-            <div className="border-b border-gray-200 px-5 py-4">
+            <div className="px-5 pt-4">
               <h2 className="text-lg font-semibold text-gray-900">Confirm teacher override</h2>
-              <p className="mt-1 text-sm text-gray-600">{overrideMessage(trackerOverrideDraft.step.label)}</p>
             </div>
             <div className="space-y-4 px-5 py-4">
               {["Referred", "Marked up"].includes(trackerOverrideDraft.step.label) && (
@@ -745,7 +770,11 @@ export function BillDetail() {
                       </option>
                     ))}
                   </select>
+                  <span className="mt-2 block text-sm text-gray-600">{overrideMessage(trackerOverrideDraft.step.label)}</span>
                 </label>
+              )}
+              {!["Referred", "Marked up"].includes(trackerOverrideDraft.step.label) && (
+                <p className="text-sm text-gray-600">{overrideMessage(trackerOverrideDraft.step.label)}</p>
               )}
               {trackerOverrideDraft.step.label === "Calendared" && (
                 <label className="block">
