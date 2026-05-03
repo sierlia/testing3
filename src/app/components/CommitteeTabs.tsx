@@ -47,25 +47,25 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
         supabase.from("bill_referrals").select("bill_id").eq("committee_id", committeeId),
       ]);
       const billIds = (refs ?? []).map((row: any) => row.bill_id);
-      const { data: voteRows } = billIds.length
+      const { data: statusRows } = billIds.length
         ? await supabase
             .from("bill_display")
-            .select("id")
+            .select("id,status")
             .in("id", billIds)
-            .eq("status", "committee_vote")
         : ({ data: [] } as any);
       const dashboardIds = (announcements ?? []).map((row: any) => row.id);
-      const voteIds = (voteRows ?? []).map((row: any) => row.id);
+      const reviewIds = (statusRows ?? []).filter((row: any) => row.status === "in_committee").map((row: any) => row.id);
+      const voteIds = (statusRows ?? []).filter((row: any) => row.status === "committee_vote").map((row: any) => row.id);
       if (!cancelled) {
         setCountData({
           counts: {
             dashboard: dashboardIds.length,
-            review: billIds.length,
+            review: reviewIds.length,
             vote: voteIds.length,
           },
           ids: {
             dashboard: dashboardIds,
-            review: billIds,
+            review: reviewIds,
             vote: voteIds,
           },
         });

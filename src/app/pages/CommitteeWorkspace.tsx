@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
-import { CheckCircle2, FileText, Pencil, Save, Vote } from "lucide-react";
+import { ChevronLeft, ChevronRight, FileText, Pencil, Sparkles, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -41,11 +41,8 @@ export function CommitteeWorkspace() {
   const [bills, setBills] = useState<Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string }>>([]);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [seenBillIds, setSeenBillIds] = useState<Set<string>>(() => new Set());
-  const [textView, setTextView] = useState<"edited" | "original">("edited");
-  const [reportDraft, setReportDraft] = useState("");
-  const [reportLoading, setReportLoading] = useState(false);
-  const [reportSaving, setReportSaving] = useState(false);
-  const [reportSaved, setReportSaved] = useState(false);
+  const [textView, setTextView] = useState<"edited" | "clean" | "original">("edited");
+  const [billListOpen, setBillListOpen] = useState(true);
   const [proposing, setProposing] = useState(false);
   const [activeEditors, setActiveEditors] = useState<
     Array<{ id: string; name: string; color: string; avatar_url: string | null }>
@@ -120,7 +117,7 @@ export function CommitteeWorkspace() {
           sponsor: sponsorMap.get(b.author_user_id) ?? "Member",
           legislativeHtml: b.legislative_text,
           status: b.status,
-        }));
+        })).filter((bill) => bill.status === "in_committee");
         setBills(mapped);
         const nextSelectedBillId = selectedBillId && mapped.some((bill) => bill.id === selectedBillId) ? selectedBillId : mapped[0]?.id ?? null;
         setSelectedBillId(nextSelectedBillId);
@@ -154,44 +151,18 @@ export function CommitteeWorkspace() {
     setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
   };
 
-  useEffect(() => {
-    if (!selectedBillId || !classId) {
-      setReportDraft("");
-      return;
-    }
-
-    let cancelled = false;
-    const loadReport = async () => {
-      setReportLoading(true);
-      setReportSaved(false);
-      try {
-        const { data, error } = await supabase
-          .from("committee_bill_docs")
-          .select("committee_report")
-          .eq("committee_id", committeeId)
-          .eq("bill_id", selectedBillId)
-          .maybeSingle();
-        if (error) throw error;
-        if (!cancelled) setReportDraft((data as any)?.committee_report ?? "");
-      } catch (e: any) {
-        if (!cancelled) toast.error(e.message || "Could not load committee report");
-      } finally {
-        if (!cancelled) setReportLoading(false);
-      }
-    };
-
-    void loadReport();
-    return () => {
-      cancelled = true;
-    };
-  }, [classId, committeeId, selectedBillId]);
-
   const proposeSelectedBillForVote = async () => {
     if (!selected) return;
     setProposing(true);
     try {
       await proposeBillForCommitteeVote(selected.id);
-      setBills((prev) => prev.map((bill) => (bill.id === selected.id ? { ...bill, status: "committee_vote" } : bill)));
+      setBills((prev) => {
+        const next = prev.filter((bill) => bill.id !== selected.id);
+        setSelectedBillId(next[0]?.id ?? null);
+        const cached = workspaceCache.get(committeeId);
+        if (cached) workspaceCache.set(committeeId, { ...cached, bills: next, selectedBillId: next[0]?.id ?? null });
+        return next;
+      });
       toast.success("Bill proposed for committee vote");
     } catch (e: any) {
       toast.error(e.message || "Could not propose bill for vote");
@@ -315,8 +286,6 @@ export function CommitteeWorkspace() {
     };
   }, [classId, committeeId, selectedBillId]);
 
-  const canProposeBill = myCommitteeRole === "chair" || myCommitteeRole === "co_chair" || myCommitteeRole === "ranking_member";
-
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -336,10 +305,16 @@ export function CommitteeWorkspace() {
             No bills have been referred to this committee yet.
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className={`grid grid-cols-1 gap-6 ${billListOpen ? "lg:grid-cols-3" : "lg:grid-cols-[auto_1fr]"}`}>
+            {billListOpen ? (
             <div className="lg:col-span-1 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="p-4 border-b border-gray-200">
-                <div className="text-sm font-semibold text-gray-900">Referred Bills</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-gray-900">Referred Bills</div>
+                  <button type="button" onClick={() => setBillListOpen(false)} className="rounded p-1 text-gray-500 hover:bg-gray-100">
+                    <ChevronLeft className="h-4 w-4" />
+                  </button>
+                </div>
                 <div className="text-xs text-gray-500">{bills.length} total</div>
               </div>
               <div className="max-h-[70vh] overflow-y-auto">
@@ -364,8 +339,18 @@ export function CommitteeWorkspace() {
                 ))}
               </div>
             </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setBillListOpen(true)}
+                className="h-fit rounded-lg border border-gray-200 bg-white p-3 text-gray-600 shadow-sm hover:bg-gray-50"
+                aria-label="Open referred bills"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            )}
 
-            <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className={`${billListOpen ? "lg:col-span-2" : ""} bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden`}>
               {selected && classId ? (
                 <>
                   <div className="p-5 border-b border-gray-200">
@@ -375,7 +360,7 @@ export function CommitteeWorkspace() {
                         <div className="text-xl font-bold text-gray-900 mt-1">{selected.title}</div>
                         <div className="text-sm text-gray-600 mt-1">Sponsor: {selected.sponsor}</div>
                       </div>
-                      <div className="flex items-center gap-3">
+                      <div className="sticky top-0 z-20 flex items-center gap-3 rounded-md bg-white/95 p-1 backdrop-blur">
                         {activeEditors.length > 0 && (
                           <div className="flex items-center gap-1.5 justify-end">
                             {activeEditors.map((u) => (
@@ -413,6 +398,16 @@ export function CommitteeWorkspace() {
                           </button>
                           <button
                             type="button"
+                            onClick={() => setTextView("clean")}
+                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+                              textView === "clean" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            Clean
+                          </button>
+                          <button
+                            type="button"
                             onClick={() => setTextView("original")}
                             className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
                               textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
@@ -422,7 +417,6 @@ export function CommitteeWorkspace() {
                             Original Text
                           </button>
                         </div>
-                        {canProposeBill && (
                           <button
                             type="button"
                             onClick={() => void proposeSelectedBillForVote()}
@@ -432,13 +426,12 @@ export function CommitteeWorkspace() {
                             <Vote className="w-4 h-4" />
                             {selected.status === "committee_vote" ? "Proposed" : proposing ? "Proposing" : "Propose Vote"}
                           </button>
-                        )}
                       </div>
                     </div>
                   </div>
                   <div className="p-5 space-y-6">
                     <div>
-                      <div className={textView === "edited" ? "block" : "hidden"} aria-hidden={textView !== "edited"}>
+                      {textView === "edited" && (
                         <CollaborativeBillEditor
                           classId={classId}
                           committeeId={committeeId}
@@ -446,53 +439,28 @@ export function CommitteeWorkspace() {
                           initialHtml={selected.legislativeHtml}
                           editable
                         />
-                      </div>
-                      <div className={textView === "original" ? "block" : "hidden"} aria-hidden={textView !== "original"}>
+                      )}
+                      {textView === "clean" && (
+                        <CollaborativeBillEditor
+                          classId={classId}
+                          committeeId={committeeId}
+                          billId={selected.id}
+                          initialHtml={selected.legislativeHtml}
+                          editable={false}
+                          displayMode="clean"
+                        />
+                      )}
+                      {textView === "original" && (
                         <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
                           <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
                         </div>
-                      </div>
+                      )}
                       <div className="text-xs text-gray-500 mt-3">
                         {textView === "edited"
                           ? "Changes sync live to other committee members and are persisted in Supabase."
-                          : "Original bill text is read-only."}
-                      </div>
-                    </div>
-
-                    <div className="border-t border-gray-200 pt-5">
-                      <div className="flex items-center justify-between gap-3 mb-3">
-                        <div>
-                          <h3 className="text-lg font-semibold text-gray-900">Committee Report</h3>
-                          <p className="text-sm text-gray-600">Draft the committee's recommendation, findings, or notes for this bill.</p>
-                        </div>
-                        {reportSaved && (
-                          <div className="inline-flex items-center gap-1.5 text-sm text-green-700">
-                            <CheckCircle2 className="w-4 h-4" />
-                            Saved
-                          </div>
-                        )}
-                      </div>
-                      <textarea
-                        value={reportDraft}
-                        onChange={(e) => {
-                          setReportDraft(e.target.value);
-                          setReportSaved(false);
-                        }}
-                        disabled={reportLoading}
-                        rows={7}
-                        placeholder="Write the committee report..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none resize-y disabled:bg-gray-50 disabled:text-gray-500"
-                      />
-                      <div className="flex justify-end mt-3">
-                        <button
-                          type="button"
-                          onClick={() => void saveReport()}
-                          disabled={reportSaving || reportLoading}
-                          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium disabled:opacity-60"
-                        >
-                          <Save className="w-4 h-4" />
-                          {reportSaving ? "Saving" : "Save Report"}
-                        </button>
+                          : textView === "clean"
+                            ? "Clean text shows accepted edits without highlights or struck text."
+                            : "Original bill text is read-only."}
                       </div>
                     </div>
                   </div>

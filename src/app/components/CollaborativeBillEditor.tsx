@@ -255,10 +255,12 @@ function createEditAttributionExtension({
   getAuthor,
   shouldSuppress,
   getDeleteDirection,
+  trackDeletes,
 }: {
   getAuthor: () => { id: string; name: string; color: string };
   shouldSuppress: () => boolean;
   getDeleteDirection: () => "backward" | "forward" | null;
+  trackDeletes: boolean;
 }) {
   return Extension.create({
     name: "editAttribution",
@@ -270,7 +272,7 @@ function createEditAttributionExtension({
         new Plugin({
           key: editAttributionPluginKey,
           filterTransaction: (transaction, state) => {
-            if (!editor.isEditable || shouldSuppress()) return true;
+            if (!editor.isEditable || shouldSuppress() || !trackDeletes) return true;
             if (!transaction.docChanged || transaction.getMeta(editAttributionPluginKey) || transaction.getMeta("restoreDeleteHighlight")) return true;
 
             let touchesDeletedText = false;
@@ -314,7 +316,7 @@ function createEditAttributionExtension({
                       to: laterMaps.map(newEnd, -1),
                     });
                   }
-                  if (oldEnd > oldStart) {
+                  if (trackDeletes && oldEnd > oldStart) {
                     if (hasDeletedContent(transaction.before, oldStart, oldEnd)) {
                       deletions.push({
                         at: laterMaps.map(newStart, 1),
@@ -431,12 +433,20 @@ export function CollaborativeBillEditor({
   billId,
   initialHtml,
   editable = true,
+  documentId,
+  storageColumn,
+  trackDeletes = true,
+  displayMode = "tracked",
 }: {
   classId: string;
   committeeId: string;
   billId: string;
   initialHtml: string;
   editable?: boolean;
+  documentId?: string;
+  storageColumn?: string;
+  trackDeletes?: boolean;
+  displayMode?: "tracked" | "clean";
 }) {
   const [ready, setReady] = useState(false);
   const [localUser, setLocalUser] = useState<{ id: string; name: string; color: string }>({ id: "", name: "Member", color: "#2563eb" });
@@ -498,7 +508,7 @@ export function CollaborativeBillEditor({
         {
           doc: ydoc,
           awareness,
-          key: { classId, committeeId, billId },
+          key: { classId, committeeId, billId, documentId, storageColumn },
           user: { id: uid, name: normalizedName, color },
         },
         () => {
@@ -523,7 +533,7 @@ export function CollaborativeBillEditor({
       ydocRef.current?.destroy();
       ydocRef.current = null;
     };
-  }, [billId, classId, committeeId]);
+  }, [billId, classId, committeeId, documentId, storageColumn]);
 
   useEffect(() => {
     if (!ready || !ydocRef.current || !awarenessRef.current) return;
@@ -544,6 +554,7 @@ export function CollaborativeBillEditor({
             getAuthor: () => localUser,
             shouldSuppress: () => suppressAttributionRef.current,
             getDeleteDirection: () => deleteDirectionRef.current,
+            trackDeletes,
           }),
           Collaboration.configure({ document: ydocRef.current }),
           CollaborationCursor.configure({
@@ -591,6 +602,7 @@ export function CollaborativeBillEditor({
               getAuthor: () => localUser,
               shouldSuppress: () => suppressAttributionRef.current,
               getDeleteDirection: () => deleteDirectionRef.current,
+              trackDeletes,
             }),
           ],
           editorProps: {
@@ -621,7 +633,7 @@ export function CollaborativeBillEditor({
         setCollabStatus("fallback");
       }
     }
-  }, [ready, editable, localUser.id, localUser.name, localUser.color, initialHtml]);
+  }, [ready, editable, localUser.id, localUser.name, localUser.color, initialHtml, trackDeletes]);
 
   useEffect(() => {
     if (!editor) return;
@@ -702,7 +714,7 @@ export function CollaborativeBillEditor({
   }
 
   return (
-    <div onClick={showRestoreMenu} onContextMenu={showRestoreMenu}>
+    <div className={displayMode === "clean" ? "committee-clean-view" : ""} onClick={showRestoreMenu} onContextMenu={showRestoreMenu}>
       {collabStatus !== "live" && (
         <div className="mb-2 text-xs px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-800">
           {collabStatus === "connecting" ? "Connecting collaboration..." : "Collaboration offline (local edits only)"}

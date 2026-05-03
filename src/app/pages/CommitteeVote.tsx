@@ -1,12 +1,12 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router";
-import { CheckCircle2, FileText, Save } from "lucide-react";
+import { CheckCircle2, FileText, Pencil, Save, Sparkles, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { CommitteeTabs, markCommitteeSeenIds } from "../components/CommitteeTabs";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
-import { reportBillFromCommittee } from "../services/bills";
+import { closeCommitteeVote, submitCommitteeReport } from "../services/bills";
 
 type BillRow = {
   id: string;
@@ -52,7 +52,9 @@ export function CommitteeVote() {
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [votes, setVotes] = useState<Array<{ user_id: string; vote: VoteChoice; voterName: string }>>([]);
   const [voting, setVoting] = useState(false);
-  const [reporting, setReporting] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [submittingReport, setSubmittingReport] = useState(false);
+  const [textView, setTextView] = useState<"edited" | "clean" | "original">("edited");
 
   useEffect(() => {
     const load = async () => {
@@ -208,21 +210,37 @@ export function CommitteeVote() {
     }
   };
 
-  const reportSelectedBill = async () => {
+  const submitReport = async () => {
     if (!selected) return;
-    setReporting(true);
+    setSubmittingReport(true);
     try {
-      await reportBillFromCommittee(selected.id);
+      await submitCommitteeReport(selected.id, committeeId);
+      toast.success("Committee report submitted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not submit report");
+    } finally {
+      setSubmittingReport(false);
+    }
+  };
+
+  const closeSelectedVote = async () => {
+    if (!selected) return;
+    const approved = voteCounts.yea > voteCounts.nay;
+    setClosing(true);
+    try {
+      await closeCommitteeVote(selected.id, approved);
       setBills((prev) => {
         const next = prev.filter((bill) => bill.id !== selected.id);
         setSelectedBillId(next[0]?.id ?? null);
+        const cached = votePageCache.get(committeeId);
+        if (cached) votePageCache.set(committeeId, { ...cached, bills: next, selectedBillId: next[0]?.id ?? null });
         return next;
       });
-      toast.success("Bill reported from committee");
+      toast.success(approved ? "Vote closed; bill calendared" : "Vote closed; bill rejected");
     } catch (e: any) {
-      toast.error(e.message || "Could not report bill");
+      toast.error(e.message || "Could not close vote");
     } finally {
-      setReporting(false);
+      setClosing(false);
     }
   };
 
@@ -231,7 +249,6 @@ export function CommitteeVote() {
     { yea: 0, nay: 0, present: 0 } as Record<VoteChoice, number>,
   );
   const myVote = meId ? votes.find((vote) => vote.user_id === meId)?.vote ?? null : null;
-  const canReportBill = myCommitteeRole === "chair" || myCommitteeRole === "co_chair" || myCommitteeRole === "ranking_member";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -289,17 +306,26 @@ export function CommitteeVote() {
                         <div className="mt-1 text-xl font-bold text-gray-900">{selected.title}</div>
                         <div className="mt-1 text-sm text-gray-600">Sponsor: {selected.sponsor}</div>
                       </div>
-                      {canReportBill && (
+                      <div className="flex flex-wrap items-center gap-2">
                         <button
                           type="button"
-                          onClick={() => void reportSelectedBill()}
-                          disabled={reporting}
-                          className="inline-flex items-center gap-2 rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
+                          onClick={() => void submitReport()}
+                          disabled={submittingReport}
+                          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                         >
                           <Save className="h-4 w-4" />
-                          {reporting ? "Reporting" : "Report bill"}
+                          {submittingReport ? "Submitting" : "Submit report"}
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => void closeSelectedVote()}
+                          disabled={closing}
+                          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          {closing ? "Closing" : "Close vote"}
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -343,16 +369,68 @@ export function CommitteeVote() {
                     </div>
 
                     <div>
-                      <div className="mb-3 flex items-center gap-1.5 text-sm font-medium text-gray-900">
-                        <CheckCircle2 className="h-4 w-4 text-blue-600" />
-                        Edited Bill Text
+                      <div className="sticky top-0 z-20 mb-3 flex flex-wrap items-center justify-between gap-3 bg-white/95 py-2 backdrop-blur">
+                        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                          <CheckCircle2 className="h-4 w-4 text-blue-600" />
+                          Bill Text
+                        </div>
+                        <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
+                          <button
+                            type="button"
+                            onClick={() => setTextView("edited")}
+                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
+                              textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <Pencil className="w-4 h-4" />
+                            Edited
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTextView("clean")}
+                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+                              textView === "clean" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            Clean
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTextView("original")}
+                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
+                              textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                            }`}
+                          >
+                            <FileText className="w-4 h-4" />
+                            Original
+                          </button>
+                        </div>
                       </div>
+                      {textView === "edited" && (
+                        <CollaborativeBillEditor classId={classId} committeeId={committeeId} billId={selected.id} initialHtml={selected.legislativeHtml} editable={false} />
+                      )}
+                      {textView === "clean" && (
+                        <CollaborativeBillEditor classId={classId} committeeId={committeeId} billId={selected.id} initialHtml={selected.legislativeHtml} editable={false} displayMode="clean" />
+                      )}
+                      {textView === "original" && (
+                        <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
+                          <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="border-t border-gray-200 pt-5">
+                      <h3 className="mb-3 text-lg font-semibold text-gray-900">Committee Report</h3>
                       <CollaborativeBillEditor
                         classId={classId}
                         committeeId={committeeId}
                         billId={selected.id}
-                        initialHtml={selected.legislativeHtml}
-                        editable={false}
+                        documentId={`${selected.id}:report`}
+                        storageColumn="committee_report_ydoc_base64"
+                        initialHtml="<p></p>"
+                        editable
+                        trackDeletes={false}
                       />
                     </div>
                   </div>

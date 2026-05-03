@@ -21,7 +21,7 @@ function fromBase64(b64: string) {
   return u8;
 }
 
-type DocKey = { committeeId: string; billId: string; classId: string };
+type DocKey = { committeeId: string; billId: string; classId: string; documentId?: string; storageColumn?: string };
 
 export class YjsSupabaseProvider {
   doc: Y.Doc;
@@ -46,7 +46,8 @@ export class YjsSupabaseProvider {
     this.key = key;
     this.onSynced = onSynced;
 
-    this.channel = supabase.channel(`doc:${key.committeeId}:${key.billId}`, { config: { broadcast: { ack: true } } });
+    const documentId = key.documentId ?? key.billId;
+    this.channel = supabase.channel(`doc:${key.committeeId}:${documentId}`, { config: { broadcast: { ack: true } } });
 
     this.awareness.setLocalStateField("user", { id: user.id, name: user.name, color: user.color });
 
@@ -161,7 +162,7 @@ export class YjsSupabaseProvider {
     const { committeeId, billId } = this.key;
     const { data, error } = await supabase
       .from("committee_bill_docs")
-      .select("ydoc_base64,updated_at")
+      .select(`${this.storageColumn()},updated_at`)
       .eq("committee_id", committeeId)
       .eq("bill_id", billId)
       .maybeSingle();
@@ -170,7 +171,7 @@ export class YjsSupabaseProvider {
       console.warn("committee bill doc hydrate failed", error);
       return false;
     }
-    const b64 = (data as any)?.ydoc_base64 as string | undefined;
+    const b64 = (data as any)?.[this.storageColumn()] as string | undefined;
     this.lastSeenUpdatedAt = ((data as any)?.updated_at as string | undefined) ?? null;
     if (b64) {
       this.lastPersistedB64 = b64;
@@ -193,7 +194,7 @@ export class YjsSupabaseProvider {
     const { committeeId, billId } = this.key;
     const { data, error } = await supabase
       .from("committee_bill_docs")
-      .select("ydoc_base64,updated_at")
+      .select(`${this.storageColumn()},updated_at`)
       .eq("committee_id", committeeId)
       .eq("bill_id", billId)
       .maybeSingle();
@@ -203,7 +204,7 @@ export class YjsSupabaseProvider {
       return;
     }
     const updatedAt = ((data as any)?.updated_at as string | undefined) ?? null;
-    const b64 = (data as any)?.ydoc_base64 as string | undefined;
+    const b64 = (data as any)?.[this.storageColumn()] as string | undefined;
     if (!b64 || !updatedAt || updatedAt === this.lastSeenUpdatedAt || b64 === this.lastPersistedB64) return;
     this.lastSeenUpdatedAt = updatedAt;
     this.lastPersistedB64 = b64;
@@ -222,7 +223,7 @@ export class YjsSupabaseProvider {
 
     const { data: existing, error: readError } = await supabase
       .from("committee_bill_docs")
-      .select("ydoc_base64,updated_at")
+      .select(`${this.storageColumn()},updated_at`)
       .eq("committee_id", committeeId)
       .eq("bill_id", billId)
       .maybeSingle();
@@ -231,7 +232,7 @@ export class YjsSupabaseProvider {
       console.warn("committee bill doc pre-persist merge failed", readError);
       return;
     }
-    const existingB64 = (existing as any)?.ydoc_base64 as string | undefined;
+    const existingB64 = (existing as any)?.[this.storageColumn()] as string | undefined;
     if (existingB64 && existingB64 !== b64) {
       const update = fromBase64(existingB64);
       if (update.length) {
@@ -242,7 +243,7 @@ export class YjsSupabaseProvider {
 
     const { data, error } = await supabase
       .from("committee_bill_docs")
-      .upsert({ committee_id: committeeId, bill_id: billId, class_id: classId, ydoc_base64: b64 } as any, {
+      .upsert({ committee_id: committeeId, bill_id: billId, class_id: classId, [this.storageColumn()]: b64 } as any, {
         onConflict: "bill_id,committee_id",
       })
       .select("updated_at")
@@ -254,6 +255,10 @@ export class YjsSupabaseProvider {
     }
     this.lastPersistedB64 = b64;
     this.lastSeenUpdatedAt = ((data as any)?.updated_at as string | undefined) ?? this.lastSeenUpdatedAt;
+  }
+
+  private storageColumn() {
+    return this.key.storageColumn ?? "ydoc_base64";
   }
 
   destroy() {

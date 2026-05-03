@@ -318,3 +318,27 @@ export async function proposeBillForCommitteeVote(billId: string) {
   const { error } = await supabase.from('bills').update({ status: 'committee_vote' } as any).eq('id', billId).eq('class_id', classId);
   if (error) throw error;
 }
+
+export async function closeCommitteeVote(billId: string, approved: boolean) {
+  const { classId } = await getCurrentProfileClass();
+  const { error } = await supabase
+    .from('bills')
+    .update({ status: approved ? 'calendared' : 'failed' } as any)
+    .eq('id', billId)
+    .eq('class_id', classId);
+  if (error) throw error;
+}
+
+export async function submitCommitteeReport(billId: string, committeeId: string) {
+  const { classId } = await getCurrentProfileClass();
+  const { error } = await supabase.from('committee_bill_docs').upsert(
+    {
+      bill_id: billId,
+      committee_id: committeeId,
+      class_id: classId,
+      committee_report_submitted_at: new Date().toISOString(),
+    } as any,
+    { onConflict: 'bill_id,committee_id' },
+  );
+  if (error) throw error;
+}

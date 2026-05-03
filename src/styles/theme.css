@@ -92,6 +92,22 @@
   border-radius: 3px;
 }
 
+.committee-clean-view .committee-edit-highlight {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.committee-clean-view .committee-delete-highlight {
+  display: none;
+}
+
+.committee-clean-view .committee-edit-highlight:hover::before,
+.committee-clean-view .committee-edit-highlight:hover::after,
+.committee-clean-view .committee-delete-highlight:hover::before,
+.committee-clean-view .committee-delete-highlight:hover::after {
+  display: none;
+}
+
 .committee-edit-highlight:hover::after,
 .committee-delete-highlight:hover::after {
   content: attr(data-edit-author);
