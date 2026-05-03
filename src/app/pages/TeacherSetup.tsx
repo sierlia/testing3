@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { useParams } from "react-router";
 import { Bell, Calendar, CheckSquare, FileText, Save, Scale, Settings, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { supabase } from "../utils/supabase";
 import { defaultPartyColor } from "../components/PartyCreateForm";
 
@@ -30,6 +32,9 @@ const tabs: Array<{ id: TabId; label: string; icon: any }> = [
   { id: "notifications", label: "Notifications", icon: Bell },
 ];
 
+const setupTabIds: TabId[] = ["parties", "committees"];
+const settingsTabIds: TabId[] = ["bills", "floor", "leadership", "calendar", "profiles", "notifications"];
+
 function Toggle({ checked, onChange, title, description }: { checked: boolean; onChange: (next: boolean) => void; title: string; description: string }) {
   return (
     <label className="flex cursor-pointer items-start gap-3 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
@@ -42,9 +47,10 @@ function Toggle({ checked, onChange, title, description }: { checked: boolean; o
   );
 }
 
-export function TeacherSetup() {
+function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
+  const params = useParams();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabId>("parties");
+  const [activeTab, setActiveTab] = useState<TabId>(mode === "setup" ? "parties" : "bills");
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
   const [hasChanges, setHasChanges] = useState(false);
   const [settings, setSettingsState] = useState({
@@ -87,7 +93,7 @@ export function TeacherSetup() {
         const uid = auth.user?.id;
         if (!uid) return;
         const { data: prof } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
-        const classId = (prof as any)?.class_id ?? null;
+        const classId = params.classId ?? (prof as any)?.class_id ?? null;
         setActiveClassId(classId);
         if (!classId) return;
         const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
@@ -126,7 +132,7 @@ export function TeacherSetup() {
       }
     };
     void load();
-  }, []);
+  }, [params.classId]);
 
   const syncPartiesAndCommittees = async (classId: string) => {
     if (settings.allowedParties.length) {
@@ -149,55 +155,69 @@ export function TeacherSetup() {
       const existing = ((cls as any)?.settings ?? {}) as any;
       const nextSettings = {
         ...existing,
-        parties: {
-          ...(existing?.parties ?? {}),
-          allowed: settings.allowedParties,
-          allowStudentCreated: settings.allowStudentCreatedParties,
-          requireApproval: settings.requirePartyApproval,
-          autoApprove: settings.autoApproveParties,
-          leadershipElectionMode: settings.partyLeadershipElectionMode,
-        },
-        committees: {
-          ...(existing?.committees ?? {}),
-          enabled: settings.enabledCommittees,
-          assignmentMode: settings.allowSelfJoinCommittees ? "self-join" : settings.committeeAssignmentMode,
-          chairElectionMode: settings.chairElectionMode,
-          chairVoteThresholdPct: settings.chairVoteThresholdPct,
-          allowSelfJoin: settings.allowSelfJoinCommittees,
-        },
-        bills: {
-          ...(existing?.bills ?? {}),
-          assignmentAuthority: settings.billAssignmentAuthority,
-          allowDrafts: settings.allowDrafts,
-          tabs: settings.billTabs,
-          committeeVoteRequired: settings.committeeVoteRequired,
-          cosponsorAfterCommitteeReport: settings.cosponsorAfterCommitteeReport,
-        },
-        floor: {
-          ...(existing?.floor ?? {}),
-          binding: settings.floorResultsBinding,
-          voteThreshold: settings.floorVoteThreshold,
-          showVoteResultsLive: settings.showVoteResultsLive,
-          calendarAutoPublish: settings.calendarAutoPublish,
-        },
-        profiles: {
-          ...(existing?.profiles ?? {}),
-          districtRequired: settings.profileDistrictRequired,
-          partyRequired: settings.profilePartyRequired,
-        },
-        notifications: {
-          ...(existing?.notifications ?? {}),
-          announcements: settings.notifyOnAnnouncements,
-          calendaredBills: settings.notifyOnCalendaredBills,
-        },
-        students: {
-          ...(existing?.students ?? {}),
-          requireJoinApproval: settings.requireJoinApproval,
-        },
+        ...(mode === "setup"
+          ? {
+              parties: {
+                ...(existing?.parties ?? {}),
+                allowed: settings.allowedParties,
+                allowStudentCreated: settings.allowStudentCreatedParties,
+                requireApproval: settings.requirePartyApproval,
+                autoApprove: settings.autoApproveParties,
+                leadershipElectionMode: settings.partyLeadershipElectionMode,
+              },
+              committees: {
+                ...(existing?.committees ?? {}),
+                enabled: settings.enabledCommittees,
+                assignmentMode: settings.allowSelfJoinCommittees ? "self-join" : settings.committeeAssignmentMode,
+                chairElectionMode: settings.chairElectionMode,
+                chairVoteThresholdPct: settings.chairVoteThresholdPct,
+                allowSelfJoin: settings.allowSelfJoinCommittees,
+              },
+            }
+          : {
+              parties: {
+                ...(existing?.parties ?? {}),
+                leadershipElectionMode: settings.partyLeadershipElectionMode,
+              },
+              committees: {
+                ...(existing?.committees ?? {}),
+                chairElectionMode: settings.chairElectionMode,
+                chairVoteThresholdPct: settings.chairVoteThresholdPct,
+              },
+              bills: {
+                ...(existing?.bills ?? {}),
+                assignmentAuthority: settings.billAssignmentAuthority,
+                allowDrafts: settings.allowDrafts,
+                tabs: settings.billTabs,
+                committeeVoteRequired: settings.committeeVoteRequired,
+                cosponsorAfterCommitteeReport: settings.cosponsorAfterCommitteeReport,
+              },
+              floor: {
+                ...(existing?.floor ?? {}),
+                binding: settings.floorResultsBinding,
+                voteThreshold: settings.floorVoteThreshold,
+                showVoteResultsLive: settings.showVoteResultsLive,
+                calendarAutoPublish: settings.calendarAutoPublish,
+              },
+              profiles: {
+                ...(existing?.profiles ?? {}),
+                districtRequired: settings.profileDistrictRequired,
+                partyRequired: settings.profilePartyRequired,
+              },
+              notifications: {
+                ...(existing?.notifications ?? {}),
+                announcements: settings.notifyOnAnnouncements,
+                calendaredBills: settings.notifyOnCalendaredBills,
+              },
+              students: {
+                ...(existing?.students ?? {}),
+                requireJoinApproval: settings.requireJoinApproval,
+              },
+            }),
       };
       const { error } = await supabase.from("classes").update({ settings: nextSettings }).eq("id", activeClassId);
       if (error) throw error;
-      await syncPartiesAndCommittees(activeClassId);
+      if (mode === "setup") await syncPartiesAndCommittees(activeClassId);
       toast.success("Settings saved");
       setHasChanges(false);
     } catch (e: any) {
@@ -340,22 +360,29 @@ export function TeacherSetup() {
     );
   };
 
+  const visibleTabs = tabs.filter((tab) => (mode === "setup" ? setupTabIds.includes(tab.id) : settingsTabIds.includes(tab.id)));
+  const heading = mode === "setup" ? "Set Up Class" : "Simulation Settings";
+  const description = mode === "setup" ? "Choose the default parties and committees for this class." : "Configure class-wide simulation rules and defaults.";
+
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <Navigation />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-2">
             <Settings className="h-7 w-7 text-blue-600" />
-            <h1 className="text-3xl font-bold text-gray-900">Simulation Settings</h1>
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900">{heading}</h1>
+              <p className="mt-1 text-gray-600">{description}</p>
+            </div>
           </div>
-          <p className="mt-1 text-gray-600">Configure class-wide simulation rules and defaults.</p>
+          {mode === "settings" && <TeacherClassTabs classId={activeClassId} active="settings" />}
         </div>
         {loading ? <div className="mb-4 text-sm text-gray-600">Loading settings...</div> : null}
 
         <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
           <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
-            {tabs.map(({ id, label, icon: Icon }) => (
+            {visibleTabs.map(({ id, label, icon: Icon }) => (
               <button key={id} onClick={() => setActiveTab(id)} className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${activeTab === id ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"}`}>
                 <Icon className="h-4 w-4" />
                 {label}
@@ -364,7 +391,7 @@ export function TeacherSetup() {
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <h2 className="mb-5 text-xl font-semibold text-gray-900">{tabs.find((tab) => tab.id === activeTab)?.label}</h2>
+            <h2 className="mb-5 text-xl font-semibold text-gray-900">{visibleTabs.find((tab) => tab.id === activeTab)?.label}</h2>
             {section()}
           </div>
         </div>
@@ -380,4 +407,12 @@ export function TeacherSetup() {
       </div>
     </div>
   );
+}
+
+export function TeacherSetup() {
+  return <TeacherSettingsPage mode="setup" />;
+}
+
+export function SimulationSettings() {
+  return <TeacherSettingsPage mode="settings" />;
 }

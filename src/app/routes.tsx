@@ -17,7 +17,7 @@ import { TessBills } from "./pages/TessBills";
 import { MyBills } from "./pages/MyBills";
 import { BillDetail } from "./pages/BillDetail";
 import { BillPipeline } from "./pages/BillPipeline";
-import { TeacherSetup } from "./pages/TeacherSetup";
+import { SimulationSettings, TeacherSetup } from "./pages/TeacherSetup";
 import { TeacherAdmin } from "./pages/TeacherAdmin";
 import { Elections } from "./pages/Elections";
 import { Caucuses } from "./pages/Caucuses";
@@ -179,6 +179,14 @@ export const router = createHashRouter([
   {
     path: "/teacher/setup",
     Component: TeacherSetup,
+  },
+  {
+    path: "/teacher/class/:classId/settings",
+    Component: SimulationSettings,
+  },
+  {
+    path: "/teacher/simulation-settings",
+    Component: SimulationSettings,
   },
   {
     path: "/teacher/admin",

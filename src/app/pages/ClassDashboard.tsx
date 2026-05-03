@@ -23,6 +23,7 @@ import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { Navigation } from "../components/Navigation";
+import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
 import { supabase } from "../utils/supabase";
 
@@ -34,10 +35,10 @@ interface CalendarEvent {
 }
 
 const workflowSteps = [
-  { id: "setup", label: "Setup / Enable class", description: "Configure settings, then open the join code when the class is ready." },
-  { id: "open_elections", label: "Open elections", description: "Open Speaker, party, committee, and caucus leadership elections." },
-  { id: "conclude_elections", label: "Conclude elections", description: "Close leadership elections and move into legislative work." },
-  { id: "legislation", label: "Refer bills to committees, calendar bills", description: "Route bills through committee referral and floor scheduling." },
+  { id: "setup", label: "Set up class", description: "Choose default parties and committees before students begin." },
+  { id: "elections", label: "Hold elections", description: "Open and close Speaker and organization leadership elections." },
+  { id: "assign_committees", label: "Assign committees", description: "Place students onto committees from their preferences." },
+  { id: "legislation", label: "Refer and calendar bills", description: "Route bills through committee referral and floor scheduling." },
 ];
 
 export function ClassDashboard() {
@@ -176,7 +177,7 @@ export function ClassDashboard() {
   const enableClass = async () => {
     await updateClassSettings({
       class: { ...(classSettings.class ?? {}), joinEnabled: true },
-      workflow: { ...(classSettings.workflow ?? {}), stage: "open_elections" },
+      workflow: { ...(classSettings.workflow ?? {}), stage: "elections" },
     });
   };
 
@@ -198,8 +199,8 @@ export function ClassDashboard() {
     const next: any = {
       workflow: { ...(classSettings.workflow ?? {}), stage },
       ...(stage === "setup" ? { class: { ...(classSettings.class ?? {}), joinEnabled: false } } : {}),
-      ...(stage === "open_elections" ? { elections: { ...(classSettings.elections ?? {}), open: true, concluded: false } } : {}),
-      ...(stage === "conclude_elections" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: false } } : {}),
+      ...(stage === "elections" ? { elections: { ...(classSettings.elections ?? {}), open: true, concluded: false } } : {}),
+      ...(stage === "assign_committees" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: true } } : {}),
       ...(stage === "legislation" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: true } } : {}),
     };
     await updateClassSettings(next);
@@ -219,34 +220,53 @@ export function ClassDashboard() {
   const openElections = async () => {
     await updateClassSettings({
       elections: { ...(classSettings.elections ?? {}), open: true },
-      workflow: { ...(classSettings.workflow ?? {}), stage: "conclude_elections" },
+      workflow: { ...(classSettings.workflow ?? {}), stage: "elections" },
     });
   };
 
   const concludeElections = async () => {
+    const nextStage = classSettings?.committees?.allowSelfJoin || classSettings?.committees?.assignmentMode === "self-join" ? "legislation" : "assign_committees";
     await updateClassSettings({
       elections: { ...(classSettings.elections ?? {}), open: false, concluded: true },
-      workflow: { ...(classSettings.workflow ?? {}), stage: "legislation" },
+      workflow: { ...(classSettings.workflow ?? {}), stage: nextStage },
     });
   };
 
-  const workflowStep = classSettings?.workflow?.stage ?? "setup";
+  const workflowStepRaw = classSettings?.workflow?.stage ?? "setup";
+  const workflowStep = ["open_elections", "conclude_elections"].includes(workflowStepRaw) ? "elections" : workflowStepRaw;
   const classJoinEnabled = Boolean(classSettings?.class?.joinEnabled);
-  const currentIndex = Math.max(0, workflowSteps.findIndex((step) => step.id === workflowStep));
-  const currentWorkflowStep = workflowSteps[currentIndex] ?? workflowSteps[0];
-  const nextWorkflowStep = workflowSteps[currentIndex + 1] ?? null;
+  const committeeSelfJoin = classSettings?.committees?.allowSelfJoin || classSettings?.committees?.assignmentMode === "self-join";
+  const visibleWorkflowSteps = workflowSteps.filter((step) => step.id !== "assign_committees" || !committeeSelfJoin);
+  const foundWorkflowIndex = visibleWorkflowSteps.findIndex((step) => step.id === workflowStep);
+  const currentIndex = foundWorkflowIndex >= 0 ? foundWorkflowIndex : Math.max(0, visibleWorkflowSteps.findIndex((step) => step.id === "legislation"));
+  const currentWorkflowStep = visibleWorkflowSteps[currentIndex] ?? visibleWorkflowSteps[0];
+  const futureWorkflowSteps = visibleWorkflowSteps.slice(currentIndex + 1);
 
   const workflowAction = (stepId: string) => {
     if (stepId === "setup") {
       return (
         <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={() => navigate("/teacher/setup")} variant="outline"><Settings className="mr-2 h-4 w-4" />Open settings</Button>
+          <Button onClick={() => navigate("/teacher/setup")} variant="outline"><Settings className="mr-2 h-4 w-4" />Open setup</Button>
           <Button onClick={() => void enableClass()} disabled={workflowBusy}><Unlock className="mr-2 h-4 w-4" />Enable class</Button>
         </div>
       );
     }
-    if (stepId === "open_elections") return <Button className="mt-4" onClick={() => void openElections()} disabled={workflowBusy}><Vote className="mr-2 h-4 w-4" />Open elections</Button>;
-    if (stepId === "conclude_elections") return <Button className="mt-4" onClick={() => void concludeElections()} disabled={workflowBusy}><Vote className="mr-2 h-4 w-4" />Conclude elections</Button>;
+    if (stepId === "elections") {
+      return (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button onClick={() => void openElections()} disabled={workflowBusy}><Vote className="mr-2 h-4 w-4" />Open elections</Button>
+          <Button onClick={() => void concludeElections()} disabled={workflowBusy} variant="outline"><Vote className="mr-2 h-4 w-4" />Close elections</Button>
+        </div>
+      );
+    }
+    if (stepId === "assign_committees") {
+      return (
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button onClick={() => navigate("/teacher/committee-assignments")}><Users className="mr-2 h-4 w-4" />Assign committees</Button>
+          <Button onClick={() => confirmWorkflowStage("legislation", "advance")} variant="outline" disabled={workflowBusy}>Mark complete</Button>
+        </div>
+      );
+    }
     return (
       <div className="mt-4 space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
@@ -293,24 +313,24 @@ export function ClassDashboard() {
               <p className="mt-1 text-sm text-gray-600">{currentWorkflowStep.description}</p>
               {workflowAction(currentWorkflowStep.id)}
             </div>
-            {nextWorkflowStep && (
-              <>
+            {futureWorkflowSteps.map((step, index) => (
+              <div key={step.id} className="flex items-stretch">
                 <div className="mt-9 h-0 min-w-8 border-t-2 border-dashed border-gray-300" />
                 <button
                   type="button"
-                  onClick={() => confirmWorkflowStage(nextWorkflowStep.id, "advance")}
+                  onClick={() => confirmWorkflowStage(step.id, index === 0 ? "advance" : "skip")}
                   className="min-w-[260px] flex-1 rounded-lg border border-gray-200 bg-gray-50 p-5 text-left opacity-60 transition hover:opacity-100"
                 >
-                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">After that</div>
-                  <h3 className="mt-1 font-semibold text-gray-700">{nextWorkflowStep.label}</h3>
-                  <p className="mt-1 text-sm text-gray-500">{nextWorkflowStep.description}</p>
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{index === 0 ? "After that" : "Future"}</div>
+                  <h3 className="mt-1 font-semibold text-gray-700">{step.label}</h3>
+                  <p className="mt-1 text-sm text-gray-500">{step.description}</p>
                 </button>
-              </>
-            )}
+              </div>
+            ))}
           </div>
           {timelineExpanded && (
             <div className="mt-4 flex gap-0 overflow-x-auto">
-              {workflowSteps.map((step, index) => (
+              {visibleWorkflowSteps.map((step, index) => (
                 <div key={step.id} className="flex items-start">
                   {index > 0 && <div className="mt-6 h-0 w-8 border-t-2 border-dashed border-gray-300" />}
                   <button
@@ -329,7 +349,7 @@ export function ClassDashboard() {
         </CardContent>
       </Card>
     ),
-    [billStats, classJoinEnabled, currentIndex, currentWorkflowStep, nextWorkflowStep, timelineExpanded, workflowBusy, classSettings],
+    [billStats, classJoinEnabled, currentIndex, currentWorkflowStep, futureWorkflowSteps, timelineExpanded, workflowBusy, classSettings],
   );
 
   const actionSections = [
@@ -371,11 +391,7 @@ export function ClassDashboard() {
             )}
             <p className="mt-1 text-sm text-gray-600">{studentCount} students enrolled</p>
           </div>
-          <div className="flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
-            <Link to={`/teacher/class/${classId}`} className="rounded px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50">Dashboard</Link>
-            <Link to={`/teacher/class/${classId}/manage`} className="rounded px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Student roster</Link>
-            <Link to="/teacher/setup" className="rounded px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Settings</Link>
-          </div>
+          <TeacherClassTabs classId={classId} active="dashboard" />
         </div>
 
         {workflowTimeline}

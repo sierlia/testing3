@@ -4,6 +4,7 @@ import { Check, Copy, Search, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
@@ -201,14 +202,17 @@ export function ClassManagePage() {
             <h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1>
             <p className="mt-1 text-sm text-gray-600">Student roster</p>
           </div>
-          <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-            <div className="text-right">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Join code</div>
-              <div className="font-mono text-xl font-bold text-blue-700">{classDetails.classCode}</div>
+          <div className="flex flex-col items-end gap-3">
+            <TeacherClassTabs classId={classId} active="roster" />
+            <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+              <div className="text-right">
+                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Join code</div>
+                <div className="font-mono text-xl font-bold text-blue-700">{classDetails.classCode}</div>
+              </div>
+              <button type="button" onClick={() => void copyJoinCode()} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Copy join code">
+                <Copy className="h-4 w-4" />
+              </button>
             </div>
-            <button type="button" onClick={() => void copyJoinCode()} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Copy join code">
-              <Copy className="h-4 w-4" />
-            </button>
           </div>
         </div>
 
