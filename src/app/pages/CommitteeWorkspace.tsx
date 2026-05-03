@@ -461,7 +461,7 @@ export function CommitteeWorkspace() {
                       </div>
                       {textView === "original" && (
                         <div>
-                          <div className="flex flex-wrap items-center gap-1 rounded-t-md border border-b-0 border-gray-200 bg-gray-50 px-2 py-2">
+                          <div className="flex flex-wrap items-center justify-end rounded-t-md border border-b-0 border-gray-200 bg-gray-50 px-2 py-2">
                             {textViewControls}
                           </div>
                           <div className="prose max-w-none min-h-[420px] p-4 rounded-b-md border border-gray-200 bg-gray-50">

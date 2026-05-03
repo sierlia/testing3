@@ -329,29 +329,6 @@ export function CommitteeVote() {
     }
   };
 
-  const withdrawCommitteeVote = async () => {
-    if (!selected || !meId) return;
-    if (voteLocked) {
-      toast.error("Voting is closed");
-      return;
-    }
-    setVoting(true);
-    try {
-      const { error } = await supabase
-        .from("bill_committee_votes")
-        .delete()
-        .eq("bill_id", selected.id)
-        .eq("committee_id", committeeId)
-        .eq("user_id", meId);
-      if (error) throw error;
-      await loadVotes(selected.id);
-    } catch (e: any) {
-      toast.error(e.message || "Could not withdraw vote");
-    } finally {
-      setVoting(false);
-    }
-  };
-
   const submitReport = async () => {
     if (!selected) return;
     setSubmittingReport(true);
@@ -448,6 +425,41 @@ export function CommitteeVote() {
     />
   ) : null;
 
+  const textViewControls = (
+    <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+      <button
+        type="button"
+        onClick={() => setTextView("edited")}
+        className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium transition-colors ${
+          textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Edited
+      </button>
+      <button
+        type="button"
+        onClick={() => setTextView("clean")}
+        className={`inline-flex items-center gap-1.5 border-l border-gray-300 px-2 py-1.5 text-xs font-medium transition-colors ${
+          textView === "clean" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <Sparkles className="h-3.5 w-3.5" />
+        Clean
+      </button>
+      <button
+        type="button"
+        onClick={() => setTextView("original")}
+        className={`inline-flex items-center gap-1.5 border-l border-gray-300 px-2 py-1.5 text-xs font-medium transition-colors ${
+          textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <FileText className="h-3.5 w-3.5" />
+        Original
+      </button>
+    </div>
+  );
+
   const finalizeDisabled = finalizing || !voteClosedAt || !reportSubmittedAt;
 
   return (
@@ -528,14 +540,6 @@ export function CommitteeVote() {
                         <div className="flex flex-wrap items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => void withdrawCommitteeVote()}
-                            disabled={voting || voteLocked || !myVote}
-                            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            Withdraw vote
-                          </button>
-                          <button
-                            type="button"
                             onClick={() => void closeSelectedVote()}
                             disabled={closing || voteLocked}
                             className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
@@ -566,38 +570,6 @@ export function CommitteeVote() {
                           <CheckCircle2 className="h-4 w-4 text-blue-600" />
                           Bill Text
                         </div>
-                        <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-                          <button
-                            type="button"
-                            onClick={() => setTextView("edited")}
-                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
-                              textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                            Edited
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setTextView("clean")}
-                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
-                              textView === "clean" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            Clean
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setTextView("original")}
-                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
-                              textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <FileText className="w-4 h-4" />
-                            Original
-                          </button>
-                        </div>
                       </div>
                       <div className={textView === "original" ? "hidden" : ""}>
                         <CollaborativeBillEditor
@@ -608,11 +580,17 @@ export function CommitteeVote() {
                           editable={false}
                           displayMode={textView === "clean" ? "clean" : "tracked"}
                           allowRestoreDeleted={false}
+                          toolbarControls={textViewControls}
                         />
                       </div>
                       {textView === "original" && (
-                        <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
-                          <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
+                        <div>
+                          <div className="flex flex-wrap items-center justify-end rounded-t-md border border-b-0 border-gray-200 bg-gray-50 px-2 py-2">
+                            {textViewControls}
+                          </div>
+                          <div className="prose max-w-none min-h-[420px] p-4 rounded-b-md border border-gray-200 bg-gray-50">
+                            <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
+                          </div>
                         </div>
                       )}
                     </div>

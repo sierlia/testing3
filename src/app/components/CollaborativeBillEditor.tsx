@@ -418,31 +418,32 @@ function CommitteeEditorToolbar({ editor, editable, trailingControls }: { editor
   ];
 
   return (
-    <div className="flex flex-wrap items-center gap-1 border border-gray-200 border-b-0 bg-gray-50 px-2 py-2 rounded-t-md">
-      {editable && buttons.map(({ label, icon: Icon, active, onClick }) => {
-        const isActive = active();
-        return (
-        <Tooltip key={label}>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              aria-label={label}
-              onMouseDown={(event) => event.preventDefault()}
-              onClick={onClick}
-              className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
-                isActive ? "bg-blue-600 text-white hover:bg-blue-700" : "text-gray-700 hover:bg-white hover:text-gray-900"
-              }`}
-              aria-pressed={isActive}
-            >
-              <Icon className="w-4 h-4" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent sideOffset={6}>{label}</TooltipContent>
-        </Tooltip>
-        );
-      })}
-      {editable && trailingControls && <div className="mx-1 h-6 w-px bg-gray-300" />}
-      {trailingControls}
+    <div className="flex flex-wrap items-center gap-2 border border-gray-200 border-b-0 bg-gray-50 px-2 py-2 rounded-t-md">
+      <div className="flex flex-wrap items-center gap-1">
+        {editable && buttons.map(({ label, icon: Icon, active, onClick }) => {
+          const isActive = active();
+          return (
+          <Tooltip key={label}>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                aria-label={label}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={onClick}
+                className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+                  isActive ? "bg-gray-300 text-gray-900 hover:bg-gray-300" : "text-gray-700 hover:bg-white hover:text-gray-900"
+                }`}
+                aria-pressed={isActive}
+              >
+                <Icon className="w-4 h-4" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent sideOffset={6}>{label}</TooltipContent>
+          </Tooltip>
+          );
+        })}
+      </div>
+      {trailingControls && <div className="ml-auto flex items-center justify-end">{trailingControls}</div>}
     </div>
   );
 }

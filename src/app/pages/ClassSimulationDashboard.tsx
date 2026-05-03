@@ -266,8 +266,9 @@ export function ClassSimulationDashboard() {
                     <h2 className="text-lg font-semibold text-gray-900">My Bills</h2>
                     <p className="text-sm text-gray-600">Drafts and submitted legislation</p>
                   </div>
-                  <Link to="/bills/my" className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                  <Link to="/bills/my" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
                     All
+                    <ChevronRight className="h-3.5 w-3.5" />
                   </Link>
                 </div>
                 {myBills.length === 0 ? (
@@ -381,7 +382,7 @@ export function ClassSimulationDashboard() {
 
           <div className="lg:col-span-1 space-y-6">
             {profile?.role === "teacher" && <TeacherAdminShortcuts />}
-            <QuickLinks />
+            <QuickLinks classId={classId} />
             <MyStatusCard status={status} />
           </div>
         </div>

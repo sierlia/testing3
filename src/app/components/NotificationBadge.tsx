@@ -122,12 +122,12 @@ export function NotificationBadge() {
             <div className="font-semibold text-gray-900">Notifications</div>
             <div className="flex items-center gap-2 text-sm">
             {items.length > 0 && (
-              <button onClick={markAllRead} className="font-medium text-blue-600 hover:text-blue-700">
+              <button onClick={markAllRead} className="text-sm font-medium text-blue-600 hover:text-blue-700">
                 Mark all read
               </button>
             )}
               {items.length > 0 && <span className="text-gray-300">|</span>}
-              <Link to="/settings/notifications" className="font-medium text-blue-600 hover:text-blue-700" onClick={() => setIsOpen(false)}>
+              <Link to="/settings/notifications" className="text-sm font-medium text-blue-600 hover:text-blue-700" onClick={() => setIsOpen(false)}>
                 Settings
               </Link>
             </div>
