@@ -11,7 +11,7 @@ export function CommitteeReportPage() {
   const [loading, setLoading] = useState(true);
   const [classId, setClassId] = useState<string | null>(null);
   const [committeeName, setCommitteeName] = useState("Committee");
-  const [bill, setBill] = useState<{ id: string; hr_label: string; title: string } | null>(null);
+  const [bill, setBill] = useState<{ id: string; hr_label: string; title: string; status: string } | null>(null);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export function CommitteeReportPage() {
 
         const { data: billRow, error: bErr } = await supabase
           .from("bill_display")
-          .select("id,hr_label,title")
+          .select("id,hr_label,title,status")
           .eq("id", billId)
           .maybeSingle();
         if (bErr) throw bErr;
@@ -81,7 +81,7 @@ export function CommitteeReportPage() {
                 documentId={`${billId}:report`}
                 storageColumn="committee_report_ydoc_base64"
                 initialHtml="<p></p>"
-                editable={false}
+                editable={bill.status === "committee_vote" && !submittedAt}
                 trackDeletes={false}
               />
             </div>

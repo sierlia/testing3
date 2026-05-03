@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
-import { CheckCircle, Users, Vote } from "lucide-react";
+import { CheckCircle, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -87,9 +87,6 @@ export function CommitteeLeadership() {
   }, [committeeId]);
 
   const isMember = !!meId && members.some((m) => m.user_id === meId);
-  const currentChair = members.find((m) => m.role === "chair");
-  const currentRanking = members.find((m) => m.role === "ranking_member");
-
   const majorityParty = useMemo(() => {
     const counts = new Map<string, number>();
     for (const member of members) counts.set(memberParty(member), (counts.get(memberParty(member)) ?? 0) + 1);
@@ -115,6 +112,18 @@ export function CommitteeLeadership() {
   const castVote = async (position: LeadershipPosition, candidateId: string) => {
     if (!committee || !meId || !isMember) return;
     try {
+      if (myVote(position) === candidateId) {
+        const { error } = await supabase
+          .from("committee_leadership_votes")
+          .delete()
+          .eq("committee_id", committee.id)
+          .eq("voter_user_id", meId)
+          .eq("position", position);
+        if (error) throw error;
+        setVotes((prev) => prev.filter((vote) => !(vote.voter_user_id === meId && vote.position === position)));
+        toast.success("Vote withdrawn");
+        return;
+      }
       const { error } = await supabase.from("committee_leadership_votes").upsert(
         {
           committee_id: committee.id,
@@ -174,7 +183,7 @@ export function CommitteeLeadership() {
                   onClick={() => void castVote(position, member.user_id)}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium ${myVote(position) === member.user_id ? "bg-blue-600 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
                 >
-                  {myVote(position) === member.user_id ? "Voted" : "Vote"}
+                  {myVote(position) === member.user_id ? "Withdraw" : "Vote"}
                 </button>
               )}
             </div>
@@ -192,35 +201,16 @@ export function CommitteeLeadership() {
           <div className="text-sm text-gray-600">Loading...</div>
         ) : (
           <>
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <h1 className="text-3xl font-bold text-gray-900">{committee.name}</h1>
+              {role === "teacher" && (
+                <button onClick={() => void applyWinners()} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+                  <CheckCircle className="h-4 w-4" />
+                  Apply winners
+                </button>
+              )}
+            </div>
             <CommitteeTabs committeeId={committeeId} active="election" />
-
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-3">
-                    <Users className="h-8 w-8 text-blue-600" />
-                    <h1 className="text-3xl font-bold text-gray-900">{committee.name}</h1>
-                  </div>
-                </div>
-                {role === "teacher" && (
-                  <button onClick={() => void applyWinners()} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
-                    <CheckCircle className="h-4 w-4" />
-                    Apply winners
-                  </button>
-                )}
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Current Chair</h2>
-                <div className="text-lg font-semibold text-gray-900">{currentChair?.profile?.display_name ?? "N/A"}</div>
-              </div>
-              <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Current Ranking Member</h2>
-                <div className="text-lg font-semibold text-gray-900">{currentRanking?.profile?.display_name ?? "N/A"}</div>
-              </div>
-            </div>
 
             {electionPanel("chair", "Chair Election", chairCandidates)}
             {majorityParty && electionPanel("ranking_member", "Ranking Member Election", rankingCandidates)}

@@ -200,6 +200,11 @@ export function CommitteeVote() {
 
   const selected = bills.find((bill) => bill.id === selectedBillId) ?? null;
 
+  useEffect(() => {
+    if (!selectedBillId) return;
+    markCommitteeSeenIds(committeeId, "vote", [selectedBillId]);
+  }, [committeeId, selectedBillId]);
+
   const loadVotes = async (billId: string) => {
     const { data, error } = await supabase
       .from("bill_committee_votes")
@@ -293,6 +298,17 @@ export function CommitteeVote() {
 
     setVoting(true);
     try {
+      if (myVote === vote) {
+        const { error } = await supabase
+          .from("bill_committee_votes")
+          .delete()
+          .eq("bill_id", selected.id)
+          .eq("committee_id", committeeId)
+          .eq("user_id", meId);
+        if (error) throw error;
+        await loadVotes(selected.id);
+        return;
+      }
       const { error } = await supabase.from("bill_committee_votes").upsert(
         {
           bill_id: selected.id,
@@ -308,6 +324,29 @@ export function CommitteeVote() {
       await loadVotes(selected.id);
     } catch (e: any) {
       toast.error(e.message || "Could not record vote");
+    } finally {
+      setVoting(false);
+    }
+  };
+
+  const withdrawCommitteeVote = async () => {
+    if (!selected || !meId) return;
+    if (voteLocked) {
+      toast.error("Voting is closed");
+      return;
+    }
+    setVoting(true);
+    try {
+      const { error } = await supabase
+        .from("bill_committee_votes")
+        .delete()
+        .eq("bill_id", selected.id)
+        .eq("committee_id", committeeId)
+        .eq("user_id", meId);
+      if (error) throw error;
+      await loadVotes(selected.id);
+    } catch (e: any) {
+      toast.error(e.message || "Could not withdraw vote");
     } finally {
       setVoting(false);
     }
@@ -484,17 +523,27 @@ export function CommitteeVote() {
                       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
                         <div>
                           <h3 className="font-semibold text-gray-900">Committee Vote</h3>
-                          <p className="text-sm text-gray-600">{voteLocked ? `Closed ${new Date(voteClosedAt!).toLocaleString()}` : "Click a total to cast or change your vote."}</p>
+                          <p className="text-sm text-gray-600">{voteLocked ? `Closed ${new Date(voteClosedAt!).toLocaleString()}` : "Click a total to cast, change, or undo your vote."}</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => void closeSelectedVote()}
-                          disabled={closing || voteLocked}
-                          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          {closing ? "Closing" : voteLocked ? "Vote closed" : "Close vote"}
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void withdrawCommitteeVote()}
+                            disabled={voting || voteLocked || !myVote}
+                            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            Withdraw vote
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void closeSelectedVote()}
+                            disabled={closing || voteLocked}
+                            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            <XCircle className="h-4 w-4" />
+                            {closing ? "Closing" : voteLocked ? "Vote closed" : "Close vote"}
+                          </button>
+                        </div>
                       </div>
                       <div className="grid grid-cols-3 gap-3">
                         {(["yea", "nay", "present"] as VoteChoice[]).map((choice) => (
@@ -558,6 +607,7 @@ export function CommitteeVote() {
                           initialHtml={selected.legislativeHtml}
                           editable={false}
                           displayMode={textView === "clean" ? "clean" : "tracked"}
+                          allowRestoreDeleted={false}
                         />
                       </div>
                       {textView === "original" && (
@@ -607,7 +657,19 @@ export function CommitteeVote() {
       </main>
 
       {reportPoppedOut && selected && classId && (
-        <div className="fixed z-50 w-[min(760px,calc(100vw-24px))] rounded-lg border border-gray-300 bg-white shadow-2xl" style={{ left: reportWindowPos.x, top: reportWindowPos.y }}>
+        <div
+          className="fixed z-50 rounded-lg border border-gray-300 bg-white shadow-2xl"
+          style={{
+            left: reportWindowPos.x,
+            top: reportWindowPos.y,
+            width: "min(760px, calc(100vw - 24px))",
+            height: "min(760px, calc(100vh - 24px))",
+            minWidth: 420,
+            minHeight: 360,
+            resize: "both",
+            overflow: "hidden",
+          }}
+        >
           <div onMouseDown={beginReportDrag} className="flex cursor-move items-center justify-between gap-3 rounded-t-lg border-b border-gray-200 bg-gray-50 px-3 py-2">
             <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-900">
               <Move className="h-4 w-4 flex-shrink-0 text-gray-500" />
@@ -617,7 +679,7 @@ export function CommitteeVote() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="max-h-[75vh] overflow-y-auto p-4">
+          <div className="h-[calc(100%-42px)] overflow-y-auto p-4">
             {reportEditor}
           </div>
         </div>

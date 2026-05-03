@@ -1,12 +1,13 @@
 import { Bell, MessageSquare, ThumbsUp } from "lucide-react";
 import { Link } from "react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "../utils/supabase";
 import { useAuth } from "../utils/AuthContext";
 
 export function NotificationBadge() {
   const { user } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [items, setItems] = useState<Array<{ id: string; title: string; message: string; href: string; created_at: string; read_at: string | null; kind: "comment" | "reaction" }>>([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
@@ -41,6 +42,15 @@ export function NotificationBadge() {
   useEffect(() => {
     void refresh();
   }, [user?.id]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!containerRef.current?.contains(event.target as Node)) setIsOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [isOpen]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -89,7 +99,7 @@ export function NotificationBadge() {
   };
 
   return (
-    <div className="relative">
+    <div ref={containerRef} className="relative">
       <button
         onClick={() => {
           setIsOpen((p) => !p);
@@ -110,13 +120,14 @@ export function NotificationBadge() {
         <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 z-50">
           <div className="p-4 border-b border-gray-200 flex items-center justify-between">
             <div className="font-semibold text-gray-900">Notifications</div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 text-sm">
             {items.length > 0 && (
-              <button onClick={markAllRead} className="text-sm text-blue-600 hover:text-blue-700 font-medium">
+              <button onClick={markAllRead} className="font-medium text-blue-600 hover:text-blue-700">
                 Mark all read
               </button>
             )}
-              <Link to="/settings/notifications" className="text-sm text-blue-600 hover:text-blue-700 font-medium" onClick={() => setIsOpen(false)}>
+              {items.length > 0 && <span className="text-gray-300">|</span>}
+              <Link to="/settings/notifications" className="font-medium text-blue-600 hover:text-blue-700" onClick={() => setIsOpen(false)}>
                 Settings
               </Link>
             </div>

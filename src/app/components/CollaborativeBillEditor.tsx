@@ -437,6 +437,7 @@ export function CollaborativeBillEditor({
   storageColumn,
   trackDeletes = true,
   displayMode = "tracked",
+  allowRestoreDeleted = true,
 }: {
   classId: string;
   committeeId: string;
@@ -447,6 +448,7 @@ export function CollaborativeBillEditor({
   storageColumn?: string;
   trackDeletes?: boolean;
   displayMode?: "tracked" | "clean";
+  allowRestoreDeleted?: boolean;
 }) {
   const [ready, setReady] = useState(false);
   const [localUser, setLocalUser] = useState<{ id: string; name: string; color: string }>({ id: "", name: "Member", color: "#2563eb" });
@@ -674,6 +676,7 @@ export function CollaborativeBillEditor({
   }, [restoreMenu]);
 
   const showRestoreMenu = (event: MouseEvent<HTMLDivElement>) => {
+    if (!allowRestoreDeleted) return;
     if (!editor) return;
     const target = event.target as HTMLElement | null;
     const deleted = target?.closest("[data-delete-highlight]") as HTMLElement | null;
@@ -727,7 +730,7 @@ export function CollaborativeBillEditor({
       )}
       {editable && <CommitteeEditorToolbar editor={editor} />}
       <EditorContent editor={editor} />
-      {restoreMenu && (
+      {allowRestoreDeleted && restoreMenu && (
         <div
           className="fixed z-50 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
           style={{ left: restoreMenu.x, top: restoreMenu.y, ["--restore-color" as any]: restoreMenu.color }}

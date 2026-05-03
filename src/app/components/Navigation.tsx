@@ -137,6 +137,11 @@ export function Navigation() {
       window.clearTimeout(orgCloseTimerRef.current);
       orgCloseTimerRef.current = null;
     }
+    if (legislationCloseTimerRef.current) {
+      window.clearTimeout(legislationCloseTimerRef.current);
+      legislationCloseTimerRef.current = null;
+    }
+    setLegislationOpen(false);
     setOrganizationsOpen(true);
   };
 
@@ -145,7 +150,7 @@ export function Navigation() {
     orgCloseTimerRef.current = window.setTimeout(() => {
       setOrganizationsOpen(false);
       orgCloseTimerRef.current = null;
-    }, 320);
+    }, 140);
   };
 
   const openLegislation = () => {
@@ -153,6 +158,11 @@ export function Navigation() {
       window.clearTimeout(legislationCloseTimerRef.current);
       legislationCloseTimerRef.current = null;
     }
+    if (orgCloseTimerRef.current) {
+      window.clearTimeout(orgCloseTimerRef.current);
+      orgCloseTimerRef.current = null;
+    }
+    setOrganizationsOpen(false);
     setLegislationOpen(true);
   };
 
@@ -161,7 +171,7 @@ export function Navigation() {
     legislationCloseTimerRef.current = window.setTimeout(() => {
       setLegislationOpen(false);
       legislationCloseTimerRef.current = null;
-    }, 320);
+    }, 140);
   };
 
   const refreshUnreadLetters = async () => {

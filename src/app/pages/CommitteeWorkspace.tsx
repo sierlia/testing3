@@ -145,6 +145,12 @@ export function CommitteeWorkspace() {
     setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
   }, [committeeId]);
 
+  useEffect(() => {
+    if (!selectedBillId) return;
+    markCommitteeSeenIds(committeeId, "review", [selectedBillId]);
+    setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
+  }, [committeeId, selectedBillId]);
+
   const selectBill = (billId: string) => {
     setSelectedBillId(billId);
     const cached = workspaceCache.get(committeeId);
@@ -359,7 +365,7 @@ export function CommitteeWorkspace() {
                         <div className="text-xl font-bold text-gray-900 mt-1">{selected.title}</div>
                         <div className="text-sm text-gray-600 mt-1">Sponsor: {selected.sponsor}</div>
                       </div>
-                      <div className="sticky top-0 z-20 flex items-center gap-3 rounded-md bg-white/95 p-1 backdrop-blur">
+                      <div className="sticky top-0 z-20 flex flex-col items-end gap-2 rounded-md bg-white/95 p-1 backdrop-blur">
                         {activeEditors.length > 0 && (
                           <div className="flex items-center gap-1.5 justify-end">
                             {activeEditors.map((u) => (
@@ -384,6 +390,26 @@ export function CommitteeWorkspace() {
                           </div>
                         )}
 
+                        <div className="flex flex-wrap justify-end gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void postSelectedBillProgress()}
+                            disabled={postingProgress}
+                            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                          >
+                            <Send className="w-4 h-4" />
+                            {postingProgress ? "Posting" : "Post progress"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void proposeSelectedBillForVote()}
+                            disabled={proposing || selected.status !== "in_committee"}
+                            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            <Vote className="w-4 h-4" />
+                            {selected.status === "committee_vote" ? "Proposed" : proposing ? "Proposing" : "Propose Vote"}
+                          </button>
+                        </div>
                         <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
                           <button
                             type="button"
@@ -416,24 +442,6 @@ export function CommitteeWorkspace() {
                             Original
                           </button>
                         </div>
-                          <button
-                            type="button"
-                            onClick={() => void postSelectedBillProgress()}
-                            disabled={postingProgress}
-                            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                          >
-                            <Send className="w-4 h-4" />
-                            {postingProgress ? "Posting" : "Post progress"}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => void proposeSelectedBillForVote()}
-                            disabled={proposing || selected.status !== "in_committee"}
-                            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                          >
-                            <Vote className="w-4 h-4" />
-                            {selected.status === "committee_vote" ? "Proposed" : proposing ? "Proposing" : "Propose Vote"}
-                          </button>
                       </div>
                     </div>
                   </div>
