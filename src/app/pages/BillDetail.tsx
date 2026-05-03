@@ -16,7 +16,7 @@ type TextTab = "revised" | "original" | "supporting";
 type TrackerStatus = "completed" | "current" | "upcoming";
 type TrackerStep = { label: string; status: TrackerStatus; date?: string | null; note?: string };
 type TrackerItem = TrackerStep | { kind: "split"; steps: [TrackerStep, TrackerStep] };
-type BillAction = { label: string; detail?: string; date: string };
+type BillAction = { label: string; detail?: string; date: string; tone?: "teacher" };
 type CommitteeOption = { id: string; name: string };
 type TeacherOverrideAction = { id: string; step: string; note: string | null; created_at: string };
 type TrackerOverrideDraft = {
@@ -313,6 +313,7 @@ export function BillDetail() {
         label,
         detail: undefined,
         date: override.created_at,
+        tone: "teacher",
       });
     }
     return rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
@@ -424,10 +425,6 @@ export function BillDetail() {
       toast.error("No committees are configured for this class");
       return;
     }
-    if (step.label === "Reported" && !referral?.committee_id) {
-      toast.error("Refer this bill to a committee before reporting it");
-      return;
-    }
     const defaultCommitteeId = referral?.committee_id ?? committeeOptions[0]?.id ?? "";
     setTrackerOverrideDraft({
       step,
@@ -445,10 +442,6 @@ export function BillDetail() {
       return;
     }
     const targetCommitteeId = step.label === "Reported" ? referral?.committee_id : committeeId;
-    if (step.label === "Reported" && !targetCommitteeId) {
-      toast.error("Refer this bill to a committee before reporting it");
-      return;
-    }
     setTrackerOverrideSaving(true);
     try {
       if (step.label === "Introduced") {
@@ -478,12 +471,14 @@ export function BillDetail() {
       } else if (step.label === "Reported") {
         await supabase.from("bill_calendar").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
         await supabase.from("bill_floor_sessions").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
-        await upsertTeacherReferral(targetCommitteeId ?? "");
-        const { error: docError } = await supabase.from("committee_bill_docs").upsert(
-          { bill_id: bill.id, committee_id: targetCommitteeId, class_id: bill.class_id, committee_vote_finalized_at: new Date().toISOString() } as any,
-          { onConflict: "bill_id,committee_id" },
-        );
-        if (docError) throw docError;
+        if (targetCommitteeId) {
+          await upsertTeacherReferral(targetCommitteeId);
+          const { error: docError } = await supabase.from("committee_bill_docs").upsert(
+            { bill_id: bill.id, committee_id: targetCommitteeId, class_id: bill.class_id, committee_vote_finalized_at: new Date().toISOString() } as any,
+            { onConflict: "bill_id,committee_id" },
+          );
+          if (docError) throw docError;
+        }
         const { error } = await supabase.from("bills").update({ status: "reported" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (error) throw error;
       } else if (step.label === "Calendared") {
@@ -717,8 +712,8 @@ export function BillDetail() {
               <h2 className="mb-4 font-semibold text-gray-900">Actions</h2>
               <div className="space-y-4">
                 {actions.map((action, index) => (
-                  <div key={`${action.label}-${action.date}-${index}`} className="border-l-2 border-blue-200 pl-3">
-                    <div className="text-sm font-medium text-gray-900">{action.label}</div>
+                  <div key={`${action.label}-${action.date}-${index}`} className={`border-l-2 pl-3 ${action.tone === "teacher" ? "border-blue-700" : "border-blue-200"}`}>
+                    <div className={`text-sm font-medium ${action.tone === "teacher" ? "text-blue-900" : "text-gray-900"}`}>{action.label}</div>
                     {action.detail && <div className="text-xs text-gray-600">{action.detail}</div>}
                     <div className="mt-1 text-xs text-gray-500">{new Date(action.date).toLocaleString()}</div>
                   </div>

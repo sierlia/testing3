@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Bell, Calendar, CheckSquare, FileText, Save, Scale, Send, Settings, UserCog, Users, Vote } from "lucide-react";
+import { Bell, Calendar, CheckSquare, FileText, Save, Scale, Settings, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -198,7 +198,7 @@ export function TeacherSetup() {
       const { error } = await supabase.from("classes").update({ settings: nextSettings }).eq("id", activeClassId);
       if (error) throw error;
       await syncPartiesAndCommittees(activeClassId);
-      toast.success("Simulation settings saved");
+      toast.success("Settings saved");
       setHasChanges(false);
     } catch (e: any) {
       toast.error(e.message || "Could not save settings");
@@ -371,18 +371,11 @@ export function TeacherSetup() {
       </main>
 
       <div className="fixed bottom-0 left-0 right-0 z-10 border-t border-gray-200 bg-white shadow-lg">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-          <div className="text-sm text-gray-600">{hasChanges ? <span className="font-medium text-amber-600">You have unsaved changes</span> : "Settings are saved"}</div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => void handleSave()} disabled={!hasChanges} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-              <Save className="h-4 w-4" />
-              Save Settings
-            </button>
-            <button onClick={() => void handleSave()} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-5 py-2 text-sm font-medium text-white hover:bg-green-700">
-              <Send className="h-4 w-4" />
-              Publish to Students
-            </button>
-          </div>
+        <div className="mx-auto flex max-w-6xl items-center justify-end px-4 py-4 sm:px-6 lg:px-8">
+          <button onClick={() => void handleSave()} disabled={!hasChanges} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+            <Save className="h-4 w-4" />
+            Save Settings
+          </button>
         </div>
       </div>
     </div>

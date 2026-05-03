@@ -1,4 +1,4 @@
-import { ChevronDown, Building2, LogOut, Settings, User, Mail, Plus, Layers, Gavel } from "lucide-react";
+import { ChevronDown, Building2, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
@@ -345,9 +345,8 @@ export function Navigation() {
               </Link>
               <Link
                 to="/floor"
-                className="inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
               >
-                <Gavel className="h-4 w-4" />
                 Floor
               </Link>
             </div>

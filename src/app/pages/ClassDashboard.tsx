@@ -12,6 +12,7 @@ import {
   MessageSquare,
   Pencil,
   Plus,
+  RotateCcw,
   Save,
   Settings,
   TrendingUp,
@@ -33,8 +34,7 @@ interface CalendarEvent {
 }
 
 const workflowSteps = [
-  { id: "setup", label: "Setup", description: "Configure class settings, parties, committees, and starting rules." },
-  { id: "enable_class", label: "Enable class", description: "Open the join code so students can enter the class." },
+  { id: "setup", label: "Setup / Enable class", description: "Configure settings, then open the join code when the class is ready." },
   { id: "open_elections", label: "Open elections", description: "Open Speaker, party, committee, and caucus leadership elections." },
   { id: "conclude_elections", label: "Conclude elections", description: "Close leadership elections and move into legislative work." },
   { id: "legislation", label: "Refer bills to committees, calendar bills", description: "Route bills through committee referral and floor scheduling." },
@@ -180,6 +180,21 @@ export function ClassDashboard() {
     alert(`Class is enabled. Have students join with code ${classCode}.`);
   };
 
+  const disableClassJoin = async () => {
+    await updateClassSettings({
+      class: { ...(classSettings.class ?? {}), joinEnabled: false },
+    });
+  };
+
+  const revertWorkflow = async (stage: string) => {
+    await updateClassSettings({
+      workflow: { ...(classSettings.workflow ?? {}), stage },
+      ...(stage === "setup" ? { class: { ...(classSettings.class ?? {}), joinEnabled: false } } : {}),
+      ...(stage === "open_elections" ? { elections: { ...(classSettings.elections ?? {}), open: true, concluded: false } } : {}),
+      ...(stage === "conclude_elections" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: false } } : {}),
+    });
+  };
+
   const openElections = async () => {
     await updateClassSettings({
       elections: { ...(classSettings.elections ?? {}), open: true },
@@ -209,7 +224,6 @@ export function ClassDashboard() {
         </div>
       );
     }
-    if (stepId === "enable_class") return <Button className="mt-4" onClick={() => void enableClass()} disabled={workflowBusy}><Unlock className="mr-2 h-4 w-4" />Enable class</Button>;
     if (stepId === "open_elections") return <Button className="mt-4" onClick={() => void openElections()} disabled={workflowBusy}><Vote className="mr-2 h-4 w-4" />Open elections</Button>;
     if (stepId === "conclude_elections") return <Button className="mt-4" onClick={() => void concludeElections()} disabled={workflowBusy}><Vote className="mr-2 h-4 w-4" />Conclude elections</Button>;
     return (
@@ -232,16 +246,22 @@ export function ClassDashboard() {
       <Card className="mb-8">
         <CardContent className="p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">
+            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-gray-700">
               {classJoinEnabled ? <Unlock className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-gray-500" />}
               {classJoinEnabled ? "Class join is enabled" : "Class join is currently closed"}
+              {classJoinEnabled && (
+                <Button variant="ghost" size="sm" onClick={() => void disableClassJoin()} disabled={workflowBusy} className="h-7 px-2 text-xs">
+                  Disable class join
+                </Button>
+              )}
             </div>
             <Button variant="ghost" size="sm" onClick={() => setTimelineExpanded((open) => !open)}>
               {timelineExpanded ? "Collapse timeline" : "View full timeline"}
               <ChevronDown className={`ml-1 h-4 w-4 transition-transform ${timelineExpanded ? "rotate-180" : ""}`} />
             </Button>
           </div>
-          <div className="flex gap-3 overflow-x-auto pb-2">
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Class timeline</div>
+          <div className="flex items-stretch gap-0 overflow-x-auto pb-2">
             <div className="min-w-[520px] flex-[2] rounded-lg border border-blue-200 bg-blue-50 p-5">
               <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
               <h2 className="mt-1 text-xl font-bold text-gray-900">{currentWorkflowStep.label}</h2>
@@ -249,19 +269,31 @@ export function ClassDashboard() {
               {workflowAction(currentWorkflowStep.id)}
             </div>
             {nextWorkflowStep && (
-              <div className="min-w-[260px] flex-1 rounded-lg border border-gray-200 bg-gray-50 p-5 opacity-60">
-                <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">After that</div>
-                <h3 className="mt-1 font-semibold text-gray-700">{nextWorkflowStep.label}</h3>
-                <p className="mt-1 text-sm text-gray-500">{nextWorkflowStep.description}</p>
-              </div>
+              <>
+                <div className="mt-9 h-0 min-w-8 border-t-2 border-dashed border-gray-300" />
+                <div className="min-w-[260px] flex-1 rounded-lg border border-gray-200 bg-gray-50 p-5 opacity-60">
+                  <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">After that</div>
+                  <h3 className="mt-1 font-semibold text-gray-700">{nextWorkflowStep.label}</h3>
+                  <p className="mt-1 text-sm text-gray-500">{nextWorkflowStep.description}</p>
+                </div>
+              </>
             )}
           </div>
           {timelineExpanded && (
-            <div className="mt-4 grid gap-2 sm:grid-cols-5">
+            <div className="mt-4 flex gap-0 overflow-x-auto">
               {workflowSteps.map((step, index) => (
-                <div key={step.id} className={`rounded-md border p-3 text-sm ${index < currentIndex ? "border-blue-200 bg-blue-50 text-blue-900" : index === currentIndex ? "border-blue-300 bg-white text-gray-900" : "border-gray-200 bg-gray-50 text-gray-500"}`}>
-                  <div className="font-semibold">{step.label}</div>
-                  <div className="mt-1 text-xs">{index < currentIndex ? "Complete" : index === currentIndex ? "Current" : "Upcoming"}</div>
+                <div key={step.id} className="flex items-start">
+                  {index > 0 && <div className="mt-6 h-0 w-8 border-t-2 border-dashed border-gray-300" />}
+                  <div className={`min-w-56 rounded-md border p-3 text-sm ${index < currentIndex ? "border-blue-200 bg-blue-50 text-blue-900" : index === currentIndex ? "border-blue-300 bg-white text-gray-900" : "border-gray-200 bg-gray-50 text-gray-500"}`}>
+                    <div className="font-semibold">{step.label}</div>
+                    <div className="mt-1 text-xs">{index < currentIndex ? "Complete" : index === currentIndex ? "Current" : "Upcoming"}</div>
+                    {index < currentIndex && (
+                      <button type="button" onClick={() => void revertWorkflow(step.id)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900">
+                        <RotateCcw className="h-3 w-3" />
+                        Revert here
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -269,7 +301,7 @@ export function ClassDashboard() {
         </CardContent>
       </Card>
     ),
-    [billStats, classJoinEnabled, currentIndex, currentWorkflowStep, nextWorkflowStep, timelineExpanded, workflowBusy],
+    [billStats, classJoinEnabled, currentIndex, currentWorkflowStep, nextWorkflowStep, timelineExpanded, workflowBusy, classSettings],
   );
 
   const primaryActions = [
@@ -403,7 +435,7 @@ export function ClassDashboard() {
                     const Icon = action.icon;
                     return (
                       <Link key={action.label} to={action.href}>
-                        <Button variant="ghost" className="w-full justify-start bg-blue-50 text-blue-800 hover:bg-blue-100">
+                        <Button variant="ghost" className="w-full justify-start bg-white text-base text-gray-900 hover:bg-gray-50">
                           <Icon className="mr-2 h-4 w-4" />
                           {action.label}
                         </Button>
