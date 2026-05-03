@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Search, MapPin, Flag } from "lucide-react";
+import { Search } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { DefaultAvatar } from "../components/DefaultAvatar";
-import { formatConstituency } from "../utils/constituency";
 
 type Member = {
   user_id: string;
@@ -51,17 +50,15 @@ export function Members() {
 
   const parties = useMemo(() => {
     const set = new Set<string>();
-    for (const m of members) if (m.party) set.add(m.party);
+    for (const m of members) if (m.role !== "teacher" && m.party) set.add(m.party);
     return Array.from(set).sort();
   }, [members]);
 
   const filteredMembers = useMemo(() => {
     return members.filter((member) => {
       const name = member.display_name ?? "";
-      const constituency = formatConstituency(member.constituency_name);
-      const matchesSearch =
-        name.toLowerCase().includes(searchQuery.toLowerCase()) || constituency.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesParty = filterParty === "all" || (member.party ?? "N/A") === filterParty;
+      const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesParty = member.role === "teacher" ? filterParty === "all" : filterParty === "all" || (member.party ?? "N/A") === filterParty;
       return matchesSearch && matchesParty;
     });
   }, [members, searchQuery, filterParty]);
@@ -85,7 +82,7 @@ export function Members() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search by name or district..."
+                placeholder="Search members..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
@@ -112,7 +109,9 @@ export function Members() {
             <Link
               key={member.user_id}
               to={`/profile/${member.user_id}`}
-              className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              className={`rounded-lg border p-6 shadow-sm transition-shadow hover:shadow-md ${
+                member.role === "teacher" ? "border-green-200 bg-green-50 hover:bg-green-100" : "border-gray-200 bg-white"
+              }`}
             >
               <div className="flex items-start gap-4 mb-4">
                 {member.avatar_url ? (
@@ -121,20 +120,16 @@ export function Members() {
                   <DefaultAvatar className="w-16 h-16 flex-shrink-0" iconClassName="w-8 h-8 text-gray-500" />
                 )}
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-gray-900 mb-1 truncate">{member.display_name ?? "Member"}</h3>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <MapPin className="w-3 h-3" />
-                      <span className="truncate">{formatConstituency(member.constituency_name)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Flag className="w-3 h-3" />
-                      <span>{member.party ?? "N/A"}</span>
-                    </div>
-                  </div>
+                  <h3 className={`mb-1 truncate font-semibold ${member.role === "teacher" ? "text-green-800" : "text-gray-900"}`}>
+                    {member.display_name ?? "Member"}
+                  </h3>
+                  {member.role === "teacher" ? (
+                    <div className="text-sm font-medium text-green-700">Teacher</div>
+                  ) : (
+                    <div className="text-sm text-gray-600">Student</div>
+                  )}
                 </div>
               </div>
-              <div className="pt-3 border-t border-gray-200 text-xs text-gray-500">{member.role === "teacher" ? "Teacher" : "Student"}</div>
             </Link>
           ))}
         </div>

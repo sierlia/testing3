@@ -64,6 +64,7 @@ export function PartyDetail() {
   const [nameDraft, setNameDraft] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "election">("dashboard");
+  const [classSettings, setClassSettings] = useState<any>({});
 
   const isMember = !!party && comparablePartyName(myParty) === comparablePartyName(party.name);
   const isTeacher = viewerRole === "teacher";
@@ -83,6 +84,8 @@ export function PartyDetail() {
       setParty(p as any);
       setAboutDraft((p as any).platform ?? "");
       setNameDraft(displayPartyName((p as any).name ?? ""));
+      const { data: classRow } = await supabase.from("classes").select("settings").eq("id", (p as any).class_id).maybeSingle();
+      setClassSettings((classRow as any)?.settings ?? {});
 
       const { data: me } = await supabase.from("profiles").select("party,role").eq("user_id", uid).maybeSingle();
       setMyParty((me as any)?.party ?? null);
@@ -344,6 +347,22 @@ export function PartyDetail() {
 
   const voteCount = (position: "chair" | "whip", candidateId: string) => votes.filter((v) => v.position === position && v.candidate_user_id === candidateId).length;
   const myLeadershipVote = (position: "chair" | "whip") => votes.find((v) => v.position === position && v.voter_user_id === meId)?.candidate_user_id ?? null;
+  const electionOpen = classSettings?.elections?.partyOpenById?.[partyId] ?? Boolean(classSettings?.elections?.open);
+
+  const setPartyElectionOpen = async (open: boolean) => {
+    if (!party || !isTeacher) return;
+    const nextSettings = {
+      ...classSettings,
+      elections: {
+        ...(classSettings.elections ?? {}),
+        partyOpenById: { ...(classSettings.elections?.partyOpenById ?? {}), [party.id]: open },
+      },
+    };
+    const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", party.class_id);
+    if (error) return toast.error(error.message || "Could not update election");
+    setClassSettings(nextSettings);
+    toast.success(open ? "Party election opened" : "Party election closed");
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -500,9 +519,23 @@ export function PartyDetail() {
                 </div>
                 ) : (
                 <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                  <div className="mb-4 flex items-center gap-2">
-                    <Vote className="h-5 w-5 text-[var(--party-color)]" />
-                    <h2 className="text-lg font-semibold text-gray-900">Party Leadership Elections</h2>
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <Vote className="h-5 w-5 text-[var(--party-color)]" />
+                      <div>
+                        <h2 className="text-lg font-semibold text-gray-900">Party Leadership Elections</h2>
+                        <p className="text-sm text-gray-500">{electionOpen ? "Voting is open." : "Voting is closed."}</p>
+                      </div>
+                    </div>
+                    {isTeacher && (
+                      <button
+                        type="button"
+                        onClick={() => void setPartyElectionOpen(!electionOpen)}
+                        className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        {electionOpen ? "Close election" : "Open election"}
+                      </button>
+                    )}
                   </div>
                   {(["chair", "whip"] as const).map((position) => (
                     <div key={position} className="mb-5 last:mb-0">
@@ -513,7 +546,7 @@ export function PartyDetail() {
                             <div className="text-sm font-medium text-gray-900">{member.display_name ?? "Member"}</div>
                             <div className="flex items-center gap-3">
                               <span className="text-xs text-gray-500">{voteCount(position, member.user_id)} votes</span>
-                              {isMember && (
+                              {isMember && electionOpen && (
                                 <button
                                   onClick={() => void castLeadershipVote(position, member.user_id)}
                                   className={`rounded px-3 py-1.5 text-xs font-medium ${myLeadershipVote(position) === member.user_id ? "text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}

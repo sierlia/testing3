@@ -13,6 +13,7 @@ interface ClassData {
   class_code: string;
   student_count: number;
   created_at: string;
+  invite_status?: string;
 }
 
 export function TeacherDashboard() {
@@ -41,12 +42,26 @@ export function TeacherDashboard() {
         const { data: { user } } = await supabase.auth.getUser();
         setUserName(user?.user_metadata?.name || 'Teacher');
 
-        const { data: classRows, error } = await supabase
-          .from('classes')
-          .select('id, name, class_code, created_at')
-          .eq('teacher_id', session.user.id)
-          .order('created_at', { ascending: false });
+        const [{ data: ownedRows, error }, { data: membershipRows }] = await Promise.all([
+          supabase
+            .from('classes')
+            .select('id, name, class_code, created_at')
+            .eq('teacher_id', session.user.id)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('class_memberships')
+            .select('class_id,status,classes(id,name,class_code,created_at)')
+            .eq('user_id', session.user.id)
+            .eq('role', 'teacher'),
+        ]);
         if (error) throw error;
+        const classMap = new Map<string, any>();
+        for (const c of ownedRows ?? []) classMap.set((c as any).id, { ...(c as any), invite_status: "approved" });
+        for (const row of membershipRows ?? []) {
+          const cls = (row as any).classes;
+          if (cls) classMap.set(cls.id, { ...cls, invite_status: (row as any).status ?? "approved" });
+        }
+        const classRows = Array.from(classMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
         const normalized = await Promise.all((classRows ?? []).map(async (c) => {
           const { count } = await supabase
@@ -91,6 +106,21 @@ export function TeacherDashboard() {
   const openClass = async (classId: string) => {
     await setActiveClass(classId);
     navigate(`/teacher/class/${classId}`);
+  };
+
+  const updateInvitation = async (classId: string, accepted: boolean) => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = accepted
+      ? await supabase
+          .from('class_memberships')
+          .update({ status: 'approved', approved_at: new Date().toISOString() } as any)
+          .eq('class_id', classId)
+          .eq('user_id', user.id)
+      : await supabase.from('class_memberships').delete().eq('class_id', classId).eq('user_id', user.id);
+    if (error) return toast.error(error.message || 'Could not update invitation');
+    toast.success(accepted ? 'Invitation accepted' : 'Invitation declined');
+    await loadUserAndClasses();
   };
 
   const visibleClasses = classes.filter((classItem) => {
@@ -163,14 +193,15 @@ export function TeacherDashboard() {
                 key={classItem.id}
                 role="button"
                 tabIndex={0}
-                onClick={() => void openClass(classItem.id)}
+                onClick={() => classItem.invite_status === 'invited' ? undefined : void openClass(classItem.id)}
                 onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") void openClass(classItem.id);
+                  if ((event.key === "Enter" || event.key === " ") && classItem.invite_status !== 'invited') void openClass(classItem.id);
                 }}
                 className="flex w-full flex-col gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 hover:bg-gray-50 md:flex-row md:items-center md:justify-between"
               >
                 <div className="min-w-0">
                   <h3 className="truncate text-lg font-semibold text-gray-900">{classItem.name}</h3>
+                  {classItem.invite_status === 'invited' && <p className="mt-1 text-sm font-medium text-blue-700">You have been invited to teach this class.</p>}
                   <p className="text-sm text-gray-500">Created {new Date(classItem.created_at).toLocaleDateString()}</p>
                   <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
                     <Users className="w-4 h-4" />
@@ -179,6 +210,12 @@ export function TeacherDashboard() {
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                  {classItem.invite_status === 'invited' && (
+                    <div className="flex gap-2">
+                      <Button onClick={(event) => { event.stopPropagation(); void updateInvitation(classItem.id, true); }}>Accept</Button>
+                      <Button variant="outline" onClick={(event) => { event.stopPropagation(); void updateInvitation(classItem.id, false); }}>Decline</Button>
+                    </div>
+                  )}
                   <div className="flex items-center justify-between gap-3 rounded-md bg-blue-50 px-3 py-2">
                       <div>
                         <p className="text-xs text-gray-600 mb-1">Join Code</p>

@@ -363,6 +363,7 @@ export function StudentProfile() {
         .split("\n")
         .map((l) => l.trim())
         .filter(Boolean);
+  const isTeacherProfile = profile.role === "teacher";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -407,40 +408,44 @@ export function StudentProfile() {
                 ) : (
                   <h1 className="text-2xl font-bold text-gray-900 mb-2">{profile.display_name || "Student"}</h1>
                 )}
-                <div className="space-y-1 text-sm text-gray-600">
-                  <div className="flex items-center gap-2">
-                    <MapPin className="w-4 h-4" />
-                    <span>{formatConstituencyFull(profile.constituency_name)}</span>
-                    {canChooseRepresentation && (
-                      <button
-                        onClick={() => setShowConstituencyModal(true)}
-                        className="text-blue-600 hover:text-blue-700 transition-colors"
-                      >
-                        Change
-                      </button>
-                    )}
+                {isTeacherProfile ? (
+                  <div className="inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">Teacher</div>
+                ) : (
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <div className="flex items-center gap-2">
+                      <MapPin className="w-4 h-4" />
+                      <span>{formatConstituencyFull(profile.constituency_name)}</span>
+                      {canChooseRepresentation && (
+                        <button
+                          onClick={() => setShowConstituencyModal(true)}
+                          className="text-blue-600 hover:text-blue-700 transition-colors"
+                        >
+                          Change
+                        </button>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Flag className="w-4 h-4" />
+                      <span>{profile.party || "N/A"}</span>
+                      {canChooseRepresentation && (
+                        <button
+                          onClick={() => setShowPartyModal(true)}
+                          className="text-blue-600 hover:text-blue-700 transition-colors"
+                        >
+                          Change
+                        </button>
+                      )}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Cook PVI: {profile.constituency_cook_pvi || "N/A"}{" "}
+                      {profile.constituency_url ? (
+                        <a href={profile.constituency_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                          Wikipedia
+                        </a>
+                      ) : null}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Flag className="w-4 h-4" />
-                    <span>{profile.party || "N/A"}</span>
-                    {canChooseRepresentation && (
-                      <button
-                        onClick={() => setShowPartyModal(true)}
-                        className="text-blue-600 hover:text-blue-700 transition-colors"
-                      >
-                        Change
-                      </button>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Cook PVI: {profile.constituency_cook_pvi || "N/A"}{" "}
-                    {profile.constituency_url ? (
-                      <a href={profile.constituency_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                        Wikipedia
-                      </a>
-                    ) : null}
-                  </div>
-                </div>
+                )}
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-end gap-3">
@@ -539,6 +544,7 @@ export function StudentProfile() {
           )}
         </div>
 
+        {!isTeacherProfile && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-900">Constituency Description</h2>
@@ -612,6 +618,7 @@ export function StudentProfile() {
             <p className="text-gray-400 italic">{emptySectionText}</p>
           )}
         </div>
+        )}
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
@@ -709,6 +716,7 @@ export function StudentProfile() {
           </div>
         </div>
 
+        {!isTeacherProfile && (
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center gap-2 mb-4">
             <Users className="w-5 h-5 text-blue-600" />
@@ -749,6 +757,7 @@ export function StudentProfile() {
             </div>
           </div>
         </div>
+        )}
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-center gap-2 mb-3">

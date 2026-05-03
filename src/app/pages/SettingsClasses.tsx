@@ -1,15 +1,21 @@
 import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
 import { SettingsLayout } from "./SettingsLayout";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { X } from "lucide-react";
 
 export function SettingsClasses() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [classes, setClasses] = useState<Array<{ id: string; name: string; class_code: string; status: string }>>([]);
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joining, setJoining] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -28,6 +34,7 @@ export function SettingsClasses() {
       if (mErr) throw mErr;
       const byClass = new Map((memberships ?? []).map((m: any) => [m.class_id, m.status ?? "approved"]));
       const profileClassId = (profile as any)?.class_id as string | undefined;
+      setActiveClassId(profileClassId ?? null);
       if (profileClassId && !byClass.has(profileClassId)) byClass.set(profileClassId, "approved");
       const classIds = Array.from(byClass.keys());
       if (classIds.length === 0) {
@@ -60,11 +67,45 @@ export function SettingsClasses() {
     navigate(`/class/${id}/dashboard`);
   };
 
+  const joinClass = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!joinCode.trim()) return;
+    setJoining(true);
+    try {
+      const { error } = await supabase.rpc("join_class_by_code", { join_code_input: joinCode.trim().toUpperCase() });
+      if (error) throw error;
+      toast.success("Class joined");
+      setJoinCode("");
+      setShowJoinModal(false);
+      await load();
+    } catch (e: any) {
+      toast.error(e.message === "INVALID_CLASS_CODE" ? "Invalid class code" : e.message || "Could not join class");
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const updateInvitation = async (classId: string, accepted: boolean) => {
+    const { data: auth } = await supabase.auth.getUser();
+    const uid = auth.user?.id;
+    if (!uid) return;
+    const { error } = accepted
+      ? await supabase
+          .from("class_memberships")
+          .update({ status: "approved", approved_at: new Date().toISOString() } as any)
+          .eq("class_id", classId)
+          .eq("user_id", uid)
+      : await supabase.from("class_memberships").delete().eq("class_id", classId).eq("user_id", uid);
+    if (error) return toast.error(error.message || "Could not update invitation");
+    toast.success(accepted ? "Invitation accepted" : "Invitation declined");
+    await load();
+  };
+
   return (
     <SettingsLayout>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-bold">Classes</h2>
-        <Button onClick={() => navigate("/join-class")}>Join Class</Button>
+        <Button onClick={() => setShowJoinModal(true)}>Join Class</Button>
       </div>
 
       {loading ? (
@@ -75,7 +116,7 @@ export function SettingsClasses() {
             <CardTitle>Join a Class to Continue</CardTitle>
           </CardHeader>
           <CardContent>
-            <Button onClick={() => navigate("/join-class")}>Join Class</Button>
+            <Button onClick={() => setShowJoinModal(true)}>Join Class</Button>
           </CardContent>
         </Card>
       ) : (
@@ -89,10 +130,47 @@ export function SettingsClasses() {
                 <p className="text-sm text-gray-600 mb-3">
                   Join code: <span className="font-mono font-semibold">{c.class_code}</span>
                 </p>
-                <Button onClick={() => void openClassDashboard(c.id)}>Open</Button>
+                {c.status === "invited" ? (
+                  <div className="flex gap-2">
+                    <Button onClick={() => void updateInvitation(c.id, true)}>Accept</Button>
+                    <Button variant="outline" onClick={() => void updateInvitation(c.id, false)}>Decline</Button>
+                  </div>
+                ) : activeClassId === c.id ? (
+                  <div className="inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">Active</div>
+                ) : (
+                  <Button variant="outline" onClick={() => void openClassDashboard(c.id)}>Make active</Button>
+                )}
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+      {showJoinModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <Card className="relative w-full max-w-md">
+            <button type="button" onClick={() => setShowJoinModal(false)} className="absolute right-4 top-4 rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Close">
+              <X className="h-5 w-5" />
+            </button>
+            <CardHeader>
+              <CardTitle>Join a Class</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={joinClass} className="space-y-4">
+                <input
+                  value={joinCode}
+                  onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+                  maxLength={6}
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 font-mono text-lg uppercase outline-none focus:ring-2 focus:ring-blue-500"
+                  placeholder="ABC123"
+                  required
+                />
+                <Button className="w-full" disabled={joining}>{joining ? "Joining..." : "Join Class"}</Button>
+                <button type="button" onClick={() => navigate("/join-class")} className="w-full text-sm font-medium text-blue-600 hover:text-blue-700">
+                  Open join page
+                </button>
+              </form>
+            </CardContent>
+          </Card>
         </div>
       )}
     </SettingsLayout>

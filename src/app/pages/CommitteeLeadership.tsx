@@ -53,6 +53,7 @@ export function CommitteeLeadership() {
   const [committee, setCommittee] = useState<{ id: string; class_id: string; name: string; description: string | null } | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [votes, setVotes] = useState<Array<{ position: LeadershipPosition; voter_user_id: string; candidate_user_id: string }>>([]);
+  const [classSettings, setClassSettings] = useState<any>({});
 
   const load = async () => {
     const cached = leadershipPageCache.get(committeeId);
@@ -77,6 +78,8 @@ export function CommitteeLeadership() {
       const { data: c, error: cErr } = await supabase.from("committees").select("id,class_id,name,description").eq("id", committeeId).single();
       if (cErr) throw cErr;
       setCommittee(c as any);
+      const { data: classRow } = await supabase.from("classes").select("settings").eq("id", (c as any).class_id).maybeSingle();
+      setClassSettings((classRow as any)?.settings ?? {});
 
       const { data: memberRows, error: mErr } = await supabase.from("committee_members").select("user_id,role").eq("committee_id", committeeId);
       if (mErr) throw mErr;
@@ -115,6 +118,8 @@ export function CommitteeLeadership() {
   }, [committeeId]);
 
   const isMember = !!meId && members.some((m) => m.user_id === meId);
+  const isTeacher = role === "teacher";
+  const electionOpen = classSettings?.elections?.committeeOpenById?.[committeeId] ?? Boolean(classSettings?.elections?.open);
   const majorityParty = useMemo(() => {
     const counts = new Map<string, number>();
     for (const member of members) counts.set(memberParty(member), (counts.get(memberParty(member)) ?? 0) + 1);
@@ -194,12 +199,27 @@ export function CommitteeLeadership() {
     }
   };
 
+  const setCommitteeElectionOpen = async (open: boolean) => {
+    if (!committee || !isTeacher) return;
+    const nextSettings = {
+      ...classSettings,
+      elections: {
+        ...(classSettings.elections ?? {}),
+        committeeOpenById: { ...(classSettings.elections?.committeeOpenById ?? {}), [committee.id]: open },
+      },
+    };
+    const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", committee.class_id);
+    if (error) return toast.error(error.message || "Could not update election");
+    setClassSettings(nextSettings);
+    toast.success(open ? "Committee election opened" : "Committee election closed");
+  };
+
   const electionPanel = (position: LeadershipPosition, label: string, candidates: Member[]) => (
     <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold text-gray-900">{label}</h2>
-          <p className="text-sm text-gray-600">Winner so far: {winnerFor(position)?.profile?.display_name ?? "No votes yet"}</p>
+          <p className="text-sm text-gray-600">{electionOpen ? "Voting is open." : "Voting is closed."} Winner so far: {winnerFor(position)?.profile?.display_name ?? "No votes yet"}</p>
         </div>
         <Vote className="h-5 w-5 text-blue-600" />
       </div>
@@ -216,7 +236,7 @@ export function CommitteeLeadership() {
             </div>
             <div className="flex items-center gap-3">
               <span className="text-sm text-gray-600">{voteCount(position, member.user_id)} votes</span>
-              {isMember && (
+              {isMember && electionOpen && (
                 <button
                   onClick={() => void castVote(position, member.user_id)}
                   className={`rounded-md px-3 py-1.5 text-sm font-medium ${myVote(position) === member.user_id ? "bg-blue-600 text-white" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
@@ -241,11 +261,16 @@ export function CommitteeLeadership() {
           <>
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h1 className="text-3xl font-bold text-gray-900">{committee.name}</h1>
-              {role === "teacher" && (
-                <button onClick={() => void applyWinners()} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
-                  <CheckCircle className="h-4 w-4" />
-                  Apply winners
-                </button>
+              {isTeacher && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <button onClick={() => void setCommitteeElectionOpen(!electionOpen)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    {electionOpen ? "Close election" : "Open election"}
+                  </button>
+                  <button onClick={() => void applyWinners()} className="inline-flex items-center gap-2 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+                    <CheckCircle className="h-4 w-4" />
+                    Apply winners
+                  </button>
+                </div>
               )}
             </div>
             <CommitteeTabs committeeId={committeeId} active="election" />

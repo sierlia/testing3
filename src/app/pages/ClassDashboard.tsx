@@ -27,6 +27,7 @@ import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
 import { fetchCalendaredBillsForCurrentClass } from "../services/bills";
 import { supabase } from "../utils/supabase";
+import { toast } from "sonner";
 
 interface CalendarEvent {
   id: string;
@@ -59,6 +60,8 @@ export function ClassDashboard() {
   const [billStats, setBillStats] = useState({ total: 0, waitingReferral: 0, waitingCalendar: 0 });
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
   const currentTimelineCardRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -277,6 +280,22 @@ export function ClassDashboard() {
     });
   };
 
+  const inviteTeacher = async () => {
+    if (!classId || !inviteEmail.trim()) return;
+    setInviteBusy(true);
+    try {
+      const { error } = await supabase.rpc("invite_teacher_to_class", { target_class: classId, teacher_email: inviteEmail.trim() });
+      if (error) throw error;
+      toast.success("Teacher invited");
+      setInviteEmail("");
+    } catch (e: any) {
+      const message = e.message === "TEACHER_NOT_FOUND" ? "No teacher account found with that email." : e.message || "Could not invite teacher";
+      toast.error(message);
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
   const workflowStepRaw = classSettings?.workflow?.stage ?? "setup";
   const workflowStep = ["open_elections", "conclude_elections"].includes(workflowStepRaw) ? "elections" : workflowStepRaw;
   const classJoinEnabled = Boolean(classSettings?.class?.joinEnabled);
@@ -318,16 +337,16 @@ export function ClassDashboard() {
     }
     if (stepId === "elections") {
       return (
-        <div className="mt-4 w-full rounded-md border border-gray-200 bg-white p-1 shadow-sm">
-          <div className="px-3 py-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
+        <div className="mt-4 w-full">
+          <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
             Elections: {electionsOpen ? "open" : "closed"}
           </div>
-          <div className="grid grid-cols-2 gap-1">
+          <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
               onClick={() => void openElections()}
               disabled={workflowBusy}
-              className={`inline-flex items-center justify-center gap-2 rounded px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${electionsOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
+              className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${electionsOpen ? "bg-blue-600 text-white shadow-sm" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
             >
               <Vote className="h-5 w-5" />
               Open
@@ -336,7 +355,7 @@ export function ClassDashboard() {
               type="button"
               onClick={() => void concludeElections()}
               disabled={workflowBusy}
-              className={`inline-flex items-center justify-center gap-2 rounded px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-gray-900 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
+              className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-gray-900 text-white shadow-sm" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
             >
               <Vote className="h-5 w-5" />
               Closed
@@ -620,6 +639,21 @@ export function ClassDashboard() {
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
+                <div className="space-y-2">
+                  <div className="text-sm font-semibold text-gray-900">Invite teacher</div>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                      placeholder="teacher@email.com"
+                      className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <Button type="button" onClick={() => void inviteTeacher()} disabled={inviteBusy || !inviteEmail.trim()}>
+                      Invite
+                    </Button>
+                  </div>
+                </div>
                 {actionSections.map((section) => (
                   <div key={section.title}>
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{section.title}</h3>

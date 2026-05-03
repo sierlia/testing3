@@ -55,7 +55,7 @@ export function TessCaucusDetail() {
   const [meId, setMeId] = useState<string | null>(null);
   const [meProfile, setMeProfile] = useState<ProfileLite | null>(null);
 
-  const [caucus, setCaucus] = useState<{ id: string; title: string; description: string; created_at: string } | null>(null);
+  const [caucus, setCaucus] = useState<{ id: string; class_id: string; title: string; description: string; created_at: string } | null>(null);
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [memberSort, setMemberSort] = useState<"role" | "name" | "party">("role");
@@ -81,6 +81,7 @@ export function TessCaucusDetail() {
   const [draggingSplit, setDraggingSplit] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "election">("dashboard");
+  const [classSettings, setClassSettings] = useState<any>({});
 
   const isLeader = myRole === "chair" || myRole === "co_chair";
   const isChair = myRole === "chair";
@@ -92,6 +93,22 @@ export function TessCaucusDetail() {
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
     [announcements, selectedAnnouncementId],
   );
+  const electionOpen = classSettings?.elections?.caucusOpenById?.[caucusId] ?? Boolean(classSettings?.elections?.open);
+
+  const setCaucusElectionOpen = async (open: boolean) => {
+    if (!caucus || !isTeacher) return;
+    const nextSettings = {
+      ...classSettings,
+      elections: {
+        ...(classSettings.elections ?? {}),
+        caucusOpenById: { ...(classSettings.elections?.caucusOpenById ?? {}), [caucus.id]: open },
+      },
+    };
+    const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", caucus.class_id);
+    if (error) return toast.error(error.message || "Could not update election");
+    setClassSettings(nextSettings);
+    toast.success(open ? "Caucus election opened" : "Caucus election closed");
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -115,13 +132,15 @@ export function TessCaucusDetail() {
 
         const { data: c, error: cErr } = await supabase
           .from("caucuses")
-          .select("id,title,description,created_at")
+          .select("id,class_id,title,description,created_at")
           .eq("id", caucusId)
           .single();
         if (cErr) throw cErr;
         setCaucus(c);
         setAboutDraft(c.description ?? "");
         setNameDraft(c.title ?? "Caucus");
+        const { data: classRow } = await supabase.from("classes").select("settings").eq("id", c.class_id).maybeSingle();
+        setClassSettings((classRow as any)?.settings ?? {});
 
         const { data: mRows, error: mErr } = await supabase
           .from("caucus_members")
@@ -956,8 +975,20 @@ export function TessCaucusDetail() {
             </div>
             ) : (
               <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="mb-4">
-                  <h2 className="text-lg font-semibold text-gray-900">Caucus Leadership Election</h2>
+                <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold text-gray-900">Caucus Leadership Election</h2>
+                    <p className="text-sm text-gray-500">{electionOpen ? "Voting is open." : "Voting is closed."}</p>
+                  </div>
+                  {isTeacher && (
+                    <button
+                      type="button"
+                      onClick={() => void setCaucusElectionOpen(!electionOpen)}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                      {electionOpen ? "Close election" : "Open election"}
+                    </button>
+                  )}
                 </div>
                 <div className="space-y-3">
                   {visibleMembers.map((m) => (
@@ -970,7 +1001,7 @@ export function TessCaucusDetail() {
                       </div>
                       <div className="flex items-center gap-2">
                         {m.role !== "member" && <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">{m.role.replace("_", " ")}</span>}
-                        {isChair && m.role !== "chair" && (
+                        {isChair && electionOpen && m.role !== "chair" && (
                           <button
                             type="button"
                             onClick={() => void setMemberRole(m.user_id, m.role === "co_chair" ? "member" : "co_chair")}

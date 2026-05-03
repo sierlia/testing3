@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Check, Minus, Trophy, Vote, X } from "lucide-react";
+import { Check, Minus, Search, Trophy, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../services/bills";
@@ -11,6 +11,7 @@ type CalendarItem = Awaited<ReturnType<typeof fetchCalendaredBillsForCurrentClas
 type SessionRow = { id: string; bill_id: string; status: "open" | "closed"; opened_at: string | null; closed_at: string | null };
 type VoteRow = { session_id: string; bill_id: string; user_id: string; vote: VoteChoice };
 type SpeakerCandidate = { id: string; name: string; party?: string | null };
+type SpeakerVoteRow = { class_id: string; voter_user_id: string; candidate_user_id: string };
 
 function sessionLabel(session: SessionRow | null) {
   if (!session) return "Vote unopened";
@@ -31,6 +32,9 @@ export function FloorSession() {
   const [busy, setBusy] = useState(false);
   const [speakerVote, setSpeakerVote] = useState<string | null>(null);
   const [speakerCandidates, setSpeakerCandidates] = useState<SpeakerCandidate[]>([]);
+  const [speakerVotes, setSpeakerVotes] = useState<SpeakerVoteRow[]>([]);
+  const [speakerSearch, setSpeakerSearch] = useState("");
+  const [speakerPartyFilter, setSpeakerPartyFilter] = useState("all");
 
   const load = async () => {
     setLoading(true);
@@ -39,16 +43,18 @@ export function FloorSession() {
       setRole(current.profile.role ?? null);
       setMeId(current.userId);
       setClassId(current.classId);
-      const [calendarRows, sessionRows, voteRows, directory, classRow] = await Promise.all([
+      const [calendarRows, sessionRows, voteRows, directory, classRow, speakerVoteRows] = await Promise.all([
         fetchCalendaredBillsForCurrentClass(),
         supabase.from("bill_floor_sessions").select("id,bill_id,status,opened_at,closed_at").eq("class_id", current.classId),
         supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", current.classId),
         supabase.rpc("class_directory", { target_class: current.classId } as any),
         supabase.from("classes").select("settings").eq("id", current.classId).maybeSingle(),
+        supabase.from("class_speaker_votes").select("class_id,voter_user_id,candidate_user_id").eq("class_id", current.classId),
       ]);
       if (sessionRows.error) throw sessionRows.error;
       if (voteRows.error) throw voteRows.error;
       if (classRow.error) throw classRow.error;
+      if (speakerVoteRows.error) throw speakerVoteRows.error;
       const students = ((directory.data ?? []) as any[]).filter((person) => person.role !== "teacher");
       setItems([...calendarRows].sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()));
       setSessions((sessionRows.data ?? []) as any);
@@ -56,6 +62,9 @@ export function FloorSession() {
       setStudentCount(students.length);
       setClassSettings((classRow.data as any)?.settings ?? {});
       setSpeakerCandidates(students.map((student) => ({ id: student.user_id, name: student.display_name ?? "Student", party: student.party })));
+      const nextSpeakerVotes = (speakerVoteRows.data ?? []) as any[];
+      setSpeakerVotes(nextSpeakerVotes);
+      setSpeakerVote(nextSpeakerVotes.find((row) => row.voter_user_id === current.userId)?.candidate_user_id ?? null);
     } catch (e: any) {
       toast.error(e.message || "Could not load floor");
     } finally {
@@ -66,6 +75,31 @@ export function FloorSession() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!classId) return;
+    const channel = supabase
+      .channel(`speaker-votes:${classId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "class_speaker_votes", filter: `class_id=eq.${classId}` },
+        (payload: any) => {
+          const nextRow = payload.new as SpeakerVoteRow | undefined;
+          const oldRow = payload.old as SpeakerVoteRow | undefined;
+          setSpeakerVotes((prev) => {
+            if (payload.eventType === "DELETE" && oldRow) return prev.filter((row) => row.voter_user_id !== oldRow.voter_user_id);
+            if (!nextRow) return prev;
+            return [...prev.filter((row) => row.voter_user_id !== nextRow.voter_user_id), nextRow];
+          });
+          if (nextRow?.voter_user_id === meId) setSpeakerVote(nextRow.candidate_user_id);
+          if (payload.eventType === "DELETE" && oldRow?.voter_user_id === meId) setSpeakerVote(null);
+        },
+      )
+      .subscribe();
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [classId, meId]);
 
   const speakerConcluded = Boolean(classSettings?.elections?.speakerConcluded);
   const activeItem = useMemo(() => {
@@ -90,6 +124,18 @@ export function FloorSession() {
     [sessionVotes],
   );
   const totalVoted = counts.yea + counts.nay + counts.present;
+  const speakerParties = useMemo(
+    () => [...new Set(speakerCandidates.map((candidate) => candidate.party || "No party"))].sort((a, b) => a.localeCompare(b)),
+    [speakerCandidates],
+  );
+  const visibleSpeakerCandidates = useMemo(() => {
+    const query = speakerSearch.trim().toLowerCase();
+    return speakerCandidates.filter((candidate) => {
+      const party = candidate.party || "No party";
+      return (!query || candidate.name.toLowerCase().includes(query) || party.toLowerCase().includes(query)) && (speakerPartyFilter === "all" || party === speakerPartyFilter);
+    });
+  }, [speakerCandidates, speakerPartyFilter, speakerSearch]);
+  const speakerVoteCount = (candidateId: string) => speakerVotes.filter((row) => row.candidate_user_id === candidateId).length;
 
   const concludeSpeakerElection = async () => {
     if (!classId || role !== "teacher") return;
@@ -105,6 +151,31 @@ export function FloorSession() {
       toast.success("Speaker election concluded");
     } catch (e: any) {
       toast.error(e.message || "Could not conclude Speaker election");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const castSpeakerVote = async (candidateId: string) => {
+    if (!classId || !meId || role === "teacher") return;
+    setBusy(true);
+    try {
+      if (speakerVote === candidateId) {
+        const { error } = await supabase.from("class_speaker_votes").delete().eq("class_id", classId).eq("voter_user_id", meId);
+        if (error) throw error;
+        setSpeakerVote(null);
+        setSpeakerVotes((prev) => prev.filter((row) => row.voter_user_id !== meId));
+        return;
+      }
+      const { error } = await supabase.from("class_speaker_votes").upsert(
+        { class_id: classId, voter_user_id: meId, candidate_user_id: candidateId, updated_at: new Date().toISOString() } as any,
+        { onConflict: "class_id,voter_user_id" },
+      );
+      if (error) throw error;
+      setSpeakerVote(candidateId);
+      setSpeakerVotes((prev) => [...prev.filter((row) => row.voter_user_id !== meId), { class_id: classId, voter_user_id: meId, candidate_user_id: candidateId }]);
+    } catch (e: any) {
+      toast.error(e.message || "Could not record speaker vote");
     } finally {
       setBusy(false);
     }
@@ -205,19 +276,45 @@ export function FloorSession() {
             {speakerCandidates.length === 0 ? (
               <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">No student candidates are available yet.</div>
             ) : (
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {speakerCandidates.map((candidate) => (
+              <div className="space-y-4">
+                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={speakerSearch}
+                      onChange={(event) => setSpeakerSearch(event.target.value)}
+                      placeholder="Search candidates..."
+                      className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <select value={speakerPartyFilter} onChange={(event) => setSpeakerPartyFilter(event.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
+                    <option value="all">All parties</option>
+                    {speakerParties.map((party) => <option key={party} value={party}>{party}</option>)}
+                  </select>
+                </div>
+                <div className="overflow-hidden rounded-lg border border-gray-200">
+                {visibleSpeakerCandidates.map((candidate) => (
                   <button
                     key={candidate.id}
                     type="button"
-                    onClick={() => setSpeakerVote((prev) => (prev === candidate.id ? null : candidate.id))}
-                    className={`rounded-md border p-4 text-left transition-colors ${speakerVote === candidate.id ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:bg-gray-50"}`}
+                    onClick={() => void castSpeakerVote(candidate.id)}
+                    disabled={busy || role === "teacher"}
+                    className={`flex w-full items-center justify-between gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 disabled:cursor-default ${
+                      speakerVote === candidate.id ? "bg-blue-50" : "bg-white hover:bg-gray-50"
+                    }`}
                   >
-                    <div className="font-semibold text-gray-900">{candidate.name}</div>
-                    <div className="text-sm text-gray-500">{candidate.party ?? "No party"}</div>
-                    <div className="mt-3 text-sm font-medium text-blue-700">{speakerVote === candidate.id ? "Selected" : "Vote for Speaker"}</div>
+                    <div className="min-w-0">
+                      <div className="font-semibold text-gray-900">{candidate.name}</div>
+                      <div className="text-sm text-gray-500">{candidate.party ?? "No party"}</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-lg font-bold text-blue-700">{speakerVoteCount(candidate.id)}</div>
+                      <div className="text-xs text-gray-500">{speakerVote === candidate.id ? "Selected" : "votes"}</div>
+                    </div>
                   </button>
                 ))}
+                {visibleSpeakerCandidates.length === 0 && <div className="p-4 text-center text-sm text-gray-500">No candidates match the filters.</div>}
+                </div>
               </div>
             )}
           </div>
