@@ -3,7 +3,7 @@ import { useParams } from "react-router";
 import { CheckCircle2, FileText, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { CommitteeTabs } from "../components/CommitteeTabs";
+import { CommitteeTabs, markCommitteeSeenIds } from "../components/CommitteeTabs";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
 import { reportBillFromCommittee } from "../services/bills";
@@ -28,6 +28,17 @@ type CommitteeBill = {
 
 type VoteChoice = "yea" | "nay" | "present";
 
+const votePageCache = new Map<
+  string,
+  {
+    classId: string | null;
+    committeeName: string;
+    myCommitteeRole: string | null;
+    bills: CommitteeBill[];
+    selectedBillId: string | null;
+  }
+>();
+
 export function CommitteeVote() {
   const { id } = useParams();
   const committeeId = id!;
@@ -45,7 +56,17 @@ export function CommitteeVote() {
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
+      const cached = votePageCache.get(committeeId);
+      if (cached) {
+        setClassId(cached.classId);
+        setCommitteeName(cached.committeeName);
+        setMyCommitteeRole(cached.myCommitteeRole);
+        setBills(cached.bills);
+        setSelectedBillId((prev) => prev ?? cached.selectedBillId);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       try {
         const { data: auth } = await supabase.auth.getUser();
         const uid = auth.user?.id;
@@ -100,7 +121,15 @@ export function CommitteeVote() {
           status: bill.status,
         }));
         setBills(mapped);
-        setSelectedBillId(mapped[0]?.id ?? null);
+        const nextSelectedBillId = selectedBillId && mapped.some((bill) => bill.id === selectedBillId) ? selectedBillId : mapped[0]?.id ?? null;
+        setSelectedBillId(nextSelectedBillId);
+        votePageCache.set(committeeId, {
+          classId: cid,
+          committeeName: (committee as any)?.name ?? "Committee",
+          myCommitteeRole: (myMembership as any)?.role ?? null,
+          bills: mapped,
+          selectedBillId: nextSelectedBillId,
+        });
       } catch (e: any) {
         toast.error(e.message || "Could not load committee vote");
       } finally {
@@ -209,8 +238,7 @@ export function CommitteeVote() {
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName} Vote</h1>
-          <p className="text-gray-600">Vote on bills that have been proposed by committee leadership.</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName}</h1>
         </div>
         <div className="mb-6">
           <CommitteeTabs committeeId={committeeId} active="vote" />
@@ -235,7 +263,12 @@ export function CommitteeVote() {
                   <button
                     key={bill.id}
                     type="button"
-                    onClick={() => setSelectedBillId(bill.id)}
+                    onClick={() => {
+                      setSelectedBillId(bill.id);
+                      const cached = votePageCache.get(committeeId);
+                      if (cached) votePageCache.set(committeeId, { ...cached, selectedBillId: bill.id });
+                      markCommitteeSeenIds(committeeId, "vote", [bill.id]);
+                    }}
                     className={`w-full border-b border-gray-100 p-4 text-left hover:bg-gray-50 ${selectedBillId === bill.id ? "bg-blue-50" : ""}`}
                   >
                     <div className="font-mono text-sm font-semibold text-gray-900">{bill.number}</div>

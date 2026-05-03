@@ -5,35 +5,69 @@ import { supabase } from "../utils/supabase";
 type TabId = "dashboard" | "review" | "vote";
 
 type Counts = Record<TabId, number>;
+type CountData = {
+  counts: Counts;
+  ids: Record<TabId, string[]>;
+};
 
 const defaultCounts: Counts = { dashboard: 0, review: 0, vote: 0 };
+const defaultIds: Record<TabId, string[]> = { dashboard: [], review: [], vote: [] };
+
+export function committeeSeenStorageKey(committeeId: string, tab: TabId) {
+  return `committee:${committeeId}:seenIds:${tab}`;
+}
+
+export function readCommitteeSeenIds(committeeId: string, tab: TabId) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(committeeSeenStorageKey(committeeId, tab)) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function markCommitteeSeenIds(committeeId: string, tab: TabId, ids: string[]) {
+  const merged = Array.from(new Set([...readCommitteeSeenIds(committeeId, tab), ...ids.filter(Boolean)]));
+  window.localStorage.setItem(committeeSeenStorageKey(committeeId, tab), JSON.stringify(merged));
+  window.dispatchEvent(new CustomEvent("committee-seen-updated", { detail: { committeeId, tab } }));
+}
 
 export function CommitteeTabs({ committeeId, active }: { committeeId: string; active: TabId }) {
-  const [counts, setCounts] = useState<Counts>(defaultCounts);
+  const [countData, setCountData] = useState<CountData>({ counts: defaultCounts, ids: defaultIds });
+  const [seenVersion, setSeenVersion] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
-      const [{ count: announcementCount }, { data: refs }] = await Promise.all([
+      const [{ data: announcements }, { data: refs }] = await Promise.all([
         supabase
           .from("committee_announcements")
-          .select("id", { count: "exact", head: true })
+          .select("id")
           .eq("committee_id", committeeId),
         supabase.from("bill_referrals").select("bill_id").eq("committee_id", committeeId),
       ]);
       const billIds = (refs ?? []).map((row: any) => row.bill_id);
-      const { count: voteCount } = billIds.length
+      const { data: voteRows } = billIds.length
         ? await supabase
             .from("bill_display")
-            .select("id", { count: "exact", head: true })
+            .select("id")
             .in("id", billIds)
             .eq("status", "committee_vote")
-        : ({ count: 0 } as any);
+        : ({ data: [] } as any);
+      const dashboardIds = (announcements ?? []).map((row: any) => row.id);
+      const voteIds = (voteRows ?? []).map((row: any) => row.id);
       if (!cancelled) {
-        setCounts({
-          dashboard: announcementCount ?? 0,
-          review: billIds.length,
-          vote: voteCount ?? 0,
+        setCountData({
+          counts: {
+            dashboard: dashboardIds.length,
+            review: billIds.length,
+            vote: voteIds.length,
+          },
+          ids: {
+            dashboard: dashboardIds,
+            review: billIds,
+            vote: voteIds,
+          },
         });
       }
     };
@@ -43,19 +77,31 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     };
   }, [committeeId]);
 
-  const storageKeyPrefix = `committee:${committeeId}:seen`;
-  const newCounts = useMemo(() => {
-    const readSeen = (tab: TabId) => Number(window.localStorage.getItem(`${storageKeyPrefix}:${tab}`) ?? "0");
-    return {
-      dashboard: Math.max(0, counts.dashboard - readSeen("dashboard")),
-      review: Math.max(0, counts.review - readSeen("review")),
-      vote: Math.max(0, counts.vote - readSeen("vote")),
-    };
-  }, [counts, storageKeyPrefix]);
-
   useEffect(() => {
-    window.localStorage.setItem(`${storageKeyPrefix}:${active}`, String(counts[active]));
-  }, [active, counts, storageKeyPrefix]);
+    const onSeen = (event: Event) => {
+      const detail = (event as CustomEvent).detail as { committeeId?: string } | undefined;
+      if (!detail?.committeeId || detail.committeeId === committeeId) setSeenVersion((value) => value + 1);
+    };
+    window.addEventListener("committee-seen-updated", onSeen);
+    window.addEventListener("storage", onSeen);
+    return () => {
+      window.removeEventListener("committee-seen-updated", onSeen);
+      window.removeEventListener("storage", onSeen);
+    };
+  }, [committeeId]);
+
+  const counts = countData.counts;
+  const newCounts = useMemo(() => {
+    const unseenCount = (tab: TabId) => {
+      const seen = new Set(readCommitteeSeenIds(committeeId, tab));
+      return countData.ids[tab].filter((id) => !seen.has(id)).length;
+    };
+    return {
+      dashboard: unseenCount("dashboard"),
+      review: unseenCount("review"),
+      vote: unseenCount("vote"),
+    };
+  }, [committeeId, countData, seenVersion]);
 
   const tabs = [
     { id: "dashboard" as const, label: "Dashboard", to: `/committees/${committeeId}` },

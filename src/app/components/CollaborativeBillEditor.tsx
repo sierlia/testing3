@@ -5,7 +5,7 @@ import { isChangeOrigin } from "@tiptap/extension-collaboration";
 import StarterKit from "@tiptap/starter-kit";
 import Collaboration from "@tiptap/extension-collaboration";
 import CollaborationCursor from "@tiptap/extension-collaboration-cursor";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
+import { Plugin, PluginKey, TextSelection } from "@tiptap/pm/state";
 import * as Y from "yjs";
 import { Awareness } from "y-protocols/awareness";
 import {
@@ -209,21 +209,18 @@ function sanitizeUrl(value: string) {
   return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
 }
 
-function deletedOriginalText(doc: any, from: number, to: number) {
-  const pieces: string[] = [];
+function hasDeletedContent(doc: any, from: number, to: number) {
+  let hasContent = false;
   doc.nodesBetween(from, to, (node: any, pos: number) => {
     if (!node.isText) return true;
     const isTrackedChange = node.marks?.some((mark: any) => mark.type.name === "editHighlight" || mark.type.name === "deleteHighlight");
     if (!isTrackedChange && node.text) {
-      const textStart = Math.max(from, pos);
-      const textEnd = Math.min(to, pos + node.nodeSize);
-      const sliceStart = Math.max(0, textStart - pos);
-      const sliceEnd = Math.max(sliceStart, textEnd - pos);
-      pieces.push(node.text.slice(sliceStart, sliceEnd));
+      hasContent = true;
+      return false;
     }
     return false;
   });
-  return pieces.join("");
+  return hasContent;
 }
 
 function setBlockAlignment(editor: Editor, alignment: "left" | "center" | "right") {
@@ -257,9 +254,11 @@ function setBlockAlignment(editor: Editor, alignment: "left" | "center" | "right
 function createEditAttributionExtension({
   getAuthor,
   shouldSuppress,
+  getDeleteDirection,
 }: {
   getAuthor: () => { id: string; name: string; color: string };
   shouldSuppress: () => boolean;
+  getDeleteDirection: () => "backward" | "forward" | null;
 }) {
   return Extension.create({
     name: "editAttribution",
@@ -304,7 +303,7 @@ function createEditAttributionExtension({
             if (!changedTransactions.length) return null;
 
             const ranges: Array<{ from: number; to: number }> = [];
-            const deletions: Array<{ at: number; text: string }> = [];
+            const deletions: Array<{ at: number; slice: any; direction: "backward" | "forward" | null }> = [];
             for (const transaction of changedTransactions) {
               transaction.mapping.maps.forEach((stepMap, mapIndex) => {
                 stepMap.forEach((oldStart, oldEnd, newStart, newEnd) => {
@@ -316,11 +315,11 @@ function createEditAttributionExtension({
                     });
                   }
                   if (oldEnd > oldStart) {
-                    const text = deletedOriginalText(transaction.before, oldStart, oldEnd);
-                    if (text) {
+                    if (hasDeletedContent(transaction.before, oldStart, oldEnd)) {
                       deletions.push({
                         at: laterMaps.map(newStart, 1),
-                        text,
+                        slice: transaction.before.slice(oldStart, oldEnd),
+                        direction: getDeleteDirection(),
                       });
                     }
                   }
@@ -352,10 +351,13 @@ function createEditAttributionExtension({
 
             for (const deletion of [...deletions].sort((a, b) => b.at - a.at)) {
               const from = Math.max(0, Math.min(deletion.at, tr.doc.content.size));
-              tr.insertText(deletion.text, from);
-              const to = from + deletion.text.length;
+              tr.replaceRange(from, from, deletion.slice);
+              const to = from + deletion.slice.size;
               tr.removeMark(from, to, editMarkType);
               tr.addMark(from, to, deleteMark);
+              if (deletions.length === 1) {
+                tr.setSelection(TextSelection.create(tr.doc, deletion.direction === "forward" ? to : from));
+              }
             }
 
             if (!tr.docChanged) return null;
@@ -443,6 +445,7 @@ export function CollaborativeBillEditor({
   const awarenessRef = useRef<Awareness | null>(null);
   const didInitRef = useRef(false);
   const suppressAttributionRef = useRef(false);
+  const deleteDirectionRef = useRef<"backward" | "forward" | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const hydratedFromSnapshotRef = useRef(false);
@@ -540,6 +543,7 @@ export function CollaborativeBillEditor({
           createEditAttributionExtension({
             getAuthor: () => localUser,
             shouldSuppress: () => suppressAttributionRef.current,
+            getDeleteDirection: () => deleteDirectionRef.current,
           }),
           Collaboration.configure({ document: ydocRef.current }),
           CollaborationCursor.configure({
@@ -550,6 +554,14 @@ export function CollaborativeBillEditor({
         editorProps: {
           attributes: {
             class: "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
+          },
+          handleKeyDown: (_view, event) => {
+            if (event.key === "Backspace") deleteDirectionRef.current = "backward";
+            if (event.key === "Delete") deleteDirectionRef.current = "forward";
+            window.setTimeout(() => {
+              deleteDirectionRef.current = null;
+            }, 0);
+            return false;
           },
         },
         // Ensure schema is created with a doc node even before any remote steps arrive.
@@ -578,17 +590,26 @@ export function CollaborativeBillEditor({
             createEditAttributionExtension({
               getAuthor: () => localUser,
               shouldSuppress: () => suppressAttributionRef.current,
+              getDeleteDirection: () => deleteDirectionRef.current,
             }),
           ],
           editorProps: {
             attributes: {
               class: "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
             },
+            handleKeyDown: (_view, event) => {
+              if (event.key === "Backspace") deleteDirectionRef.current = "backward";
+              if (event.key === "Delete") deleteDirectionRef.current = "forward";
+              window.setTimeout(() => {
+                deleteDirectionRef.current = null;
+              }, 0);
+              return false;
+            },
           },
           content: initialHtml || "<p></p>",
         });
         setEditor(ed);
-        setEditorError(`Collaboration unavailable: ${e?.message || String(e)}`);
+        setEditorError(null);
         setCollabStatus("fallback");
         return () => {
           ed.destroy();

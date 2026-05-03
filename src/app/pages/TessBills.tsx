@@ -125,6 +125,7 @@ export function TessBills() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const isTeacher = (user?.user_metadata as any)?.role === "teacher";
+  const currentUserId = user?.id ?? "";
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBill, setSelectedBill] = useState<BillView | null>(null);
   const [allBills, setAllBills] = useState<BillView[]>([]);
@@ -243,7 +244,8 @@ export function TessBills() {
                 className="w-full rounded-md border border-gray-300 py-3 pl-10 pr-3 text-base outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-2">
               <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
                 <option value="all">All statuses</option>
                 {statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
@@ -270,8 +272,7 @@ export function TessBills() {
                 <option value="cosponsors">Sort: Cosponsors</option>
               </select>
               <button onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
-            </div>
-            <div className="flex justify-end">
+              </div>
               <div className="flex rounded-md border border-gray-300 bg-white p-1 shadow-sm">
                 <button type="button" onClick={() => setRowMode("preview")} className={`flex items-center justify-center gap-1 rounded px-3 py-1.5 text-sm font-medium ${rowMode === "preview" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
                   <Eye className="h-4 w-4" />
@@ -295,7 +296,9 @@ export function TessBills() {
                 <div className="py-12 text-center text-gray-500">No bills found matching your criteria</div>
               ) : (
                 <div className="divide-y divide-gray-200">
-                  {filteredBills.map((bill) => (
+                  {filteredBills.map((bill) => {
+                    const authoredByMe = bill.sponsorId === currentUserId;
+                    return (
                     <div
                       key={bill.id}
                       role="button"
@@ -304,7 +307,9 @@ export function TessBills() {
                       onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") handleBillClick(bill);
                       }}
-                      className={`block w-full p-4 text-left transition-colors hover:bg-gray-50 ${selectedBill?.id === bill.id && rowMode === "preview" ? "bg-blue-50" : ""}`}
+                      className={`block w-full p-4 text-left transition-colors hover:bg-gray-50 ${
+                        authoredByMe ? "bg-emerald-50/60" : ""
+                      } ${selectedBill?.id === bill.id && rowMode === "preview" ? "bg-blue-50" : ""}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
@@ -336,7 +341,8 @@ export function TessBills() {
                         </div>
                       </div>
                     </div>
-                  ))}
+                  );
+                  })}
                 </div>
               )}
             </div>

@@ -8,13 +8,51 @@ import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/Rea
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
-import { CommitteeTabs } from "../components/CommitteeTabs";
+import { CommitteeTabs, markCommitteeSeenIds } from "../components/CommitteeTabs";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
 
 type Announcement = { id: string; committee_id: string; author_user_id: string; title: string; body: string; created_at: string; author?: ProfileLite | null };
 type Comment = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; parent_comment_id?: string | null; author?: ProfileLite | null };
+
+function partyAbbr(party: string | null | undefined) {
+  const normalized = String(party ?? "").toLowerCase();
+  if (normalized.includes("democrat")) return "D";
+  if (normalized.includes("republican")) return "R";
+  if (normalized.includes("independent")) return "I";
+  if (normalized.includes("green")) return "G";
+  if (normalized.includes("libertarian")) return "L";
+  return party?.trim()?.slice(0, 1).toUpperCase() || "I";
+}
+
+function memberDescriptor(profile: ProfileLite | null) {
+  const district = formatConstituency(profile?.constituency_name);
+  return `${partyAbbr(profile?.party)}-${district || "N/A"}`;
+}
+
+function leadershipLabel(role: MembershipRole) {
+  if (role === "chair") return "Chair";
+  if (role === "co_chair") return "Co-chair";
+  if (role === "ranking_member") return "Ranking member";
+  return "";
+}
+
+const dashboardCache = new Map<
+  string,
+  {
+    committee: { id: string; class_id: string; name: string; description: string | null; created_at: string } | null;
+    members: Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>;
+    myRole: MembershipRole | null;
+    viewerRole: "teacher" | "student" | null;
+    allowSelfJoin: boolean;
+    announcements: Announcement[];
+    selectedAnnouncementId: string | null;
+    commentsByAnnouncement: Record<string, ThreadComment[]>;
+    announcementReactions: Record<string, ReactionsSummary | undefined>;
+    commentReactions: Record<string, ReactionsSummary | undefined>;
+  }
+>();
 
 export function CommitteeDashboard() {
   const { id } = useParams();
@@ -58,7 +96,23 @@ export function CommitteeDashboard() {
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
+      const cached = dashboardCache.get(committeeId);
+      if (cached) {
+        setCommittee(cached.committee);
+        setAboutDraft(cached.committee?.description ?? "");
+        setMembers(cached.members);
+        setMyRole(cached.myRole);
+        setViewerRole(cached.viewerRole);
+        setAllowSelfJoin(cached.allowSelfJoin);
+        setAnnouncements(cached.announcements);
+        setSelectedAnnouncementId((prev) => prev ?? cached.selectedAnnouncementId);
+        setCommentsByAnnouncement(cached.commentsByAnnouncement);
+        setAnnouncementReactions(cached.announcementReactions);
+        setCommentReactions(cached.commentReactions);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       try {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id ?? null;
@@ -86,13 +140,13 @@ export function CommitteeDashboard() {
         const { data: prof } = await supabase.from("profiles").select("class_id,role").eq("user_id", me ?? "").maybeSingle();
         const classId = (prof as any)?.class_id ?? null;
         setViewerRole(((prof as any)?.role ?? null) as any);
+        let nextAllowSelfJoin = false;
         if ((c as any).class_id) {
           const { data: cls } = await supabase.from("classes").select("settings").eq("id", (c as any).class_id).maybeSingle();
           const settings = (cls as any)?.settings ?? {};
-          setAllowSelfJoin(!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
-        } else {
-          setAllowSelfJoin(false);
+          nextAllowSelfJoin = !!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join";
         }
+        setAllowSelfJoin(nextAllowSelfJoin);
 
         const { data: mRows, error: mErr } = await supabase
           .from("committee_members")
@@ -107,14 +161,14 @@ export function CommitteeDashboard() {
           .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]);
         const pMap = new Map((pRows ?? []).map((p: any) => [p.user_id, p]));
 
-        setMembers(
-          (mRows ?? []).map((m: any) => ({
+        const nextMembers = (mRows ?? []).map((m: any) => ({
             user_id: m.user_id,
             role: m.role as MembershipRole,
             profile: (pMap.get(m.user_id) as ProfileLite) ?? null,
-          })),
-        );
-        setMyRole(me ? ((mRows ?? []).find((r: any) => r.user_id === me)?.role as any) ?? null : null);
+          }));
+        setMembers(nextMembers);
+        const nextMyRole = me ? ((mRows ?? []).find((r: any) => r.user_id === me)?.role as any) ?? null : null;
+        setMyRole(nextMyRole);
 
         const { data: aRows, error: aErr } = await supabase
           .from("committee_announcements")
@@ -184,13 +238,13 @@ export function CommitteeDashboard() {
           setAnnouncementReactions(announcementSummary);
 
           const commentIds = (cRows ?? []).map((r: any) => r.id);
+          let commentSummary: Record<string, ReactionsSummary> = {};
           if (commentIds.length) {
             const { data: crRows, error: crErr } = await supabase
               .from("committee_comment_reactions")
               .select("comment_id,user_id,emoji")
               .in("comment_id", commentIds);
             if (crErr) throw crErr;
-            const commentSummary: Record<string, ReactionsSummary> = {};
             for (const r of crRows ?? []) {
               const id = (r as any).comment_id as string;
               const emoji = (r as any).emoji as ReactionEmoji;
@@ -202,6 +256,37 @@ export function CommitteeDashboard() {
             }
             setCommentReactions(commentSummary);
           }
+          dashboardCache.set(committeeId, {
+            committee: c as any,
+            members: nextMembers,
+            myRole: nextMyRole,
+            viewerRole: ((prof as any)?.role ?? null) as any,
+            allowSelfJoin: nextAllowSelfJoin,
+            announcements: mappedAnnouncements,
+            selectedAnnouncementId:
+              requestedAnnouncement && mappedAnnouncements.some((a) => a.id === requestedAnnouncement)
+                ? requestedAnnouncement
+                : mappedAnnouncements[0]?.id ?? null,
+            commentsByAnnouncement: grouped,
+            announcementReactions: announcementSummary,
+            commentReactions: commentSummary,
+          });
+        } else {
+          dashboardCache.set(committeeId, {
+            committee: c as any,
+            members: nextMembers,
+            myRole: nextMyRole,
+            viewerRole: ((prof as any)?.role ?? null) as any,
+            allowSelfJoin: nextAllowSelfJoin,
+            announcements: mappedAnnouncements,
+            selectedAnnouncementId:
+              requestedAnnouncement && mappedAnnouncements.some((a) => a.id === requestedAnnouncement)
+                ? requestedAnnouncement
+                : mappedAnnouncements[0]?.id ?? null,
+            commentsByAnnouncement: {},
+            announcementReactions: {},
+            commentReactions: {},
+          });
         }
       } catch (e: any) {
         toast.error(e.message || "Could not load committee");
@@ -566,10 +651,9 @@ export function CommitteeDashboard() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-1">{committee.name}</h1>
-            <div className="text-sm text-gray-600">{members.length} members</div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-1">{committee.name}</h1>
           </div>
           <div className="flex items-center gap-2">
             {!myRole && allowSelfJoin && viewerRole === "student" && (
@@ -646,7 +730,16 @@ export function CommitteeDashboard() {
                     <div className="p-6 text-sm text-gray-500">No announcements yet.</div>
                   ) : (
                     announcements.map((a) => (
-                      <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} className={`w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "bg-blue-50" : ""}`}>
+                      <button
+                        key={a.id}
+                        onClick={() => {
+                          setSelectedAnnouncementId(a.id);
+                          const cached = dashboardCache.get(committeeId);
+                          if (cached) dashboardCache.set(committeeId, { ...cached, selectedAnnouncementId: a.id });
+                          markCommitteeSeenIds(committeeId, "dashboard", [a.id]);
+                        }}
+                        className={`w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "bg-blue-50" : ""}`}
+                      >
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
                           <Link to={`/profile/${a.author_user_id}`} className="text-blue-600 hover:underline">
@@ -725,6 +818,7 @@ export function CommitteeDashboard() {
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Members</h2>
+              <span className="text-sm text-gray-500">{members.length} member{members.length === 1 ? "" : "s"}</span>
             </div>
             <div className="flex gap-2 mb-4">
               <input
@@ -753,11 +847,11 @@ export function CommitteeDashboard() {
                         {m.profile?.display_name ?? "Member"}
                       </Link>
                     </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {formatConstituency(m.profile?.constituency_name)} • {m.profile?.party ?? "N/A"}
-                    </div>
+                    <div className="text-xs text-gray-500 truncate">{memberDescriptor(m.profile)}</div>
                   </div>
-                  <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>
+                  {leadershipLabel(m.role) && (
+                    <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{leadershipLabel(m.role)}</div>
+                  )}
                 </div>
               ))}
               {visibleMembers.length === 0 && <div className="text-sm text-gray-500">No members found.</div>}

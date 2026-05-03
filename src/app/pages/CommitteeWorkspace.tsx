@@ -6,7 +6,7 @@ import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { DefaultAvatar } from "../components/DefaultAvatar";
-import { CommitteeTabs } from "../components/CommitteeTabs";
+import { CommitteeTabs, markCommitteeSeenIds, readCommitteeSeenIds } from "../components/CommitteeTabs";
 import { proposeBillForCommitteeVote } from "../services/bills";
 
 type BillRow = {
@@ -17,6 +17,17 @@ type BillRow = {
   author_user_id: string;
   status: string;
 };
+
+const workspaceCache = new Map<
+  string,
+  {
+    classId: string | null;
+    committeeName: string;
+    myCommitteeRole: string | null;
+    bills: Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string }>;
+    selectedBillId: string | null;
+  }
+>();
 
 export function CommitteeWorkspace() {
   const { id } = useParams();
@@ -29,6 +40,7 @@ export function CommitteeWorkspace() {
 
   const [bills, setBills] = useState<Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string }>>([]);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
+  const [seenBillIds, setSeenBillIds] = useState<Set<string>>(() => new Set());
   const [textView, setTextView] = useState<"edited" | "original">("edited");
   const [reportDraft, setReportDraft] = useState("");
   const [reportLoading, setReportLoading] = useState(false);
@@ -42,7 +54,17 @@ export function CommitteeWorkspace() {
 
   useEffect(() => {
     const load = async () => {
-      setLoading(true);
+      const cached = workspaceCache.get(committeeId);
+      if (cached) {
+        setClassId(cached.classId);
+        setCommitteeName(cached.committeeName);
+        setMyCommitteeRole(cached.myCommitteeRole);
+        setBills(cached.bills);
+        setSelectedBillId((prev) => prev ?? cached.selectedBillId);
+        setLoading(false);
+      } else {
+        setLoading(true);
+      }
       try {
         const { data: auth } = await supabase.auth.getUser();
         const uid = auth.user?.id;
@@ -100,7 +122,15 @@ export function CommitteeWorkspace() {
           status: b.status,
         }));
         setBills(mapped);
-        setSelectedBillId(mapped[0]?.id ?? null);
+        const nextSelectedBillId = selectedBillId && mapped.some((bill) => bill.id === selectedBillId) ? selectedBillId : mapped[0]?.id ?? null;
+        setSelectedBillId(nextSelectedBillId);
+        workspaceCache.set(committeeId, {
+          classId: cid,
+          committeeName: (committee as any)?.name ?? "Committee",
+          myCommitteeRole: (myMembership as any)?.role ?? null,
+          bills: mapped,
+          selectedBillId: nextSelectedBillId,
+        });
       } catch (e: any) {
         toast.error(e.message || "Could not load committee workspace");
       } finally {
@@ -111,6 +141,18 @@ export function CommitteeWorkspace() {
   }, [committeeId]);
 
   const selected = bills.find((b) => b.id === selectedBillId) ?? null;
+
+  useEffect(() => {
+    setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
+  }, [committeeId]);
+
+  const selectBill = (billId: string) => {
+    setSelectedBillId(billId);
+    const cached = workspaceCache.get(committeeId);
+    if (cached) workspaceCache.set(committeeId, { ...cached, selectedBillId: billId });
+    markCommitteeSeenIds(committeeId, "review", [billId]);
+    setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
+  };
 
   useEffect(() => {
     if (!selectedBillId || !classId) {
@@ -280,8 +322,7 @@ export function CommitteeWorkspace() {
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName} Workspace</h1>
-          <p className="text-gray-600">Live, collaborative bill text editing</p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName}</h1>
         </div>
         <div className="mb-6">
           <CommitteeTabs committeeId={committeeId} active="review" />
@@ -305,15 +346,20 @@ export function CommitteeWorkspace() {
                 {bills.map((b) => (
                   <button
                     key={b.id}
-                    onClick={() => setSelectedBillId(b.id)}
+                    onClick={() => selectBill(b.id)}
                     className={`w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 ${
                       selectedBillId === b.id ? "bg-blue-50" : ""
                     }`}
                   >
+                    <div className="flex items-start gap-2">
+                      {!seenBillIds.has(b.id) && <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-600" aria-label="New bill" />}
+                      <div className="min-w-0 flex-1">
                         <div className="font-mono text-sm font-semibold text-gray-900">{b.number}</div>
                         <div className="text-sm text-gray-700 line-clamp-2">{b.title}</div>
                     <div className="text-xs text-gray-500 mt-1">Sponsor: {b.sponsor}</div>
                     <div className="mt-2 text-xs rounded bg-gray-100 px-2 py-1 inline-block text-gray-700">{b.status.replace("_", " ")}</div>
+                      </div>
+                    </div>
                   </button>
                 ))}
               </div>
