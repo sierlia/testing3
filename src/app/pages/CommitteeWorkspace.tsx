@@ -140,6 +140,40 @@ export function CommitteeWorkspace() {
   }, [committeeId]);
 
   const selected = bills.find((b) => b.id === selectedBillId) ?? null;
+  const textViewControls = (
+    <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+      <button
+        type="button"
+        onClick={() => setTextView("edited")}
+        className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium transition-colors ${
+          textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Edited
+      </button>
+      <button
+        type="button"
+        onClick={() => setTextView("clean")}
+        className={`inline-flex items-center gap-1.5 border-l border-gray-300 px-2 py-1.5 text-xs font-medium transition-colors ${
+          textView === "clean" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <Sparkles className="h-3.5 w-3.5" />
+        Clean
+      </button>
+      <button
+        type="button"
+        onClick={() => setTextView("original")}
+        className={`inline-flex items-center gap-1.5 border-l border-gray-300 px-2 py-1.5 text-xs font-medium transition-colors ${
+          textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+        }`}
+      >
+        <FileText className="h-3.5 w-3.5" />
+        Original
+      </button>
+    </div>
+  );
 
   useEffect(() => {
     setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
@@ -390,38 +424,6 @@ export function CommitteeWorkspace() {
                         )}
 
                         <div className="flex flex-wrap justify-end gap-2">
-                          <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
-                            <button
-                              type="button"
-                              onClick={() => setTextView("edited")}
-                              className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium transition-colors ${
-                                textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                              }`}
-                            >
-                              <Pencil className="h-3.5 w-3.5" />
-                              Edited
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTextView("clean")}
-                              className={`inline-flex items-center gap-1.5 border-l border-gray-300 px-2 py-1.5 text-xs font-medium transition-colors ${
-                                textView === "clean" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                              }`}
-                            >
-                              <Sparkles className="h-3.5 w-3.5" />
-                              Clean
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setTextView("original")}
-                              className={`inline-flex items-center gap-1.5 border-l border-gray-300 px-2 py-1.5 text-xs font-medium transition-colors ${
-                                textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                              }`}
-                            >
-                              <FileText className="h-3.5 w-3.5" />
-                              Original
-                            </button>
-                          </div>
                           <button
                             type="button"
                             onClick={() => void postSelectedBillProgress()}
@@ -454,11 +456,17 @@ export function CommitteeWorkspace() {
                           initialHtml={selected.legislativeHtml}
                           editable={textView === "edited"}
                           displayMode={textView === "clean" ? "clean" : "tracked"}
+                          toolbarControls={textViewControls}
                         />
                       </div>
                       {textView === "original" && (
-                        <div className="prose max-w-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-gray-50">
-                          <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
+                        <div>
+                          <div className="flex flex-wrap items-center gap-1 rounded-t-md border border-b-0 border-gray-200 bg-gray-50 px-2 py-2">
+                            {textViewControls}
+                          </div>
+                          <div className="prose max-w-none min-h-[420px] p-4 rounded-b-md border border-gray-200 bg-gray-50">
+                            <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
+                          </div>
                         </div>
                       )}
                     </div>

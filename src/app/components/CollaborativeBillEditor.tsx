@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type MouseEvent } from "react";
+import { useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { EditorContent } from "@tiptap/react";
 import { Editor, Extension, Mark } from "@tiptap/core";
 import { isChangeOrigin } from "@tiptap/extension-collaboration";
@@ -373,7 +373,19 @@ function createEditAttributionExtension({
   });
 }
 
-function CommitteeEditorToolbar({ editor }: { editor: Editor }) {
+function CommitteeEditorToolbar({ editor, editable, trailingControls }: { editor: Editor; editable: boolean; trailingControls?: ReactNode }) {
+  const [, setToolbarVersion] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setToolbarVersion((version) => version + 1);
+    editor.on("selectionUpdate", refresh);
+    editor.on("transaction", refresh);
+    return () => {
+      editor.off("selectionUpdate", refresh);
+      editor.off("transaction", refresh);
+    };
+  }, [editor]);
+
   const run = (command: () => void) => {
     command();
     editor.view.focus();
@@ -390,24 +402,26 @@ function CommitteeEditorToolbar({ editor }: { editor: Editor }) {
   };
 
   const buttons = [
-    { label: "Header 1", icon: Heading1, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 1 }).run()) },
-    { label: "Header 2", icon: Heading2, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 2 }).run()) },
-    { label: "Header 3", icon: Heading3, onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 3 }).run()) },
-    { label: "Bold", icon: Bold, onClick: () => run(() => editor.chain().focus().toggleBold().run()) },
-    { label: "Italic", icon: Italic, onClick: () => run(() => editor.chain().focus().toggleItalic().run()) },
-    { label: "Underline", icon: Underline, onClick: () => run(() => editor.chain().focus().toggleMark("underline").run()) },
-    { label: "Hyperlink", icon: LinkIcon, onClick: setLink },
-    { label: "Numbered list", icon: ListOrdered, onClick: () => run(() => editor.chain().focus().toggleOrderedList().run()) },
-    { label: "Bullet point list", icon: List, onClick: () => run(() => editor.chain().focus().toggleBulletList().run()) },
-    { label: "Align left", icon: AlignLeft, onClick: () => setBlockAlignment(editor, "left") },
-    { label: "Align center", icon: AlignCenter, onClick: () => setBlockAlignment(editor, "center") },
-    { label: "Align right", icon: AlignRight, onClick: () => setBlockAlignment(editor, "right") },
-    { label: "Remove formatting", icon: RemoveFormatting, onClick: () => run(() => editor.chain().focus().unsetMark("bold").unsetMark("italic").unsetMark("underline").unsetMark("link").clearNodes().run()) },
+    { label: "Header 1", icon: Heading1, active: () => editor.isActive("heading", { level: 1 }), onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 1 }).run()) },
+    { label: "Header 2", icon: Heading2, active: () => editor.isActive("heading", { level: 2 }), onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 2 }).run()) },
+    { label: "Header 3", icon: Heading3, active: () => editor.isActive("heading", { level: 3 }), onClick: () => run(() => editor.chain().focus().toggleHeading({ level: 3 }).run()) },
+    { label: "Bold", icon: Bold, active: () => editor.isActive("bold"), onClick: () => run(() => editor.chain().focus().toggleBold().run()) },
+    { label: "Italic", icon: Italic, active: () => editor.isActive("italic"), onClick: () => run(() => editor.chain().focus().toggleItalic().run()) },
+    { label: "Underline", icon: Underline, active: () => editor.isActive("underline"), onClick: () => run(() => editor.chain().focus().toggleMark("underline").run()) },
+    { label: "Hyperlink", icon: LinkIcon, active: () => editor.isActive("link"), onClick: setLink },
+    { label: "Numbered list", icon: ListOrdered, active: () => editor.isActive("orderedList"), onClick: () => run(() => editor.chain().focus().toggleOrderedList().run()) },
+    { label: "Bullet point list", icon: List, active: () => editor.isActive("bulletList"), onClick: () => run(() => editor.chain().focus().toggleBulletList().run()) },
+    { label: "Align left", icon: AlignLeft, active: () => !editor.isActive({ textAlign: "center" }) && !editor.isActive({ textAlign: "right" }), onClick: () => setBlockAlignment(editor, "left") },
+    { label: "Align center", icon: AlignCenter, active: () => editor.isActive({ textAlign: "center" }), onClick: () => setBlockAlignment(editor, "center") },
+    { label: "Align right", icon: AlignRight, active: () => editor.isActive({ textAlign: "right" }), onClick: () => setBlockAlignment(editor, "right") },
+    { label: "Remove formatting", icon: RemoveFormatting, active: () => false, onClick: () => run(() => editor.chain().focus().unsetMark("bold").unsetMark("italic").unsetMark("underline").unsetMark("link").clearNodes().run()) },
   ];
 
   return (
     <div className="flex flex-wrap items-center gap-1 border border-gray-200 border-b-0 bg-gray-50 px-2 py-2 rounded-t-md">
-      {buttons.map(({ label, icon: Icon, onClick }) => (
+      {editable && buttons.map(({ label, icon: Icon, active, onClick }) => {
+        const isActive = active();
+        return (
         <Tooltip key={label}>
           <TooltipTrigger asChild>
             <button
@@ -415,14 +429,20 @@ function CommitteeEditorToolbar({ editor }: { editor: Editor }) {
               aria-label={label}
               onMouseDown={(event) => event.preventDefault()}
               onClick={onClick}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-700 transition-colors hover:bg-white hover:text-gray-900"
+              className={`inline-flex h-8 w-8 items-center justify-center rounded-md transition-colors ${
+                isActive ? "bg-blue-600 text-white hover:bg-blue-700" : "text-gray-700 hover:bg-white hover:text-gray-900"
+              }`}
+              aria-pressed={isActive}
             >
               <Icon className="w-4 h-4" />
             </button>
           </TooltipTrigger>
           <TooltipContent sideOffset={6}>{label}</TooltipContent>
         </Tooltip>
-      ))}
+        );
+      })}
+      {editable && trailingControls && <div className="mx-1 h-6 w-px bg-gray-300" />}
+      {trailingControls}
     </div>
   );
 }
@@ -438,6 +458,7 @@ export function CollaborativeBillEditor({
   trackDeletes = true,
   displayMode = "tracked",
   allowRestoreDeleted = true,
+  toolbarControls,
 }: {
   classId: string;
   committeeId: string;
@@ -449,6 +470,7 @@ export function CollaborativeBillEditor({
   trackDeletes?: boolean;
   displayMode?: "tracked" | "clean";
   allowRestoreDeleted?: boolean;
+  toolbarControls?: ReactNode;
 }) {
   const [ready, setReady] = useState(false);
   const [localUser, setLocalUser] = useState<{ id: string; name: string; color: string }>({ id: "", name: "Member", color: "#2563eb" });
@@ -728,7 +750,7 @@ export function CollaborativeBillEditor({
           {collabStatus === "connecting" ? "Connecting collaboration..." : "Collaboration offline (local edits only)"}
         </div>
       )}
-      {editable && <CommitteeEditorToolbar editor={editor} />}
+      {(editable || toolbarControls) && <CommitteeEditorToolbar editor={editor} editable={editable} trailingControls={toolbarControls} />}
       <EditorContent editor={editor} />
       {allowRestoreDeleted && restoreMenu && (
         <div

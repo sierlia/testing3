@@ -682,7 +682,7 @@ export function CommitteeDashboard() {
     return (
       <div className="min-h-screen bg-gray-50">
         <Navigation />
-        <main className="max-w-6xl mx-auto px-4 py-10 text-gray-600">Loading...</main>
+        <main className="max-w-7xl mx-auto px-4 py-10 text-gray-600">Loading...</main>
       </div>
     );
   }
@@ -709,7 +709,7 @@ export function CommitteeDashboard() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900 mb-1">{committee.name}</h1>

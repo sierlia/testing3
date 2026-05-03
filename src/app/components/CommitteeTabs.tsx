@@ -194,12 +194,12 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
   ].filter((tab) => tab.id === "dashboard" || isMember);
 
   return (
-    <div className={`grid gap-2 rounded-lg border border-gray-200 bg-white p-2 shadow-sm ${tabs.length === 1 ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-4"}`}>
+    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
       {tabs.map((tab) => (
         <Link
           key={tab.id}
           to={tab.to}
-          className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             active === tab.id ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
           }`}
         >

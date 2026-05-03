@@ -126,13 +126,11 @@ export function PartiesPage() {
           }));
         setParties(nextParties);
 
-        const { data: memberships } = await supabase.from("class_memberships").select("user_id").eq("class_id", activeClassId).eq("status", "approved");
-        const memberIds = (memberships ?? []).map((m: any) => m.user_id);
         const [{ data: memberProfiles }, { data: voteRows }] = await Promise.all([
           supabase
             .from("profiles")
             .select("user_id,display_name,party")
-            .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]),
+            .eq("class_id", activeClassId),
           supabase.from("party_leadership_votes").select("party_id,position,candidate_user_id").eq("class_id", activeClassId),
         ]);
         const nextMembers = (memberProfiles ?? []) as any;
@@ -159,15 +157,18 @@ export function PartiesPage() {
   const approvedParties = useMemo(() => filteredParties.filter((party) => party.approved), [filteredParties]);
   const pendingParties = useMemo(() => parties.filter((party) => !party.approved), [parties]);
   const currentPartyName = useMemo(() => members.find((member) => member.user_id === meId)?.party ?? null, [meId, members]);
-  const majorityPartyName = useMemo(() => {
+  const twoPartyMajorityName = useMemo(() => {
     const counts = new Map<string, number>();
     for (const member of members) {
       if (!member.party) continue;
       counts.set(member.party, (counts.get(member.party) ?? 0) + 1);
     }
-    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
-    if (!ranked.length || ranked[0][1] === ranked[1]?.[1]) return null;
-    return ranked[0][0];
+    const democratic = [...counts.entries()].find(([name]) => name.toLowerCase().includes("democrat"));
+    const republican = [...counts.entries()].find(([name]) => name.toLowerCase().includes("republican"));
+    const democraticCount = democratic?.[1] ?? 0;
+    const republicanCount = republican?.[1] ?? 0;
+    if (democraticCount === republicanCount) return null;
+    return democraticCount > republicanCount ? democratic?.[0] ?? null : republican?.[0] ?? null;
   }, [members]);
 
   const memberCount = (partyName: string) => members.filter((member) => member.party === partyName).length;
@@ -175,8 +176,8 @@ export function PartiesPage() {
     const normalized = partyName.toLowerCase();
     const isMajorParty = normalized.includes("democrat") || normalized.includes("republican");
     if (!isMajorParty) return { chair: "Chair", whip: "Vice Chair" };
-    if (!majorityPartyName) return { chair: "Leader", whip: "Whip" };
-    const isMajority = partyName === majorityPartyName;
+    if (!twoPartyMajorityName) return { chair: "Leader", whip: "Whip" };
+    const isMajority = partyName === twoPartyMajorityName;
     return {
       chair: isMajority ? "Majority Leader" : "Minority Leader",
       whip: isMajority ? "Majority Whip" : "Minority Whip",
@@ -315,10 +316,9 @@ export function PartiesPage() {
                           className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
                             isCurrentParty
                               ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
-                              : currentPartyName
-                                ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
-                                : "bg-blue-600 text-white hover:bg-blue-700"
+                              : "text-white hover:opacity-90"
                           }`}
+                          style={isCurrentParty ? undefined : { backgroundColor: party.color }}
                         >
                           {isCurrentParty ? <LogOut className="h-3.5 w-3.5" /> : currentPartyName ? <Repeat2 className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
                           {isCurrentParty ? "Leave" : currentPartyName ? "Switch" : "Join"}

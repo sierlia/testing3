@@ -811,14 +811,11 @@ export function StudentProfile() {
 
       {showPartyModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Choose Party</h2>
-              <button onClick={() => setShowPartyModal(false)} className="text-gray-400 hover:text-gray-600 transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6">
+          <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <button onClick={() => setShowPartyModal(false)} className="absolute right-6 top-6 z-10 text-gray-400 hover:text-gray-600 transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+            <div className="p-6 pr-14">
               <PartySelection
                 selectedParty={partyDraftId}
                 newParty={newPartyDraft}
@@ -844,17 +841,14 @@ export function StudentProfile() {
 
       {showConstituencyModal && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200 flex items-center justify-between">
-              <h2 className="text-xl font-semibold text-gray-900">Choose Constituency</h2>
-              <button
-                onClick={() => setShowConstituencyModal(false)}
-                className="text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="p-6">
+          <div className="relative bg-white rounded-lg shadow-xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setShowConstituencyModal(false)}
+              className="absolute right-6 top-6 z-10 text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="p-6 pr-14">
               <ConstituencyPicker selected={constituencyDraftId} unavailableIds={unavailableConstituencies} onSelect={(cid) => setConstituencyDraftId(cid)} />
             </div>
             <div className="p-6 border-t border-gray-200 flex items-center justify-end gap-3">

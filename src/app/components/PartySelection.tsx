@@ -98,12 +98,15 @@ export function PartySelection({ selectedParty, newParty, onSelectParty, onCreat
                 key={party.id}
                 type="button"
                 onClick={() => handleSelectParty(party.id)}
-                className={`w-full rounded-lg border-2 bg-white p-4 text-left transition-colors ${
-                  isSelected ? "border-gray-900" : "border-gray-200 hover:border-gray-300"
+                className={`w-full rounded-lg border-2 p-4 text-left transition-colors ${
+                  isSelected ? "border-gray-900" : "border-gray-200 bg-white hover:border-gray-300"
                 }`}
-                style={{ boxShadow: isSelected ? `inset 4px 0 0 ${party.color}` : `inset 4px 0 0 ${party.color}55` }}
+                style={{
+                  backgroundColor: isSelected ? `${party.color}22` : "#ffffff",
+                  boxShadow: `inset 4px 0 0 ${party.color}`,
+                }}
               >
-                <div className="flex items-start justify-between gap-4">
+                <div className="flex items-center justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="h-3 w-3 rounded-full" style={{ backgroundColor: party.color }} />
@@ -112,8 +115,8 @@ export function PartySelection({ selectedParty, newParty, onSelectParty, onCreat
                     <p className="mt-2 text-sm text-gray-700">{party.platform || "No platform yet."}</p>
                   </div>
                   {isSelected && (
-                    <div className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: party.color }}>
-                      <Check className="h-4 w-4 text-white" />
+                    <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: party.color }}>
+                      <Check className="h-6 w-6 text-white" />
                     </div>
                   )}
                 </div>
@@ -143,7 +146,7 @@ export function PartySelection({ selectedParty, newParty, onSelectParty, onCreat
               onChange={setDraft}
               onCancel={() => setShowCreateForm(false)}
               onSubmit={handleCreateDraft}
-              submitLabel="Use This Party"
+              submitLabel="Create Party"
             />
           )}
         </div>

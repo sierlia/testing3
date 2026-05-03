@@ -15,6 +15,15 @@ type Member = {
 };
 
 type LeadershipPosition = "chair" | "ranking_member";
+type LeadershipCache = {
+  meId: string | null;
+  role: string | null;
+  committee: { id: string; class_id: string; name: string; description: string | null } | null;
+  members: Member[];
+  votes: Array<{ position: LeadershipPosition; voter_user_id: string; candidate_user_id: string }>;
+};
+
+const leadershipPageCache = new Map<string, LeadershipCache>();
 
 function partyAbbr(party: string | null | undefined) {
   const normalized = String(party ?? "").toLowerCase();
@@ -46,7 +55,17 @@ export function CommitteeLeadership() {
   const [votes, setVotes] = useState<Array<{ position: LeadershipPosition; voter_user_id: string; candidate_user_id: string }>>([]);
 
   const load = async () => {
-    setLoading(true);
+    const cached = leadershipPageCache.get(committeeId);
+    if (cached) {
+      setMeId(cached.meId);
+      setRole(cached.role);
+      setCommittee(cached.committee);
+      setMembers(cached.members);
+      setVotes(cached.votes);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
     try {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id ?? null;
@@ -67,13 +86,22 @@ export function CommitteeLeadership() {
         .select("user_id,display_name,party,constituency_name,avatar_url")
         .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]);
       const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
-      setMembers((memberRows ?? []).map((m: any) => ({ ...m, profile: profileMap.get(m.user_id) ?? null })) as any);
+      const nextMembers = (memberRows ?? []).map((m: any) => ({ ...m, profile: profileMap.get(m.user_id) ?? null })) as Member[];
+      setMembers(nextMembers);
 
       const { data: voteRows } = await supabase
         .from("committee_leadership_votes")
         .select("position,voter_user_id,candidate_user_id")
         .eq("committee_id", committeeId);
-      setVotes((voteRows ?? []) as any);
+      const nextVotes = (voteRows ?? []) as any;
+      setVotes(nextVotes);
+      leadershipPageCache.set(committeeId, {
+        meId: uid,
+        role: (prof as any)?.role ?? null,
+        committee: c as any,
+        members: nextMembers,
+        votes: nextVotes,
+      });
     } catch (e: any) {
       toast.error(e.message || "Could not load committee leadership");
     } finally {
@@ -120,7 +148,12 @@ export function CommitteeLeadership() {
           .eq("voter_user_id", meId)
           .eq("position", position);
         if (error) throw error;
-        setVotes((prev) => prev.filter((vote) => !(vote.voter_user_id === meId && vote.position === position)));
+        setVotes((prev) => {
+          const next = prev.filter((vote) => !(vote.voter_user_id === meId && vote.position === position));
+          const cached = leadershipPageCache.get(committeeId);
+          if (cached) leadershipPageCache.set(committeeId, { ...cached, votes: next });
+          return next;
+        });
         toast.success("Vote withdrawn");
         return;
       }
@@ -135,7 +168,12 @@ export function CommitteeLeadership() {
         { onConflict: "committee_id,voter_user_id,position" },
       );
       if (error) throw error;
-      setVotes((prev) => [...prev.filter((vote) => !(vote.voter_user_id === meId && vote.position === position)), { voter_user_id: meId, candidate_user_id: candidateId, position }]);
+      setVotes((prev) => {
+        const next = [...prev.filter((vote) => !(vote.voter_user_id === meId && vote.position === position)), { voter_user_id: meId, candidate_user_id: candidateId, position }];
+        const cached = leadershipPageCache.get(committeeId);
+        if (cached) leadershipPageCache.set(committeeId, { ...cached, votes: next });
+        return next;
+      });
       toast.success("Vote recorded");
     } catch (e: any) {
       toast.error(e.message || "Could not record vote");
@@ -196,7 +234,7 @@ export function CommitteeLeadership() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {loading || !committee ? (
           <div className="text-sm text-gray-600">Loading...</div>
         ) : (

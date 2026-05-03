@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { ClipboardList, LogOut, Search, UserPlus, Users } from "lucide-react";
+import { ClipboardList, Search, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
@@ -277,7 +277,7 @@ export function CommitteesHome() {
                               : "bg-blue-600 text-white hover:bg-blue-700"
                           }`}
                         >
-                          {joinedCommitteeIds.has(c.id) ? <LogOut className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                          {!joinedCommitteeIds.has(c.id) && <UserPlus className="w-4 h-4" />}
                           {joinedCommitteeIds.has(c.id) ? (leavingCommitteeId === c.id ? "Leaving" : "Leave") : joiningCommitteeId === c.id ? "Joining" : "Join"}
                         </button>
                       )}

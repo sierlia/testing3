@@ -39,7 +39,7 @@ export function PartyCreateForm({
   const disabled = submitting || !value.name.trim() || (requirePlatform && !value.platform.trim()) || platformWordCount > maxPlatformWords;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+    <div className="rounded-lg border border-gray-200 bg-white p-4">
       <div className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Party Name *</label>
@@ -72,8 +72,13 @@ export function PartyCreateForm({
               type="color"
               value={value.color}
               onChange={(event) => onChange({ ...value, color: event.target.value })}
-              className="h-8 w-10 cursor-pointer rounded border border-gray-300 bg-white p-1"
+              className="h-8 w-8 cursor-pointer rounded-full border border-gray-300 bg-[conic-gradient(red,orange,yellow,green,cyan,blue,violet,red)] p-0 opacity-0"
               aria-label="Custom party color"
+            />
+            <span
+              className="-ml-10 pointer-events-none h-8 w-8 rounded-full border-2 border-white shadow ring-1 ring-gray-300"
+              style={{ background: "conic-gradient(red, orange, yellow, green, cyan, blue, violet, red)" }}
+              aria-hidden="true"
             />
           </div>
         </div>
