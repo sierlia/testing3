@@ -97,7 +97,7 @@ export function ClassActivityPage() {
         </div>
 
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_16rem_9rem]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_16rem_4rem]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
@@ -133,9 +133,9 @@ export function ClassActivityPage() {
             <button
               type="button"
               onClick={() => setSortDirection((current) => (current === "desc" ? "asc" : "desc"))}
+              aria-label={sortDirection === "desc" ? "Sort ascending" : "Sort descending"}
               className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              Time
               {sortDirection === "desc" ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
             </button>
           </div>

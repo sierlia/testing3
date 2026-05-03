@@ -279,7 +279,11 @@ export function ClassDashboard() {
       const container = timelineScrollRef.current;
       const card = currentTimelineCardRef.current;
       const isLastCard = currentIndex === visibleWorkflowSteps.length - 1;
-      const target = isLastCard ? card.offsetLeft - (container.clientWidth - card.offsetWidth) : card.offsetLeft - 56;
+      const containerRect = container.getBoundingClientRect();
+      const cardRect = card.getBoundingClientRect();
+      const leftAligned = container.scrollLeft + cardRect.left - containerRect.left;
+      const rightAligned = container.scrollLeft + cardRect.right - containerRect.right;
+      const target = isLastCard ? rightAligned : leftAligned;
       container.scrollLeft = Math.max(0, target);
     });
     return () => window.cancelAnimationFrame(frame);
@@ -490,7 +494,6 @@ export function ClassDashboard() {
                   </div>
                   <div className="flex items-center gap-2">
                     <Button onClick={() => navigate("/teacher/deadlines?add=1")}><Plus className="mr-2 h-4 w-4" />Add Deadline</Button>
-                    <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
                   </div>
                 </div>
               </CardHeader>
@@ -552,8 +555,9 @@ export function ClassDashboard() {
                     ))
                   )}
                 </div>
-                <div className="mt-4 flex">
+                <div className="mt-4 grid gap-2 sm:grid-cols-2">
                   <Button variant="outline" onClick={() => navigate("/teacher/deadlines")}>Manage deadlines</Button>
+                  <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
                 </div>
               </CardContent>
             </Card>
