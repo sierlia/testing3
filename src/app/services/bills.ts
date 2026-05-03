@@ -312,3 +312,9 @@ export async function reportBillFromCommittee(billId: string) {
   const { error } = await supabase.from('bills').update({ status: 'reported' } as any).eq('id', billId).eq('class_id', classId);
   if (error) throw error;
 }
+
+export async function proposeBillForCommitteeVote(billId: string) {
+  const { classId } = await getCurrentProfileClass();
+  const { error } = await supabase.from('bills').update({ status: 'committee_vote' } as any).eq('id', billId).eq('class_id', classId);
+  if (error) throw error;
+}

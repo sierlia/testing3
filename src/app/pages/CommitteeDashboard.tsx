@@ -8,6 +8,7 @@ import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/Rea
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
+import { CommitteeTabs } from "../components/CommitteeTabs";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
@@ -581,14 +582,10 @@ export function CommitteeDashboard() {
                 {joining ? "Joining" : "Join"}
               </button>
             )}
-            <div className="flex items-center rounded-md border border-gray-300 overflow-hidden">
-              <span className="px-3 py-2 text-sm bg-gray-50 text-gray-900 font-medium">Dashboard</span>
-              <Link to={`/committee/${committeeId}/workspace`} className="px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                Workspace
-              </Link>
-            </div>
           </div>
         </div>
+
+        <CommitteeTabs committeeId={committeeId} active="dashboard" />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">

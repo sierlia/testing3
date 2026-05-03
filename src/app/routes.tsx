@@ -50,6 +50,7 @@ import { PartiesPage } from "./pages/PartiesPage";
 import { PartyDetail } from "./pages/PartyDetail";
 import { CommitteesHome } from "./pages/CommitteesHome";
 import { CommitteeDashboard } from "./pages/CommitteeDashboard";
+import { CommitteeVote } from "./pages/CommitteeVote";
 import { ClassSimulationDashboard } from "./pages/ClassSimulationDashboard";
 
 export const router = createHashRouter([
@@ -136,6 +137,10 @@ export const router = createHashRouter([
   {
     path: "/committee/:id/workspace",
     Component: CommitteeWorkspace,
+  },
+  {
+    path: "/committee/:id/vote",
+    Component: CommitteeVote,
   },
   {
     path: "/bills/create",

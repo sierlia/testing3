@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
-import { CheckCircle2, FileText, Pencil, Save } from "lucide-react";
+import { CheckCircle2, FileText, Pencil, Save, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { DefaultAvatar } from "../components/DefaultAvatar";
-import { reportBillFromCommittee } from "../services/bills";
+import { CommitteeTabs } from "../components/CommitteeTabs";
+import { proposeBillForCommitteeVote } from "../services/bills";
 
 type BillRow = {
   id: string;
@@ -16,7 +17,6 @@ type BillRow = {
   author_user_id: string;
   status: string;
 };
-type VoteChoice = "yea" | "nay" | "present";
 
 export function CommitteeWorkspace() {
   const { id } = useParams();
@@ -24,7 +24,6 @@ export function CommitteeWorkspace() {
 
   const [loading, setLoading] = useState(true);
   const [classId, setClassId] = useState<string | null>(null);
-  const [meId, setMeId] = useState<string | null>(null);
   const [myCommitteeRole, setMyCommitteeRole] = useState<string | null>(null);
   const [committeeName, setCommitteeName] = useState<string>("Committee");
 
@@ -35,9 +34,7 @@ export function CommitteeWorkspace() {
   const [reportLoading, setReportLoading] = useState(false);
   const [reportSaving, setReportSaving] = useState(false);
   const [reportSaved, setReportSaved] = useState(false);
-  const [votes, setVotes] = useState<Array<{ user_id: string; vote: VoteChoice; voterName: string }>>([]);
-  const [voting, setVoting] = useState(false);
-  const [reporting, setReporting] = useState(false);
+  const [proposing, setProposing] = useState(false);
   const [activeEditors, setActiveEditors] = useState<
     Array<{ id: string; name: string; color: string; avatar_url: string | null }>
   >([]);
@@ -50,7 +47,6 @@ export function CommitteeWorkspace() {
         const { data: auth } = await supabase.auth.getUser();
         const uid = auth.user?.id;
         if (!uid) return;
-        setMeId(uid);
 
         // Derive the class from the committee so deep-links/reloads still have a working my_class_id().
         const { data: committee, error: cErr } = await supabase.from("committees").select("name,class_id").eq("id", committeeId).maybeSingle();
@@ -148,76 +144,17 @@ export function CommitteeWorkspace() {
     };
   }, [classId, committeeId, selectedBillId]);
 
-  useEffect(() => {
-    if (!selectedBillId || !classId) {
-      setVotes([]);
-      return;
-    }
-    let cancelled = false;
-    const loadVotes = async () => {
-      try {
-        const { data, error } = await supabase
-          .from("bill_committee_votes")
-          .select("user_id,vote")
-          .eq("committee_id", committeeId)
-          .eq("bill_id", selectedBillId);
-        if (error) throw error;
-        const voterIds = [...new Set((data ?? []).map((v: any) => v.user_id))];
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("user_id,display_name")
-          .in("user_id", voterIds.length ? voterIds : ["00000000-0000-0000-0000-000000000000"]);
-        const nameMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p.display_name ?? "Member"]));
-        if (!cancelled) {
-          setVotes((data ?? []).map((v: any) => ({ user_id: v.user_id, vote: v.vote, voterName: nameMap.get(v.user_id) ?? "Member" })));
-        }
-      } catch (e: any) {
-        if (!cancelled) toast.error(e.message || "Could not load committee votes");
-      }
-    };
-    void loadVotes();
-  }, [classId, committeeId, selectedBillId]);
-
-  const castCommitteeVote = async (vote: VoteChoice) => {
-    if (!selected || !classId || !meId) return;
-    setVoting(true);
-    try {
-      const { error } = await supabase.from("bill_committee_votes").upsert(
-        {
-          bill_id: selected.id,
-          committee_id: committeeId,
-          class_id: classId,
-          user_id: meId,
-          vote,
-          updated_at: new Date().toISOString(),
-        } as any,
-        { onConflict: "bill_id,committee_id,user_id" },
-      );
-      if (error) throw error;
-      const { data: profile } = await supabase.from("profiles").select("display_name").eq("user_id", meId).maybeSingle();
-      setVotes((prev) => [
-        ...prev.filter((v) => v.user_id !== meId),
-        { user_id: meId, vote, voterName: (profile as any)?.display_name ?? "You" },
-      ]);
-      toast.success("Vote recorded");
-    } catch (e: any) {
-      toast.error(e.message || "Could not record vote");
-    } finally {
-      setVoting(false);
-    }
-  };
-
-  const reportSelectedBill = async () => {
+  const proposeSelectedBillForVote = async () => {
     if (!selected) return;
-    setReporting(true);
+    setProposing(true);
     try {
-      await reportBillFromCommittee(selected.id);
-      setBills((prev) => prev.map((bill) => (bill.id === selected.id ? { ...bill, status: "reported" } : bill)));
-      toast.success("Bill reported from committee");
+      await proposeBillForCommitteeVote(selected.id);
+      setBills((prev) => prev.map((bill) => (bill.id === selected.id ? { ...bill, status: "committee_vote" } : bill)));
+      toast.success("Bill proposed for committee vote");
     } catch (e: any) {
-      toast.error(e.message || "Could not report bill");
+      toast.error(e.message || "Could not propose bill for vote");
     } finally {
-      setReporting(false);
+      setProposing(false);
     }
   };
 
@@ -336,12 +273,7 @@ export function CommitteeWorkspace() {
     };
   }, [classId, committeeId, selectedBillId]);
 
-  const voteCounts = votes.reduce(
-    (acc, row) => ({ ...acc, [row.vote]: (acc[row.vote] ?? 0) + 1 }),
-    { yea: 0, nay: 0, present: 0 } as Record<VoteChoice, number>,
-  );
-  const myVote = meId ? votes.find((v) => v.user_id === meId)?.vote ?? null : null;
-  const canReportBill = myCommitteeRole === "chair" || myCommitteeRole === "co_chair" || myCommitteeRole === "ranking_member";
+  const canProposeBill = myCommitteeRole === "chair" || myCommitteeRole === "co_chair" || myCommitteeRole === "ranking_member";
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -350,6 +282,9 @@ export function CommitteeWorkspace() {
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName} Workspace</h1>
           <p className="text-gray-600">Live, collaborative bill text editing</p>
+        </div>
+        <div className="mb-6">
+          <CommitteeTabs committeeId={committeeId} active="review" />
         </div>
 
         {loading ? (
@@ -441,48 +376,21 @@ export function CommitteeWorkspace() {
                             Original Text
                           </button>
                         </div>
+                        {canProposeBill && (
+                          <button
+                            type="button"
+                            onClick={() => void proposeSelectedBillForVote()}
+                            disabled={proposing || selected.status !== "in_committee"}
+                            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            <Vote className="w-4 h-4" />
+                            {selected.status === "committee_vote" ? "Proposed" : proposing ? "Proposing" : "Propose Vote"}
+                          </button>
+                        )}
                       </div>
                     </div>
                   </div>
                   <div className="p-5 space-y-6">
-                    <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-4">
-                        <div>
-                          <h3 className="font-semibold text-gray-900">Committee Vote</h3>
-                          <p className="text-sm text-gray-600">Members can vote yea, nay, or present on this bill.</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {(["yea", "nay", "present"] as VoteChoice[]).map((choice) => (
-                            <button
-                              key={choice}
-                              type="button"
-                              disabled={voting}
-                              onClick={() => void castCommitteeVote(choice)}
-                              className={`rounded-md px-3 py-2 text-sm font-medium capitalize ${
-                                myVote === choice ? "bg-blue-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                              }`}
-                            >
-                              {choice}
-                            </button>
-                          ))}
-                          {canReportBill && (
-                            <button
-                              type="button"
-                              onClick={() => void reportSelectedBill()}
-                              disabled={reporting || selected.status === "reported"}
-                              className="rounded-md bg-green-600 px-3 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50"
-                            >
-                              {selected.status === "reported" ? "Reported" : reporting ? "Reporting" : "Report bill"}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                      <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                        <div className="rounded bg-white p-3"><div className="text-xl font-bold text-green-700">{voteCounts.yea}</div><div className="text-xs text-gray-600">Yea</div></div>
-                        <div className="rounded bg-white p-3"><div className="text-xl font-bold text-red-700">{voteCounts.nay}</div><div className="text-xs text-gray-600">Nay</div></div>
-                        <div className="rounded bg-white p-3"><div className="text-xl font-bold text-gray-700">{voteCounts.present}</div><div className="text-xs text-gray-600">Present</div></div>
-                      </div>
-                    </div>
                     <div>
                       <div className={textView === "edited" ? "block" : "hidden"} aria-hidden={textView !== "edited"}>
                         <CollaborativeBillEditor
