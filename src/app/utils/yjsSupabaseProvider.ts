@@ -28,9 +28,11 @@ export class YjsSupabaseProvider {
   awareness: Awareness;
   private channel: RealtimeChannel;
   private key: DocKey;
+  private providerId = Math.random().toString(36).slice(2);
   private destroyed = false;
   private persistTimer: number | null = null;
   private pollTimer: number | null = null;
+  private syncRequestTimer: number | null = null;
   private lastPersistedB64: string | null = null;
   private lastSeenUpdatedAt: string | null = null;
   private onSynced?: () => void;
@@ -51,6 +53,8 @@ export class YjsSupabaseProvider {
     this.channel
       .on("broadcast", { event: "yjs-update" }, (payload) => {
         const b64 = (payload as any)?.payload?.b64 as string | undefined;
+        const senderId = (payload as any)?.payload?.senderId as string | undefined;
+        if (senderId === this.providerId) return;
         if (!b64) return;
         const update = fromBase64(b64);
         // Tag remote updates with this provider instance so our update handler
@@ -60,13 +64,25 @@ export class YjsSupabaseProvider {
         // even if the originating user disconnects quickly.
         this.schedulePersist();
       })
-      .on("broadcast", { event: "yjs-sync" }, (payload) => {
+      .on("broadcast", { event: "yjs-sync-request" }, (payload) => {
+        const senderId = (payload as any)?.payload?.senderId as string | undefined;
+        const stateVectorB64 = (payload as any)?.payload?.stateVectorB64 as string | undefined;
+        if (!senderId || senderId === this.providerId || !stateVectorB64) return;
+        const update = Y.encodeStateAsUpdate(this.doc, fromBase64(stateVectorB64));
+        if (update.length) {
+          void this.sendBroadcast("yjs-sync-response", toBase64(update), { targetId: senderId });
+        }
+      })
+      .on("broadcast", { event: "yjs-sync-response" }, (payload) => {
+        const senderId = (payload as any)?.payload?.senderId as string | undefined;
+        const targetId = (payload as any)?.payload?.targetId as string | undefined;
         const b64 = (payload as any)?.payload?.b64 as string | undefined;
-        if (!b64) return;
+        if (senderId === this.providerId || targetId !== this.providerId || !b64) return;
         const update = fromBase64(b64);
-        // Applying a full-state update is safe; Yjs will merge it.
-        Y.applyUpdate(this.doc, update, this);
-        this.schedulePersist();
+        if (update.length) {
+          Y.applyUpdate(this.doc, update, this);
+          this.schedulePersist();
+        }
       })
       .on("broadcast", { event: "yjs-awareness" }, (payload) => {
         const b64 = (payload as any)?.payload?.b64 as string | undefined;
@@ -85,14 +101,7 @@ export class YjsSupabaseProvider {
         for (const msg of this.pendingSends.splice(0, this.pendingSends.length)) {
           void this.sendBroadcast(msg.event, msg.b64, msg.extra);
         }
-        // Broadcast full state so other connected clients converge even if their
-        // DB hydration was blocked/stale or they joined simultaneously.
-        try {
-          const full = Y.encodeStateAsUpdate(this.doc);
-          void this.sendBroadcast("yjs-sync", toBase64(full));
-        } catch {
-          // ignore
-        }
+        this.requestPeerSync();
         this.onSynced?.();
         this.broadcastAwareness();
       });
@@ -125,11 +134,22 @@ export class YjsSupabaseProvider {
       this.pendingSends.push({ event, b64, extra });
       return;
     }
-    const resp = await this.channel.send({ type: "broadcast", event, payload: { b64, ...(extra ?? {}) } });
+    const resp = await this.channel.send({ type: "broadcast", event, payload: { b64, senderId: this.providerId, ...(extra ?? {}) } });
     if ((resp as any)?.status && (resp as any).status !== "ok") {
       // eslint-disable-next-line no-console
       console.warn("yjs broadcast send failed", event, resp);
     }
+  }
+
+  private requestPeerSync() {
+    if (this.syncRequestTimer) window.clearTimeout(this.syncRequestTimer);
+    const sendRequest = () => {
+      if (this.destroyed || !this.isSubscribed) return;
+      const stateVector = Y.encodeStateVector(this.doc);
+      void this.sendBroadcast("yjs-sync-request", "", { stateVectorB64: toBase64(stateVector) });
+    };
+    sendRequest();
+    this.syncRequestTimer = window.setTimeout(sendRequest, 500);
   }
 
   private schedulePersist() {
@@ -197,9 +217,29 @@ export class YjsSupabaseProvider {
 
   private async persistToDb() {
     const { committeeId, billId, classId } = this.key;
-    const state = Y.encodeStateAsUpdate(this.doc);
-    const b64 = toBase64(state);
+    let b64 = toBase64(Y.encodeStateAsUpdate(this.doc));
     if (b64 === this.lastPersistedB64) return;
+
+    const { data: existing, error: readError } = await supabase
+      .from("committee_bill_docs")
+      .select("ydoc_base64,updated_at")
+      .eq("committee_id", committeeId)
+      .eq("bill_id", billId)
+      .maybeSingle();
+    if (readError) {
+      // eslint-disable-next-line no-console
+      console.warn("committee bill doc pre-persist merge failed", readError);
+      return;
+    }
+    const existingB64 = (existing as any)?.ydoc_base64 as string | undefined;
+    if (existingB64 && existingB64 !== b64) {
+      const update = fromBase64(existingB64);
+      if (update.length) {
+        Y.applyUpdate(this.doc, update, this);
+        b64 = toBase64(Y.encodeStateAsUpdate(this.doc));
+      }
+    }
+
     const { data, error } = await supabase
       .from("committee_bill_docs")
       .upsert({ committee_id: committeeId, bill_id: billId, class_id: classId, ydoc_base64: b64 } as any, {
@@ -231,6 +271,7 @@ export class YjsSupabaseProvider {
     }
     if (this.persistTimer) window.clearTimeout(this.persistTimer);
     if (this.pollTimer) window.clearInterval(this.pollTimer);
+    if (this.syncRequestTimer) window.clearTimeout(this.syncRequestTimer);
     void supabase.removeChannel(this.channel);
   }
 

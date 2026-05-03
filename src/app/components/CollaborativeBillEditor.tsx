@@ -604,19 +604,26 @@ export function CollaborativeBillEditor({
 
   useEffect(() => {
     if (!editor) return;
-    // If the doc was empty when we joined, seed it once from the bill text.
     if (didInitRef.current) return;
     didInitRef.current = true;
-    // Seed from the original bill text if the collaborative document is still empty.
-    // This ensures the editable version always starts with the original text.
-    if (editor.getText().trim() === "") {
+
+    const seedIfEmpty = () => {
+      if (editor.isDestroyed) return;
+      const fragment = ydocRef.current?.getXmlFragment("default");
+      const fragmentText = fragment?.toString().replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim() ?? "";
+      if (fragmentText) return;
+      if (editor.getText().trim() !== "") return;
       suppressAttributionRef.current = true;
       try {
         editor.commands.setContent(initialHtml || "<p></p>", false);
       } finally {
         suppressAttributionRef.current = false;
       }
-    }
+    };
+
+    const delay = providerRef.current?.getHydratedFromSnapshot() ? 300 : 900;
+    const timer = window.setTimeout(seedIfEmpty, delay);
+    return () => window.clearTimeout(timer);
   }, [editor, initialHtml]);
 
   useEffect(() => {
