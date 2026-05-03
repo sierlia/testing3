@@ -7,7 +7,6 @@ import * as Y from "yjs";
 import { yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { BillActions } from "../components/BillActions";
 import { DeleteHighlight, EditHighlight, LinkMark, TextAlignment, UnderlineMark } from "../components/CollaborativeBillEditor";
 import { fetchBillDetail, toggleCosponsor } from "../services/bills";
 import { supabase } from "../utils/supabase";
@@ -18,6 +17,7 @@ type TrackerStatus = "completed" | "current" | "upcoming";
 type TrackerStep = { label: string; status: TrackerStatus; date?: string | null; note?: string };
 type TrackerItem = TrackerStep | { kind: "split"; steps: [TrackerStep, TrackerStep] };
 type BillAction = { label: string; detail?: string; date: string };
+type CommitteeOption = { id: string; name: string };
 
 function formatDate(value?: string | null) {
   return value ? new Date(value).toLocaleDateString() : "";
@@ -88,10 +88,10 @@ function trackerIcon(step: TrackerStep) {
   return step.status === "completed" ? Check : step.status === "current" ? Clock : Circle;
 }
 
-function TrackerPoint({ step, compact = false }: { step: TrackerStep; compact?: boolean }) {
+function TrackerPoint({ step, compact = false, onSelect }: { step: TrackerStep; compact?: boolean; onSelect?: (step: TrackerStep) => void }) {
   const Icon = trackerIcon(step);
-  return (
-    <div className="flex min-w-0 items-start gap-2">
+  const content = (
+    <>
       <span
         className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
           step.status === "completed" ? "bg-blue-600 text-white" : step.status === "current" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"
@@ -103,11 +103,23 @@ function TrackerPoint({ step, compact = false }: { step: TrackerStep; compact?: 
         <div className={`${compact ? "text-[11px]" : "text-xs"} truncate font-semibold ${step.status === "upcoming" ? "text-gray-500" : "text-gray-900"}`}>{step.label}</div>
         <div className="truncate text-[11px] text-gray-500">{step.note || formatDate(step.date) || "Pending"}</div>
       </div>
+    </>
+  );
+  if (onSelect) {
+    return (
+      <button type="button" onClick={() => onSelect(step)} className="flex min-w-0 items-start gap-2 rounded-md text-left hover:bg-gray-50">
+        {content}
+      </button>
+    );
+  }
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      {content}
     </div>
   );
 }
 
-function HorizontalTracker({ steps }: { steps: TrackerItem[] }) {
+function HorizontalTracker({ steps, onSelectStep }: { steps: TrackerItem[]; onSelectStep?: (step: TrackerStep) => void }) {
   return (
     <div className="pt-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -120,8 +132,8 @@ function HorizontalTracker({ steps }: { steps: TrackerItem[] }) {
                   <div className={`flex-1 ${trackerBarClass(step.steps[1].status)}`} />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <TrackerPoint step={step.steps[0]} compact />
-                  <TrackerPoint step={step.steps[1]} compact />
+                  <TrackerPoint step={step.steps[0]} compact onSelect={onSelectStep} />
+                  <TrackerPoint step={step.steps[1]} compact onSelect={onSelectStep} />
                 </div>
               </div>
             );
@@ -129,7 +141,7 @@ function HorizontalTracker({ steps }: { steps: TrackerItem[] }) {
           return (
             <div key={step.label} className="min-w-0">
               <div className={`mb-2 h-1.5 rounded-full ${trackerBarClass(step.status)}`} />
-              <TrackerPoint step={step} />
+              <TrackerPoint step={step} onSelect={onSelectStep} />
             </div>
           );
         })}
@@ -154,6 +166,7 @@ export function BillDetail() {
   const [floorSession, setFloorSession] = useState<any>(null);
   const [floorVotes, setFloorVotes] = useState<any[]>([]);
   const [classSettings, setClassSettings] = useState<any>({});
+  const [committeeOptions, setCommitteeOptions] = useState<CommitteeOption[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentProfile, setCurrentProfile] = useState<any>(null);
   const [userRole, setUserRole] = useState<"student" | "teacher" | "leadership">("student");
@@ -187,7 +200,15 @@ export function BillDetail() {
         if (me) {
           const { data: p } = await supabase.from("profiles").select("role,display_name,party,constituency_name").eq("user_id", me).maybeSingle();
           setCurrentProfile(p ?? null);
-          if ((p as any)?.role === "teacher") setUserRole("teacher");
+          if ((p as any)?.role === "teacher") {
+            setUserRole("teacher");
+            const { data: committeeRows } = await supabase
+              .from("committees")
+              .select("id,name")
+              .eq("class_id", res.bill.class_id)
+              .order("name", { ascending: true });
+            setCommitteeOptions((committeeRows ?? []) as any);
+          }
         }
       } catch (e: any) {
         toast.error(e.message || "Could not load bill");
@@ -230,7 +251,7 @@ export function BillDetail() {
   useEffect(() => {
     if (!bill) return;
     setActiveTab((prev) => {
-      if (showRevisedText) return prev === "original" || prev === "supporting" || prev === "revised" ? prev : "revised";
+      if (showRevisedText) return "revised";
       return prev === "revised" ? "original" : prev;
     });
   }, [bill, showRevisedText]);
@@ -325,6 +346,126 @@ export function BillDetail() {
     }
   };
 
+  const refreshBillState = async () => {
+    if (!id) return;
+    const res = await fetchBillDetail(id);
+    setBill(res.bill);
+    setSponsor(res.sponsor);
+    setCosponsors(res.cosponsors);
+    setCosponsorIds(res.cosponsorIds);
+    setReferral(res.referral);
+    setCommitteeDoc(res.committeeDoc);
+    setCommitteeVotes(res.committeeVotes);
+    setCalendar(res.calendar);
+    setFloorSession(res.floorSession);
+    setFloorVotes(res.floorVotes);
+    setClassSettings(res.classSettings ?? {});
+  };
+
+  const chooseCommitteeId = () => {
+    if (committeeOptions.length === 0) {
+      toast.error("No committees are configured for this class");
+      return null;
+    }
+    if (committeeOptions.length === 1) return committeeOptions[0].id;
+    const list = committeeOptions.map((committee, index) => `${index + 1}. ${committee.name}`).join("\n");
+    const raw = window.prompt(`Choose a committee:\n${list}`, referral?.committee_name ?? "1");
+    if (!raw) return null;
+    const byNumber = Number(raw.trim());
+    if (Number.isInteger(byNumber) && committeeOptions[byNumber - 1]) return committeeOptions[byNumber - 1].id;
+    const match = committeeOptions.find((committee) => committee.name.toLowerCase() === raw.trim().toLowerCase());
+    if (!match) {
+      toast.error("No matching committee");
+      return null;
+    }
+    return match.id;
+  };
+
+  const ensureTeacherReferral = async () => {
+    if (!bill) return null;
+    const committeeId = chooseCommitteeId();
+    if (!committeeId) return null;
+    const { error: referralError } = await supabase.from("bill_referrals").upsert(
+      {
+        bill_id: bill.id,
+        class_id: bill.class_id,
+        committee_id: committeeId,
+      } as any,
+      { onConflict: "bill_id" },
+    );
+    if (referralError) throw referralError;
+    const { error: billError } = await supabase.from("bills").update({ status: "in_committee" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+    if (billError) throw billError;
+    return committeeId;
+  };
+
+  const handleTeacherTrackerSelect = async (step: TrackerStep) => {
+    if (userRole !== "teacher" || !bill) return;
+    try {
+      if (step.label === "Introduced") {
+        const { error } = await supabase.from("bills").update({ status: "submitted" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+        if (error) throw error;
+      } else if (step.label === "Referred") {
+        await ensureTeacherReferral();
+      } else if (step.label === "Marked up") {
+        const committeeId = referral?.committee_id ?? (await ensureTeacherReferral());
+        if (!committeeId) return;
+        const now = new Date().toISOString();
+        const { error: docError } = await supabase.from("committee_bill_docs").upsert(
+          { bill_id: bill.id, committee_id: committeeId, class_id: bill.class_id, committee_markup_posted_at: now } as any,
+          { onConflict: "bill_id,committee_id" },
+        );
+        if (docError) throw docError;
+        const { error: billError } = await supabase.from("bills").update({ status: "committee_vote" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+        if (billError) throw billError;
+      } else if (step.label === "Reported") {
+        const committeeId = referral?.committee_id ?? (await ensureTeacherReferral());
+        if (!committeeId) return;
+        const { error: docError } = await supabase.from("committee_bill_docs").upsert(
+          { bill_id: bill.id, committee_id: committeeId, class_id: bill.class_id, committee_vote_finalized_at: new Date().toISOString() } as any,
+          { onConflict: "bill_id,committee_id" },
+        );
+        if (docError) throw docError;
+        const { error } = await supabase.from("bills").update({ status: "reported" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+        if (error) throw error;
+      } else if (step.label === "Calendared") {
+        const scheduledAt = window.prompt("Schedule this bill for the calendar:", new Date().toISOString());
+        if (!scheduledAt) return;
+        const { error: calendarError } = await supabase.from("bill_calendar").upsert(
+          { bill_id: bill.id, class_id: bill.class_id, scheduled_at: scheduledAt, duration_minutes: 30, published: true, created_by: currentUserId } as any,
+          { onConflict: "class_id,bill_id" },
+        );
+        if (calendarError) throw calendarError;
+        const { error } = await supabase.from("bills").update({ status: "calendared" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+        if (error) throw error;
+      } else if (step.label === "Floor") {
+        const now = new Date().toISOString();
+        const { error: sessionError } = await supabase.from("bill_floor_sessions").upsert(
+          { bill_id: bill.id, class_id: bill.class_id, status: "open", opened_at: now, opened_by: currentUserId } as any,
+          { onConflict: "class_id,bill_id" },
+        );
+        if (sessionError) throw sessionError;
+        const { error } = await supabase.from("bills").update({ status: "floor" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+        if (error) throw error;
+      } else if (step.label === "Final") {
+        const raw = window.prompt("Final result: passed or failed?", "passed");
+        if (!raw) return;
+        const nextStatus = raw.toLowerCase().startsWith("p") ? "passed" : "failed";
+        const { error: sessionError } = await supabase.from("bill_floor_sessions").upsert(
+          { bill_id: bill.id, class_id: bill.class_id, status: "closed", closed_at: new Date().toISOString() } as any,
+          { onConflict: "class_id,bill_id" },
+        );
+        if (sessionError) throw sessionError;
+        const { error } = await supabase.from("bills").update({ status: nextStatus } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+        if (error) throw error;
+      }
+      await refreshBillState();
+      toast.success("Bill tracker updated");
+    } catch (e: any) {
+      toast.error(e.message || "Could not update bill tracker");
+    }
+  };
+
   if (loading || !bill) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -376,7 +517,7 @@ export function BillDetail() {
             </div>
             <div><span className="font-semibold text-gray-900">Latest action:</span> {latestAction ? `${latestAction.label} - ${formatDate(latestAction.date)}` : "No action yet"}</div>
           </div>
-          <HorizontalTracker steps={tracker} />
+          <HorizontalTracker steps={tracker} onSelectStep={userRole === "teacher" ? handleTeacherTrackerSelect : undefined} />
         </div>
 
         {bill.status === "draft" && (
@@ -424,18 +565,6 @@ export function BillDetail() {
                 {activeTab === "supporting" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: bill.supporting_text || "<p><em>No supporting text</em></p>" }} />}
               </div>
             </div>
-
-            <BillActions
-              bill={{
-                id: bill.id,
-                number: bill.hr_label,
-                committee: referral?.committee_name ?? "",
-                currentStatus: bill.status,
-                hasHold: bill.status === "draft",
-              }}
-              userRole={userRole}
-              currentUserId={currentUserId ?? ""}
-            />
           </div>
 
           <aside className="space-y-6">

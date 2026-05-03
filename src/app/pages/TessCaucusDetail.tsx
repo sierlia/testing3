@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Save, X, Users as UsersIcon, Send, Pencil } from "lucide-react";
+import { Save, X, Users as UsersIcon, Send, Pencil, Trash2 } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -53,6 +53,7 @@ export function TessCaucusDetail() {
   const [memberSearch, setMemberSearch] = useState("");
   const [memberSort, setMemberSort] = useState<"role" | "name" | "party">("role");
   const [myRole, setMyRole] = useState<MembershipRole | null>(null);
+  const [viewerRole, setViewerRole] = useState<"teacher" | "student" | null>(null);
 
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
@@ -72,6 +73,9 @@ export function TessCaucusDetail() {
 
   const isLeader = myRole === "chair" || myRole === "co_chair";
   const isChair = myRole === "chair";
+  const isTeacher = viewerRole === "teacher";
+  const canPostAnnouncements = isLeader || isTeacher;
+  const canComment = Boolean(myRole) || isTeacher;
 
   const selectedAnnouncement = useMemo(
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
@@ -88,12 +92,14 @@ export function TessCaucusDetail() {
         if (me) {
           const { data: mp } = await supabase
             .from("profiles")
-            .select("user_id,display_name,party,constituency_name,avatar_url")
+            .select("user_id,display_name,party,constituency_name,avatar_url,role")
             .eq("user_id", me)
             .maybeSingle();
           setMeProfile((mp as any) ?? null);
+          setViewerRole(((mp as any)?.role ?? null) as any);
         } else {
           setMeProfile(null);
+          setViewerRole(null);
         }
 
         const { data: c, error: cErr } = await supabase
@@ -462,6 +468,39 @@ export function TessCaucusDetail() {
 
   const postComment = async () => submitComment(newComment, null);
 
+  const deleteAnnouncement = async (announcementId: string) => {
+    if (!isTeacher) return;
+    try {
+      const { error } = await supabase.from("caucus_announcements").delete().eq("id", announcementId);
+      if (error) throw error;
+      setAnnouncements((prev) => prev.filter((announcement) => announcement.id !== announcementId));
+      setCommentsByAnnouncement((prev) => {
+        const next = { ...prev };
+        delete next[announcementId];
+        return next;
+      });
+      setSelectedAnnouncementId((prev) => (prev === announcementId ? announcements.find((announcement) => announcement.id !== announcementId)?.id ?? null : prev));
+      toast.success("Announcement deleted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not delete announcement");
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!isTeacher || !selectedAnnouncementId) return;
+    try {
+      const { error } = await supabase.from("caucus_comments").delete().eq("id", commentId);
+      if (error) throw error;
+      setCommentsByAnnouncement((prev) => ({
+        ...prev,
+        [selectedAnnouncementId]: (prev[selectedAnnouncementId] ?? []).filter((comment) => comment.id !== commentId && comment.parent_comment_id !== commentId),
+      }));
+      toast.success("Comment deleted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not delete comment");
+    }
+  };
+
   const toggleAnnouncementReaction = async (announcementId: string, emoji: ReactionEmoji) => {
     if (!meId) return;
     const mine = announcementReactions[announcementId]?.mine?.has(emoji) ?? false;
@@ -699,7 +738,7 @@ export function TessCaucusDetail() {
                 <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
               </div>
 
-              {isLeader && (
+              {canPostAnnouncements && (
                 <div className="p-6 border-b border-gray-200">
                   <div className="flex items-start gap-3">
                     <textarea
@@ -733,8 +772,8 @@ export function TessCaucusDetail() {
                       <button
                         key={a.id}
                         onClick={() => setSelectedAnnouncementId(a.id)}
-                        className={`w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 ${
-                          selectedAnnouncementId === a.id ? "bg-blue-50" : ""
+                        className={`w-full text-left p-4 border-b border-gray-100 bg-white hover:bg-gray-50 ${
+                          selectedAnnouncementId === a.id ? "border-l-4 border-l-blue-500" : ""
                         }`}
                       >
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
@@ -758,7 +797,15 @@ export function TessCaucusDetail() {
                 <div className="p-4 max-h-[520px] overflow-y-auto flex-1">
                   {selectedAnnouncement ? (
                     <div className="space-y-4">
-                      <div className="border border-gray-200 rounded-md p-4 bg-gray-50">
+                      <div className="border border-gray-200 rounded-md p-4 bg-white">
+                        {isTeacher && (
+                          <div className="mb-2 flex justify-end">
+                            <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
                         <div className="text-sm text-gray-900 whitespace-pre-line">{selectedAnnouncement.body}</div>
                         <div className="text-xs text-gray-500 mt-2">
                           <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className="text-blue-600 hover:underline">
@@ -779,14 +826,16 @@ export function TessCaucusDetail() {
                         <h3 className="text-sm font-semibold text-gray-900">Comments</h3>
                         <ThreadedComments
                           comments={visibleComments}
-                          meId={myRole ? meId : null}
+                          meId={canComment ? meId : null}
                           reactionsByCommentId={commentReactions}
                           onToggleReaction={(commentId, emoji) => void toggleCommentReaction(commentId, emoji)}
                           onSubmitComment={submitComment}
+                          canDeleteComments={isTeacher}
+                          onDeleteComment={deleteComment}
                         />
                       </div>
 
-                      {myRole && (
+                      {canComment && (
                         <div className="pt-2 border-t border-gray-200">
                           <div className="flex items-start gap-2">
                             <textarea

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
-import { Flag, Pencil, Save, Send, Users, Vote } from "lucide-react";
+import { Flag, Pencil, Save, Send, Trash2, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -19,6 +19,7 @@ export function PartyDetail() {
   const [loading, setLoading] = useState(true);
   const [meId, setMeId] = useState<string | null>(null);
   const [myParty, setMyParty] = useState<string | null>(null);
+  const [viewerRole, setViewerRole] = useState<"teacher" | "student" | null>(null);
   const [party, setParty] = useState<PartyRow | null>(null);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -33,6 +34,8 @@ export function PartyDetail() {
   const [aboutDraft, setAboutDraft] = useState("");
 
   const isMember = !!party && myParty === party.name;
+  const isTeacher = viewerRole === "teacher";
+  const canUseBoard = isMember || isTeacher;
   const selectedAnnouncement = announcements.find((a) => a.id === selectedAnnouncementId) ?? null;
 
   const load = async () => {
@@ -48,8 +51,9 @@ export function PartyDetail() {
       setParty(p as any);
       setAboutDraft((p as any).platform ?? "");
 
-      const { data: me } = await supabase.from("profiles").select("party").eq("user_id", uid).maybeSingle();
+      const { data: me } = await supabase.from("profiles").select("party,role").eq("user_id", uid).maybeSingle();
       setMyParty((me as any)?.party ?? null);
+      setViewerRole(((me as any)?.role ?? null) as any);
 
       const { data: memberRows, error: memberErr } = await supabase
         .from("profiles")
@@ -190,6 +194,39 @@ export function PartyDetail() {
     }
   };
 
+  const deleteAnnouncement = async (announcementId: string) => {
+    if (!isTeacher) return;
+    try {
+      const { error } = await supabase.from("party_announcements").delete().eq("id", announcementId);
+      if (error) throw error;
+      setAnnouncements((prev) => prev.filter((announcement) => announcement.id !== announcementId));
+      setComments((prev) => {
+        const next = { ...prev };
+        delete next[announcementId];
+        return next;
+      });
+      setSelectedAnnouncementId((prev) => (prev === announcementId ? announcements.find((announcement) => announcement.id !== announcementId)?.id ?? null : prev));
+      toast.success("Announcement deleted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not delete announcement");
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!isTeacher || !selectedAnnouncement) return;
+    try {
+      const { error } = await supabase.from("party_comments").delete().eq("id", commentId);
+      if (error) throw error;
+      setComments((prev) => ({
+        ...prev,
+        [selectedAnnouncement.id]: (prev[selectedAnnouncement.id] ?? []).filter((comment) => comment.id !== commentId),
+      }));
+      toast.success("Comment deleted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not delete comment");
+    }
+  };
+
   const castLeadershipVote = async (position: "chair" | "whip", candidateId: string) => {
     if (!party || !meId || !isMember) return;
     try {
@@ -271,7 +308,7 @@ export function PartyDetail() {
                   <div className="border-b border-gray-200 p-5">
                     <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
                   </div>
-                  {isMember && (
+                  {canUseBoard && (
                     <div className="border-b border-gray-200 p-5">
                       <div className="flex gap-3">
                         <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} rows={3} placeholder="Post an announcement..." className="flex-1 rounded-md border border-gray-300 px-3 py-2" />
@@ -285,7 +322,7 @@ export function PartyDetail() {
                         <div className="p-5 text-sm text-gray-500">No announcements yet.</div>
                       ) : (
                         announcements.map((a) => (
-                          <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} className={`w-full border-b border-gray-100 p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "bg-blue-50" : ""}`}>
+                          <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} className={`w-full border-b border-gray-100 bg-white p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "border-l-4 border-l-blue-500" : ""}`}>
                             <div className="line-clamp-2 text-sm font-medium text-gray-900">{a.body}</div>
                             <div className="mt-1 text-xs text-gray-500">{a.author?.display_name ?? "Member"} • {new Date(a.created_at).toLocaleDateString()}</div>
                           </button>
@@ -295,7 +332,15 @@ export function PartyDetail() {
                     <div className="max-h-[520px] overflow-y-auto p-5">
                       {selectedAnnouncement ? (
                         <div className="space-y-4">
-                          <div className="rounded-md bg-gray-50 p-4">
+                          <div className="rounded-md border border-gray-200 bg-white p-4">
+                            {isTeacher && (
+                              <div className="mb-2 flex justify-end">
+                                <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
+                                  <Trash2 className="h-3.5 w-3.5" />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
                             <div className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</div>
                             <div className="mt-2 text-xs text-gray-500">{selectedAnnouncement.author?.display_name ?? "Member"} • {new Date(selectedAnnouncement.created_at).toLocaleString()}</div>
                           </div>
@@ -303,12 +348,19 @@ export function PartyDetail() {
                             <h3 className="text-sm font-semibold text-gray-900">Comments</h3>
                             {(comments[selectedAnnouncement.id] ?? []).map((comment) => (
                               <div key={comment.id} className="rounded-md border border-gray-200 p-3 text-sm">
-                                <div className="font-medium text-gray-900">{comment.author?.display_name ?? "Member"}</div>
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="font-medium text-gray-900">{comment.author?.display_name ?? "Member"}</div>
+                                  {isTeacher && (
+                                    <button type="button" onClick={() => void deleteComment(comment.id)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete comment">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
+                                </div>
                                 <div className="mt-1 text-gray-700">{comment.body}</div>
                               </div>
                             ))}
                           </div>
-                          {isMember && (
+                          {canUseBoard && (
                             <div className="flex gap-2 border-t border-gray-200 pt-3">
                               <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={2} placeholder="Write a comment..." className="flex-1 rounded-md border border-gray-300 px-3 py-2" />
                               <button onClick={() => void postComment()} disabled={!newComment.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Send</button>

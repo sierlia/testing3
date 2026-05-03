@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ChevronDown, ChevronRight, Reply } from "lucide-react";
+import { ChevronDown, ChevronRight, Reply, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { ReactionEmoji, ReactionsBar, ReactionsSummary } from "./ReactionsBar";
 import { DefaultAvatar } from "./DefaultAvatar";
@@ -31,12 +31,16 @@ export function ThreadedComments({
   reactionsByCommentId,
   onToggleReaction,
   onSubmitComment,
+  canDeleteComments = false,
+  onDeleteComment,
 }: {
   comments: ThreadComment[];
   meId: string | null;
   reactionsByCommentId: Record<string, ReactionsSummary | undefined>;
   onToggleReaction: (commentId: string, emoji: ReactionEmoji) => void;
   onSubmitComment: (body: string, parentCommentId: string | null) => Promise<void>;
+  canDeleteComments?: boolean;
+  onDeleteComment?: (commentId: string) => Promise<void>;
 }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
@@ -90,6 +94,16 @@ export function ThreadedComments({
                 </Link>
                 <span className="text-gray-500 text-xs ml-2">{formatDate(comment.created_at)}</span>
               </div>
+              {canDeleteComments && onDeleteComment && (
+                <button
+                  type="button"
+                  onClick={() => void onDeleteComment(comment.id)}
+                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                  aria-label="Delete comment"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
             <div className="text-sm text-gray-700 whitespace-pre-wrap mt-1">
               {parentName ? <span className="text-blue-600 font-medium">@{parentName} </span> : null}
