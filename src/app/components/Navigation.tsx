@@ -276,19 +276,19 @@ export function Navigation() {
                       to="/parties"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      Party
+                      Parties
                     </Link>
                     <Link
                       to="/committees"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      Committee
+                      Committees
                     </Link>
                     <Link
                       to="/caucuses"
                       className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     >
-                      Caucus
+                      Caucuses
                     </Link>
                   </div>
                 )}

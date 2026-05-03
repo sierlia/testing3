@@ -3,6 +3,7 @@ import { Bell, Calendar, CheckSquare, FileText, Save, Scale, Send, Settings, Use
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
+import { defaultPartyColor } from "../components/PartyCreateForm";
 
 type TabId = "parties" | "committees" | "bills" | "floor" | "leadership" | "calendar" | "profiles" | "notifications";
 
@@ -126,7 +127,7 @@ export function TeacherSetup() {
   const syncPartiesAndCommittees = async (classId: string) => {
     if (settings.allowedParties.length) {
       await supabase.from("parties").upsert(
-        settings.allowedParties.map((name) => ({ class_id: classId, name, platform: "", approved: true })),
+        settings.allowedParties.map((name) => ({ class_id: classId, name, platform: "", color: defaultPartyColor(name), approved: true })),
         { onConflict: "class_id,name" },
       );
     }

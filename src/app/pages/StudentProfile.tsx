@@ -23,7 +23,6 @@ import { Navigation } from "../components/Navigation";
 import { ConstituencyPicker, getConstituencyById } from "../components/ConstituencyPicker";
 import {
   getPartyIdByName,
-  getPartyNameById,
   NewParty,
   PartySelection,
 } from "../components/PartySelection";
@@ -137,7 +136,16 @@ export function StudentProfile() {
         })),
       );
 
-      const existingPartyId = (pr.written_responses as any)?.party_id ?? getPartyIdByName(pr.party);
+      let existingPartyId = (pr.written_responses as any)?.party_id ?? getPartyIdByName(pr.party);
+      if (!existingPartyId && pr.class_id && pr.party) {
+        const { data: existingParty } = await supabase
+          .from("parties")
+          .select("id")
+          .eq("class_id", pr.class_id)
+          .eq("name", pr.party)
+          .maybeSingle();
+        existingPartyId = (existingParty as any)?.id ?? null;
+      }
       setPartyDraftId(existingPartyId ?? null);
       setNewPartyDraft((pr.written_responses as any)?.new_party ?? undefined);
       setConstituencyDraftId((pr.written_responses as any)?.constituency_id ?? null);
@@ -323,8 +331,42 @@ export function StudentProfile() {
 
   const savePartySelection = async () => {
     if (!profile) return;
-    const partyName = getPartyNameById(partyDraftId) ?? newPartyDraft?.name ?? null;
-    mergeWrittenResponses({ party_id: partyDraftId, new_party: newPartyDraft });
+    let partyName: string | null = null;
+    let savedPartyId = partyDraftId;
+    if (partyDraftId === "custom" && newPartyDraft?.name.trim()) {
+      const { data: auth } = await supabase.auth.getUser();
+      const me = auth.user?.id;
+      if (!me || !profile.class_id) return;
+      const { data: cls } = await supabase.from("classes").select("settings").eq("id", profile.class_id).maybeSingle();
+      const requireApproval = !!(cls as any)?.settings?.parties?.requireApproval;
+      const { data: created, error } = await supabase
+        .from("parties")
+        .upsert(
+          {
+            class_id: profile.class_id,
+            name: newPartyDraft.name.trim(),
+            platform: newPartyDraft.platform.trim(),
+            color: newPartyDraft.color,
+            created_by: me,
+            approved: profile.role === "teacher" || !requireApproval,
+          } as any,
+          { onConflict: "class_id,name" },
+        )
+        .select("id,name")
+        .single();
+      if (error) {
+        toast.error(error.message || "Could not create party");
+        return;
+      }
+      savedPartyId = (created as any).id;
+      partyName = (created as any).name;
+      setPartyDraftId(savedPartyId);
+      setNewPartyDraft(undefined);
+    } else if (partyDraftId) {
+      const { data: party } = await supabase.from("parties").select("name").eq("id", partyDraftId).maybeSingle();
+      partyName = (party as any)?.name ?? null;
+    }
+    mergeWrittenResponses({ party_id: savedPartyId, new_party: undefined });
     await saveProfile({ party: partyName } as any);
     setShowPartyModal(false);
   };

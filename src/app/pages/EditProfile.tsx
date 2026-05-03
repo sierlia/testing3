@@ -18,10 +18,10 @@ import tessLinImage from "figma:asset/966ec4d05f8fbeb48998b857574fc6613b388aae.p
 import { toast } from "sonner";
 import { ConstituencyPicker, getConstituencyById } from "../components/ConstituencyPicker";
 import {
-  getPartyNameById,
   NewParty,
   PartySelection,
 } from "../components/PartySelection";
+import { supabase } from "../utils/supabase";
 
 export function EditProfile() {
   const { id } = useParams();
@@ -80,8 +80,12 @@ export function EditProfile() {
     setEditingContent("");
   };
 
-  const handleSaveParty = () => {
-    const partyName = getPartyNameById(profileData.partyId) ?? profileData.newParty?.name ?? null;
+  const handleSaveParty = async () => {
+    let partyName = profileData.newParty?.name ?? null;
+    if (!partyName && profileData.partyId && profileData.partyId !== "custom") {
+      const { data } = await supabase.from("parties").select("name").eq("id", profileData.partyId).maybeSingle();
+      partyName = (data as any)?.name ?? null;
+    }
     setProfileData({
       ...profileData,
       party: partyName || "N/A",
@@ -468,7 +472,7 @@ export function EditProfile() {
                 Cancel
               </button>
               <button
-                onClick={handleSaveParty}
+                onClick={() => void handleSaveParty()}
                 className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
               >
                 <Save className="w-4 h-4" />

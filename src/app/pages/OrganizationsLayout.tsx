@@ -9,13 +9,18 @@ export function OrganizationsLayout({ active, children }: { active: "parties" | 
         <p className="text-gray-600">Parties, committees, and caucuses for your class</p>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-2 flex gap-2">
-        <Tab to="/parties" active={active === "parties"}>Parties</Tab>
-        <Tab to="/committees" active={active === "committees"}>Committees</Tab>
-        <Tab to="/caucuses" active={active === "caucuses"}>Caucuses</Tab>
+      <div className="grid gap-4 md:grid-cols-[180px_1fr]">
+        <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
+          <div className="flex gap-2 md:flex-col">
+            <Tab to="/parties" active={active === "parties"}>Parties</Tab>
+            <Tab to="/committees" active={active === "committees"}>Committees</Tab>
+            <Tab to="/caucuses" active={active === "caucuses"}>Caucuses</Tab>
+          </div>
+        </div>
+        <div className="min-w-0">
+          {children}
+        </div>
       </div>
-
-      {children}
     </div>
   );
 }
@@ -32,4 +37,3 @@ function Tab({ to, active, children }: { to: string; active: boolean; children: 
     </Link>
   );
 }
-

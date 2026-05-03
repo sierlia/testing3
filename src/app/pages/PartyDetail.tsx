@@ -7,7 +7,7 @@ import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 
-type PartyRow = { id: string; class_id: string; name: string; platform: string; created_at: string };
+type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
 type MemberRow = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
 type Announcement = { id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
 type CommentRow = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
@@ -43,7 +43,7 @@ export function PartyDetail() {
       setMeId(uid);
       if (!uid) return;
 
-      const { data: p, error: pErr } = await supabase.from("parties").select("id,class_id,name,platform,created_at").eq("id", partyId).single();
+      const { data: p, error: pErr } = await supabase.from("parties").select("id,class_id,name,platform,color,created_at").eq("id", partyId).single();
       if (pErr) throw pErr;
       setParty(p as any);
       setAboutDraft((p as any).platform ?? "");
@@ -222,11 +222,15 @@ export function PartyDetail() {
           <div className="text-sm text-gray-600">Loading...</div>
         ) : (
           <>
-            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              <div className="h-2" style={{ backgroundColor: party.color || "#2563eb" }} />
+              <div className="p-6">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <div className="flex items-center gap-2">
-                    <Flag className="h-6 w-6 text-blue-600" />
+                    <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ backgroundColor: party.color || "#2563eb" }}>
+                      <Flag className="h-4 w-4" />
+                    </span>
                     <h1 className="text-2xl font-bold text-gray-900">{party.name}</h1>
                   </div>
                   <p className="mt-2 text-sm text-gray-600">
@@ -237,6 +241,7 @@ export function PartyDetail() {
                   onClick={() => void joinOrSwitch()}
                   className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                   disabled={isMember}
+                  style={{ backgroundColor: isMember ? undefined : party.color || "#2563eb" }}
                 >
                   {isMember ? "Joined" : myParty ? "Switch to party" : "Join party"}
                 </button>
@@ -256,6 +261,7 @@ export function PartyDetail() {
                 ) : (
                   <p className="whitespace-pre-line text-gray-700">{party.platform || "No platform yet."}</p>
                 )}
+              </div>
               </div>
             </div>
 

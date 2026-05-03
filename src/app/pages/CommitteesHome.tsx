@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Building2, Check, ClipboardList, UserPlus, Users } from "lucide-react";
+import { Building2, Check, ClipboardList, Search, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
@@ -21,6 +21,7 @@ export function CommitteesHome() {
   const [meId, setMeId] = useState<string | null>(null);
   const [joinedCommitteeIds, setJoinedCommitteeIds] = useState<Set<string>>(new Set());
   const [joiningCommitteeId, setJoiningCommitteeId] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -100,7 +101,12 @@ export function CommitteesHome() {
     void load();
   }, []);
 
-  const items = useMemo(() => committees.map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0 })), [committees, memberCounts]);
+  const items = useMemo(() => {
+    const query = searchQuery.toLowerCase().trim();
+    return committees
+      .filter((committee) => !query || committee.name.toLowerCase().includes(query) || (committee.description ?? "").toLowerCase().includes(query))
+      .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0 }));
+  }, [committees, memberCounts, searchQuery]);
   const canSelfJoin = role === "student" && (!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
 
   const joinCommittee = async (committeeId: string) => {
@@ -131,9 +137,20 @@ export function CommitteesHome() {
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OrganizationsLayout active="committees">
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <Building2 className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Committees</h2>
+            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-blue-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Committees</h2>
+              </div>
+              <div className="relative sm:w-72">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search committees..."
+                  className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
             </div>
             {role === "student" && needsPreferences && !preferencesSubmitted && (
               <button
