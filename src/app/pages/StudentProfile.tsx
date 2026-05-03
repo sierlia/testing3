@@ -25,6 +25,7 @@ import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituencyFull, normalizeConstituencyId } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
 
 type EditingSection = "personal_statement" | "constituency_description" | "key_issues" | null;
 
@@ -85,6 +86,7 @@ export function StudentProfile() {
   const [constituencyDraftId, setConstituencyDraftId] = useState<string | null>(null);
   const [unavailableConstituencies, setUnavailableConstituencies] = useState<string[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [teacherProfileTab, setTeacherProfileTab] = useState<"example" | "layout">("example");
 
   useEffect(() => {
     (async () => {
@@ -364,6 +366,7 @@ export function StudentProfile() {
         .map((l) => l.trim())
         .filter(Boolean);
   const isTeacherProfile = profile.role === "teacher";
+  const sampleBadge = isTeacherProfile && !isMe ? <span className="rounded-full bg-green-100 px-2 py-1 text-xs font-semibold text-green-700">Sample work</span> : null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -462,10 +465,41 @@ export function StudentProfile() {
           </div>
         </div>
 
+        {isTeacherProfile && isMe && (
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setTeacherProfileTab("example")}
+                className={`rounded-md px-4 py-2 text-sm font-medium ${teacherProfileTab === "example" ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+              >
+                Example profile
+              </button>
+              <button
+                type="button"
+                onClick={() => setTeacherProfileTab("layout")}
+                className={`rounded-md px-4 py-2 text-sm font-medium ${teacherProfileTab === "layout" ? "bg-green-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
+              >
+                Edit profile layout
+              </button>
+            </div>
+            {teacherProfileTab === "example" && (
+              <p className="mt-3 text-sm text-gray-600">
+                Write example responses here to show students what strong work can look like for each profile box.
+              </p>
+            )}
+          </div>
+        )}
+
+        {isTeacherProfile && isMe && teacherProfileTab === "layout" ? (
+          <ProfileLayoutEditor embedded />
+        ) : (
+        <>
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-900">Personal Statement</h2>
             <div className="flex items-center gap-3">
+              {sampleBadge}
               <div className="text-xs italic text-gray-500">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
               {isMe && editingSection !== "personal_statement" && (
                 <button onClick={() => startEdit("personal_statement")} className="text-blue-600 hover:text-blue-700 transition-colors">
@@ -624,6 +658,7 @@ export function StudentProfile() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-gray-900">Key Issues</h2>
             <div className="flex items-center gap-3">
+              {sampleBadge}
               <div className="text-xs italic text-gray-500">{updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}</div>
               {isMe && editingSection !== "key_issues" && (
                 <button onClick={() => startEdit("key_issues")} className="text-blue-600 hover:text-blue-700 transition-colors">
@@ -766,6 +801,8 @@ export function StudentProfile() {
           </div>
           <p className="text-gray-600">Coming soon</p>
         </div>
+        </>
+        )}
       </main>
 
       {showPartyModal && (

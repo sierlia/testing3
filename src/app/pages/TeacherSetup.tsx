@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { useParams } from "react-router";
-import { Bell, Calendar, CheckSquare, FileText, Save, Scale, Settings, UserCog, Users, Vote } from "lucide-react";
+import { Bell, Calendar, CheckSquare, FileText, Mail, Save, Scale, Settings, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
@@ -65,6 +65,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const [activeTab, setActiveTab] = useState<TabId>(mode === "setup" ? "parties" : "bills");
   const [activeClassId, setActiveClassId] = useState<string | null>(params.classId ?? null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteBusy, setInviteBusy] = useState(false);
   const [settings, setSettingsState] = useState({
     allowedParties: ["Democratic Party", "Republican Party"],
     allowStudentCreatedParties: false,
@@ -237,6 +239,25 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
   };
 
+  const inviteTeacher = async () => {
+    if (!activeClassId || !inviteEmail.trim()) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) {
+      toast.error("please enter a valid email address");
+      return;
+    }
+    setInviteBusy(true);
+    try {
+      const { error } = await supabase.rpc("invite_teacher_to_class", { target_class: activeClassId, teacher_email: inviteEmail.trim() });
+      if (error) throw error;
+      toast.success("invitation sent if user exists");
+      setInviteEmail("");
+    } catch (e: any) {
+      toast.error(e.message === "EMAIL_REQUIRED" ? "please enter a valid email address" : "invitation sent if user exists");
+    } finally {
+      setInviteBusy(false);
+    }
+  };
+
   const section = () => {
     if (activeTab === "parties") {
       return (
@@ -360,6 +381,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         <div className="space-y-5">
           <Toggle checked={settings.profileDistrictRequired} onChange={(v) => setSettings({ profileDistrictRequired: v })} title="Require constituency" description="Students should choose a district for their profile." />
           <Toggle checked={settings.profilePartyRequired} onChange={(v) => setSettings({ profilePartyRequired: v })} title="Require party" description="Students should choose or join a party." />
+          <a href="/teacher/profile-layout-editor" className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-semibold text-gray-900 hover:bg-gray-50">
+            <UserCog className="h-4 w-4" />
+            Edit profile layout
+          </a>
         </div>
       );
     }
@@ -405,6 +430,29 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <h2 className="mb-5 text-xl font-semibold text-gray-900">{visibleTabs.find((tab) => tab.id === activeTab)?.label}</h2>
             {section()}
+            <div className="mt-8 border-t border-gray-200 pt-5">
+              <div className="mb-2 flex items-center gap-2 text-base font-semibold text-gray-900">
+                <Mail className="h-4 w-4 text-blue-600" />
+                Invite teacher
+              </div>
+              <div className="flex max-w-xl gap-2">
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(event) => setInviteEmail(event.target.value)}
+                  placeholder="teacher@email.com"
+                  className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => void inviteTeacher()}
+                  disabled={inviteBusy || !inviteEmail.trim() || !activeClassId}
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Invite
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </main>

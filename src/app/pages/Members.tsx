@@ -5,6 +5,7 @@ import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { formatConstituency } from "../utils/constituency";
 
 type Member = {
   user_id: string;
@@ -14,6 +15,16 @@ type Member = {
   avatar_url: string | null;
   role: "teacher" | "student";
 };
+
+function partyAbbr(party: string | null | undefined) {
+  const normalized = String(party ?? "").toLowerCase();
+  if (normalized.includes("democrat")) return "D";
+  if (normalized.includes("republican")) return "R";
+  if (normalized.includes("independent")) return "I";
+  if (normalized.includes("green")) return "G";
+  if (normalized.includes("libertarian")) return "L";
+  return party?.trim()?.slice(0, 1).toUpperCase() || "I";
+}
 
 export function Members() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -126,7 +137,7 @@ export function Members() {
                   {member.role === "teacher" ? (
                     <div className="text-sm font-medium text-green-700">Teacher</div>
                   ) : (
-                    <div className="text-sm text-gray-600">Student</div>
+                    <div className="text-sm text-gray-600">Rep.-{partyAbbr(member.party)}-{formatConstituency(member.constituency_name) || "N/A"}</div>
                   )}
                 </div>
               </div>

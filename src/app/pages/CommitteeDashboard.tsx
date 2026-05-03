@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
-import { LogOut, Users, Send, Pencil, Save, X, UserPlus, Trash2 } from "lucide-react";
+import { GraduationCap, LogOut, Users, Send, Pencil, Save, X, UserPlus, Trash2 } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -29,7 +29,7 @@ function partyAbbr(party: string | null | undefined) {
 
 function memberDescriptor(profile: ProfileLite | null) {
   const district = formatConstituency(profile?.constituency_name);
-  return `${partyAbbr(profile?.party)}-${district || "N/A"}`;
+  return `Rep.-${partyAbbr(profile?.party)}-${district || "N/A"}`;
 }
 
 function displayAuthorName(author: ProfileLite | null | undefined, fallback = "Unknown") {
@@ -42,6 +42,10 @@ function leadershipLabel(role: MembershipRole) {
   if (role === "co_chair") return "Co-chair";
   if (role === "ranking_member") return "Ranking member";
   return "";
+}
+
+function authorLinkClass(author: ProfileLite | null | undefined) {
+  return author?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline";
 }
 
 const dashboardCache = new Map<
@@ -771,6 +775,30 @@ export function CommitteeDashboard() {
     }
   };
 
+  const requestRoleChange = (member: { user_id: string; role: MembershipRole; profile: ProfileLite | null }, nextRole: MembershipRole) => {
+    if (!isTeacher || member.role === nextRole) return;
+    setConfirmDialog({
+      title: "Change member role?",
+      message: `Set ${member.profile?.display_name ?? "this member"} to ${leadershipLabel(nextRole) || "Member"} for ${committee?.name ?? "this committee"}?`,
+      confirmLabel: "Change role",
+      onConfirm: () => updateMemberRole(member.user_id, nextRole),
+    });
+  };
+
+  const updateMemberRole = async (userId: string, nextRole: MembershipRole) => {
+    const { error } = await supabase.from("committee_members").update({ role: nextRole } as any).eq("committee_id", committeeId).eq("user_id", userId);
+    if (error) return toast.error(error.message || "Could not update role");
+    setMembers((prev) => prev.map((member) => (member.user_id === userId ? { ...member, role: nextRole } : member)));
+    const cached = dashboardCache.get(committeeId);
+    if (cached) {
+      dashboardCache.set(committeeId, {
+        ...cached,
+        members: cached.members.map((member) => (member.user_id === userId ? { ...member, role: nextRole } : member)),
+      });
+    }
+    toast.success("Role updated");
+  };
+
   if (loading || !committee) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -912,11 +940,14 @@ export function CommitteeDashboard() {
                           if (cached) dashboardCache.set(committeeId, { ...cached, selectedAnnouncementId: a.id });
                           markCommitteeSeenIds(committeeId, "dashboard", [a.id]);
                         }}
-                        className={`w-full text-left p-4 border-b border-gray-100 bg-white hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "border-l-4 border-l-blue-500" : ""}`}
+                        className={`relative w-full text-left p-4 border-b border-gray-100 bg-white hover:bg-gray-50 ${
+                          selectedAnnouncementId === a.id ? `border-l-4 ${a.author?.role === "teacher" ? "border-l-green-500" : "border-l-blue-500"}` : ""
+                        }`}
                       >
+                        {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
-                          <Link to={`/profile/${a.author_user_id}`} className="text-blue-600 hover:underline">
+                          <Link to={`/profile/${a.author_user_id}`} className={authorLinkClass(a.author)}>
                             {displayAuthorName(a.author)}
                           </Link>{" "}
                           • {new Date(a.created_at).toLocaleString()}
@@ -935,10 +966,11 @@ export function CommitteeDashboard() {
                 <div className="p-4 max-h-[520px] overflow-y-auto flex-1">
                   {selectedAnnouncement ? (
                     <div className="space-y-4">
-                      <div className="border border-gray-200 rounded-md p-4 bg-white">
+                      <div className="relative border border-gray-200 rounded-md p-4 bg-white">
+                        {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <div className="text-sm text-gray-900 whitespace-pre-line">{selectedAnnouncement.body}</div>
                         <div className="text-xs text-gray-500 mt-2">
-                          <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className="text-blue-600 hover:underline">
+                          <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={authorLinkClass(selectedAnnouncement.author)}>
                             {displayAuthorName(selectedAnnouncement.author)}
                           </Link>{" "}
                           • {new Date(selectedAnnouncement.created_at).toLocaleString()}
@@ -1033,9 +1065,20 @@ export function CommitteeDashboard() {
                     </div>
                     <div className="text-xs text-gray-500 truncate">{memberDescriptor(m.profile)}</div>
                   </div>
-                  {leadershipLabel(m.role) && (
+                  {isTeacher ? (
+                    <select
+                      value={m.role}
+                      onChange={(event) => requestRoleChange(m, event.target.value as MembershipRole)}
+                      className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                    >
+                      <option value="member">Member</option>
+                      <option value="chair">Chair</option>
+                      <option value="co_chair">Co-chair</option>
+                      <option value="ranking_member">Ranking member</option>
+                    </select>
+                  ) : leadershipLabel(m.role) ? (
                     <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{leadershipLabel(m.role)}</div>
-                  )}
+                  ) : null}
                 </div>
               ))}
               {visibleMembers.length === 0 && <div className="text-sm text-gray-500">No members found.</div>}

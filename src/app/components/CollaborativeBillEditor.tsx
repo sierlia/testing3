@@ -498,10 +498,11 @@ export function CollaborativeBillEditor({
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;
       if (!uid) return;
-      const { data: p } = await supabase.from("profiles").select("display_name").eq("user_id", uid).maybeSingle();
+      const { data: p } = await supabase.from("profiles").select("display_name,role").eq("user_id", uid).maybeSingle();
       const name = (p as any)?.display_name ?? auth.user?.user_metadata?.name ?? "Member";
       // Keep authorName in highlights consistent: prefer a concrete non-empty name.
-      const normalizedName = String(name || "").trim() || "Member";
+      const baseName = String(name || "").trim() || "Member";
+      const normalizedName = (p as any)?.role === "teacher" ? `${baseName} (Teacher)` : baseName;
       let color = colorFromId(uid);
       try {
         const { data: row } = await supabase

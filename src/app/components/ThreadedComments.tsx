@@ -89,8 +89,8 @@ export function ThreadedComments({
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm">
-                <Link to={`/profile/${comment.author_user_id}`} className="font-semibold text-gray-900 hover:underline">
-                  {comment.author?.display_name ?? "Member"}
+                <Link to={`/profile/${comment.author_user_id}`} className={`font-semibold hover:underline ${comment.author?.role === "teacher" ? "text-green-700" : "text-gray-900"}`}>
+                  {comment.author?.display_name ?? "Member"}{comment.author?.role === "teacher" ? " (Teacher)" : ""}
                 </Link>
                 <span className="text-gray-500 text-xs ml-2">{formatDate(comment.created_at)}</span>
               </div>

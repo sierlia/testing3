@@ -249,8 +249,9 @@ export function CommitteeWorkspace() {
         const uid = auth.user?.id;
         if (!uid) return;
 
-        const { data: profile } = await supabase.from("profiles").select("display_name,avatar_url").eq("user_id", uid).maybeSingle();
-        const normalizedName = String((profile as any)?.display_name ?? auth.user?.user_metadata?.name ?? "").trim() || "Member";
+        const { data: profile } = await supabase.from("profiles").select("display_name,avatar_url,role").eq("user_id", uid).maybeSingle();
+        const baseName = String((profile as any)?.display_name ?? auth.user?.user_metadata?.name ?? "").trim() || "Member";
+        const normalizedName = (profile as any)?.role === "teacher" ? `${baseName} (Teacher)` : baseName;
 
         let color = "#2563eb";
         const { data: existingColor } = await supabase

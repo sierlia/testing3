@@ -1,390 +1,263 @@
-import { useState } from "react";
-import { DndProvider, useDrag, useDrop } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowDown, ArrowUp, FileText, GripVertical, Layout, Mail, Plus, Save, Trash2, Users } from "lucide-react";
+import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import {
-  User,
-  MapPin,
-  Flag,
-  GripVertical,
-  Plus,
-  Trash2,
-  Save,
-  RotateCcw,
-  Layout,
-  Settings,
-} from "lucide-react";
-import tessLinImage from "figma:asset/966ec4d05f8fbeb48998b857574fc6613b388aae.png";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { supabase } from "../utils/supabase";
 
-interface ProfileSection {
-  id: string;
+type SectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters";
+type ProfileSection = {
+  id?: string;
+  class_id: string;
+  section_key: string;
   title: string;
-  type: string;
+  section_type: SectionType;
   width: "full" | "half";
-  content?: any;
-  editable: boolean;
+  is_editable: boolean;
+  position: number;
+};
+
+const defaultSections: Array<Omit<ProfileSection, "class_id">> = [
+  { section_key: "personal_statement", title: "Personal Statement", section_type: "long_response", width: "full", is_editable: true, position: 0 },
+  { section_key: "constituency_description", title: "Constituency Description", section_type: "long_response", width: "full", is_editable: true, position: 1 },
+  { section_key: "key_issues", title: "Key Issues", section_type: "long_response", width: "full", is_editable: true, position: 2 },
+  { section_key: "legislation_written", title: "Legislation Written", section_type: "legislation_written", width: "half", is_editable: false, position: 3 },
+  { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "half", is_editable: false, position: 4 },
+  { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", is_editable: false, position: 5 },
+];
+
+const typeLabels: Record<SectionType, string> = {
+  long_response: "Long response",
+  legislation_written: "Legislation written",
+  organizations: "Organizations",
+  dear_colleague_letters: "Dear Colleague letters",
+};
+
+function sectionIcon(type: SectionType) {
+  if (type === "legislation_written") return FileText;
+  if (type === "organizations") return Users;
+  if (type === "dear_colleague_letters") return Mail;
+  return Layout;
 }
 
-interface DragItem {
-  index: number;
-  id: string;
-  type: string;
-}
+export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }) {
+  const [loading, setLoading] = useState(true);
+  const [classId, setClassId] = useState<string | null>(null);
+  const [sections, setSections] = useState<ProfileSection[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
-function DraggableSection({
-  section,
-  index,
-  moveSection,
-  removeSection,
-  updateSection,
-}: {
-  section: ProfileSection;
-  index: number;
-  moveSection: (dragIndex: number, hoverIndex: number) => void;
-  removeSection: (id: string) => void;
-  updateSection: (id: string, updates: Partial<ProfileSection>) => void;
-}) {
-  const [{ isDragging }, drag, preview] = useDrag({
-    type: "section",
-    item: { index, id: section.id, type: "section" },
-    collect: (monitor) => ({
-      isDragging: monitor.isDragging(),
-    }),
-  });
+  const load = async () => {
+    setLoading(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) return;
+      const { data: profile } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
+      const activeClass = (profile as any)?.class_id ?? null;
+      setClassId(activeClass);
+      if (!activeClass) return;
+      const { data, error } = await supabase
+        .from("class_profile_sections")
+        .select("id,class_id,section_key,title,section_type,width,is_editable,position")
+        .eq("class_id", activeClass)
+        .order("position", { ascending: true });
+      if (error) throw error;
+      const rows = (data ?? []) as ProfileSection[];
+      setSections(rows.length ? rows : defaultSections.map((section) => ({ ...section, class_id: activeClass })));
+    } catch (e: any) {
+      toast.error(e.message || "Could not load profile layout");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const [, drop] = useDrop<DragItem, void, {}>({
-    accept: "section",
-    hover: (item: DragItem) => {
-      if (item.index !== index) {
-        moveSection(item.index, index);
-        item.index = index;
-      }
-    },
-  });
+  useEffect(() => {
+    void load();
+  }, []);
 
+  const normalizedSections = useMemo(
+    () => sections.map((section, index) => ({ ...section, position: index })),
+    [sections],
+  );
+
+  const updateSection = (sectionKey: string, patch: Partial<ProfileSection>) => {
+    setSections((prev) => prev.map((section) => (section.section_key === sectionKey ? { ...section, ...patch } : section)));
+  };
+
+  const moveSection = (index: number, direction: -1 | 1) => {
+    setSections((prev) => {
+      const next = [...prev];
+      const target = index + direction;
+      if (target < 0 || target >= next.length) return prev;
+      const [item] = next.splice(index, 1);
+      next.splice(target, 0, item);
+      return next;
+    });
+  };
+
+  const addSection = (type: SectionType = "long_response") => {
+    if (!classId) return;
+    const stamp = Date.now();
+    setSections((prev) => [
+      ...prev,
+      {
+        class_id: classId,
+        section_key: `custom_${stamp}`,
+        title: type === "long_response" ? "New Response Section" : typeLabels[type],
+        section_type: type,
+        width: "full",
+        is_editable: true,
+        position: prev.length,
+      },
+    ]);
+  };
+
+  const saveLayout = async () => {
+    if (!classId) return toast.error("Open a class first");
+    setSaving(true);
+    try {
+      const payload = normalizedSections.map((section) => ({
+        class_id: classId,
+        section_key: section.section_key,
+        title: section.title.trim() || "Untitled section",
+        section_type: section.section_type,
+        width: section.width,
+        is_editable: section.is_editable,
+        position: section.position,
+      }));
+      const { error } = await supabase.from("class_profile_sections").upsert(payload as any, { onConflict: "class_id,section_key" });
+      if (error) throw error;
+      toast.success("Profile layout saved");
+      await load();
+    } catch (e: any) {
+      toast.error(e.message || "Could not save profile layout");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const removeSectionNow = async (section: ProfileSection) => {
+    if (!classId) return;
+    if (section.id) {
+      const { error } = await supabase.rpc("delete_profile_section_and_work", { target_class: classId, target_section_key: section.section_key } as any);
+      if (error) return toast.error(error.message || "Could not delete section");
+    }
+    setSections((prev) => prev.filter((row) => row.section_key !== section.section_key));
+    toast.success("Section deleted");
+  };
+
+  const requestDelete = async (section: ProfileSection) => {
+    if (!classId) return;
+    let count = 0;
+    if (section.id && section.section_type === "long_response") {
+      const { data } = await supabase.rpc("profile_section_work_count", { target_class: classId, target_section_key: section.section_key } as any);
+      count = Number(data ?? 0);
+    }
+    if (!count) {
+      void removeSectionNow(section);
+      return;
+    }
+    setConfirmDialog({
+      title: "Delete section?",
+      message: `${count} student${count === 1 ? " has" : "s have"} written work in this box. Deleting it will permanently delete that work.`,
+      confirmLabel: "Proceed",
+      danger: true,
+      onConfirm: () => {
+        window.setTimeout(() => {
+          setConfirmDialog({
+            title: "Permanently delete student work?",
+            message: "This action cannot be undone. The section and all stored student responses for it will be permanently deleted.",
+            confirmLabel: "Delete permanently",
+            danger: true,
+            onConfirm: () => removeSectionNow(section),
+          });
+        }, 0);
+      },
+    });
+  };
+
+  const content = (
+    <main className={embedded ? "space-y-5" : "mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"}>
+      <div className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+        <h1 className="text-2xl font-bold text-gray-900">Edit Profile Layout</h1>
+        <p className="mt-1 text-sm text-gray-600">
+          Rename, reorder, add, resize, or remove profile sections for student profiles in this class.
+        </p>
+      </div>
+
+      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          {(["long_response", "legislation_written", "organizations", "dear_colleague_letters"] as SectionType[]).map((type) => {
+            const Icon = sectionIcon(type);
+            return (
+              <button key={type} type="button" onClick={() => addSection(type)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                <Plus className="h-4 w-4" />
+                <Icon className="h-4 w-4" />
+                {typeLabels[type]}
+              </button>
+            );
+          })}
+        </div>
+        <button type="button" onClick={() => void saveLayout()} disabled={saving || loading} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+          <Save className="h-4 w-4" />
+          Save Layout
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">Loading layout...</div>
+      ) : (
+        <div className="grid grid-cols-2 gap-4">
+          {normalizedSections.map((section, index) => {
+            const Icon = sectionIcon(section.section_type);
+            return (
+              <div key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-4 shadow-sm ${section.width === "full" ? "col-span-2" : ""}`}>
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 flex-1 items-center gap-2">
+                    <GripVertical className="h-4 w-4 text-gray-400" />
+                    <Icon className="h-4 w-4 text-blue-600" />
+                    <input
+                      value={section.title}
+                      onChange={(event) => updateSection(section.section_key, { title: event.target.value })}
+                      className="min-w-0 flex-1 border-b border-transparent bg-transparent text-base font-semibold text-gray-900 outline-none hover:border-gray-300 focus:border-blue-500"
+                    />
+                  </div>
+                  <button type="button" onClick={() => void requestDelete(section)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete section">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+                <div className="grid gap-3 sm:grid-cols-[1fr_8rem_7rem]">
+                  <select value={section.section_type} onChange={(event) => updateSection(section.section_key, { section_type: event.target.value as SectionType })} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
+                    {Object.entries(typeLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                  <select value={section.width} onChange={(event) => updateSection(section.section_key, { width: event.target.value as "full" | "half" })} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
+                    <option value="full">Full</option>
+                    <option value="half">Half</option>
+                  </select>
+                  <div className="flex gap-1">
+                    <button type="button" onClick={() => moveSection(index, -1)} disabled={index === 0} className="flex-1 rounded-md border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 disabled:opacity-40" aria-label="Move up"><ArrowUp className="mx-auto h-4 w-4" /></button>
+                    <button type="button" onClick={() => moveSection(index, 1)} disabled={index === normalizedSections.length - 1} className="flex-1 rounded-md border border-gray-300 p-2 text-gray-700 hover:bg-gray-50 disabled:opacity-40" aria-label="Move down"><ArrowDown className="mx-auto h-4 w-4" /></button>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
+    </main>
+  );
+
+  if (embedded) return content;
   return (
-    <div
-      ref={(node) => preview(drop(node))}
-      className={`bg-white rounded-lg shadow-sm border-2 ${
-        isDragging ? "border-blue-400 opacity-50" : "border-gray-200"
-      } p-6 ${section.width === "full" ? "col-span-2" : ""}`}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div className="flex items-center gap-3 flex-1">
-          <div ref={drag} className="cursor-move">
-            <GripVertical className="w-5 h-5 text-gray-400" />
-          </div>
-          <input
-            type="text"
-            value={section.title}
-            onChange={(e) =>
-              updateSection(section.id, { title: e.target.value })
-            }
-            className="text-lg font-semibold text-gray-900 border-b border-transparent hover:border-gray-300 focus:border-blue-500 outline-none bg-transparent"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() =>
-              updateSection(section.id, {
-                width: section.width === "full" ? "half" : "full",
-              })
-            }
-            className="p-2 text-gray-500 hover:text-blue-600 transition-colors"
-            title={section.width === "full" ? "Make half width" : "Make full width"}
-          >
-            <Layout className="w-4 h-4" />
-          </button>
-          {section.editable && (
-            <button
-              onClick={() => removeSection(section.id)}
-              className="p-2 text-gray-500 hover:text-red-600 transition-colors"
-            >
-              <Trash2 className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="text-sm text-gray-600">
-        {section.type === "personal-statement" && (
-          <p className="text-gray-700">
-            I am honored to represent California's 22nd District in Congress...
-          </p>
-        )}
-        {section.type === "constituency" && (
-          <div className="text-gray-700 whitespace-pre-line">
-            Representative: David Valadao, Republican Party{"\n"}
-            Population: 770,684{"\n"}
-            Median household income: $60,072
-          </div>
-        )}
-        {section.type === "key-issues" && (
-          <ul className="space-y-2">
-            <li className="text-gray-700 flex items-start">
-              <span className="mr-2">•</span>
-              <span>Medicaid (CA-22 has the highest Medicaid enrollment rate in the U.S.)</span>
-            </li>
-            <li className="text-gray-700 flex items-start">
-              <span className="mr-2">•</span>
-              <span>Cost of living (for similar reasons)</span>
-            </li>
-          </ul>
-        )}
-        {section.type === "legislation-written" && (
-          <div className="space-y-2">
-            <div className="p-3 bg-gray-50 rounded-md">
-              <span className="font-mono text-sm font-semibold text-gray-900 block mb-1">H.R. 1</span>
-              <p className="text-sm text-gray-700">Laboratory Accountability, Biosafety, and Security Access and Facility Enforcement (LABSAFE) Act</p>
-            </div>
-          </div>
-        )}
-        {section.type === "legislation-cosponsored" && (
-          <p className="text-sm text-gray-500">No legislation cosponsored yet</p>
-        )}
-        {section.type === "dear-colleague" && (
-          <p className="text-gray-600">0 letters sent</p>
-        )}
-        {section.type === "custom" && (
-          <textarea
-            placeholder="Enter custom content..."
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            rows={3}
-          />
-        )}
-      </div>
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      {content}
     </div>
   );
 }
 
 export function TeacherProfileLayoutEditor() {
-  const [sections, setSections] = useState<ProfileSection[]>([
-    {
-      id: "personal-statement",
-      title: "Personal Statement",
-      type: "personal-statement",
-      width: "full",
-      editable: false,
-    },
-    {
-      id: "constituency",
-      title: "Constituency Description",
-      type: "constituency",
-      width: "full",
-      editable: false,
-    },
-    {
-      id: "key-issues",
-      title: "Key Issues",
-      type: "key-issues",
-      width: "full",
-      editable: false,
-    },
-    {
-      id: "legislation-written",
-      title: "Legislation Written",
-      type: "legislation-written",
-      width: "half",
-      editable: false,
-    },
-    {
-      id: "legislation-cosponsored",
-      title: "Legislation Cosponsored",
-      type: "legislation-cosponsored",
-      width: "half",
-      editable: false,
-    },
-    {
-      id: "dear-colleague",
-      title: "Dear Colleague Letters",
-      type: "dear-colleague",
-      width: "full",
-      editable: false,
-    },
-  ]);
-  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
-
-  const moveSection = (dragIndex: number, hoverIndex: number) => {
-    const draggedSection = sections[dragIndex];
-    const newSections = [...sections];
-    newSections.splice(dragIndex, 1);
-    newSections.splice(hoverIndex, 0, draggedSection);
-    setSections(newSections);
-  };
-
-  const addSection = () => {
-    const newSection: ProfileSection = {
-      id: `custom-${Date.now()}`,
-      title: "New Section",
-      type: "custom",
-      width: "full",
-      editable: true,
-    };
-    setSections([...sections, newSection]);
-  };
-
-  const removeSection = (id: string) => {
-    setSections(sections.filter((s) => s.id !== id));
-  };
-
-  const updateSection = (id: string, updates: Partial<ProfileSection>) => {
-    setSections(
-      sections.map((s) => (s.id === id ? { ...s, ...updates } : s))
-    );
-  };
-
-  const resetLayout = () => {
-    setConfirmDialog({
-      title: "Reset layout?",
-      message: "This will remove all custom sections and restore the default profile layout.",
-      confirmLabel: "Reset",
-      danger: true,
-      onConfirm: () => {
-        setSections([
-        {
-          id: "personal-statement",
-          title: "Personal Statement",
-          type: "personal-statement",
-          width: "full",
-          editable: false,
-        },
-        {
-          id: "constituency",
-          title: "Constituency Description",
-          type: "constituency",
-          width: "full",
-          editable: false,
-        },
-        {
-          id: "key-issues",
-          title: "Key Issues",
-          type: "key-issues",
-          width: "full",
-          editable: false,
-        },
-        {
-          id: "legislation-written",
-          title: "Legislation Written",
-          type: "legislation-written",
-          width: "half",
-          editable: false,
-        },
-        {
-          id: "legislation-cosponsored",
-          title: "Legislation Cosponsored",
-          type: "legislation-cosponsored",
-          width: "half",
-          editable: false,
-        },
-        {
-          id: "dear-colleague",
-          title: "Dear Colleague Letters",
-          type: "dear-colleague",
-          width: "full",
-          editable: false,
-        },
-        ]);
-      },
-    });
-  };
-
-  const saveLayout = () => {
-    console.log("Saving layout:", sections);
-    alert("Profile layout saved successfully!");
-  };
-
-  return (
-    <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-gray-50">
-        <Navigation />
-
-        <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          {/* Header card (fixed, non-editable) */}
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4">
-                <img
-                  src={tessLinImage}
-                  alt="Tess Lin"
-                  className="w-16 h-16 rounded-full object-cover"
-                />
-                <div>
-                  <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                    Tess Lin
-                  </h1>
-                  <div className="space-y-1 text-sm text-gray-600">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-4 h-4" />
-                      <span>California's 22nd District</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Flag className="w-4 h-4" />
-                      <span>Democratic Party</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div className="flex flex-col gap-2 text-xs text-gray-500">
-                <div className="px-3 py-2 bg-blue-50 text-blue-700 rounded border border-blue-200">
-                  Dear Colleague Letters can be enabled/disabled in{" "}
-                  <button className="underline hover:text-blue-800">
-                    simulation settings
-                  </button>
-                </div>
-              </div>
-            </div>
-            <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-              <p className="text-sm text-yellow-800 flex items-center gap-2">
-                <Settings className="w-4 h-4" />
-                <span className="font-medium">Teacher View:</span>
-                Drag sections to reorder, click the layout icon to toggle width, or add custom sections below.
-              </p>
-            </div>
-          </div>
-
-          {/* Control buttons */}
-          <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center gap-3">
-              <button
-                onClick={addSection}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium"
-              >
-                <Plus className="w-4 h-4" />
-                Add Custom Section
-              </button>
-              <button
-                onClick={resetLayout}
-                className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors font-medium"
-              >
-                <RotateCcw className="w-4 h-4" />
-                Reset to Default
-              </button>
-            </div>
-            <button
-              onClick={saveLayout}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-            >
-              <Save className="w-4 h-4" />
-              Save Layout
-            </button>
-          </div>
-
-          {/* Editable sections grid */}
-          <div className="grid grid-cols-2 gap-6">
-            {sections.map((section, index) => (
-              <DraggableSection
-                key={section.id}
-                section={section}
-                index={index}
-                moveSection={moveSection}
-                removeSection={removeSection}
-                updateSection={updateSection}
-              />
-            ))}
-          </div>
-        </main>
-        <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
-      </div>
-    </DndProvider>
-  );
+  return <ProfileLayoutEditor />;
 }

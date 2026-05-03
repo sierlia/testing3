@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router";
-import { CheckCircle, Flag, LogOut, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
+import { CheckCircle, Flag, GraduationCap, LogOut, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -27,6 +27,20 @@ function comparablePartyName(name: string | null | undefined) {
 function displayAuthorName(author: MemberRow | null | undefined, fallback = "Member") {
   const name = author?.display_name ?? fallback;
   return author?.role === "teacher" ? `${name} (Teacher)` : name;
+}
+
+function authorLinkClass(author: MemberRow | null | undefined) {
+  return author?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline";
+}
+
+function partyAbbr(party: string | null | undefined) {
+  const normalized = String(party ?? "").toLowerCase();
+  if (normalized.includes("democrat")) return "D";
+  if (normalized.includes("republican")) return "R";
+  if (normalized.includes("independent")) return "I";
+  if (normalized.includes("green")) return "G";
+  if (normalized.includes("libertarian")) return "L";
+  return party?.trim()?.slice(0, 1).toUpperCase() || "I";
 }
 
 function PartyIcon({ name }: { name: string }) {
@@ -522,9 +536,12 @@ export function PartyDetail() {
                         <div className="p-5 text-sm text-gray-500">No announcements yet.</div>
                       ) : (
                         announcements.map((a) => (
-                          <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} style={selectedAnnouncementId === a.id ? { borderLeftColor: party.color || "#2563eb" } : undefined} className={`w-full border-b border-gray-100 bg-white p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "border-l-4" : ""}`}>
+                          <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} style={selectedAnnouncementId === a.id && a.author?.role !== "teacher" ? { borderLeftColor: party.color || "#2563eb" } : undefined} className={`relative w-full border-b border-gray-100 bg-white p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? `border-l-4 ${a.author?.role === "teacher" ? "border-l-green-500" : ""}` : ""}`}>
+                            {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                             <div className="line-clamp-2 text-sm font-medium text-gray-900">{a.body}</div>
-                            <div className="mt-1 text-xs text-gray-500">{displayAuthorName(a.author)} • {new Date(a.created_at).toLocaleDateString()}</div>
+                            <div className="mt-1 text-xs text-gray-500">
+                              <Link to={`/profile/${a.author_user_id}`} className={authorLinkClass(a.author)}>{displayAuthorName(a.author)}</Link> • {new Date(a.created_at).toLocaleDateString()}
+                            </div>
                           </button>
                         ))
                       )}
@@ -532,9 +549,12 @@ export function PartyDetail() {
                     <div className="max-h-[520px] overflow-y-auto p-5">
                       {selectedAnnouncement ? (
                         <div className="space-y-4">
-                          <div className="rounded-md border border-gray-200 bg-white p-4">
+                          <div className="relative rounded-md border border-gray-200 bg-white p-4">
+                            {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                             <div className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</div>
-                            <div className="mt-2 text-xs text-gray-500">{displayAuthorName(selectedAnnouncement.author)} • {new Date(selectedAnnouncement.created_at).toLocaleString()}</div>
+                            <div className="mt-2 text-xs text-gray-500">
+                              <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={authorLinkClass(selectedAnnouncement.author)}>{displayAuthorName(selectedAnnouncement.author)}</Link> • {new Date(selectedAnnouncement.created_at).toLocaleString()}
+                            </div>
                             {isTeacher && (
                               <div className="mt-3 flex justify-end">
                                 <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
@@ -549,7 +569,7 @@ export function PartyDetail() {
                             {(comments[selectedAnnouncement.id] ?? []).map((comment) => (
                               <div key={comment.id} className="rounded-md border border-gray-200 p-3 text-sm">
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="font-medium text-gray-900">{displayAuthorName(comment.author)}</div>
+                                  <Link to={`/profile/${comment.author_user_id}`} className={`font-medium ${authorLinkClass(comment.author)}`}>{displayAuthorName(comment.author)}</Link>
                                   {isTeacher && (
                                     <button type="button" onClick={() => void deleteComment(comment.id)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete comment">
                                       <Trash2 className="h-3.5 w-3.5" />
@@ -667,7 +687,7 @@ export function PartyDetail() {
                       {m.avatar_url ? <img src={m.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
                       <div className="min-w-0 flex-1">
                         <Link to={`/profile/${m.user_id}`} className="truncate text-sm font-medium text-[var(--party-color)] hover:underline">{m.display_name ?? "Member"}</Link>
-                        <div className="truncate text-xs text-gray-500">{formatConstituency(m.constituency_name)}</div>
+                        <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.party)}-{formatConstituency(m.constituency_name) || "N/A"}</div>
                       </div>
                     </div>
                   ))}

@@ -280,6 +280,17 @@ export function ClassDashboard() {
     });
   };
 
+  const confirmElectionToggle = (open: boolean) => {
+    setConfirmDialog({
+      title: open ? "Open all elections?" : "Close all elections?",
+      message: open
+        ? "This will open the Speaker election and every organization leadership election for the class. To open only one election, use the controls in that specific floor, party, committee, or caucus area."
+        : "This will close the Speaker election and every organization leadership election for the class. To close only one election, use the controls in that specific floor, party, committee, or caucus area.",
+      confirmLabel: open ? "Open all elections" : "Close all elections",
+      onConfirm: open ? openElections : concludeElections,
+    });
+  };
+
   const inviteTeacher = async () => {
     if (!classId || !inviteEmail.trim()) return;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(inviteEmail.trim())) {
@@ -342,7 +353,7 @@ export function ClassDashboard() {
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => void openElections()}
+              onClick={() => confirmElectionToggle(true)}
               disabled={workflowBusy}
               className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${electionsOpen ? "bg-blue-600 text-white shadow-sm" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
             >
@@ -351,7 +362,7 @@ export function ClassDashboard() {
             </button>
             <button
               type="button"
-              onClick={() => void concludeElections()}
+              onClick={() => confirmElectionToggle(false)}
               disabled={workflowBusy}
               className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-gray-900 text-white shadow-sm" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
             >
@@ -641,21 +652,6 @@ export function ClassDashboard() {
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  <div className="text-sm font-semibold text-gray-900">Invite teacher</div>
-                  <div className="flex gap-2">
-                    <input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(event) => setInviteEmail(event.target.value)}
-                      placeholder="teacher@email.com"
-                      className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <Button type="button" onClick={() => void inviteTeacher()} disabled={inviteBusy || !inviteEmail.trim()}>
-                      Invite
-                    </Button>
-                  </div>
-                </div>
                 {actionSections.map((section) => (
                   <div key={section.title}>
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{section.title}</h3>
@@ -674,6 +670,21 @@ export function ClassDashboard() {
                     </div>
                   </div>
                 ))}
+                <div className="border-t border-gray-200 pt-4">
+                  <div className="mb-2 text-sm font-semibold text-gray-900">Invite teacher</div>
+                  <div className="flex gap-2">
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                      placeholder="teacher@email.com"
+                      className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <Button type="button" onClick={() => void inviteTeacher()} disabled={inviteBusy || !inviteEmail.trim()}>
+                      Invite
+                    </Button>
+                  </div>
+                </div>
               </CardContent>
             </Card>
           </div>

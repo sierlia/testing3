@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Save, X, Users as UsersIcon, Send, Pencil, Trash2, LogOut, UserPlus } from "lucide-react";
+import { GraduationCap, Save, X, Users as UsersIcon, Send, Pencil, Trash2, LogOut, UserPlus } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -44,6 +44,27 @@ type Comment = {
 function displayAuthorName(author: ProfileLite | null | undefined, fallback = "Unknown") {
   const name = author?.display_name ?? fallback;
   return author?.role === "teacher" ? `${name} (Teacher)` : name;
+}
+
+function authorLinkClass(author: ProfileLite | null | undefined) {
+  return author?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline";
+}
+
+function partyAbbr(party: string | null | undefined) {
+  const normalized = String(party ?? "").toLowerCase();
+  if (normalized.includes("democrat")) return "D";
+  if (normalized.includes("republican")) return "R";
+  if (normalized.includes("independent")) return "I";
+  if (normalized.includes("green")) return "G";
+  if (normalized.includes("libertarian")) return "L";
+  return party?.trim()?.slice(0, 1).toUpperCase() || "I";
+}
+
+function leadershipLabel(role: MembershipRole) {
+  if (role === "chair") return "Chair";
+  if (role === "co_chair") return "Co-chair";
+  if (role === "ranking_member") return "Ranking member";
+  return "Member";
 }
 
 export function TessCaucusDetail() {
@@ -485,7 +506,7 @@ export function TessCaucusDetail() {
   };
 
   const setMemberRole = async (userId: string, role: MembershipRole) => {
-    if (electionConcluded) return;
+    if (electionConcluded && !isTeacher) return;
     try {
       const { error } = await supabase.from("caucus_members").update({ role }).eq("caucus_id", caucusId).eq("user_id", userId);
       if (error) throw error;
@@ -493,6 +514,16 @@ export function TessCaucusDetail() {
     } catch (e: any) {
       toast.error(e.message || "Could not update role");
     }
+  };
+
+  const requestMemberRole = (member: { user_id: string; role: MembershipRole; profile: ProfileLite | null }, role: MembershipRole) => {
+    if (!isTeacher || member.role === role) return;
+    setConfirmDialog({
+      title: "Change member role?",
+      message: `Set ${member.profile?.display_name ?? "this member"} to ${leadershipLabel(role)} for ${caucus?.title ?? "this caucus"}?`,
+      confirmLabel: "Change role",
+      onConfirm: () => setMemberRole(member.user_id, role),
+    });
   };
 
   const postAnnouncement = async () => {
@@ -901,13 +932,14 @@ export function TessCaucusDetail() {
                       <button
                         key={a.id}
                         onClick={() => setSelectedAnnouncementId(a.id)}
-                        className={`w-full text-left p-4 border-b border-gray-100 bg-white hover:bg-gray-50 ${
-                          selectedAnnouncementId === a.id ? "border-l-4 border-l-blue-500" : ""
+                        className={`relative w-full text-left p-4 border-b border-gray-100 bg-white hover:bg-gray-50 ${
+                          selectedAnnouncementId === a.id ? `border-l-4 ${a.author?.role === "teacher" ? "border-l-green-500" : "border-l-blue-500"}` : ""
                         }`}
                       >
+                        {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
-                          <Link to={`/profile/${a.author_user_id}`} className="text-blue-600 hover:underline">
+                          <Link to={`/profile/${a.author_user_id}`} className={authorLinkClass(a.author)}>
                             {displayAuthorName(a.author)}
                           </Link>{" "}
                           • {new Date(a.created_at).toLocaleString()}
@@ -926,10 +958,11 @@ export function TessCaucusDetail() {
                 <div className="p-4 max-h-[520px] overflow-y-auto flex-1">
                   {selectedAnnouncement ? (
                     <div className="space-y-4">
-                      <div className="border border-gray-200 rounded-md p-4 bg-white">
+                      <div className="relative border border-gray-200 rounded-md p-4 bg-white">
+                        {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <div className="text-sm text-gray-900 whitespace-pre-line">{selectedAnnouncement.body}</div>
                         <div className="text-xs text-gray-500 mt-2">
-                          <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className="text-blue-600 hover:underline">
+                          <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={authorLinkClass(selectedAnnouncement.author)}>
                             {displayAuthorName(selectedAnnouncement.author)}
                           </Link>{" "}
                           • {new Date(selectedAnnouncement.created_at).toLocaleString()}
@@ -1023,10 +1056,10 @@ export function TessCaucusDetail() {
                   {visibleMembers.map((m) => (
                     <div key={`election:${m.user_id}`} className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
                       <div className="min-w-0">
-                        <Link to={`/profile/${m.user_id}`} className="truncate text-sm font-medium text-blue-600 hover:underline">
+                        <Link to={`/profile/${m.user_id}`} className={`truncate text-sm font-medium ${m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}`}>
                           {m.profile?.display_name ?? "Member"}
                         </Link>
-                        <div className="truncate text-xs text-gray-500">{formatConstituency(m.profile?.constituency_name)} - {m.profile?.party ?? "N/A"}</div>
+                        <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.profile?.party)}-{formatConstituency(m.profile?.constituency_name) || "N/A"}</div>
                       </div>
                       <div className="flex items-center gap-2">
                         {m.role !== "member" && <span className="rounded bg-gray-100 px-2 py-1 text-xs text-gray-700">{m.role.replace("_", " ")}</span>}
@@ -1076,17 +1109,30 @@ export function TessCaucusDetail() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        <Link to={`/profile/${m.user_id}`} className="text-blue-600 hover:underline">
+                        <Link to={`/profile/${m.user_id}`} className={m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
                           {m.profile?.display_name ?? "Member"}
                         </Link>
                       </div>
                       <div className="text-xs text-gray-500 truncate">
-                        {formatConstituency(m.profile?.constituency_name)} • {m.profile?.party ?? "N/A"}
+                        Rep.-{partyAbbr(m.profile?.party)}-{formatConstituency(m.profile?.constituency_name) || "N/A"}
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {m.role !== "member" && <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>}
-                      {isChair && m.role !== "chair" && (
+                      {isTeacher ? (
+                        <select
+                          value={m.role}
+                          onChange={(event) => requestMemberRole(m, event.target.value as MembershipRole)}
+                          className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700"
+                        >
+                          <option value="member">Member</option>
+                          <option value="chair">Chair</option>
+                          <option value="co_chair">Co-chair</option>
+                          <option value="ranking_member">Ranking member</option>
+                        </select>
+                      ) : m.role !== "member" ? (
+                        <div className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">{m.role.replace("_", " ")}</div>
+                      ) : null}
+                      {isChair && !isTeacher && m.role !== "chair" && (
                         <button
                           type="button"
                           onClick={() => void setMemberRole(m.user_id, m.role === "co_chair" ? "member" : "co_chair")}
