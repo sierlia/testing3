@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { GraduationCap, Save, X, Users as UsersIcon, Send, Pencil, Trash2, LogOut, UserPlus } from "lucide-react";
+import { GraduationCap, MoreHorizontal, Save, X, Users as UsersIcon, Send, Pencil, Trash2, LogOut, UserPlus } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -105,6 +105,7 @@ export function TessCaucusDetail() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "election">("dashboard");
   const [classSettings, setClassSettings] = useState<any>({});
+  const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null);
 
   const isLeader = myRole === "chair" || myRole === "co_chair";
   const isChair = myRole === "chair";
@@ -521,9 +522,17 @@ export function TessCaucusDetail() {
   const setMemberRole = async (userId: string, role: MembershipRole) => {
     if (electionConcluded && !isTeacher) return;
     try {
+      if (role === "chair") {
+        const currentChair = members.find((member) => member.role === "chair" && member.user_id !== userId);
+        if (currentChair) {
+          const { error: demoteError } = await supabase.from("caucus_members").update({ role: "member" }).eq("caucus_id", caucusId).eq("user_id", currentChair.user_id);
+          if (demoteError) throw demoteError;
+        }
+      }
       const { error } = await supabase.from("caucus_members").update({ role }).eq("caucus_id", caucusId).eq("user_id", userId);
       if (error) throw error;
-      setMembers((prev) => prev.map((m) => (m.user_id === userId ? { ...m, role } : m)));
+      setMembers((prev) => prev.map((m) => (m.user_id === userId ? { ...m, role } : role === "chair" && m.role === "chair" ? { ...m, role: "member" } : m)));
+      setMemberMenuOpen(null);
     } catch (e: any) {
       toast.error(e.message || "Could not update role");
     }
@@ -531,9 +540,10 @@ export function TessCaucusDetail() {
 
   const requestMemberRole = (member: { user_id: string; role: MembershipRole; profile: ProfileLite | null }, role: MembershipRole) => {
     if (!isTeacher || member.role === role) return;
+    const currentChair = role === "chair" ? members.find((m) => m.role === "chair" && m.user_id !== member.user_id) : null;
     setConfirmDialog({
       title: "Change member role?",
-      message: `Set ${member.profile?.display_name ?? "this member"} to ${leadershipLabel(role)} for ${caucus?.title ?? "this caucus"}?`,
+      message: `Set ${member.profile?.display_name ?? "this member"} to ${leadershipLabel(role)} for ${caucus?.title ?? "this caucus"}?${currentChair ? ` ${currentChair.profile?.display_name ?? "The current chair"} will be moved back to Member.` : ""}`,
       confirmLabel: "Change role",
       onConfirm: () => setMemberRole(member.user_id, role),
     });
@@ -1145,16 +1155,32 @@ export function TessCaucusDetail() {
                     </div>
                     <div className="flex items-center gap-2">
                       {isTeacher ? (
-                        <select
-                          value={m.role}
-                          onChange={(event) => requestMemberRole(m, event.target.value as MembershipRole)}
-                          className="rounded-md border border-gray-300 px-2 py-1 text-xs text-gray-700"
-                        >
-                          <option value="member">Member</option>
-                          <option value="chair">Chair</option>
-                          <option value="co_chair">Co-chair</option>
-                          <option value="ranking_member">Ranking member</option>
-                        </select>
+                        <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id))}
+                            className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                            aria-label="Member actions"
+                          >
+                            <MoreHorizontal className="h-4 w-4" />
+                          </button>
+                          {memberMenuOpen === m.user_id && (
+                            <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
+                              {(["member", "chair", "co_chair"] as MembershipRole[]).map((role) => (
+                                <button
+                                  key={role}
+                                  type="button"
+                                  onClick={() => requestMemberRole(m, role)}
+                                  disabled={m.role === role}
+                                  className="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-default disabled:bg-gray-50 disabled:text-gray-400"
+                                >
+                                  <span>{leadershipLabel(role)}</span>
+                                  {m.role === role && <span className="text-xs">Current</span>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
                         ) : null}
                       {isChair && !isTeacher && m.role !== "chair" && (
                         <button

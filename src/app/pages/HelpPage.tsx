@@ -51,17 +51,25 @@ export function HelpPage() {
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
         <article className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
           <header className="border-b border-gray-200 pb-6">
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900">Sierlia Help Guide</h1>
+            <h1 className="text-4xl font-bold tracking-tight text-gray-900">Help Guide</h1>
             <p className="mt-3 max-w-3xl text-gray-600">
               This guide explains the class simulation tools, student workflows, teacher controls, organization spaces, bill tracking, elections, floor sessions, profiles, and communication features.
             </p>
           </header>
 
-          <nav className="my-6 rounded-lg border border-gray-200 bg-gray-50 p-4" aria-label="Help sections">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Sections</h2>
-            <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <nav className="my-6 rounded-lg border border-gray-200 bg-gray-50 p-3" aria-label="Help sections">
+            <div className="flex gap-2 overflow-x-auto pb-1">
               {sections.map(([id, label]) => (
-                <a key={id} href={`#${id}`} className="rounded-md px-3 py-2 text-sm font-medium text-blue-700 hover:bg-white hover:text-blue-800">
+                <a
+                  key={id}
+                  href={`#${id}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                    window.history.replaceState(null, "", `#${id}`);
+                  }}
+                  className="shrink-0 rounded-md bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:text-blue-800"
+                >
                   {label}
                 </a>
               ))}

@@ -242,8 +242,14 @@ export function CommitteeLeadership() {
     const chair = winnerFor("chair");
     const ranking = winnerFor("ranking_member");
     try {
-      if (chair) await supabase.from("committee_members").update({ role: "chair" } as any).eq("committee_id", committeeId).eq("user_id", chair.user_id);
-      if (ranking) await supabase.from("committee_members").update({ role: "ranking_member" } as any).eq("committee_id", committeeId).eq("user_id", ranking.user_id);
+      if (chair) {
+        await supabase.from("committee_members").update({ role: "member" } as any).eq("committee_id", committeeId).eq("role", "chair").neq("user_id", chair.user_id);
+        await supabase.from("committee_members").update({ role: "chair" } as any).eq("committee_id", committeeId).eq("user_id", chair.user_id);
+      }
+      if (ranking) {
+        await supabase.from("committee_members").update({ role: "member" } as any).eq("committee_id", committeeId).eq("role", "ranking_member").neq("user_id", ranking.user_id);
+        await supabase.from("committee_members").update({ role: "ranking_member" } as any).eq("committee_id", committeeId).eq("user_id", ranking.user_id);
+      }
       if (committee) {
         const nextSettings = {
           ...classSettings,

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Link, useParams } from "react-router";
-import { CheckCircle, Flag, GraduationCap, LogOut, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
+import { CheckCircle, Flag, GraduationCap, LogOut, MoreHorizontal, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
@@ -9,9 +9,11 @@ import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
-type MemberRow = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null; role?: string | null };
+type PartyRole = "majority_leader" | "majority_whip" | "minority_leader" | "minority_whip" | "leader" | "whip" | "chair" | "vice_chair";
+type MemberRow = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null; role?: string | null; organization_role?: PartyRole | null };
 type Announcement = { id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
 type CommentRow = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
+type PartyMemberRoleRow = { party_id: string; user_id: string; role: PartyRole };
 
 function displayPartyName(name: string) {
   const normalized = name.trim();
@@ -31,6 +33,11 @@ function displayAuthorName(author: MemberRow | null | undefined, fallback = "Mem
 
 function authorLinkClass(author: MemberRow | null | undefined) {
   return author?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline";
+}
+
+function isMajorPartyName(name: string | null | undefined) {
+  const comparable = comparablePartyName(name);
+  return comparable === "democratic party" || comparable === "republican party";
 }
 
 function partyAbbr(party: string | null | undefined) {
@@ -73,6 +80,9 @@ export function PartyDetail() {
   const [sortBy, setSortBy] = useState<"name" | "district">("name");
   const [votes, setVotes] = useState<Array<{ position: "chair" | "whip"; voter_user_id: string; candidate_user_id: string }>>([]);
   const [optOuts, setOptOuts] = useState<Array<{ position: "chair" | "whip"; user_id: string }>>([]);
+  const [partyRoles, setPartyRoles] = useState<PartyMemberRoleRow[]>([]);
+  const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null);
+  const [majorPartyAlignment, setMajorPartyAlignment] = useState<"majority" | "minority" | "tie" | null>(null);
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
   const [editingName, setEditingName] = useState(false);
@@ -112,7 +122,23 @@ export function PartyDetail() {
         .eq("class_id", (p as any).class_id)
         .order("display_name", { ascending: true });
       if (memberErr) throw memberErr;
-      setMembers(((memberRows ?? []) as any[]).filter((member) => comparablePartyName(member.party) === comparablePartyName((p as any).name)) as any);
+      const allClassMembers = (memberRows ?? []) as any[];
+      const demCount = allClassMembers.filter((member) => comparablePartyName(member.party) === "democratic party").length;
+      const repCount = allClassMembers.filter((member) => comparablePartyName(member.party) === "republican party").length;
+      const currentPartyName = comparablePartyName((p as any).name);
+      setMajorPartyAlignment(
+        currentPartyName === "democratic party"
+          ? demCount === repCount ? "tie" : demCount > repCount ? "majority" : "minority"
+          : currentPartyName === "republican party"
+            ? demCount === repCount ? "tie" : repCount > demCount ? "majority" : "minority"
+            : null,
+      );
+      const { data: roleRows, error: roleErr } = await supabase.from("party_member_roles").select("party_id,user_id,role").eq("party_id", partyId);
+      if (roleErr) throw roleErr;
+      const nextRoles = (roleRows ?? []) as PartyMemberRoleRow[];
+      setPartyRoles(nextRoles);
+      const roleMap = new Map(nextRoles.map((row) => [row.user_id, row.role]));
+      setMembers(((memberRows ?? []) as any[]).filter((member) => comparablePartyName(member.party) === comparablePartyName((p as any).name)).map((member) => ({ ...member, organization_role: roleMap.get(member.user_id) ?? null })) as any);
 
       const { data: aRows, error: aErr } = await supabase
         .from("party_announcements")
@@ -126,7 +152,7 @@ export function PartyDetail() {
         .from("profiles")
         .select("user_id,display_name,party,constituency_name,avatar_url,role")
         .in("user_id", authorIds.length ? authorIds : ["00000000-0000-0000-0000-000000000000"]);
-      const authorMap = new Map((authors ?? []).map((a: any) => [a.user_id, a]));
+      const authorMap = new Map((authors ?? []).map((a: any) => [a.user_id, { ...a, organization_role: nextRoles.find((row) => row.user_id === a.user_id)?.role ?? null }]));
       const mappedAnnouncements = (aRows ?? []).map((a: any) => ({ ...a, author: authorMap.get(a.author_user_id) ?? null }));
       setAnnouncements(mappedAnnouncements as any);
       setSelectedAnnouncementId((prev) => prev ?? mappedAnnouncements[0]?.id ?? null);
@@ -139,7 +165,7 @@ export function PartyDetail() {
           .from("profiles")
           .select("user_id,display_name,party,constituency_name,avatar_url,role")
           .in("user_id", commentAuthorIds.length ? commentAuthorIds : ["00000000-0000-0000-0000-000000000000"]);
-        const cAuthorMap = new Map((cAuthors ?? []).map((a: any) => [a.user_id, a]));
+        const cAuthorMap = new Map((cAuthors ?? []).map((a: any) => [a.user_id, { ...a, organization_role: nextRoles.find((row) => row.user_id === a.user_id)?.role ?? null }]));
         const grouped: Record<string, CommentRow[]> = {};
         for (const row of cRows ?? []) {
           const comment = { ...(row as any), author: cAuthorMap.get((row as any).author_user_id) ?? null };
@@ -190,10 +216,49 @@ export function PartyDetail() {
     const winner = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     return winner ? members.find((m) => m.user_id === winner) ?? null : null;
   };
+  const roleHolder = (role: PartyRole) => partyRoles.find((row) => row.role === role)?.user_id ?? null;
+  const memberForRole = (role: PartyRole) => {
+    const userId = roleHolder(role);
+    return userId ? members.find((member) => member.user_id === userId) ?? null : null;
+  };
+  const partyRoleOptions = (): Array<{ role: PartyRole | "member"; label: string }> => {
+    if (!party || !isMajorPartyName(party.name)) {
+      return [
+        { role: "member", label: "Member" },
+        { role: "chair", label: "Chair" },
+        { role: "vice_chair", label: "Vice chair" },
+      ];
+    }
+    if (majorPartyAlignment === "majority") {
+      return [
+        { role: "member", label: "Member" },
+        { role: "majority_leader", label: "Majority leader" },
+        { role: "majority_whip", label: "Majority whip" },
+      ];
+    }
+    if (majorPartyAlignment === "minority") {
+      return [
+        { role: "member", label: "Member" },
+        { role: "minority_leader", label: "Minority leader" },
+        { role: "minority_whip", label: "Minority whip" },
+      ];
+    }
+    return [
+      { role: "member", label: "Member" },
+      { role: "leader", label: "Leader" },
+      { role: "whip", label: "Whip" },
+    ];
+  };
+  const partyRoleLabel = (role: PartyRole | null | undefined) => {
+    if (!role) return "";
+    return partyRoleOptions().find((option) => option.role === role)?.label ?? role.split("_").map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
+  };
   const partyMemberRole = (userId: string | null | undefined) => {
     if (!userId) return "";
-    if (leaderFor("chair")?.user_id === userId) return "Leader";
-    if (leaderFor("whip")?.user_id === userId) return "Whip";
+    const explicitRole = partyRoles.find((row) => row.user_id === userId)?.role;
+    if (explicitRole) return partyRoleLabel(explicitRole);
+    if (leaderFor("chair")?.user_id === userId) return partyRoleLabel(partyRoleOptions()[1]?.role as PartyRole);
+    if (leaderFor("whip")?.user_id === userId) return partyRoleLabel(partyRoleOptions()[2]?.role as PartyRole);
     return "";
   };
   const partyAuthorLinkClass = (author: MemberRow | null | undefined) =>
@@ -263,6 +328,49 @@ export function PartyDetail() {
       toast.success("Party platform updated");
     } catch (e: any) {
       toast.error(e.message || "Could not update party");
+    }
+  };
+
+  const requestPartyRoleChange = (member: MemberRow, nextRole: PartyRole | "member") => {
+    if (!party || !isTeacher) return;
+    const currentRole = partyRoles.find((row) => row.user_id === member.user_id)?.role ?? null;
+    if ((nextRole === "member" && !currentRole) || currentRole === nextRole) return;
+    const existingHolder = nextRole === "member" ? null : memberForRole(nextRole);
+    const replacementText = existingHolder && existingHolder.user_id !== member.user_id
+      ? ` ${existingHolder.display_name ?? "The current role holder"} will be moved back to Member.`
+      : "";
+    setConfirmDialog({
+      title: "Change party role?",
+      message: `Set ${member.display_name ?? "this member"} to ${nextRole === "member" ? "Member" : partyRoleLabel(nextRole)} for ${displayPartyName(party.name)}?${replacementText}`,
+      confirmLabel: "Change role",
+      onConfirm: () => updatePartyRole(member.user_id, nextRole),
+    });
+  };
+
+  const updatePartyRole = async (userId: string, nextRole: PartyRole | "member") => {
+    if (!party) return;
+    try {
+      if (nextRole === "member") {
+        const { error } = await supabase.from("party_member_roles").delete().eq("party_id", party.id).eq("user_id", userId);
+        if (error) throw error;
+        setPartyRoles((prev) => prev.filter((row) => row.user_id !== userId));
+        setMembers((prev) => prev.map((member) => member.user_id === userId ? { ...member, organization_role: null } : member));
+      } else {
+        const { error: deleteUserError } = await supabase.from("party_member_roles").delete().eq("party_id", party.id).eq("user_id", userId);
+        if (deleteUserError) throw deleteUserError;
+        const { error: deleteRoleError } = await supabase.from("party_member_roles").delete().eq("party_id", party.id).eq("role", nextRole);
+        if (deleteRoleError) throw deleteRoleError;
+        const { error: insertError } = await supabase.from("party_member_roles").insert({ party_id: party.id, user_id: userId, role: nextRole } as any);
+        if (insertError) throw insertError;
+        const nextRoles = [...partyRoles.filter((row) => row.user_id !== userId && row.role !== nextRole), { party_id: party.id, user_id: userId, role: nextRole }];
+        setPartyRoles(nextRoles);
+        const roleMap = new Map(nextRoles.map((row) => [row.user_id, row.role]));
+        setMembers((prev) => prev.map((member) => ({ ...member, organization_role: roleMap.get(member.user_id) ?? null })));
+      }
+      setMemberMenuOpen(null);
+      toast.success("Role updated");
+    } catch (e: any) {
+      toast.error(e.message || "Could not update role");
     }
   };
 
@@ -428,6 +536,10 @@ export function PartyDetail() {
 
   const postPartyElectionResults = async () => {
     if (!party || !isTeacher) return;
+    const firstRole = partyRoleOptions()[1]?.role as PartyRole | undefined;
+    const secondRole = partyRoleOptions()[2]?.role as PartyRole | undefined;
+    const firstWinner = leaderFor("chair");
+    const secondWinner = leaderFor("whip");
     const nextSettings = {
       ...classSettings,
       elections: {
@@ -436,10 +548,16 @@ export function PartyDetail() {
         partyOpenById: { ...(classSettings.elections?.partyOpenById ?? {}), [party.id]: false },
       },
     };
-    const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", party.class_id);
-    if (error) return toast.error(error.message || "Could not post results");
-    setClassSettings(nextSettings);
-    toast.success("Election results posted");
+    try {
+      if (firstRole && firstWinner) await updatePartyRole(firstWinner.user_id, firstRole);
+      if (secondRole && secondWinner) await updatePartyRole(secondWinner.user_id, secondRole);
+      const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", party.class_id);
+      if (error) throw error;
+      setClassSettings(nextSettings);
+      toast.success("Election results posted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not post results");
+    }
   };
 
   return (
@@ -471,8 +589,11 @@ export function PartyDetail() {
                       </>
                     )}
                   </div>
-                  <p className="mt-2 text-sm text-gray-600">
+                  <p className="hidden">
                     Chair: {leaderFor("chair")?.display_name ?? "N/A"} • Whip: {leaderFor("whip")?.display_name ?? "N/A"} • {members.length} members
+                  </p>
+                  <p className="mt-2 text-sm text-gray-600">
+                    {partyRoleOptions()[1]?.label ?? "Leader"}: {memberForRole(partyRoleOptions()[1]?.role as PartyRole)?.display_name ?? leaderFor("chair")?.display_name ?? "N/A"} | {partyRoleOptions()[2]?.label ?? "Whip"}: {memberForRole(partyRoleOptions()[2]?.role as PartyRole)?.display_name ?? leaderFor("whip")?.display_name ?? "N/A"} | {members.length} members
                   </p>
                 </div>
                 {!isTeacher && (
@@ -711,6 +832,34 @@ export function PartyDetail() {
                           {m.role !== "teacher" && <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.party)}-{formatConstituency(m.constituency_name) || "N/A"}</div>}
                           {roleLabel && <div className="mt-1 inline-flex rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">{roleLabel}</div>}
                         </div>
+                        {isTeacher && (
+                          <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id))}
+                              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                              aria-label="Member actions"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </button>
+                            {memberMenuOpen === m.user_id && (
+                              <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
+                                {partyRoleOptions().map((option) => (
+                                  <button
+                                    key={option.role}
+                                    type="button"
+                                    onClick={() => requestPartyRoleChange(m, option.role)}
+                                    disabled={(m.organization_role ?? "member") === option.role}
+                                    className="flex w-full items-center justify-between rounded px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-default disabled:bg-gray-50 disabled:text-gray-400"
+                                  >
+                                    <span>{option.label}</span>
+                                    {(m.organization_role ?? "member") === option.role && <span className="text-xs">Current</span>}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     );
                   })}

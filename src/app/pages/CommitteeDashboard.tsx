@@ -32,6 +32,10 @@ function memberDescriptor(profile: ProfileLite | null) {
   return `Rep.-${partyAbbr(profile?.party)}-${district || "N/A"}`;
 }
 
+function memberParty(member: { profile: ProfileLite | null }) {
+  return String(member.profile?.party ?? "Independent").trim() || "Independent";
+}
+
 function displayAuthorName(author: ProfileLite | null | undefined, fallback = "Unknown") {
   const name = author?.display_name ?? fallback;
   return author?.role === "teacher" ? `${name} (Teacher)` : name;
@@ -113,6 +117,15 @@ export function CommitteeDashboard() {
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
     [announcements, selectedAnnouncementId],
   );
+  const majorityParty = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const member of members) counts.set(memberParty(member), (counts.get(memberParty(member)) ?? 0) + 1);
+    const entries = [...counts.entries()];
+    if (!entries.length) return null;
+    if (new Set(entries.map(([, count]) => count)).size === 1) return null;
+    const sorted = entries.sort((a, b) => b[1] - a[1]);
+    return sorted[0][1] > (sorted[1]?.[1] ?? 0) ? sorted[0][0] : null;
+  }, [members]);
 
   useEffect(() => {
     const load = async () => {
@@ -797,25 +810,44 @@ export function CommitteeDashboard() {
 
   const requestRoleChange = (member: { user_id: string; role: MembershipRole; profile: ProfileLite | null }, nextRole: MembershipRole) => {
     if (!isTeacher || member.role === nextRole) return;
+    if (nextRole === "chair" && majorityParty && memberParty(member) !== majorityParty) {
+      toast.error("Committee chairs must be members of the majority party.");
+      return;
+    }
+    if (nextRole === "ranking_member" && majorityParty && memberParty(member) === majorityParty) {
+      toast.error("Ranking members must be from a minority party.");
+      return;
+    }
+    const existingHolder = nextRole === "chair" || nextRole === "ranking_member"
+      ? members.find((m) => m.role === nextRole && m.user_id !== member.user_id)
+      : null;
     setConfirmDialog({
       title: "Change member role?",
-      message: `Set ${member.profile?.display_name ?? "this member"} to ${leadershipLabel(nextRole) || "Member"} for ${committee?.name ?? "this committee"}?`,
+      message: `Set ${member.profile?.display_name ?? "this member"} to ${leadershipLabel(nextRole) || "Member"} for ${committee?.name ?? "this committee"}?${existingHolder ? ` ${existingHolder.profile?.display_name ?? "The current role holder"} will be moved back to Member.` : ""}`,
       confirmLabel: "Change role",
       onConfirm: () => updateMemberRole(member.user_id, nextRole),
     });
   };
 
   const updateMemberRole = async (userId: string, nextRole: MembershipRole) => {
+    if (nextRole === "chair" || nextRole === "ranking_member") {
+      const existingHolder = members.find((member) => member.role === nextRole && member.user_id !== userId);
+      if (existingHolder) {
+        const { error: demoteError } = await supabase.from("committee_members").update({ role: "member" } as any).eq("committee_id", committeeId).eq("user_id", existingHolder.user_id);
+        if (demoteError) return toast.error(demoteError.message || "Could not update role");
+      }
+    }
     const { error } = await supabase.from("committee_members").update({ role: nextRole } as any).eq("committee_id", committeeId).eq("user_id", userId);
     if (error) return toast.error(error.message || "Could not update role");
-    setMembers((prev) => prev.map((member) => (member.user_id === userId ? { ...member, role: nextRole } : member)));
+    setMembers((prev) => prev.map((member) => (member.user_id === userId ? { ...member, role: nextRole } : (nextRole === "chair" || nextRole === "ranking_member") && member.role === nextRole ? { ...member, role: "member" } : member)));
     const cached = dashboardCache.get(committeeId);
     if (cached) {
       dashboardCache.set(committeeId, {
         ...cached,
-        members: cached.members.map((member) => (member.user_id === userId ? { ...member, role: nextRole } : member)),
+        members: cached.members.map((member) => (member.user_id === userId ? { ...member, role: nextRole } : (nextRole === "chair" || nextRole === "ranking_member") && member.role === nextRole ? { ...member, role: "member" } : member)),
       });
     }
+    setMemberMenuOpen(null);
     toast.success("Role updated");
   };
 
@@ -1127,7 +1159,7 @@ export function CommitteeDashboard() {
                       </button>
                       {memberMenuOpen === m.user_id && (
                         <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
-                          {(["member", "chair", "co_chair", "ranking_member"] as MembershipRole[]).map((role) => (
+                          {(["member", "chair", "ranking_member"] as MembershipRole[]).map((role) => (
                             <button
                               key={role}
                               type="button"
