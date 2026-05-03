@@ -67,6 +67,7 @@ export function CreateClassPage() {
         },
         bills: { tabs: ['legislative text', 'supporting text'], assignmentAuthority: 'teacher' },
         floor: { binding: true, calendarAutoPublish: true },
+        students: { requireJoinApproval: false },
       };
 
       const { data: createdClass, error } = await supabase.from('classes').insert({

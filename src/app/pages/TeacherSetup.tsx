@@ -71,6 +71,7 @@ export function TeacherSetup() {
     profilePartyRequired: true,
     notifyOnAnnouncements: true,
     notifyOnCalendaredBills: true,
+    requireJoinApproval: false,
   });
 
   const setSettings = (patch: Partial<typeof settings>) => {
@@ -116,6 +117,7 @@ export function TeacherSetup() {
           profilePartyRequired: s?.profiles?.partyRequired ?? prev.profilePartyRequired,
           notifyOnAnnouncements: s?.notifications?.announcements ?? prev.notifyOnAnnouncements,
           notifyOnCalendaredBills: s?.notifications?.calendaredBills ?? prev.notifyOnCalendaredBills,
+          requireJoinApproval: s?.students?.requireJoinApproval ?? prev.requireJoinApproval,
         }));
       } catch (e: any) {
         toast.error(e.message || "Could not load settings");
@@ -187,6 +189,10 @@ export function TeacherSetup() {
           ...(existing?.notifications ?? {}),
           announcements: settings.notifyOnAnnouncements,
           calendaredBills: settings.notifyOnCalendaredBills,
+        },
+        students: {
+          ...(existing?.students ?? {}),
+          requireJoinApproval: settings.requireJoinApproval,
         },
       };
       const { error } = await supabase.from("classes").update({ settings: nextSettings }).eq("id", activeClassId);
@@ -329,6 +335,7 @@ export function TeacherSetup() {
       <div className="space-y-5">
         <Toggle checked={settings.notifyOnAnnouncements} onChange={(v) => setSettings({ notifyOnAnnouncements: v })} title="Announcement notifications" description="Class organization announcements can notify students." />
         <Toggle checked={settings.notifyOnCalendaredBills} onChange={(v) => setSettings({ notifyOnCalendaredBills: v })} title="Calendared bill notifications" description="Notify students when bills are placed on the floor calendar." />
+        <Toggle checked={settings.requireJoinApproval} onChange={(v) => setSettings({ requireJoinApproval: v })} title="Require student join approval" description="New students appear in the pending roster until approved." />
       </div>
     );
   };

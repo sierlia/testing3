@@ -9,7 +9,7 @@ import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
-type MemberRow = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null };
+type MemberRow = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null; role?: string | null };
 type Announcement = { id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
 type CommentRow = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
 
@@ -22,6 +22,11 @@ function displayPartyName(name: string) {
 
 function comparablePartyName(name: string | null | undefined) {
   return displayPartyName(String(name ?? "")).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function displayAuthorName(author: MemberRow | null | undefined, fallback = "Member") {
+  const name = author?.display_name ?? fallback;
+  return author?.role === "teacher" ? `${name} (Teacher)` : name;
 }
 
 function PartyIcon({ name }: { name: string }) {
@@ -85,7 +90,7 @@ export function PartyDetail() {
 
       const { data: memberRows, error: memberErr } = await supabase
         .from("profiles")
-        .select("user_id,display_name,party,constituency_name,avatar_url")
+        .select("user_id,display_name,party,constituency_name,avatar_url,role")
         .eq("class_id", (p as any).class_id)
         .order("display_name", { ascending: true });
       if (memberErr) throw memberErr;
@@ -101,7 +106,7 @@ export function PartyDetail() {
       const authorIds = [...new Set((aRows ?? []).map((a: any) => a.author_user_id))];
       const { data: authors } = await supabase
         .from("profiles")
-        .select("user_id,display_name,party,constituency_name,avatar_url")
+        .select("user_id,display_name,party,constituency_name,avatar_url,role")
         .in("user_id", authorIds.length ? authorIds : ["00000000-0000-0000-0000-000000000000"]);
       const authorMap = new Map((authors ?? []).map((a: any) => [a.user_id, a]));
       const mappedAnnouncements = (aRows ?? []).map((a: any) => ({ ...a, author: authorMap.get(a.author_user_id) ?? null }));
@@ -114,7 +119,7 @@ export function PartyDetail() {
         const commentAuthorIds = [...new Set((cRows ?? []).map((c: any) => c.author_user_id))];
         const { data: cAuthors } = await supabase
           .from("profiles")
-          .select("user_id,display_name,party,constituency_name,avatar_url")
+          .select("user_id,display_name,party,constituency_name,avatar_url,role")
           .in("user_id", commentAuthorIds.length ? commentAuthorIds : ["00000000-0000-0000-0000-000000000000"]);
         const cAuthorMap = new Map((cAuthors ?? []).map((a: any) => [a.user_id, a]));
         const grouped: Record<string, CommentRow[]> = {};
@@ -373,14 +378,16 @@ export function PartyDetail() {
                     Chair: {leaderFor("chair")?.display_name ?? "N/A"} • Whip: {leaderFor("whip")?.display_name ?? "N/A"} • {members.length} members
                   </p>
                 </div>
-                <button
-                  onClick={() => void joinOrSwitch()}
-                  className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-                  style={{ backgroundColor: party.color || "#2563eb" }}
-                >
-                  {isMember ? <LogOut className="h-4 w-4" /> : myParty ? <Repeat2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                  {isMember ? "Leave" : myParty ? "Switch to party" : "Join party"}
-                </button>
+                {!isTeacher && (
+                  <button
+                    onClick={() => void joinOrSwitch()}
+                    className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                    style={{ backgroundColor: party.color || "#2563eb" }}
+                  >
+                    {isMember ? <LogOut className="h-4 w-4" /> : myParty ? <Repeat2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                    {isMember ? "Leave" : myParty ? "Switch to party" : "Join party"}
+                  </button>
+                )}
               </div>
               <div className="mt-5 border-t border-gray-200 pt-5">
                 <div className="mb-3 flex items-center justify-between">
@@ -402,7 +409,7 @@ export function PartyDetail() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-              {(["dashboard", "election"] as const).map((tab) => (
+              {(["dashboard", "election"] as const).filter((tab) => tab === "dashboard" || isMember || isTeacher).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -442,7 +449,7 @@ export function PartyDetail() {
                         announcements.map((a) => (
                           <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} style={selectedAnnouncementId === a.id ? { borderLeftColor: party.color || "#2563eb" } : undefined} className={`w-full border-b border-gray-100 bg-white p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? "border-l-4" : ""}`}>
                             <div className="line-clamp-2 text-sm font-medium text-gray-900">{a.body}</div>
-                            <div className="mt-1 text-xs text-gray-500">{a.author?.display_name ?? "Member"} • {new Date(a.created_at).toLocaleDateString()}</div>
+                            <div className="mt-1 text-xs text-gray-500">{displayAuthorName(a.author)} • {new Date(a.created_at).toLocaleDateString()}</div>
                           </button>
                         ))
                       )}
@@ -451,23 +458,23 @@ export function PartyDetail() {
                       {selectedAnnouncement ? (
                         <div className="space-y-4">
                           <div className="rounded-md border border-gray-200 bg-white p-4">
+                            <div className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</div>
+                            <div className="mt-2 text-xs text-gray-500">{displayAuthorName(selectedAnnouncement.author)} • {new Date(selectedAnnouncement.created_at).toLocaleString()}</div>
                             {isTeacher && (
-                              <div className="mb-2 flex justify-end">
+                              <div className="mt-3 flex justify-end">
                                 <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
                                   <Trash2 className="h-3.5 w-3.5" />
                                   Delete
                                 </button>
                               </div>
                             )}
-                            <div className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</div>
-                            <div className="mt-2 text-xs text-gray-500">{selectedAnnouncement.author?.display_name ?? "Member"} • {new Date(selectedAnnouncement.created_at).toLocaleString()}</div>
                           </div>
                           <div className="space-y-2">
                             <h3 className="text-sm font-semibold text-gray-900">Comments</h3>
                             {(comments[selectedAnnouncement.id] ?? []).map((comment) => (
                               <div key={comment.id} className="rounded-md border border-gray-200 p-3 text-sm">
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="font-medium text-gray-900">{comment.author?.display_name ?? "Member"}</div>
+                                  <div className="font-medium text-gray-900">{displayAuthorName(comment.author)}</div>
                                   {isTeacher && (
                                     <button type="button" onClick={() => void deleteComment(comment.id)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete comment">
                                       <Trash2 className="h-3.5 w-3.5" />

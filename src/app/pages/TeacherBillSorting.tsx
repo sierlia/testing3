@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DndProvider, useDrag, useDrop } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Navigation } from "../components/Navigation";
-import { FileText, Eye, GripVertical, Check, X } from "lucide-react";
+import { FileText, Eye, GripVertical, Check, Search } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 
@@ -32,7 +32,7 @@ function DraggableBill({ bill, onViewText }: { bill: Bill; onViewText: (bill: Bi
   });
 
   return (
-    <div ref={preview} className={`bg-white rounded-lg border-2 border-gray-200 p-4 transition-all ${isDragging ? "opacity-50" : ""}`}>
+    <div ref={preview} className={`rounded-md border border-gray-200 bg-white p-3 transition-all hover:border-blue-200 hover:bg-blue-50 ${isDragging ? "opacity-50" : ""}`}>
       <div className="flex items-center justify-between gap-3">
         <div ref={drag} className="cursor-move">
           <GripVertical className="w-5 h-5 text-gray-400" />
@@ -43,7 +43,7 @@ function DraggableBill({ bill, onViewText }: { bill: Bill; onViewText: (bill: Bi
         </div>
         <button
           onClick={() => onViewText(bill)}
-          className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-100 text-blue-700 rounded-md hover:bg-blue-200 transition-colors"
+          className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-100 transition-colors"
         >
           <Eye className="w-3 h-3" />
           View
@@ -73,8 +73,8 @@ function CommitteeDropZone({
   const assignedBills = bills.filter((b) => b.assignedCommittee === committee.id);
 
   return (
-    <div ref={drop} className={`bg-white rounded-xl shadow-lg border-2 p-6 transition-all min-h-[300px] ${isOver ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}>
-      <div className="mb-4">
+    <div ref={drop} className={`rounded-lg border bg-white p-4 shadow-sm transition-all min-h-[280px] ${isOver ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}>
+      <div className="mb-4 border-b border-gray-100 pb-3">
         <h3 className="text-lg font-semibold text-gray-900">{committee.name}</h3>
         <p className="text-sm text-gray-600 mt-1">{assignedBills.length} bill{assignedBills.length !== 1 ? "s" : ""} assigned</p>
       </div>
@@ -82,7 +82,7 @@ function CommitteeDropZone({
       <div className="space-y-3">
         {assignedBills.length > 0 ? (
           assignedBills.map((bill) => (
-            <div key={bill.id} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-4">
+            <div key={bill.id} className="rounded-md border border-blue-200 bg-blue-50 p-3">
               <div className="flex items-center justify-between gap-3">
                 <div className="flex-1">
                   <div className="font-mono text-sm font-semibold text-gray-900">{bill.number}</div>
@@ -90,7 +90,7 @@ function CommitteeDropZone({
                 </div>
                 <button
                   onClick={() => onViewText(bill)}
-                  className="flex items-center gap-1 px-3 py-1.5 text-xs bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
+                  className="flex items-center gap-1 rounded-md px-2.5 py-1.5 text-xs text-blue-700 hover:bg-blue-100 transition-colors"
                 >
                   <Eye className="w-3 h-3" />
                   View
@@ -131,6 +131,7 @@ export function TeacherBillSorting() {
 
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -222,36 +223,52 @@ export function TeacherBillSorting() {
     }
   };
 
-  const unassignedBills = useMemo(() => bills.filter((b) => !b.assignedCommittee), [bills]);
+  const unassignedBills = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return bills.filter((b) => {
+      if (b.assignedCommittee) return false;
+      if (!query) return true;
+      return b.number.toLowerCase().includes(query) || b.title.toLowerCase().includes(query);
+    });
+  }, [bills, searchQuery]);
   const hasAssignments = bills.some((b) => b.assignedCommittee);
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-blue-50">
+      <div className="min-h-screen bg-gray-50">
         <Navigation />
 
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="mb-8 flex items-center justify-between">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="text-3xl font-bold text-gray-900 mb-2">Sort Bills into Committees</h1>
-              <p className="text-gray-600">Drag and drop bills to refer them to committees</p>
+              <p className="text-gray-600">Assign introduced bills to the committee that should review them.</p>
             </div>
             {hasAssignments && (
-              <button onClick={handleConfirm} className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all shadow-md hover:shadow-lg font-medium">
+              <button onClick={handleConfirm} className="flex items-center gap-2 rounded-md bg-green-600 px-5 py-2.5 text-white hover:bg-green-700 transition-colors font-medium">
                 <Check className="w-5 h-5" />
-                Confirm Assignments
+                Save referrals
               </button>
             )}
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden sticky top-8">
-                <div className="bg-gradient-to-r from-gray-700 to-gray-800 p-5 text-white">
-                  <h2 className="text-xl font-semibold">Unassigned Bills</h2>
-                  <p className="text-sm text-gray-300 mt-1">{unassignedBills.length} bill{unassignedBills.length !== 1 ? "s" : ""}</p>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-[22rem_minmax(0,1fr)]">
+            <div>
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden sticky top-8">
+                <div className="border-b border-gray-200 p-4">
+                  <h2 className="text-lg font-semibold text-gray-900">Unassigned Bills</h2>
+                  <p className="text-sm text-gray-500 mt-1">{unassignedBills.length} bill{unassignedBills.length !== 1 ? "s" : ""}</p>
+                  <div className="relative mt-3">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                      placeholder="Search bills..."
+                      className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
                 </div>
-                <div className="p-6 space-y-3">
+                <div className="max-h-[70vh] p-4 space-y-2 overflow-y-auto">
                   {loading ? (
                     <div className="text-sm text-gray-500">Loading…</div>
                   ) : unassignedBills.length > 0 ? (
@@ -267,8 +284,8 @@ export function TeacherBillSorting() {
               </div>
             </div>
 
-            <div className="lg:col-span-2">
-              <div className="space-y-6">
+            <div>
+              <div className="grid gap-4 xl:grid-cols-2">
                 {loading ? (
                   <div className="text-sm text-gray-500">Loading…</div>
                 ) : committees.length === 0 ? (
@@ -284,20 +301,20 @@ export function TeacherBillSorting() {
         </main>
 
         {selectedBill && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden">
-              <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 text-white">
-                <span className="font-mono font-bold text-lg">{selectedBill.number}</span>
-                <h2 className="text-2xl font-bold mt-2">{selectedBill.title}</h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl">
+              <div className="border-b border-gray-200 p-5">
+                <span className="font-mono text-sm font-bold text-gray-900">{selectedBill.number}</span>
+                <h2 className="mt-1 text-xl font-semibold text-gray-900">{selectedBill.title}</h2>
                 {selectedBill.assignedCommittee && (
-                  <p className="text-sm text-blue-100 mt-2">Assigned to: {committees.find((c) => c.id === selectedBill.assignedCommittee)?.name}</p>
+                  <p className="mt-2 text-sm text-gray-600">Assigned to {committees.find((c) => c.id === selectedBill.assignedCommittee)?.name}</p>
                 )}
               </div>
-              <div className="p-8 max-h-[60vh] overflow-y-auto">
+              <div className="max-h-[60vh] overflow-y-auto p-6">
                 <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: selectedBill.text }} />
               </div>
-              <div className="p-6 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50 flex items-center justify-end">
-                <button onClick={() => setSelectedBill(null)} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all shadow-md hover:shadow-lg font-medium">
+              <div className="flex items-center justify-end border-t border-gray-200 bg-gray-50 p-4">
+                <button onClick={() => setSelectedBill(null)} className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
                   Close
                 </button>
               </div>
@@ -306,32 +323,31 @@ export function TeacherBillSorting() {
         )}
 
         {showConfirmModal && (
-          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden">
-              <div className="p-8">
-                <div className="flex items-center justify-center w-16 h-16 bg-green-100 rounded-full mx-auto mb-4">
-                  <Check className="w-8 h-8 text-green-600" />
-                </div>
-                <h3 className="text-2xl font-bold text-gray-900 mb-3 text-center">Confirm Assignments</h3>
-                <p className="text-gray-600 mb-4 text-center">Save bill referrals to committees?</p>
-                <div className="space-y-2 mb-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+            <div className="w-full max-w-md overflow-hidden rounded-lg bg-white shadow-xl">
+              <div className="border-b border-gray-200 px-5 py-4">
+                <h3 className="text-lg font-semibold text-gray-900">Confirm referrals</h3>
+                <p className="mt-1 text-sm text-gray-600">Save these bill assignments to committee records?</p>
+              </div>
+              <div className="px-5 py-4">
+                <div className="max-h-72 space-y-2 overflow-y-auto">
                   {bills
                     .filter((b) => b.assignedCommittee)
                     .map((bill) => (
-                      <div key={bill.id} className="p-3 bg-gray-50 rounded-lg text-sm">
+                      <div key={bill.id} className="rounded-md bg-gray-50 p-3 text-sm">
                         <span className="font-semibold">{bill.number}</span> →{" "}
                         <span className="text-blue-600">{committees.find((c) => c.id === bill.assignedCommittee)?.name}</span>
                       </div>
                     ))}
                 </div>
               </div>
-              <div className="p-6 border-t border-gray-200 bg-gradient-to-r from-gray-50 to-blue-50 flex items-center justify-end gap-3">
-                <button onClick={() => setShowConfirmModal(false)} className="px-5 py-2.5 text-gray-700 hover:text-gray-900 hover:bg-white rounded-lg transition-all font-medium">
+              <div className="flex items-center justify-end gap-3 border-t border-gray-200 bg-gray-50 p-4">
+                <button onClick={() => setShowConfirmModal(false)} className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-white hover:text-gray-900">
                   Cancel
                 </button>
-                <button onClick={() => void confirmAssignments()} className="flex items-center gap-2 px-6 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all shadow-md hover:shadow-lg font-medium">
-                  <Check className="w-5 h-5" />
-                  Confirm
+                <button onClick={() => void confirmAssignments()} className="flex items-center gap-2 rounded-md bg-green-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-green-700">
+                  <Check className="h-4 w-4" />
+                  Save referrals
                 </button>
               </div>
             </div>

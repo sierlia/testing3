@@ -50,11 +50,9 @@ export function ClassSimulationDashboard() {
           .eq("user_id", uid)
           .maybeSingle();
         if ((membership as any)?.status === "pending") {
-          await supabase
-            .from("class_memberships")
-            .update({ status: "approved", approved_at: new Date().toISOString() })
-            .eq("class_id", classId)
-            .eq("user_id", uid);
+          toast.info("Your class join request is waiting for teacher approval.");
+          navigate("/settings/classes");
+          return;
         }
 
         const { error: upErr } = await supabase

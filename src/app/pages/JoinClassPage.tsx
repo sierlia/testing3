@@ -26,6 +26,12 @@ export function JoinClassPage() {
       const row = joined?.[0];
       if (!row) throw new Error('Invalid class code');
 
+      if ((row as any).joined_status === "pending") {
+        toast.info(`Requested to join ${row.joined_class_name}`);
+        navigate('/settings/classes');
+        return;
+      }
+
       toast.success(`Joined ${row.joined_class_name}`);
       navigate(`/class/${row.joined_class_id}/dashboard`);
     } catch (error: any) {

@@ -18,6 +18,7 @@ type ProfileLite = {
   party: string | null;
   constituency_name: string | null;
   avatar_url: string | null;
+  role?: string | null;
 };
 
 type Announcement = {
@@ -39,6 +40,11 @@ type Comment = {
   parent_comment_id?: string | null;
   author?: ProfileLite | null;
 };
+
+function displayAuthorName(author: ProfileLite | null | undefined, fallback = "Unknown") {
+  const name = author?.display_name ?? fallback;
+  return author?.role === "teacher" ? `${name} (Teacher)` : name;
+}
 
 export function TessCaucusDetail() {
   const { id } = useParams();
@@ -126,7 +132,7 @@ export function TessCaucusDetail() {
         const memberIds = [...new Set((mRows ?? []).map((m: any) => m.user_id))];
         const { data: pRows } = await supabase
           .from("profiles")
-          .select("user_id,display_name,party,constituency_name,avatar_url")
+          .select("user_id,display_name,party,constituency_name,avatar_url,role")
           .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]);
         const pMap = new Map((pRows ?? []).map((p: any) => [p.user_id, p]));
 
@@ -148,7 +154,7 @@ export function TessCaucusDetail() {
         const authorIds = [...new Set((aRows ?? []).map((a: any) => a.author_user_id))];
         const { data: aAuthors } = await supabase
           .from("profiles")
-          .select("user_id,display_name,party,constituency_name,avatar_url")
+          .select("user_id,display_name,party,constituency_name,avatar_url,role")
           .in("user_id", authorIds.length ? authorIds : ["00000000-0000-0000-0000-000000000000"]);
         const aAuthorMap = new Map((aAuthors ?? []).map((p: any) => [p.user_id, p]));
 
@@ -177,7 +183,7 @@ export function TessCaucusDetail() {
           const commentAuthorIds = [...new Set((cRows ?? []).map((r: any) => r.author_user_id))];
           const { data: cAuthors } = await supabase
             .from("profiles")
-            .select("user_id,display_name,party,constituency_name,avatar_url")
+            .select("user_id,display_name,party,constituency_name,avatar_url,role")
             .in("user_id", commentAuthorIds.length ? commentAuthorIds : ["00000000-0000-0000-0000-000000000000"]);
           const cAuthorMap = new Map((cAuthors ?? []).map((p: any) => [p.user_id, p]));
 
@@ -275,7 +281,7 @@ export function TessCaucusDetail() {
           const row = payload.new as any;
           const { data: author } = await supabase
             .from("profiles")
-            .select("user_id,display_name,party,constituency_name,avatar_url")
+            .select("user_id,display_name,party,constituency_name,avatar_url,role")
             .eq("user_id", row.author_user_id)
             .maybeSingle();
           setAnnouncements((prev) => [{ ...(row as any), author: (author as any) ?? null }, ...prev]);
@@ -288,7 +294,7 @@ export function TessCaucusDetail() {
           const row = payload.new as any;
           const { data: author } = await supabase
             .from("profiles")
-            .select("user_id,display_name,party,constituency_name,avatar_url")
+            .select("user_id,display_name,party,constituency_name,avatar_url,role")
             .eq("user_id", row.author_user_id)
             .maybeSingle();
           const comment: ThreadComment = { ...(row as any), author: (author as any) ?? null };
@@ -744,15 +750,17 @@ export function TessCaucusDetail() {
                 • {members.length} members
               </p>
             </div>
-            <button
-              onClick={joinLeave}
-              className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
-                myRole ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
-              }`}
-            >
-              {myRole ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-              {myRole ? "Leave" : "Join"}
-            </button>
+            {!isTeacher && (
+              <button
+                onClick={joinLeave}
+                className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                  myRole ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
+                }`}
+              >
+                {myRole ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                {myRole ? "Leave" : "Join"}
+              </button>
+            )}
           </div>
           <div className="mt-5 pt-5 border-t border-gray-200">
               <div className="flex items-center justify-between mb-3">
@@ -863,7 +871,7 @@ export function TessCaucusDetail() {
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
                           <Link to={`/profile/${a.author_user_id}`} className="text-blue-600 hover:underline">
-                            {a.author?.display_name ?? "Unknown"}
+                            {displayAuthorName(a.author)}
                           </Link>{" "}
                           • {new Date(a.created_at).toLocaleString()}
                         </div>
@@ -882,18 +890,10 @@ export function TessCaucusDetail() {
                   {selectedAnnouncement ? (
                     <div className="space-y-4">
                       <div className="border border-gray-200 rounded-md p-4 bg-white">
-                        {isTeacher && (
-                          <div className="mb-2 flex justify-end">
-                            <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
-                              <Trash2 className="h-3.5 w-3.5" />
-                              Delete
-                            </button>
-                          </div>
-                        )}
                         <div className="text-sm text-gray-900 whitespace-pre-line">{selectedAnnouncement.body}</div>
                         <div className="text-xs text-gray-500 mt-2">
                           <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className="text-blue-600 hover:underline">
-                            {selectedAnnouncement.author?.display_name ?? "Unknown"}
+                            {displayAuthorName(selectedAnnouncement.author)}
                           </Link>{" "}
                           • {new Date(selectedAnnouncement.created_at).toLocaleString()}
                         </div>
@@ -904,6 +904,14 @@ export function TessCaucusDetail() {
                             onToggle={(emoji) => toggleAnnouncementReaction(selectedAnnouncement.id, emoji)}
                           />
                         </div>
+                        {isTeacher && (
+                          <div className="mt-3 flex justify-end">
+                            <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       <div className="space-y-3">

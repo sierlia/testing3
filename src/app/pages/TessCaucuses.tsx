@@ -410,18 +410,20 @@ export function TessCaucuses() {
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-2">{caucus.description}</p>
                   </div>
-                  <button
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      handleJoinLeave(caucus.id);
-                    }}
-                    className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-md font-medium text-sm transition-colors ${
-                      caucus.isMember ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
-                    }`}
-                  >
-                    {caucus.isMember ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                    {caucus.isMember ? "Leave" : "Join"}
-                  </button>
+                  {role !== "teacher" && (
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        handleJoinLeave(caucus.id);
+                      }}
+                      className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-md font-medium text-sm transition-colors ${
+                        caucus.isMember ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
+                      }`}
+                    >
+                      {caucus.isMember ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                      {caucus.isMember ? "Leave" : "Join"}
+                    </button>
+                  )}
                   {role === "teacher" && (
                     <div className="ml-2 flex gap-1">
                       <button

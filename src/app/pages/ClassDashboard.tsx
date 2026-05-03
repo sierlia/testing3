@@ -44,6 +44,7 @@ export function ClassDashboard() {
   const [className, setClassName] = useState<string>('');
   const [classNameDraft, setClassNameDraft] = useState<string>('');
   const [editingClassName, setEditingClassName] = useState(false);
+  const [classCode, setClassCode] = useState<string>('');
   const [studentCount, setStudentCount] = useState<number>(0);
   const [recentActivity, setRecentActivity] = useState<StudentActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
@@ -67,12 +68,13 @@ export function ClassDashboard() {
       if (!classId) return;
       try {
         const [{ data: cls, error: cErr }, { count: rosterCount }] = await Promise.all([
-          supabase.from("classes").select("name").eq("id", classId).maybeSingle(),
+          supabase.from("classes").select("name,class_code").eq("id", classId).maybeSingle(),
           supabase.from("class_memberships").select("user_id", { count: "exact", head: true }).eq("class_id", classId).eq("status", "approved"),
         ]);
         if (cErr) throw cErr;
         setClassName((cls as any)?.name ?? "Class");
         setClassNameDraft((cls as any)?.name ?? "Class");
+        setClassCode((cls as any)?.class_code ?? "");
         setStudentCount(rosterCount ?? 0);
 
         const nowIso = new Date().toISOString();
@@ -92,10 +94,10 @@ export function ClassDashboard() {
 
         const [committeeRows, caucusRows] = await Promise.all([
           supabase.from("committees").select("id,name").eq("class_id", classId),
-          supabase.from("caucuses").select("id,name").eq("class_id", classId),
+          supabase.from("caucuses").select("id,title").eq("class_id", classId),
         ]);
         const committeeMap = new Map((committeeRows.data ?? []).map((c: any) => [c.id, c.name]));
-        const caucusMap = new Map((caucusRows.data ?? []).map((c: any) => [c.id, c.name]));
+        const caucusMap = new Map((caucusRows.data ?? []).map((c: any) => [c.id, c.title]));
 
         const committeeIds = Array.from(committeeMap.keys());
         const caucusIds = Array.from(caucusMap.keys());
@@ -279,31 +281,17 @@ export function ClassDashboard() {
     {
       title: "Legislation",
       actions: [
-        { label: "Calendar Bills", href: "/calendar", icon: CalendarIcon },
-        { label: "Floor Session", href: "/floor-session", icon: Gavel },
-        { label: "Review Bills", href: "/bills", icon: FileText },
         { label: "Sort Bills into Committees", href: "/teacher/bill-sorting", icon: FileText },
+        { label: "Calendar Bills", href: "/calendar", icon: CalendarIcon },
       ],
     },
     {
       title: "Organizations",
       actions: [
         { label: "Committee Assignments", href: "/teacher/committee-assignments", icon: BookOpen },
-        { label: "Elections", href: "/elections", icon: Vote },
       ],
     },
-    {
-      title: "Class Operations",
-      actions: [
-        { label: "Admin Settings", href: "/teacher/admin", icon: Settings },
-        { label: "Curriculum Resources", href: "/resources", icon: BookOpen },
-        { label: "Manage Deadlines", href: "/teacher/deadlines", icon: Bell },
-      ],
-    },
-  ].map((section) => ({
-    ...section,
-    actions: [...section.actions].sort((a, b) => a.label.localeCompare(b.label)),
-  }));
+  ];
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -311,51 +299,41 @@ export function ClassDashboard() {
 
       {/* Main Content */}
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          {className ? (
-            <div className="flex flex-wrap items-center gap-2">
-              {editingClassName ? (
-                <>
-                  <input
-                    value={classNameDraft}
-                    onChange={(event) => setClassNameDraft(event.target.value)}
-                    className="rounded-md border border-gray-300 px-3 py-2 text-3xl font-bold text-gray-900"
-                  />
-                  <button type="button" onClick={() => void saveClassName()} className="rounded-md p-2 text-blue-600 hover:bg-blue-50" aria-label="Save class name">
-                    <Save className="h-5 w-5" />
-                  </button>
-                </>
-              ) : (
-                <>
-                  <h1 className="text-3xl font-bold text-gray-900">{className}</h1>
-                  <button type="button" onClick={() => setEditingClassName(true)} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Rename class">
-                    <Pencil className="h-5 w-5" />
-                  </button>
-                </>
-              )}
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            {className ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {editingClassName ? (
+                  <>
+                    <input
+                      value={classNameDraft}
+                      onChange={(event) => setClassNameDraft(event.target.value)}
+                      className="rounded-md border border-gray-300 px-3 py-2 text-3xl font-bold text-gray-900"
+                    />
+                    <button type="button" onClick={() => void saveClassName()} className="rounded-md p-2 text-blue-600 hover:bg-blue-50" aria-label="Save class name">
+                      <Save className="h-5 w-5" />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <h1 className="text-3xl font-bold text-gray-900">{className}</h1>
+                    <button type="button" onClick={() => setEditingClassName(true)} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Rename class">
+                      <Pencil className="h-5 w-5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <div className="h-9 w-64 rounded bg-gray-200 animate-pulse" />
+            )}
+            <p className="text-sm text-gray-600 mt-1">{studentCount} students enrolled</p>
+          </div>
+          {classCode && (
+            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-right shadow-sm">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Join code</div>
+              <div className="mt-1 font-mono text-xl font-bold text-blue-700">{classCode}</div>
             </div>
-          ) : (
-            <div className="h-9 w-64 rounded bg-gray-200 animate-pulse" />
           )}
-          <p className="text-sm text-gray-600 mt-1">{studentCount} students enrolled</p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 mb-8">
-          {primaryActions.map((action) => {
-            const Icon = action.icon;
-            return (
-              <Link key={action.label} to={action.href} className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-colors hover:border-blue-200 hover:bg-blue-50">
-                <div className="flex items-start gap-4">
-                  <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">{action.label}</h2>
-                    <p className="mt-1 text-sm text-gray-600">{action.description}</p>
-                  </div>
-                </div>
-              </Link>
-            );
-          })}
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6 mb-8">
@@ -446,9 +424,21 @@ export function ClassDashboard() {
             <Card>
               <CardHeader>
                 <CardTitle>Actions</CardTitle>
-                <CardDescription>Sorted by workflow area</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
+                <div className="space-y-2">
+                  {primaryActions.map((action) => {
+                    const Icon = action.icon;
+                    return (
+                      <Link key={action.label} to={action.href}>
+                        <Button variant="ghost" className="w-full justify-start bg-blue-50 text-blue-800 hover:bg-blue-100">
+                          <Icon className="w-4 h-4 mr-2" />
+                          {action.label}
+                        </Button>
+                      </Link>
+                    );
+                  })}
+                </div>
                 {actionSections.map((section) => (
                   <div key={section.title}>
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{section.title}</h3>

@@ -1,81 +1,228 @@
-import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router';
-import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
-import { Users, Copy, Check, UserX } from 'lucide-react';
-import { supabase } from '../utils/supabase';
-import { toast } from 'sonner';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Badge } from '../components/ui/badge';
-import { Navigation } from '../components/Navigation';
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams } from "react-router";
+import { Check, Search, UserX, Users } from "lucide-react";
+import { toast } from "sonner";
+import { Navigation } from "../components/Navigation";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { Button } from "../components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table";
+import { supabase } from "../utils/supabase";
 
-interface Student { id: string; name: string; email: string; joinedAt: string; status: "approved" | "pending"; }
-interface ClassDetails { id: string; name: string; description: string; joinCode: string; createdAt: string; }
+interface Student {
+  id: string;
+  name: string;
+  email: string;
+  joinedAt: string;
+  status: "approved" | "pending";
+  position: string;
+  billCount: number;
+}
+
+interface ClassDetails {
+  id: string;
+  name: string;
+}
 
 export function ClassManagePage() {
-  const { classId } = useParams(); const navigate = useNavigate();
+  const { classId } = useParams();
+  const navigate = useNavigate();
   const [classDetails, setClassDetails] = useState<ClassDetails | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [loading, setLoading] = useState(true); const [copiedCode, setCopiedCode] = useState(false);
-
-  useEffect(() => { loadClassData(); }, [classId]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const loadClassData = async () => {
+    if (!classId) return;
+    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (user && classId) {
-        await supabase.from('profiles').upsert({
+      if (user) {
+        await supabase.from("profiles").upsert({
           user_id: user.id,
           class_id: classId,
-          role: 'teacher',
+          role: "teacher",
           display_name: user.user_metadata?.name ?? null,
         });
       }
 
-      const { data: cls, error: cErr } = await supabase.from('classes').select('id,name,class_code,created_at,settings').eq('id', classId).single();
+      const { data: cls, error: cErr } = await supabase.from("classes").select("id,name").eq("id", classId).single();
       if (cErr) throw cErr;
-      setClassDetails({ id: cls.id, name: cls.name, joinCode: cls.class_code, createdAt: cls.created_at, description: cls.settings?.description ?? '' });
+      setClassDetails({ id: cls.id, name: cls.name });
 
       const { data: roster, error: rErr } = await supabase
-        .from('class_memberships')
-        .select('user_id, created_at, status, email')
-        .eq('class_id', classId)
-        .eq('role', 'student');
+        .from("class_memberships")
+        .select("user_id,created_at,status,email")
+        .eq("class_id", classId)
+        .eq("role", "student");
       if (rErr) throw rErr;
 
-      const userIds = (roster ?? []).map((r: any) => r.user_id);
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('user_id,display_name')
-        .in('user_id', userIds.length ? userIds : ['00000000-0000-0000-0000-000000000000']);
-      const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
+      const userIds = (roster ?? []).map((row: any) => row.user_id);
+      const [{ data: profiles }, { data: bills }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("user_id,display_name")
+          .in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
+        supabase
+          .from("bills")
+          .select("author_user_id")
+          .eq("class_id", classId),
+      ]);
+      const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.user_id, profile]));
+      const billCounts = new Map<string, number>();
+      for (const bill of bills ?? []) {
+        const authorId = (bill as any).author_user_id;
+        billCounts.set(authorId, (billCounts.get(authorId) ?? 0) + 1);
+      }
 
-      const rows = (roster ?? []).map((r: any) => ({
-        id: r.user_id,
-        name: profileMap.get(r.user_id)?.display_name ?? 'Student',
-        email: r.email ?? 'N/A',
-        joinedAt: r.created_at,
-        status: (r.status ?? 'approved') as 'approved' | 'pending',
-      }));
-      setStudents(rows);
-    } catch (error) { console.error('Error loading class data:', error); toast.error('Failed to load class data'); }
-    finally { setLoading(false); }
+      setStudents(
+        (roster ?? []).map((row: any) => ({
+          id: row.user_id,
+          name: profileMap.get(row.user_id)?.display_name ?? "Student",
+          email: row.email ?? "N/A",
+          joinedAt: row.created_at,
+          status: (row.status ?? "approved") as "approved" | "pending",
+          position: "N/A",
+          billCount: billCounts.get(row.user_id) ?? 0,
+        })),
+      );
+    } catch (error: any) {
+      toast.error(error.message || "Failed to load class data");
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const removeStudent = async (studentId: string) => {
-    const { error } = await supabase.from('class_memberships').delete().eq('user_id', studentId).eq('class_id', classId);
-    if (error) return toast.error('Failed to remove student');
-    toast.success('Student removed'); loadClassData();
+  useEffect(() => {
+    void loadClassData();
+  }, [classId]);
+
+  const approveStudent = async (studentId: string) => {
+    if (!classId) return;
+    const { error } = await supabase
+      .from("class_memberships")
+      .update({ status: "approved", approved_at: new Date().toISOString() })
+      .eq("user_id", studentId)
+      .eq("class_id", classId);
+    if (error) return toast.error("Failed to approve student");
+    toast.success("Student approved");
+    await loadClassData();
   };
+
+  const removeStudent = (student: Student) => {
+    setConfirmDialog({
+      title: "Remove student?",
+      message: `${student.name} will be removed from this class.`,
+      confirmLabel: "Remove",
+      danger: true,
+      onConfirm: async () => {
+        if (!classId) return;
+        const { error } = await supabase.from("class_memberships").delete().eq("user_id", student.id).eq("class_id", classId);
+        if (error) throw error;
+        await supabase.from("profiles").update({ class_id: null } as any).eq("user_id", student.id).eq("class_id", classId);
+        toast.success("Student removed");
+        await loadClassData();
+      },
+    });
+  };
+
+  const filteredStudents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return students.filter((student) => {
+      if (!query) return true;
+      return student.name.toLowerCase().includes(query) || student.email.toLowerCase().includes(query);
+    });
+  }, [searchQuery, students]);
+
+  const approvedStudents = filteredStudents.filter((student) => student.status === "approved");
+  const pendingStudents = filteredStudents.filter((student) => student.status === "pending");
+
+  const rosterTable = (rows: Student[], pending = false) => (
+    rows.length === 0 ? (
+      <div className="py-10 text-center text-sm text-gray-500">
+        <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+        No students found.
+      </div>
+    ) : (
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Position</TableHead>
+            <TableHead>Bills</TableHead>
+            <TableHead className="text-right">Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.map((student) => (
+            <TableRow key={student.id}>
+              <TableCell className="font-medium">{student.name}</TableCell>
+              <TableCell>{student.email}</TableCell>
+              <TableCell>{student.position}</TableCell>
+              <TableCell>{student.billCount}</TableCell>
+              <TableCell className="text-right">
+                <div className="flex justify-end gap-2">
+                  {pending && (
+                    <Button variant="ghost" size="sm" onClick={() => void approveStudent(student.id)}>
+                      <Check className="mr-1 h-4 w-4" />
+                      Approve
+                    </Button>
+                  )}
+                  <Button variant="ghost" size="sm" onClick={() => removeStudent(student)} className="text-red-600 hover:text-red-700">
+                    <UserX className="h-4 w-4" />
+                  </Button>
+                </div>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    )
+  );
 
   if (loading) return <div className="min-h-screen bg-gray-50 flex items-center justify-center">Loading...</div>;
-  if (!classDetails) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Button onClick={() => navigate('/teacher/dashboard')}>Back</Button></div>;
+  if (!classDetails) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Button onClick={() => navigate("/teacher/dashboard")}>Back</Button></div>;
 
-  return <div className="min-h-screen bg-gray-50"><Navigation />
-  <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"><div className="mb-8"><h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1><p className="text-sm text-gray-600 mt-1">Class Management</p></div><div className="grid lg:grid-cols-2 gap-6 mb-8"><Card><CardHeader><CardTitle className="text-lg">Join Code</CardTitle></CardHeader><CardContent><div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg"><div className="text-3xl font-bold text-blue-600 font-mono">{classDetails.joinCode}</div><Button size="sm" variant="ghost" onClick={() => {navigator.clipboard.writeText(classDetails.joinCode);setCopiedCode(true);setTimeout(()=>setCopiedCode(false),1500)}}>{copiedCode ? <Check className="w-5 h-5 text-green-600"/> : <Copy className="w-5 h-5"/>}</Button></div></CardContent></Card>
-  <Card><CardHeader><CardTitle className="text-lg">Total Students</CardTitle></CardHeader><CardContent><div className="text-4xl font-bold text-gray-900">{students.length}</div></CardContent></Card></div>
-  <Tabs defaultValue="students"><TabsList><TabsTrigger value="students">Students</TabsTrigger><TabsTrigger value="settings">Settings</TabsTrigger></TabsList>
-  <TabsContent value="students"><Card><CardHeader><CardTitle>Student Roster</CardTitle></CardHeader><CardContent>{students.length===0? <div className="py-8 text-center"><Users className="w-10 h-10 mx-auto text-gray-400"/><p>No students yet.</p></div> : <Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Email</TableHead><TableHead>Joined</TableHead><TableHead>Status</TableHead><TableHead className="text-right">Actions</TableHead></TableRow></TableHeader><TableBody>{students.map(s=><TableRow key={s.id}><TableCell>{s.name}</TableCell><TableCell>{s.email}</TableCell><TableCell>{new Date(s.joinedAt).toLocaleDateString()}</TableCell><TableCell><Badge variant="default">{s.status === 'pending' ? 'approved' : s.status}</Badge></TableCell><TableCell className="text-right space-x-2"><Button variant="ghost" size="sm" onClick={()=>removeStudent(s.id)}><UserX className="w-4 h-4"/></Button></TableCell></TableRow>)}</TableBody></Table>}</CardContent></Card></TabsContent>
-  <TabsContent value="settings"><Card><CardHeader><CardTitle>Class Settings</CardTitle><CardDescription>{classDetails.description || 'No description set.'}</CardDescription></CardHeader></Card></TabsContent></Tabs></main></div>;
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1>
+          <p className="mt-1 text-sm text-gray-600">Student roster</p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <CardTitle>Students</CardTitle>
+              <div className="relative w-full sm:max-w-sm">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search students..."
+                  className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <Tabs defaultValue="students">
+              <TabsList>
+                <TabsTrigger value="students">Students</TabsTrigger>
+                <TabsTrigger value="pending">Pending</TabsTrigger>
+              </TabsList>
+              <TabsContent value="students">{rosterTable(approvedStudents)}</TabsContent>
+              <TabsContent value="pending">{rosterTable(pendingStudents, true)}</TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+      </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
+    </div>
+  );
 }

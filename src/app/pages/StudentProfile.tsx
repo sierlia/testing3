@@ -452,9 +452,6 @@ export function StudentProfile() {
                   Send letter
                 </Link>
               )}
-              <div className="text-xs italic text-gray-500 whitespace-nowrap">
-                {updatedAt ? new Date(updatedAt).toLocaleDateString() : ""}
-              </div>
             </div>
           </div>
         </div>

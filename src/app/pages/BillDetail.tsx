@@ -98,7 +98,7 @@ function revisedHtmlFromSnapshot(snapshot?: string | null) {
 
 function trackerBarClass(status: TrackerStatus) {
   if (status === "completed") return "bg-blue-600";
-  if (status === "current") return "bg-blue-600";
+  if (status === "current") return "bg-blue-300";
   return "bg-blue-100";
 }
 
@@ -308,9 +308,10 @@ export function BillDetail() {
     if (floorVoteDate) rows.push({ label: "Floor vote recorded", detail: `${floorCounts.yea} yeas to ${floorCounts.nay} nays${floorCounts.present ? `, ${floorCounts.present} present` : ""}`, date: floorVoteDate });
     if (floorSession?.closed_at) rows.push({ label: "Floor debate closed", date: floorSession.closed_at });
     for (const override of teacherOverrideActions) {
+      const label = override.step === "Referred" && override.note ? `Teacher Override: ${override.note}` : `Teacher Override: ${override.step}`;
       rows.push({
-        label: `Teacher override: ${override.step}`,
-        detail: override.step === "Referred" ? override.note ?? undefined : undefined,
+        label,
+        detail: undefined,
         date: override.created_at,
       });
     }
