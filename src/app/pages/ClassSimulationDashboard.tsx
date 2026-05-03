@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { AnnouncementsFeed } from "../components/AnnouncementsFeed";
 import { QuickLinks } from "../components/QuickLinks";
@@ -30,8 +30,6 @@ export function ClassSimulationDashboard() {
   const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
   const [myBills, setMyBills] = useState<BillRecord[]>([]);
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; bill_id: string; scheduled_at: string; duration_minutes: number; bill: BillRecord }>>([]);
-  const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => new Date());
 
   useEffect(() => {
     const load = async () => {
@@ -203,7 +201,6 @@ export function ClassSimulationDashboard() {
     const day = String(date.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
   };
-  const selectedDateKey = dateKey(selectedCalendarDate);
   const eventsByDay = useMemo(() => {
     const map = new Map<string, typeof calendarItems>();
     for (const item of calendarItems) {
@@ -212,17 +209,6 @@ export function ClassSimulationDashboard() {
     }
     return map;
   }, [calendarItems]);
-  const monthDays = useMemo(() => {
-    const start = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
-    const firstGridDay = new Date(start);
-    firstGridDay.setDate(start.getDate() - start.getDay());
-    return Array.from({ length: 42 }, (_, index) => {
-      const day = new Date(firstGridDay);
-      day.setDate(firstGridDay.getDate() + index);
-      return day;
-    });
-  }, [calendarMonth]);
-  const selectedEvents = eventsByDay.get(selectedDateKey) ?? [];
   const dashboardAnnouncements = useMemo(
     () => [...announcements].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 3),
     [announcements],
@@ -296,90 +282,6 @@ export function ClassSimulationDashboard() {
               </section>
             )}
 
-            {profile?.role !== "teacher" && (
-              <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-                <div className="mb-4 flex items-center justify-between gap-4">
-                  <div>
-                    <h2 className="text-lg font-semibold text-gray-900">Floor Calendar</h2>
-                    <p className="text-sm text-gray-600">Calendared bills scheduled for floor debate</p>
-                  </div>
-                  <Link to="/calendar" className="text-sm font-medium text-blue-600 hover:text-blue-700">
-                    Full calendar
-                  </Link>
-                </div>
-                <div className="rounded-md border border-gray-200">
-                  <div className="flex items-center justify-between border-b border-gray-200 p-3">
-                    <button
-                      type="button"
-                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1))}
-                      className="rounded p-1 text-gray-600 hover:bg-gray-100"
-                      aria-label="Previous month"
-                    >
-                      <ChevronLeft className="h-5 w-5" />
-                    </button>
-                    <div className="font-semibold text-gray-900">
-                      {calendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1))}
-                      className="rounded p-1 text-gray-600 hover:bg-gray-100"
-                      aria-label="Next month"
-                    >
-                      <ChevronRight className="h-5 w-5" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-center text-xs font-medium text-gray-500">
-                    {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                      <div key={day} className="py-2">{day}</div>
-                    ))}
-                  </div>
-                  <div className="grid grid-cols-7">
-                    {monthDays.map((day) => {
-                      const key = dateKey(day);
-                      const hasEvents = Boolean(eventsByDay.get(key)?.length);
-                      const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
-                      const isSelected = key === selectedDateKey;
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          onClick={() => setSelectedCalendarDate(day)}
-                          className={`min-h-14 border-b border-r border-gray-100 p-1.5 text-left text-xs transition-colors last:border-r-0 ${
-                            isSelected ? "bg-blue-100 text-blue-900" : hasEvents ? "bg-blue-50 text-gray-900 hover:bg-blue-100" : "hover:bg-gray-50"
-                          } ${isCurrentMonth ? "" : "text-gray-300"}`}
-                        >
-                          <span className="font-medium">{day.getDate()}</span>
-                          {hasEvents && <div className="mt-1 h-1.5 w-1.5 rounded-full bg-blue-600" />}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <div className="mt-4">
-                  <h3 className="mb-2 text-sm font-semibold text-gray-900">
-                    {selectedCalendarDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-                  </h3>
-                  {selectedEvents.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">Nothing calendared for this day.</div>
-                  ) : (
-                    <div className="space-y-2">
-                      {selectedEvents.map((item) => (
-                        <Link key={item.id} to={`/bills/${item.bill_id}`} className="flex items-center justify-between gap-4 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
-                          <div className="min-w-0">
-                            <div className="font-mono text-sm font-semibold text-gray-900">{item.bill.hr_label}</div>
-                            <div className="truncate text-sm text-gray-700">{item.bill.title}</div>
-                          </div>
-                          <div className="flex-shrink-0 text-xs text-gray-500">
-                            {new Date(item.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </section>
-            )}
           </div>
 
           <div className="lg:col-span-1 space-y-6">
@@ -387,16 +289,13 @@ export function ClassSimulationDashboard() {
             <QuickLinks classId={classId} />
             <section className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h2 className="text-lg font-semibold text-gray-900">Floor Calendar</h2>
+                <h2 className="text-lg font-semibold text-gray-900">{new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}</h2>
                 <Link to="/calendar" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
                   Full calendar
                   <ChevronRight className="h-3.5 w-3.5" />
                 </Link>
               </div>
-              <div className="mb-3 text-sm font-medium text-gray-700">
-                {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-              </div>
-              <div className="grid grid-cols-7 gap-1.5">
+              <div className="grid grid-cols-7 gap-1">
                 {miniCalendarDays.map((day) => {
                   const key = dateKey(day);
                   const events = eventsByDay.get(key) ?? [];
@@ -406,7 +305,7 @@ export function ClassSimulationDashboard() {
                       <button
                         type="button"
                         className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
-                          events.length ? "bg-blue-600 text-white hover:bg-blue-700" : isToday ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                          events.length ? "bg-blue-50 text-blue-800 ring-1 ring-blue-200 hover:bg-blue-100" : isToday ? "bg-gray-100 text-gray-900 ring-1 ring-gray-300" : "bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50"
                         }`}
                       >
                         {day.getDate()}

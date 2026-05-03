@@ -77,6 +77,8 @@ export function CommitteeDashboard() {
 
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
@@ -107,6 +109,7 @@ export function CommitteeDashboard() {
       if (cached) {
         setCommittee(cached.committee);
         setAboutDraft(cached.committee?.description ?? "");
+        setNameDraft(cached.committee?.name ?? "Committee");
         setMembers(cached.members);
         setMyRole(cached.myRole);
         setViewerRole(cached.viewerRole);
@@ -143,6 +146,7 @@ export function CommitteeDashboard() {
         if (cErr) throw cErr;
         setCommittee(c as any);
         setAboutDraft((c as any).description ?? "");
+        setNameDraft((c as any).name ?? "Committee");
 
         const { data: prof } = await supabase.from("profiles").select("class_id,role").eq("user_id", me ?? "").maybeSingle();
         const classId = (prof as any)?.class_id ?? null;
@@ -464,6 +468,19 @@ export function CommitteeDashboard() {
     }
   };
 
+  const saveName = async () => {
+    if (!committee || !nameDraft.trim()) return;
+    try {
+      const { error } = await supabase.from("committees").update({ name: nameDraft.trim() } as any).eq("id", committeeId);
+      if (error) throw error;
+      setCommittee({ ...committee, name: nameDraft.trim() });
+      setEditingName(false);
+      toast.success("Committee renamed");
+    } catch (e: any) {
+      toast.error(e.message || "Could not rename committee");
+    }
+  };
+
   const postAnnouncement = async () => {
     if (!meId) return;
     if (!newAnnouncement.trim()) return;
@@ -782,7 +799,17 @@ export function CommitteeDashboard() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-1">{committee.name}</h1>
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-3xl font-bold text-gray-900" />
+                <button type="button" onClick={() => void saveName()} className="rounded-md p-2 text-blue-600 hover:bg-blue-50"><Save className="h-5 w-5" /></button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <h1 className="text-3xl font-bold text-gray-900 mb-1">{committee.name}</h1>
+                {isTeacher && <button type="button" onClick={() => setEditingName(true)} className="rounded-md p-2 text-gray-500 hover:bg-gray-100"><Pencil className="h-5 w-5" /></button>}
+              </div>
+            )}
           </div>
           <div className="flex items-center gap-2">
             {myRole && (
@@ -815,7 +842,7 @@ export function CommitteeDashboard() {
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold text-gray-900">About</h2>
-                {isLeader && !editingAbout && (
+                {(isLeader || isTeacher) && !editingAbout && (
                   <button onClick={() => setEditingAbout(true)} className="text-blue-600 hover:text-blue-700 transition-colors">
                     <Pencil className="w-4 h-4" />
                   </button>

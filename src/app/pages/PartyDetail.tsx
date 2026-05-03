@@ -13,6 +13,13 @@ type MemberRow = { user_id: string; display_name: string | null; party: string |
 type Announcement = { id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
 type CommentRow = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
 
+function displayPartyName(name: string) {
+  const normalized = name.trim();
+  if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
+  if (/republican( party)?$/i.test(normalized)) return "Republican Party";
+  return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
 export function PartyDetail() {
   const { id } = useParams();
   const partyId = id!;
@@ -33,6 +40,8 @@ export function PartyDetail() {
   const [votes, setVotes] = useState<Array<{ position: "chair" | "whip"; voter_user_id: string; candidate_user_id: string }>>([]);
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const isMember = !!party && myParty === party.name;
@@ -52,6 +61,7 @@ export function PartyDetail() {
       if (pErr) throw pErr;
       setParty(p as any);
       setAboutDraft((p as any).platform ?? "");
+      setNameDraft(displayPartyName((p as any).name ?? ""));
 
       const { data: me } = await supabase.from("profiles").select("party,role").eq("user_id", uid).maybeSingle();
       setMyParty((me as any)?.party ?? null);
@@ -172,6 +182,22 @@ export function PartyDetail() {
       await load();
     } catch (e: any) {
       toast.error(e.message || "Could not update party");
+    }
+  };
+
+  const saveName = async () => {
+    if (!party || !nameDraft.trim()) return;
+    const nextName = displayPartyName(nameDraft);
+    try {
+      const { error } = await supabase.from("parties").update({ name: nextName } as any).eq("id", party.id);
+      if (error) throw error;
+      await supabase.from("profiles").update({ party: nextName } as any).eq("class_id", party.class_id).eq("party", party.name);
+      setParty({ ...party, name: nextName });
+      setMyParty((current) => (current === party.name ? nextName : current));
+      setEditingName(false);
+      toast.success("Party renamed");
+    } catch (e: any) {
+      toast.error(e.message || "Could not rename party");
     }
   };
 
@@ -316,7 +342,17 @@ export function PartyDetail() {
                     <span className="inline-flex h-8 w-8 items-center justify-center rounded-full text-white" style={{ backgroundColor: party.color || "#2563eb" }}>
                       <Flag className="h-4 w-4" />
                     </span>
-                    <h1 className="text-2xl font-bold text-gray-900">{party.name}</h1>
+                    {editingName ? (
+                      <>
+                        <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} className="rounded-md border border-gray-300 px-2 py-1 text-2xl font-bold text-gray-900" />
+                        <button type="button" onClick={() => void saveName()} className="rounded-md p-1 text-blue-600 hover:bg-blue-50"><Save className="h-4 w-4" /></button>
+                      </>
+                    ) : (
+                      <>
+                        <h1 className="text-2xl font-bold text-gray-900">{displayPartyName(party.name)}</h1>
+                        {isTeacher && <button type="button" onClick={() => setEditingName(true)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100"><Pencil className="h-4 w-4" /></button>}
+                      </>
+                    )}
                   </div>
                   <p className="mt-2 text-sm text-gray-600">
                     Chair: {leaderFor("chair")?.display_name ?? "N/A"} • Whip: {leaderFor("whip")?.display_name ?? "N/A"} • {members.length} members
@@ -334,7 +370,7 @@ export function PartyDetail() {
               <div className="mt-5 border-t border-gray-200 pt-5">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-lg font-semibold text-gray-900">About</h2>
-                  {isMember && !editingAbout && (
+                  {(isMember || isTeacher) && !editingAbout && (
                     <button onClick={() => setEditingAbout(true)} className="text-blue-600 hover:text-blue-700"><Pencil className="h-4 w-4" /></button>
                   )}
                 </div>

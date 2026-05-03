@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Search, Plus, Users, ArrowUpDown, Vote, LogOut, UserPlus } from "lucide-react";
+import { Search, Plus, Users, ArrowUpDown, Vote, LogOut, UserPlus, Pencil, Trash2 } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -34,6 +34,8 @@ export function TessCaucuses() {
   const [createName, setCreateName] = useState("");
   const [createDescription, setCreateDescription] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [role, setRole] = useState<"teacher" | "student" | null>(null);
+  const [editingCaucus, setEditingCaucus] = useState<Caucus | null>(null);
 
   const [caucuses, setCaucuses] = useState<Caucus[]>([]);
 
@@ -49,6 +51,8 @@ export function TessCaucuses() {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id;
         if (!me) return;
+        const { data: profile } = await supabase.from("profiles").select("role").eq("user_id", me).maybeSingle();
+        setRole(((profile as any)?.role ?? null) as any);
 
         const { data: caucusRows, error: cErr } = await supabase
           .from("caucuses")
@@ -245,6 +249,37 @@ export function TessCaucuses() {
     void run();
   };
 
+  const saveCaucusEdits = async () => {
+    if (!editingCaucus) return;
+    const { error } = await supabase
+      .from("caucuses")
+      .update({ title: editingCaucus.name.trim(), description: editingCaucus.description.trim() } as any)
+      .eq("id", editingCaucus.id);
+    if (error) return toast.error(error.message || "Could not update caucus");
+    const next = caucuses.map((caucus) => (caucus.id === editingCaucus.id ? editingCaucus : caucus));
+    setCaucuses(next);
+    caucusesPageCache = next;
+    setEditingCaucus(null);
+    toast.success("Caucus updated");
+  };
+
+  const deleteCaucus = (caucus: Caucus) => {
+    setConfirmDialog({
+      title: "Delete caucus?",
+      message: `${caucus.name} will be deleted.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        const { error } = await supabase.from("caucuses").delete().eq("id", caucus.id);
+        if (error) throw error;
+        const next = caucuses.filter((item) => item.id !== caucus.id);
+        setCaucuses(next);
+        caucusesPageCache = next;
+        toast.success("Caucus deleted");
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -286,6 +321,29 @@ export function TessCaucuses() {
                 >
                   {creating ? "Creating..." : "Create Caucus"}
                 </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {role === "teacher" && editingCaucus && (
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="grid gap-3 md:grid-cols-[1fr_2fr_auto]">
+              <input
+                value={editingCaucus.name}
+                onChange={(event) => setEditingCaucus({ ...editingCaucus, name: event.target.value })}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Caucus name"
+              />
+              <input
+                value={editingCaucus.description}
+                onChange={(event) => setEditingCaucus({ ...editingCaucus, description: event.target.value })}
+                className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="About this caucus"
+              />
+              <div className="flex gap-2">
+                <button type="button" onClick={() => void saveCaucusEdits()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+                <button type="button" onClick={() => setEditingCaucus(null)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
               </div>
             </div>
           </div>
@@ -364,6 +422,32 @@ export function TessCaucuses() {
                     {caucus.isMember ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
                     {caucus.isMember ? "Leave" : "Join"}
                   </button>
+                  {role === "teacher" && (
+                    <div className="ml-2 flex gap-1">
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setEditingCaucus(caucus);
+                        }}
+                        className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                        aria-label="Edit caucus"
+                      >
+                        <Pencil className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          deleteCaucus(caucus);
+                        }}
+                        className="rounded-md p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                        aria-label="Delete caucus"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 <div className="grid gap-2 border-t border-gray-200 pt-4 text-sm">

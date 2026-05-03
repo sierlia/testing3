@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { ClipboardList, LogOut, Search, UserPlus, Users } from "lucide-react";
+import { ClipboardList, LogOut, Pencil, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
@@ -36,6 +36,7 @@ export function CommitteesHome() {
   const [leavingCommitteeId, setLeavingCommitteeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [editingCommittee, setEditingCommittee] = useState<CommitteeRow | null>(null);
 
   useEffect(() => {
     if (committeesHomeCache) {
@@ -221,6 +222,33 @@ export function CommitteesHome() {
     }
   };
 
+  const saveCommitteeEdits = async () => {
+    if (!editingCommittee) return;
+    const { error } = await supabase
+      .from("committees")
+      .update({ name: editingCommittee.name.trim(), description: editingCommittee.description ?? "" } as any)
+      .eq("id", editingCommittee.id);
+    if (error) return toast.error(error.message || "Could not update committee");
+    setCommittees((prev) => prev.map((committee) => (committee.id === editingCommittee.id ? editingCommittee : committee)));
+    setEditingCommittee(null);
+    toast.success("Committee updated");
+  };
+
+  const deleteCommittee = (committee: CommitteeRow) => {
+    setConfirmDialog({
+      title: "Delete committee?",
+      message: `${committee.name} will be deleted.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        const { error } = await supabase.from("committees").delete().eq("id", committee.id);
+        if (error) throw error;
+        setCommittees((prev) => prev.filter((item) => item.id !== committee.id));
+        toast.success("Committee deleted");
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -250,6 +278,28 @@ export function CommitteesHome() {
                   <span className="block text-sm text-blue-800">Your teacher will use these rankings to assign committees.</span>
                 </span>
               </button>
+            )}
+            {role === "teacher" && editingCommittee && (
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="grid gap-3 md:grid-cols-[1fr_2fr_auto]">
+                  <input
+                    value={editingCommittee.name}
+                    onChange={(event) => setEditingCommittee({ ...editingCommittee, name: event.target.value })}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="Committee name"
+                  />
+                  <input
+                    value={editingCommittee.description ?? ""}
+                    onChange={(event) => setEditingCommittee({ ...editingCommittee, description: event.target.value })}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-sm"
+                    placeholder="About this committee"
+                  />
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => void saveCommitteeEdits()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+                    <button type="button" onClick={() => setEditingCommittee(null)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+                  </div>
+                </div>
+              </div>
             )}
             {loading ? (
               <div className="text-sm text-gray-500">Loading committees…</div>
@@ -294,6 +344,32 @@ export function CommitteesHome() {
                           {joinedCommitteeIds.has(c.id) ? <LogOut className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
                           {joinedCommitteeIds.has(c.id) ? (leavingCommitteeId === c.id ? "Leaving" : "Leave") : joiningCommitteeId === c.id ? "Joining" : "Join"}
                         </button>
+                      )}
+                      {role === "teacher" && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setEditingCommittee(c);
+                            }}
+                            className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                            aria-label="Edit committee"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              deleteCommittee(c);
+                            }}
+                            className="rounded-md p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                            aria-label="Delete committee"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

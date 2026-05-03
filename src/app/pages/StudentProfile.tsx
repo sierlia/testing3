@@ -3,15 +3,10 @@ import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import {
   Award,
-  Bold,
   ChevronDown,
   ChevronUp,
   FileText,
   Flag,
-  Italic,
-  Link as LinkIcon,
-  List,
-  ListOrdered,
   Mail,
   MapPin,
   Pencil,
@@ -216,71 +211,6 @@ export function StudentProfile() {
     void saveProfile({ written_responses: next } as any);
   };
 
-  const insertMarkdown = (prefix: string, suffix = "", placeholder = "text") => {
-    if (!textareaRef) return;
-    const start = textareaRef.selectionStart;
-    const end = textareaRef.selectionEnd;
-    const selectedText = editingContent.substring(start, end);
-    const textToInsert = selectedText || placeholder;
-    const newText =
-      editingContent.substring(0, start) + prefix + textToInsert + suffix + editingContent.substring(end);
-    setEditingContent(newText);
-
-    setTimeout(() => {
-      const el = textareaRef;
-      if (!el) return;
-      const newCursorPos = start + prefix.length + (selectedText ? selectedText.length : 0);
-      el.focus();
-      el.setSelectionRange(newCursorPos, newCursorPos + (selectedText ? 0 : placeholder.length));
-    }, 0);
-  };
-
-  const MarkdownToolbar = () => (
-    <div className="flex items-center gap-1 p-2 bg-gray-50 border border-gray-300 rounded-t-md border-b-0">
-      <button
-        type="button"
-        onClick={() => insertMarkdown("**", "**", "bold text")}
-        className="p-2 hover:bg-gray-200 rounded transition-colors"
-        title="Bold"
-      >
-        <Bold className="w-4 h-4 text-gray-700" />
-      </button>
-      <button
-        type="button"
-        onClick={() => insertMarkdown("*", "*", "italic text")}
-        className="p-2 hover:bg-gray-200 rounded transition-colors"
-        title="Italic"
-      >
-        <Italic className="w-4 h-4 text-gray-700" />
-      </button>
-      <button
-        type="button"
-        onClick={() => insertMarkdown("[", "](url)", "link text")}
-        className="p-2 hover:bg-gray-200 rounded transition-colors"
-        title="Link"
-      >
-        <LinkIcon className="w-4 h-4 text-gray-700" />
-      </button>
-      <div className="w-px h-6 bg-gray-300 mx-1" />
-      <button
-        type="button"
-        onClick={() => insertMarkdown("- ", "", "list item")}
-        className="p-2 hover:bg-gray-200 rounded transition-colors"
-        title="Bullet List"
-      >
-        <List className="w-4 h-4 text-gray-700" />
-      </button>
-      <button
-        type="button"
-        onClick={() => insertMarkdown("1. ", "", "list item")}
-        className="p-2 hover:bg-gray-200 rounded transition-colors"
-        title="Numbered List"
-      >
-        <ListOrdered className="w-4 h-4 text-gray-700" />
-      </button>
-    </div>
-  );
-
   const startEdit = (section: Exclude<EditingSection, null>) => {
     if (!profile) return;
     setEditingSection(section);
@@ -466,9 +396,10 @@ export function StudentProfile() {
               <div>
                 {isMe ? (
                   <input
-                    className="mb-2 w-full rounded-md border border-dashed border-gray-300 bg-transparent px-2 py-1 text-2xl font-bold text-gray-900 outline-none hover:border-blue-300 focus:border-blue-500"
+                    className="mb-2 w-full rounded-md border-2 border-dashed border-gray-300 bg-transparent px-2 py-1 text-2xl font-bold text-gray-900 outline-none hover:border-blue-300 focus:border-blue-500"
                     value={profile.display_name || ""}
-                    onChange={(e) => setProfile({ ...profile, display_name: e.target.value })}
+                    maxLength={40}
+                    onChange={(e) => setProfile({ ...profile, display_name: e.target.value.slice(0, 40) })}
                     onBlur={() => void saveProfile({ display_name: profile.display_name } as any, true)}
                     placeholder="Your name"
                   />
@@ -542,7 +473,6 @@ export function StudentProfile() {
           </div>
           {editingSection === "personal_statement" ? (
             <div className="space-y-3">
-              <MarkdownToolbar />
               <textarea
                 ref={setTextareaRef}
                 value={editingContent}
@@ -551,7 +481,6 @@ export function StudentProfile() {
                 rows={10}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               />
-              <div className="text-xs text-gray-500">Supports markdown formatting</div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => void saveEdit("personal_statement")}
@@ -626,7 +555,6 @@ export function StudentProfile() {
           </div>
           {editingSection === "constituency_description" ? (
             <div className="space-y-3">
-              <MarkdownToolbar />
               <textarea
                 ref={setTextareaRef}
                 value={editingContent}
@@ -635,7 +563,6 @@ export function StudentProfile() {
                 rows={10}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
               />
-              <div className="text-xs text-gray-500">Supports markdown formatting</div>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => void saveEdit("constituency_description")}

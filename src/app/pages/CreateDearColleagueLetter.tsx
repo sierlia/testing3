@@ -17,6 +17,13 @@ type Recipient = {
   district?: string | null;
 };
 
+function displayPartyName(name: string) {
+  const normalized = name.trim();
+  if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
+  if (/republican( party)?$/i.test(normalized)) return "Republican Party";
+  return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
 export function CreateDearColleagueLetter() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -60,7 +67,7 @@ export function CreateDearColleagueLetter() {
         const classMembers = ((directory ?? []) as any[]).filter((p) => p.user_id !== uid);
         setIndividuals(classMembers);
         setCaucuses((cau ?? []) as any);
-        setParties((par ?? []) as any);
+        setParties(((par ?? []) as any[]).map((party) => ({ ...party, name: displayPartyName(party.name) })));
         setCommittees((com ?? []) as any);
 
         const replyRecipientId = searchParams.get("to");
@@ -199,12 +206,28 @@ export function CreateDearColleagueLetter() {
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">To:</label>
+            <div className="mb-2 flex flex-wrap items-center gap-3">
+              <label className="text-sm font-medium text-gray-700">To:</label>
+              <div className="flex gap-1.5">
+                {(["individual", "party", "committee", "caucus"] as RecipientType[]).map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => setRecipientType(t)}
+                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                      recipientType === t ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+                    }`}
+                  >
+                    {t === "individual" ? "Individuals" : t === "party" ? "Parties" : t === "committee" ? "Committees" : "Caucuses"}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-            {recipients.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
+            <div className="relative">
+              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-3" />
+              <div className="flex min-h-10 w-full flex-wrap items-center gap-2 rounded-md border border-gray-300 py-1.5 pl-9 pr-3 focus-within:ring-2 focus-within:ring-blue-500">
                 {recipients.map((recipient, index) => (
-                  <div key={`${recipient.type}:${recipient.id}`} className="flex items-center gap-2 px-3 py-1.5 bg-blue-100 text-blue-800 rounded-full">
+                  <div key={`${recipient.type}:${recipient.id}`} className="flex items-center gap-2 rounded-full bg-blue-100 px-2.5 py-1 text-blue-800">
                     {recipient.type === "individual" && recipient.image ? (
                       <img src={recipient.image} alt={recipient.name} className="w-5 h-5 rounded-full object-cover" />
                     ) : recipient.type === "individual" ? (
@@ -214,30 +237,11 @@ export function CreateDearColleagueLetter() {
                       {recipient.name}
                       {recipient.district ? ` (${recipient.district})` : ""}
                     </span>
-                    <button onClick={() => handleRemoveRecipient(index)} className="hover:bg-blue-200 rounded-full p-0.5 transition-colors">
+                    <button type="button" onClick={() => handleRemoveRecipient(index)} className="hover:bg-blue-200 rounded-full p-0.5 transition-colors">
                       <X className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
-              </div>
-            )}
-
-            <div className="flex gap-2 mb-3">
-              {(["individual", "party", "committee", "caucus"] as RecipientType[]).map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setRecipientType(t)}
-                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
-                    recipientType === t ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}
-                >
-                  {t === "individual" ? "Individuals" : t === "party" ? "Parties" : t === "committee" ? "Committees" : "Caucuses"}
-                </button>
-              ))}
-            </div>
-
-            <div className="relative">
-              <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
               <input
                 type="text"
                 value={searchQuery}
@@ -247,19 +251,10 @@ export function CreateDearColleagueLetter() {
                 }}
                 onFocus={() => setShowSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
-                placeholder={
-                  loading
-                    ? "Loading..."
-                    : recipientType === "individual"
-                      ? "Search members..."
-                      : recipientType === "party"
-                        ? "Search parties..."
-                        : recipientType === "committee"
-                          ? "Search committees..."
-                          : "Search caucuses..."
-                }
-                className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                placeholder={loading ? "Loading..." : ""}
+                className="min-w-[12rem] flex-1 border-0 bg-transparent py-0.5 text-sm outline-none"
               />
+              </div>
 
               {showSuggestions && filteredSuggestions.length > 0 && (
                 <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
@@ -321,7 +316,9 @@ export function CreateDearColleagueLetter() {
             <textarea
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              placeholder="Dear Colleague,\n\nI am writing to..."
+              placeholder={`Dear Colleague,
+
+I am writing to...`}
               rows={12}
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
             />

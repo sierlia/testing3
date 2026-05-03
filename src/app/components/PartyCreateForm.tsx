@@ -25,6 +25,7 @@ export function PartyCreateForm({
   submitting,
   submitLabel = "Create Party",
   requirePlatform = true,
+  nameError,
 }: {
   value: NewParty;
   onChange: (party: NewParty) => void;
@@ -33,6 +34,7 @@ export function PartyCreateForm({
   submitting?: boolean;
   submitLabel?: string;
   requirePlatform?: boolean;
+  nameError?: string;
 }) {
   const platformWordCount = useMemo(() => (value.platform.trim() ? value.platform.trim().split(/\s+/).length : 0), [value.platform]);
   const maxPlatformWords = 100;
@@ -52,7 +54,9 @@ export function PartyCreateForm({
             placeholder="e.g., Progressive Reform Party"
             className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
             maxLength={50}
+            aria-invalid={Boolean(nameError)}
           />
+          {nameError && <div className="mt-1 text-xs font-medium text-red-600">{nameError}</div>}
         </div>
 
         <div>

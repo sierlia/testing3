@@ -58,6 +58,8 @@ export function TessCaucusDetail() {
 
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState("");
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
@@ -112,6 +114,7 @@ export function TessCaucusDetail() {
         if (cErr) throw cErr;
         setCaucus(c);
         setAboutDraft(c.description ?? "");
+        setNameDraft(c.title ?? "Caucus");
 
         const { data: mRows, error: mErr } = await supabase
           .from("caucus_members")
@@ -425,6 +428,19 @@ export function TessCaucusDetail() {
     }
   };
 
+  const saveName = async () => {
+    if (!caucus || !nameDraft.trim()) return;
+    try {
+      const { error } = await supabase.from("caucuses").update({ title: nameDraft.trim() }).eq("id", caucus.id);
+      if (error) throw error;
+      setCaucus({ ...caucus, title: nameDraft.trim() });
+      setEditingName(false);
+      toast.success("Caucus renamed");
+    } catch (e: any) {
+      toast.error(e.message || "Could not rename caucus");
+    }
+  };
+
   const setMemberRole = async (userId: string, role: MembershipRole) => {
     try {
       const { error } = await supabase.from("caucus_members").update({ role }).eq("caucus_id", caucusId).eq("user_id", userId);
@@ -696,7 +712,17 @@ export function TessCaucusDetail() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 mb-1">{caucus.title}</h1>
+              {editingName ? (
+                <div className="flex items-center gap-2">
+                  <input value={nameDraft} onChange={(event) => setNameDraft(event.target.value)} className="rounded-md border border-gray-300 px-2 py-1 text-2xl font-bold text-gray-900" />
+                  <button type="button" onClick={() => void saveName()} className="rounded-md p-1 text-blue-600 hover:bg-blue-50"><Save className="h-4 w-4" /></button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <h1 className="text-2xl font-bold text-gray-900 mb-1">{caucus.title}</h1>
+                  {isTeacher && <button type="button" onClick={() => setEditingName(true)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100"><Pencil className="h-4 w-4" /></button>}
+                </div>
+              )}
               <p className="text-sm text-gray-600">
                 Chair:{" "}
                 {chairMember?.user_id ? (
@@ -730,7 +756,7 @@ export function TessCaucusDetail() {
           <div className="mt-5 pt-5 border-t border-gray-200">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-lg font-semibold text-gray-900">About</h2>
-                {isLeader && !editingAbout && (
+                {(isLeader || isTeacher) && !editingAbout && (
                   <button onClick={() => setEditingAbout(true)} className="text-blue-600 hover:text-blue-700 transition-colors">
                     <Pencil className="w-4 h-4" />
                   </button>

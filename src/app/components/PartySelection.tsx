@@ -13,6 +13,13 @@ export interface Party {
   color: string;
 }
 
+function displayPartyName(name: string) {
+  const normalized = name.trim();
+  if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
+  if (/republican( party)?$/i.test(normalized)) return "Republican Party";
+  return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
 interface PartySelectionProps {
   selectedParty: string | null;
   newParty?: NewParty;
@@ -52,7 +59,7 @@ export function PartySelection({ selectedParty, newParty, onSelectParty, onCreat
         setParties(
           (rows ?? []).map((party: any) => ({
             id: party.id,
-            name: party.name,
+            name: displayPartyName(party.name),
             platform: party.platform ?? "",
             color: party.color ?? defaultPartyColor(party.name),
           })),
@@ -110,7 +117,7 @@ export function PartySelection({ selectedParty, newParty, onSelectParty, onCreat
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="h-3 w-3 rounded-full" style={{ backgroundColor: party.color }} />
-                      <h3 className="text-lg font-semibold text-gray-900">{party.name}</h3>
+                      <h3 className="text-lg font-semibold text-gray-900">{displayPartyName(party.name)}</h3>
                     </div>
                     <p className="mt-2 text-sm text-gray-700">{party.platform || "No platform yet."}</p>
                   </div>

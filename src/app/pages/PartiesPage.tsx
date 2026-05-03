@@ -1,7 +1,7 @@
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Flag, LogOut, Plus, Repeat2, Search, UserPlus, Users, Vote } from "lucide-react";
+import { Flag, LogOut, Pencil, Plus, Repeat2, Search, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { PartyCreateForm, NewParty, defaultPartyColor } from "../components/PartyCreateForm";
@@ -50,6 +50,17 @@ function fadedPartyColor(color: string) {
   return `rgba(${parseInt(r, 16)}, ${parseInt(g, 16)}, ${parseInt(b, 16)}, 0.14)`;
 }
 
+function displayPartyName(name: string) {
+  const normalized = name.trim();
+  if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
+  if (/republican( party)?$/i.test(normalized)) return "Republican Party";
+  return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
+function comparablePartyName(name: string) {
+  return displayPartyName(name).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
 export function PartiesPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -65,6 +76,8 @@ export function PartiesPage() {
   const [draft, setDraft] = useState<NewParty>({ name: "", platform: "", color: "#2563eb" });
   const [searchQuery, setSearchQuery] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [partyNameError, setPartyNameError] = useState("");
+  const [editingPartyId, setEditingPartyId] = useState<string | null>(null);
 
   useEffect(() => {
     if (partiesPageCache) {
@@ -261,13 +274,18 @@ export function PartiesPage() {
 
   const createParty = async () => {
     if (!classId || !meId) return;
+    const normalizedDraftName = comparablePartyName(draft.name);
+    if (parties.some((party) => comparablePartyName(party.name) === normalizedDraftName)) {
+      setPartyNameError("Name already used");
+      return;
+    }
     setCreating(true);
     try {
       const { data, error } = await supabase
         .from("parties")
         .insert({
           class_id: classId,
-          name: draft.name.trim(),
+          name: displayPartyName(draft.name),
           platform: draft.platform.trim(),
           color: draft.color,
           created_by: meId,
@@ -280,6 +298,7 @@ export function PartiesPage() {
       setParties(nextParties);
       if (partiesPageCache) partiesPageCache = { ...partiesPageCache, parties: nextParties };
       setDraft({ name: "", platform: "", color: "#2563eb" });
+      setPartyNameError("");
       setNewPartyOpen(false);
       toast.success(role === "teacher" || !requireApproval ? "Party created" : "Party submitted for approval");
     } catch (error: any) {
@@ -287,6 +306,56 @@ export function PartiesPage() {
     } finally {
       setCreating(false);
     }
+  };
+
+  const savePartyEdits = async () => {
+    if (!editingPartyId) return;
+    const current = parties.find((party) => party.id === editingPartyId);
+    if (!current) return;
+    const nextName = displayPartyName(draft.name);
+    if (parties.some((party) => party.id !== editingPartyId && comparablePartyName(party.name) === comparablePartyName(nextName))) {
+      setPartyNameError("Name already used");
+      return;
+    }
+    setCreating(true);
+    try {
+      const { data, error } = await supabase
+        .from("parties")
+        .update({ name: nextName, platform: draft.platform.trim(), color: draft.color } as any)
+        .eq("id", editingPartyId)
+        .select("id,name,platform,color,approved,created_at")
+        .single();
+      if (error) throw error;
+      const nextParties = parties.map((party) => (party.id === editingPartyId ? (data as any) : party));
+      setParties(nextParties);
+      if (partiesPageCache) partiesPageCache = { ...partiesPageCache, parties: nextParties };
+      setEditingPartyId(null);
+      setNewPartyOpen(false);
+      setDraft({ name: "", platform: "", color: "#2563eb" });
+      setPartyNameError("");
+      toast.success("Party updated");
+    } catch (error: any) {
+      toast.error(error.message || "Could not update party");
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const deleteParty = (party: PartyRow) => {
+    setConfirmDialog({
+      title: "Delete party?",
+      message: `${displayPartyName(party.name)} will be deleted. Members in this party will no longer have a party.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        const { error } = await supabase.from("parties").delete().eq("id", party.id);
+        if (error) throw error;
+        const nextParties = parties.filter((item) => item.id !== party.id);
+        setParties(nextParties);
+        if (partiesPageCache) partiesPageCache = { ...partiesPageCache, parties: nextParties };
+        toast.success("Party deleted");
+      },
+    });
   };
 
   return (
@@ -307,7 +376,12 @@ export function PartiesPage() {
               </div>
               {canCreate && (
                 <button
-                  onClick={() => setNewPartyOpen((open) => !open)}
+                  onClick={() => {
+                    setEditingPartyId(null);
+                    setPartyNameError("");
+                    setDraft({ name: "", platform: "", color: "#2563eb" });
+                    setNewPartyOpen((open) => !open);
+                  }}
                   className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
                 >
                   <Plus className="h-4 w-4" />
@@ -319,8 +393,23 @@ export function PartiesPage() {
 
           {newPartyOpen && (
             <div className="mb-6 bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold text-gray-900">Create Party</h3>
-              <PartyCreateForm value={draft} onChange={setDraft} onCancel={() => setNewPartyOpen(false)} onSubmit={createParty} submitting={creating} />
+              <h3 className="mb-4 text-lg font-semibold text-gray-900">{editingPartyId ? "Edit Party" : "Create Party"}</h3>
+              <PartyCreateForm
+                value={draft}
+                onChange={(next) => {
+                  setDraft(next);
+                  setPartyNameError("");
+                }}
+                onCancel={() => {
+                  setNewPartyOpen(false);
+                  setEditingPartyId(null);
+                  setPartyNameError("");
+                }}
+                onSubmit={editingPartyId ? savePartyEdits : createParty}
+                submitting={creating}
+                submitLabel={editingPartyId ? "Save Party" : "Create Party"}
+                nameError={partyNameError}
+              />
             </div>
           )}
 
@@ -353,7 +442,7 @@ export function PartiesPage() {
                         <div className="flex items-center gap-3">
                           <PartyIcon name={party.name} />
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900 group-hover:[color:var(--party-color)]">{party.name}</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 group-hover:[color:var(--party-color)]">{displayPartyName(party.name)}</h3>
                             <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
                               <Users className="h-3.5 w-3.5" />
                               {memberCount(party.name)} members
@@ -374,6 +463,35 @@ export function PartiesPage() {
                           {isCurrentParty ? <LogOut className="h-3.5 w-3.5" /> : currentPartyName ? <Repeat2 className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
                           {isCurrentParty ? "Leave" : currentPartyName ? "Switch" : "Join"}
                         </button>
+                        {role === "teacher" && (
+                          <div className="flex gap-1">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setEditingPartyId(party.id);
+                                setDraft({ name: displayPartyName(party.name), platform: party.platform, color: party.color });
+                                setPartyNameError("");
+                                setNewPartyOpen(true);
+                              }}
+                              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                              aria-label="Edit party"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                deleteParty(party);
+                              }}
+                              className="rounded-md p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                              aria-label="Delete party"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        )}
                       </div>
                       <p className="line-clamp-3 text-sm text-gray-600">{party.platform || "No platform yet."}</p>
                       <div className="mt-4 grid gap-2 border-t border-gray-200 pt-4 text-sm">

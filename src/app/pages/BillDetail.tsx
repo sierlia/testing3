@@ -18,6 +18,7 @@ type TrackerStep = { label: string; status: TrackerStatus; date?: string | null;
 type TrackerItem = TrackerStep | { kind: "split"; steps: [TrackerStep, TrackerStep] };
 type BillAction = { label: string; detail?: string; date: string };
 type CommitteeOption = { id: string; name: string };
+type TeacherOverrideAction = { id: string; step: string; note: string | null; created_at: string };
 type TrackerOverrideDraft = {
   step: TrackerStep;
   committeeId: string;
@@ -38,6 +39,16 @@ function voteCounts(votes: Array<{ vote: string }>) {
     (acc, row) => ({ ...acc, [row.vote]: (acc[row.vote] ?? 0) + 1 }),
     { yea: 0, nay: 0, present: 0 } as Record<string, number>,
   );
+}
+
+function overrideMessage(step: string) {
+  if (step === "Introduced") return "The bill will be sent back to waiting for referral to a committee.";
+  if (step === "Referred") return "The bill will be placed into the committee of their choosing.";
+  if (step === "Marked up") return "The bill will be put up for vote in the committee of their choosing.";
+  if (step === "Reported") return "The bill will be waiting for calendaring.";
+  if (step === "Calendared") return "The bill will be calendared at the time of your choosing.";
+  if (step === "Floor") return "The bill will be moved to the floor queue.";
+  return "The bill status will be updated.";
 }
 
 function latestDate(rows: Array<{ created_at?: string | null; updated_at?: string | null }>) {
@@ -86,7 +97,7 @@ function revisedHtmlFromSnapshot(snapshot?: string | null) {
 
 function trackerBarClass(status: TrackerStatus) {
   if (status === "completed") return "bg-blue-600";
-  if (status === "current") return "bg-blue-300";
+  if (status === "current") return "bg-blue-600";
   return "bg-gray-200";
 }
 
@@ -94,7 +105,7 @@ function trackerIcon(step: TrackerStep) {
   return step.status === "completed" ? Check : step.status === "current" ? Clock : Circle;
 }
 
-function TrackerPoint({ step, compact = false, onSelect }: { step: TrackerStep; compact?: boolean; onSelect?: (step: TrackerStep) => void }) {
+function TrackerPoint({ step, compact = false }: { step: TrackerStep; compact?: boolean }) {
   const Icon = trackerIcon(step);
   const content = (
     <>
@@ -111,13 +122,6 @@ function TrackerPoint({ step, compact = false, onSelect }: { step: TrackerStep; 
       </div>
     </>
   );
-  if (onSelect) {
-    return (
-      <button type="button" onClick={() => onSelect(step)} className="flex min-w-0 items-start gap-2 rounded-md border border-dashed border-gray-300 p-1 text-left hover:border-blue-300 hover:bg-blue-50">
-        {content}
-      </button>
-    );
-  }
   return (
     <div className="flex min-w-0 items-start gap-2">
       {content}
@@ -132,22 +136,28 @@ function HorizontalTracker({ steps, onSelectStep }: { steps: TrackerItem[]; onSe
         {steps.map((step) => {
           if ("kind" in step) {
             return (
-              <div key={step.steps.map((item) => item.label).join("-")} className="min-w-0">
-                <div className="mb-2 flex h-1.5 overflow-hidden rounded-full">
-                  <div className={`flex-1 ${trackerBarClass(step.steps[0].status)}`} />
-                  <div className={`flex-1 ${trackerBarClass(step.steps[1].status)}`} />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <TrackerPoint step={step.steps[0]} compact onSelect={onSelectStep} />
-                  <TrackerPoint step={step.steps[1]} compact onSelect={onSelectStep} />
-                </div>
+              <div key={step.steps.map((item) => item.label).join("-")} className="grid grid-cols-2 gap-2">
+                {step.steps.map((item) => (
+                  <div
+                    key={item.label}
+                    className={`min-w-0 rounded-md ${onSelectStep ? "cursor-pointer border border-dashed border-gray-300 p-1 hover:border-blue-300 hover:bg-blue-50" : ""}`}
+                    onClick={onSelectStep ? () => onSelectStep(item) : undefined}
+                  >
+                    <div className={`mb-2 h-1.5 rounded-full ${trackerBarClass(item.status)}`} />
+                    <TrackerPoint step={item} compact />
+                  </div>
+                ))}
               </div>
             );
           }
           return (
-            <div key={step.label} className="min-w-0">
+            <div
+              key={step.label}
+              className={`min-w-0 rounded-md ${onSelectStep ? "cursor-pointer border border-dashed border-gray-300 p-1 hover:border-blue-300 hover:bg-blue-50" : ""}`}
+              onClick={onSelectStep ? () => onSelectStep(step) : undefined}
+            >
               <div className={`mb-2 h-1.5 rounded-full ${trackerBarClass(step.status)}`} />
-              <TrackerPoint step={step} onSelect={onSelectStep} />
+              <TrackerPoint step={step} />
             </div>
           );
         })}
@@ -171,6 +181,7 @@ export function BillDetail() {
   const [calendar, setCalendar] = useState<any>(null);
   const [floorSession, setFloorSession] = useState<any>(null);
   const [floorVotes, setFloorVotes] = useState<any[]>([]);
+  const [teacherOverrideActions, setTeacherOverrideActions] = useState<TeacherOverrideAction[]>([]);
   const [classSettings, setClassSettings] = useState<any>({});
   const [committeeOptions, setCommitteeOptions] = useState<CommitteeOption[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
@@ -204,6 +215,12 @@ export function BillDetail() {
         setFloorSession(res.floorSession);
         setFloorVotes(res.floorVotes);
         setClassSettings(res.classSettings ?? {});
+        const { data: overrideRows } = await supabase
+          .from("bill_teacher_overrides")
+          .select("id,step,note,created_at")
+          .eq("bill_id", res.bill.id)
+          .order("created_at", { ascending: false });
+        setTeacherOverrideActions((overrideRows ?? []) as any);
 
         if (me) {
           const { data: p } = await supabase.from("profiles").select("role,display_name,party,constituency_name").eq("user_id", me).maybeSingle();
@@ -289,8 +306,15 @@ export function BillDetail() {
     const floorVoteDate = latestDate(floorVotes);
     if (floorVoteDate) rows.push({ label: "Floor vote recorded", detail: `${floorCounts.yea} yeas to ${floorCounts.nay} nays${floorCounts.present ? `, ${floorCounts.present} present` : ""}`, date: floorVoteDate });
     if (floorSession?.closed_at) rows.push({ label: "Floor debate closed", date: floorSession.closed_at });
+    for (const override of teacherOverrideActions) {
+      rows.push({
+        label: `Teacher override: ${override.step}`,
+        detail: override.note ?? "Updated by teacher",
+        date: override.created_at,
+      });
+    }
     return rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [bill, calendar, committeeCounts, committeeDoc, committeeVotes, floorCounts, floorSession, floorVotes, referral]);
+  }, [bill, calendar, committeeCounts, committeeDoc, committeeVotes, floorCounts, floorSession, floorVotes, referral, teacherOverrideActions]);
 
   const latestAction = actions[0];
 
@@ -368,6 +392,12 @@ export function BillDetail() {
     setFloorSession(res.floorSession);
     setFloorVotes(res.floorVotes);
     setClassSettings(res.classSettings ?? {});
+    const { data: overrideRows } = await supabase
+      .from("bill_teacher_overrides")
+      .select("id,step,note,created_at")
+      .eq("bill_id", res.bill.id)
+      .order("created_at", { ascending: false });
+    setTeacherOverrideActions((overrideRows ?? []) as any);
   };
 
   const upsertTeacherReferral = async (committeeId: string) => {
@@ -411,11 +441,20 @@ export function BillDetail() {
     setTrackerOverrideSaving(true);
     try {
       if (step.label === "Introduced") {
+        await supabase.from("bill_referrals").delete().eq("bill_id", bill.id);
+        await supabase.from("committee_bill_docs").delete().eq("bill_id", bill.id);
+        await supabase.from("bill_calendar").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
+        await supabase.from("bill_floor_sessions").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
         const { error } = await supabase.from("bills").update({ status: "submitted" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (error) throw error;
       } else if (step.label === "Referred") {
+        await supabase.from("committee_bill_docs").delete().eq("bill_id", bill.id);
+        await supabase.from("bill_calendar").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
+        await supabase.from("bill_floor_sessions").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
         await upsertTeacherReferral(committeeId);
       } else if (step.label === "Marked up") {
+        await supabase.from("bill_calendar").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
+        await supabase.from("bill_floor_sessions").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
         await upsertTeacherReferral(committeeId);
         const now = new Date().toISOString();
         const { error: docError } = await supabase.from("committee_bill_docs").upsert(
@@ -426,6 +465,8 @@ export function BillDetail() {
         const { error: billError } = await supabase.from("bills").update({ status: "committee_vote" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (billError) throw billError;
       } else if (step.label === "Reported") {
+        await supabase.from("bill_calendar").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
+        await supabase.from("bill_floor_sessions").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
         await upsertTeacherReferral(committeeId);
         const { error: docError } = await supabase.from("committee_bill_docs").upsert(
           { bill_id: bill.id, committee_id: committeeId, class_id: bill.class_id, committee_vote_finalized_at: new Date().toISOString() } as any,
@@ -435,6 +476,7 @@ export function BillDetail() {
         const { error } = await supabase.from("bills").update({ status: "reported" } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (error) throw error;
       } else if (step.label === "Calendared") {
+        await supabase.from("bill_floor_sessions").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
         if (!scheduledAt) return;
         const { error: calendarError } = await supabase.from("bill_calendar").upsert(
           { bill_id: bill.id, class_id: bill.class_id, scheduled_at: new Date(scheduledAt).toISOString(), duration_minutes: 30, published: true, created_by: currentUserId } as any,
@@ -461,6 +503,13 @@ export function BillDetail() {
         const { error } = await supabase.from("bills").update({ status: finalStatus } as any).eq("id", bill.id).eq("class_id", bill.class_id);
         if (error) throw error;
       }
+      await supabase.from("bill_teacher_overrides").insert({
+        bill_id: bill.id,
+        class_id: bill.class_id,
+        actor_user_id: currentUserId,
+        step: step.label,
+        note: overrideMessage(step.label),
+      } as any);
       await refreshBillState();
       setTrackerOverrideDraft(null);
       toast.success("Bill tracker updated");
@@ -666,7 +715,7 @@ export function BillDetail() {
           <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
             <div className="border-b border-gray-200 px-5 py-4">
               <h2 className="text-lg font-semibold text-gray-900">Confirm teacher override</h2>
-              <p className="mt-1 text-sm text-gray-600">Update this bill to {trackerOverrideDraft.step.label}.</p>
+              <p className="mt-1 text-sm text-gray-600">{overrideMessage(trackerOverrideDraft.step.label)}</p>
             </div>
             <div className="space-y-4 px-5 py-4">
               {["Referred", "Marked up", "Reported"].includes(trackerOverrideDraft.step.label) && (
@@ -708,7 +757,7 @@ export function BillDetail() {
                 </label>
               )}
               <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                This will directly change the bill tracker and may create or update related committee, calendar, or floor records.
+                This action will create or update related committee, calendar, or floor records.
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-5 py-4">

@@ -15,7 +15,9 @@ import {
   AlertCircle,
   Plus,
   Settings,
-  Bell
+  Bell,
+  Pencil,
+  Save
 } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { Navigation } from '../components/Navigation';
@@ -40,6 +42,8 @@ export function ClassDashboard() {
   const { classId } = useParams();
   const navigate = useNavigate();
   const [className, setClassName] = useState<string>('');
+  const [classNameDraft, setClassNameDraft] = useState<string>('');
+  const [editingClassName, setEditingClassName] = useState(false);
   const [studentCount, setStudentCount] = useState<number>(0);
   const [recentActivity, setRecentActivity] = useState<StudentActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
@@ -68,6 +72,7 @@ export function ClassDashboard() {
         ]);
         if (cErr) throw cErr;
         setClassName((cls as any)?.name ?? "Class");
+        setClassNameDraft((cls as any)?.name ?? "Class");
         setStudentCount(rosterCount ?? 0);
 
         const nowIso = new Date().toISOString();
@@ -234,6 +239,14 @@ export function ClassDashboard() {
     }
   };
 
+  const saveClassName = async () => {
+    if (!classId || !classNameDraft.trim()) return;
+    const { error } = await supabase.from("classes").update({ name: classNameDraft.trim() }).eq("id", classId);
+    if (error) return;
+    setClassName(classNameDraft.trim());
+    setEditingClassName(false);
+  };
+
   const getEventIcon = (type: string) => {
     switch (type) {
       case 'deadline':
@@ -300,7 +313,27 @@ export function ClassDashboard() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8">
           {className ? (
-            <h1 className="text-3xl font-bold text-gray-900">{className}</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              {editingClassName ? (
+                <>
+                  <input
+                    value={classNameDraft}
+                    onChange={(event) => setClassNameDraft(event.target.value)}
+                    className="rounded-md border border-gray-300 px-3 py-2 text-3xl font-bold text-gray-900"
+                  />
+                  <button type="button" onClick={() => void saveClassName()} className="rounded-md p-2 text-blue-600 hover:bg-blue-50" aria-label="Save class name">
+                    <Save className="h-5 w-5" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <h1 className="text-3xl font-bold text-gray-900">{className}</h1>
+                  <button type="button" onClick={() => setEditingClassName(true)} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Rename class">
+                    <Pencil className="h-5 w-5" />
+                  </button>
+                </>
+              )}
+            </div>
           ) : (
             <div className="h-9 w-64 rounded bg-gray-200 animate-pulse" />
           )}
