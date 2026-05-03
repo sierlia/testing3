@@ -52,6 +52,7 @@ export function ClassDashboard() {
   const [studentCount, setStudentCount] = useState(0);
   const [recentActivity, setRecentActivity] = useState<ClassActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
+  const [selectedUpcomingDay, setSelectedUpcomingDay] = useState<string | null>(null);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
   const [billStats, setBillStats] = useState({ total: 0, waitingReferral: 0, waitingCalendar: 0 });
   const [workflowBusy, setWorkflowBusy] = useState(false);
@@ -185,6 +186,9 @@ export function ClassDashboard() {
     return map;
   }, [upcomingEvents]);
 
+  const displayedUpcomingEvents = selectedUpcomingDay ? eventsByDay.get(selectedUpcomingDay) ?? [] : upcomingEvents;
+  const selectedUpcomingDate = selectedUpcomingDay ? new Date(`${selectedUpcomingDay}T00:00:00`) : null;
+
   const saveClassName = async () => {
     if (!classId || !classNameDraft.trim()) return;
     const { error } = await supabase.from("classes").update({ name: classNameDraft.trim() }).eq("id", classId);
@@ -274,7 +278,9 @@ export function ClassDashboard() {
       if (!currentTimelineCardRef.current || !timelineScrollRef.current) return;
       const container = timelineScrollRef.current;
       const card = currentTimelineCardRef.current;
-      container.scrollLeft = Math.max(0, card.offsetLeft - 16);
+      const isLastCard = currentIndex === visibleWorkflowSteps.length - 1;
+      const target = isLastCard ? card.offsetLeft - (container.clientWidth - card.offsetWidth) : card.offsetLeft - 56;
+      container.scrollLeft = Math.max(0, target);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [currentIndex, timelineExpanded, visibleWorkflowSteps.length]);
@@ -482,7 +488,10 @@ export function ClassDashboard() {
                   <div>
                     <CardTitle>Upcoming Events & Deadlines</CardTitle>
                   </div>
-                  <Button onClick={() => navigate("/teacher/deadlines?add=1")}><Plus className="mr-2 h-4 w-4" />Add Deadline</Button>
+                  <div className="flex items-center gap-2">
+                    <Button onClick={() => navigate("/teacher/deadlines?add=1")}><Plus className="mr-2 h-4 w-4" />Add Deadline</Button>
+                    <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -494,10 +503,10 @@ export function ClassDashboard() {
                       <button
                         key={dayKey(day)}
                         type="button"
-                        onClick={() => navigate(`/calendar?date=${dayKey(day)}`)}
+                        onClick={() => setSelectedUpcomingDay(dayKey(day))}
                         className="group relative text-left"
                       >
-                        <div className={`flex min-h-16 flex-col items-center justify-center rounded-full border text-center text-xs ${events.length ? "border-sky-200 bg-sky-50 text-sky-800" : isToday ? "border-gray-200 bg-gray-100 text-gray-800" : "border-gray-200 bg-white text-gray-500"}`}>
+                        <div className={`flex min-h-16 flex-col items-center justify-center rounded-full border text-center text-xs ${selectedUpcomingDay === dayKey(day) ? "border-blue-300 bg-blue-100 text-blue-900" : events.length ? "border-sky-200 bg-sky-50 text-sky-800" : isToday ? "border-gray-200 bg-gray-100 text-gray-800" : "border-gray-200 bg-white text-gray-500"}`}>
                           <span className="font-semibold">{day.toLocaleDateString(undefined, { weekday: "short" })}</span>
                           <span className="text-lg font-bold">{day.getDate()}</span>
                         </div>
@@ -516,10 +525,22 @@ export function ClassDashboard() {
                   })}
                 </div>
                 <div className="space-y-3">
-                  {upcomingEvents.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">No upcoming events.</div>
+                  {selectedUpcomingDate && (
+                    <div className="flex items-center justify-between border-b border-gray-100 pb-2 text-sm">
+                      <span className="font-semibold text-gray-900">
+                        {selectedUpcomingDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                      </span>
+                      <button type="button" onClick={() => setSelectedUpcomingDay(null)} className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                        Show all
+                      </button>
+                    </div>
+                  )}
+                  {displayedUpcomingEvents.length === 0 ? (
+                    <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                      {selectedUpcomingDate ? "No upcoming events for this day." : "No upcoming events."}
+                    </div>
                   ) : (
-                    upcomingEvents.map((event) => (
+                    displayedUpcomingEvents.map((event) => (
                       <div key={event.id} className="flex items-start gap-3 rounded-lg bg-sky-50 p-3 transition-colors hover:bg-sky-100">
                         <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
                         <div className="min-w-0 flex-1">
@@ -531,9 +552,8 @@ export function ClassDashboard() {
                     ))
                   )}
                 </div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                <div className="mt-4 flex">
                   <Button variant="outline" onClick={() => navigate("/teacher/deadlines")}>Manage deadlines</Button>
-                  <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
                 </div>
               </CardContent>
             </Card>
