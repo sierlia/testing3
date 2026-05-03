@@ -42,13 +42,14 @@ function voteCounts(votes: Array<{ vote: string }>) {
 }
 
 function overrideMessage(step: string) {
-  if (step === "Introduced") return "The bill will be sent back to waiting for referral to a committee.";
-  if (step === "Referred") return "The bill will be placed into the committee of their choosing.";
-  if (step === "Marked up") return "The bill will be put up for vote in the committee of their choosing.";
-  if (step === "Reported") return "The bill will be waiting for calendaring.";
-  if (step === "Calendared") return "The bill will be calendared at the time of your choosing.";
-  if (step === "Floor") return "The bill will be moved to the floor queue.";
-  return "The bill status will be updated.";
+  if (step === "Introduced") return "This will return the bill to the introduced stage so it can be referred again.";
+  if (step === "Referred") return "This will refer the bill to the committee selected below.";
+  if (step === "Marked up") return "This will move the bill into committee vote for the committee selected below.";
+  if (step === "Reported") return "This will mark the current committee's work as reported and move the bill to await calendaring.";
+  if (step === "Calendared") return "This will place the bill on the floor calendar for the selected date and time.";
+  if (step === "Floor") return "This will move the bill into the floor queue.";
+  if (step === "Final") return "This will close floor action and record the final bill outcome.";
+  return "This will update the bill's status.";
 }
 
 function latestDate(rows: Array<{ created_at?: string | null; updated_at?: string | null }>) {
@@ -98,7 +99,7 @@ function revisedHtmlFromSnapshot(snapshot?: string | null) {
 function trackerBarClass(status: TrackerStatus) {
   if (status === "completed") return "bg-blue-600";
   if (status === "current") return "bg-blue-600";
-  return "bg-gray-200";
+  return "bg-blue-100";
 }
 
 function trackerIcon(step: TrackerStep) {
@@ -111,7 +112,7 @@ function TrackerPoint({ step, compact = false }: { step: TrackerStep; compact?: 
     <>
       <span
         className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
-          step.status === "completed" ? "bg-blue-600 text-white" : step.status === "current" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"
+          step.status === "completed" ? "bg-blue-600 text-white" : step.status === "current" ? "bg-blue-100 text-blue-700" : "bg-blue-50 text-blue-300"
         }`}
       >
         <Icon className="h-3 w-3" />
@@ -309,7 +310,7 @@ export function BillDetail() {
     for (const override of teacherOverrideActions) {
       rows.push({
         label: `Teacher override: ${override.step}`,
-        detail: override.note ?? "Updated by teacher",
+        detail: override.step === "Referred" ? override.note ?? undefined : undefined,
         date: override.created_at,
       });
     }
@@ -418,8 +419,12 @@ export function BillDetail() {
 
   const openTeacherTrackerOverride = (step: TrackerStep) => {
     if (userRole !== "teacher" || !bill) return;
-    if (committeeOptions.length === 0 && ["Referred", "Marked up", "Reported"].includes(step.label)) {
+    if (committeeOptions.length === 0 && ["Referred", "Marked up"].includes(step.label)) {
       toast.error("No committees are configured for this class");
+      return;
+    }
+    if (step.label === "Reported" && !referral?.committee_id) {
+      toast.error("Refer this bill to a committee before reporting it");
       return;
     }
     const defaultCommitteeId = referral?.committee_id ?? committeeOptions[0]?.id ?? "";
@@ -434,8 +439,13 @@ export function BillDetail() {
   const handleTeacherTrackerOverride = async () => {
     if (userRole !== "teacher" || !bill || !trackerOverrideDraft) return;
     const { step, committeeId, scheduledAt, finalStatus } = trackerOverrideDraft;
-    if (["Referred", "Marked up", "Reported"].includes(step.label) && !committeeId) {
+    if (["Referred", "Marked up"].includes(step.label) && !committeeId) {
       toast.error("Choose a committee");
+      return;
+    }
+    const targetCommitteeId = step.label === "Reported" ? referral?.committee_id : committeeId;
+    if (step.label === "Reported" && !targetCommitteeId) {
+      toast.error("Refer this bill to a committee before reporting it");
       return;
     }
     setTrackerOverrideSaving(true);
@@ -467,9 +477,9 @@ export function BillDetail() {
       } else if (step.label === "Reported") {
         await supabase.from("bill_calendar").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
         await supabase.from("bill_floor_sessions").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
-        await upsertTeacherReferral(committeeId);
+        await upsertTeacherReferral(targetCommitteeId ?? "");
         const { error: docError } = await supabase.from("committee_bill_docs").upsert(
-          { bill_id: bill.id, committee_id: committeeId, class_id: bill.class_id, committee_vote_finalized_at: new Date().toISOString() } as any,
+          { bill_id: bill.id, committee_id: targetCommitteeId, class_id: bill.class_id, committee_vote_finalized_at: new Date().toISOString() } as any,
           { onConflict: "bill_id,committee_id" },
         );
         if (docError) throw docError;
@@ -508,7 +518,7 @@ export function BillDetail() {
         class_id: bill.class_id,
         actor_user_id: currentUserId,
         step: step.label,
-        note: overrideMessage(step.label),
+        note: step.label === "Referred" ? `Referred to ${committeeOptions.find((committee) => committee.id === committeeId)?.name ?? "selected committee"}` : null,
       } as any);
       await refreshBillState();
       setTrackerOverrideDraft(null);
@@ -532,6 +542,13 @@ export function BillDetail() {
   const sponsorName = sponsor?.display_name ?? "Unknown";
   const sponsorDistrict = formatConstituency(sponsor?.constituency_name);
   const isUserSponsor = sponsor?.user_id === currentUserId || bill.author_user_id === currentUserId;
+  const overrideCommitteeOptions =
+    trackerOverrideDraft?.step.label === "Marked up" && referral?.committee_id
+      ? [
+          ...committeeOptions.filter((committee) => committee.id === referral.committee_id),
+          ...committeeOptions.filter((committee) => committee.id !== referral.committee_id),
+        ]
+      : committeeOptions;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -718,7 +735,7 @@ export function BillDetail() {
               <p className="mt-1 text-sm text-gray-600">{overrideMessage(trackerOverrideDraft.step.label)}</p>
             </div>
             <div className="space-y-4 px-5 py-4">
-              {["Referred", "Marked up", "Reported"].includes(trackerOverrideDraft.step.label) && (
+              {["Referred", "Marked up"].includes(trackerOverrideDraft.step.label) && (
                 <label className="block">
                   <span className="mb-1 block text-sm font-medium text-gray-700">Committee</span>
                   <select
@@ -726,8 +743,10 @@ export function BillDetail() {
                     onChange={(event) => setTrackerOverrideDraft((draft) => draft ? { ...draft, committeeId: event.target.value } : draft)}
                     className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
                   >
-                    {committeeOptions.map((committee) => (
-                      <option key={committee.id} value={committee.id}>{committee.name}</option>
+                    {overrideCommitteeOptions.map((committee) => (
+                      <option key={committee.id} value={committee.id}>
+                        {committee.name}{trackerOverrideDraft.step.label === "Marked up" && committee.id === referral?.committee_id ? " (current committee)" : ""}
+                      </option>
                     ))}
                   </select>
                 </label>

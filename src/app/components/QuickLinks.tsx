@@ -104,8 +104,8 @@ export function QuickLinks({ classId }: { classId?: string }) {
           </div>
           <span className="font-medium">Create Bill</span>
         </Link>
-        {section("Committees", <Users className="h-4 w-4" />, committees, (id) => `/committees/${id}`)}
-        {section("Caucuses", <FileText className="h-4 w-4" />, caucuses, (id) => `/caucuses/${id}`)}
+        {section("Committees", <FileText className="h-4 w-4" />, committees, (id) => `/committees/${id}`)}
+        {section("Caucuses", <Users className="h-4 w-4" />, caucuses, (id) => `/caucuses/${id}`)}
       </div>
     </div>
   );

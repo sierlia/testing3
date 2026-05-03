@@ -393,13 +393,13 @@ export function StudentProfile() {
                   </label>
                 )}
               </div>
-              <div>
+              <div className="min-w-0 flex-1 sm:min-w-[24rem]">
                 {isMe ? (
                   <input
-                    className="mb-2 w-full rounded-md border-2 border-dashed border-gray-300 bg-transparent px-2 py-1 text-2xl font-bold text-gray-900 outline-none hover:border-blue-300 focus:border-blue-500"
+                    className="mb-2 w-full rounded-md border-2 border-dashed border-gray-300 bg-transparent px-3 py-1 text-2xl font-bold text-gray-900 outline-none hover:border-blue-300 focus:border-blue-500"
                     value={profile.display_name || ""}
-                    maxLength={40}
-                    onChange={(e) => setProfile({ ...profile, display_name: e.target.value.slice(0, 40) })}
+                    maxLength={64}
+                    onChange={(e) => setProfile({ ...profile, display_name: e.target.value.slice(0, 64) })}
                     onBlur={() => void saveProfile({ display_name: profile.display_name } as any, true)}
                     placeholder="Your name"
                   />

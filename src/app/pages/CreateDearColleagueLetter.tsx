@@ -261,7 +261,7 @@ export function CreateDearColleagueLetter() {
                 }}
                 onFocus={() => setShowSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 120)}
-                placeholder={loading ? "Loading..." : ""}
+                placeholder={loading ? "Loading..." : "Search"}
                 className="min-w-[12rem] flex-1 border-0 bg-transparent py-0.5 text-sm outline-none"
               />
               </div>

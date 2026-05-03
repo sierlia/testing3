@@ -26,6 +26,7 @@ export function PartyCreateForm({
   submitLabel = "Create Party",
   requirePlatform = true,
   nameError,
+  onNameBlur,
 }: {
   value: NewParty;
   onChange: (party: NewParty) => void;
@@ -35,6 +36,7 @@ export function PartyCreateForm({
   submitLabel?: string;
   requirePlatform?: boolean;
   nameError?: string;
+  onNameBlur?: () => void;
 }) {
   const platformWordCount = useMemo(() => (value.platform.trim() ? value.platform.trim().split(/\s+/).length : 0), [value.platform]);
   const maxPlatformWords = 100;
@@ -51,12 +53,15 @@ export function PartyCreateForm({
               const name = event.target.value;
               onChange({ ...value, name, color: value.color || defaultPartyColor(name) });
             }}
+            onBlur={onNameBlur}
             placeholder="e.g., Progressive Reform Party"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+            className={`w-full rounded-md border px-3 py-2 outline-none focus:ring-2 ${
+              nameError ? "border-red-500 focus:ring-red-200" : "border-gray-300 focus:ring-blue-500"
+            }`}
             maxLength={50}
             aria-invalid={Boolean(nameError)}
           />
-          {nameError && <div className="mt-1 text-xs font-medium text-red-600">{nameError}</div>}
+          {nameError && <div className="mt-1 px-3 text-xs font-medium text-red-600">{nameError}</div>}
         </div>
 
         <div>

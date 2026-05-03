@@ -272,13 +272,22 @@ export function PartiesPage() {
     }
   };
 
+  const hasDuplicatePartyName = (name: string, ignoredPartyId = editingPartyId) => {
+    if (!name.trim()) return false;
+    const normalizedName = comparablePartyName(name);
+    if (!normalizedName) return false;
+    return parties.some((party) => party.id !== ignoredPartyId && comparablePartyName(party.name) === normalizedName);
+  };
+
+  const validatePartyName = (name = draft.name) => {
+    const duplicate = hasDuplicatePartyName(name);
+    setPartyNameError(duplicate ? "Name already used" : "");
+    return !duplicate;
+  };
+
   const createParty = async () => {
     if (!classId || !meId) return;
-    const normalizedDraftName = comparablePartyName(draft.name);
-    if (parties.some((party) => comparablePartyName(party.name) === normalizedDraftName)) {
-      setPartyNameError("Name already used");
-      return;
-    }
+    if (!validatePartyName()) return;
     setCreating(true);
     try {
       const { data, error } = await supabase
@@ -313,10 +322,7 @@ export function PartiesPage() {
     const current = parties.find((party) => party.id === editingPartyId);
     if (!current) return;
     const nextName = displayPartyName(draft.name);
-    if (parties.some((party) => party.id !== editingPartyId && comparablePartyName(party.name) === comparablePartyName(nextName))) {
-      setPartyNameError("Name already used");
-      return;
-    }
+    if (!validatePartyName(nextName)) return;
     setCreating(true);
     try {
       const { data, error } = await supabase
@@ -398,8 +404,9 @@ export function PartiesPage() {
                 value={draft}
                 onChange={(next) => {
                   setDraft(next);
-                  setPartyNameError("");
+                  if (partyNameError && !hasDuplicatePartyName(next.name)) setPartyNameError("");
                 }}
+                onNameBlur={() => validatePartyName()}
                 onCancel={() => {
                   setNewPartyOpen(false);
                   setEditingPartyId(null);

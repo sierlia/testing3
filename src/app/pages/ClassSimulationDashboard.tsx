@@ -305,12 +305,12 @@ export function ClassSimulationDashboard() {
                       <button
                         type="button"
                         className={`flex h-8 w-8 items-center justify-center rounded-full text-xs font-medium ${
-                          events.length ? "bg-blue-50 text-blue-800 ring-1 ring-blue-200 hover:bg-blue-100" : isToday ? "bg-gray-100 text-gray-900 ring-1 ring-gray-300" : "bg-white text-gray-700 ring-1 ring-gray-200 hover:bg-gray-50"
+                          events.length ? "bg-blue-50 text-blue-800 hover:bg-blue-100" : isToday ? "bg-gray-100 text-gray-900" : "bg-white text-gray-700 hover:bg-gray-50"
                         }`}
                       >
                         {day.getDate()}
                       </button>
-                      <div className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-56 -translate-x-1/2 rounded-md border border-gray-200 bg-white p-2 text-left text-xs text-gray-700 shadow-lg group-hover:block">
+                      <div className="pointer-events-none absolute left-full top-1/2 z-20 ml-2 hidden w-56 -translate-y-1/2 rounded-md border border-gray-200 bg-white p-2 text-left text-xs text-gray-700 shadow-lg group-hover:block">
                         <div className="mb-1 font-semibold text-gray-900">{day.toLocaleDateString(undefined, { month: "short", day: "numeric" })}</div>
                         {events.length ? (
                           events.map((event) => (
