@@ -6,7 +6,6 @@ export function OrganizationsLayout({ active, children }: { active: "parties" | 
     <div className="space-y-4">
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Organizations</h1>
-        <p className="text-gray-600">Parties, committees, and caucuses for your class</p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[180px_1fr]">

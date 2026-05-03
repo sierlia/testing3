@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Search, Plus, Users, ArrowUpDown } from "lucide-react";
+import { Search, Plus, Users, ArrowUpDown, Vote } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -19,6 +19,8 @@ interface Caucus {
   createdAt: string;
 }
 
+let caucusesPageCache: Caucus[] | null = null;
+
 export function TessCaucuses() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"createdAt" | "members">("createdAt");
@@ -33,8 +35,13 @@ export function TessCaucuses() {
   const [caucuses, setCaucuses] = useState<Caucus[]>([]);
 
   useEffect(() => {
+    if (caucusesPageCache) {
+      setCaucuses(caucusesPageCache);
+      setLoading(false);
+    }
+
     const load = async () => {
-      setLoading(true);
+      if (!caucusesPageCache) setLoading(true);
       try {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id;
@@ -97,6 +104,7 @@ export function TessCaucuses() {
         });
 
         setCaucuses(views);
+        caucusesPageCache = views;
       } catch (e: any) {
         toast.error(e.message || "Could not load caucuses");
       } finally {
@@ -147,10 +155,14 @@ export function TessCaucuses() {
               c.id === caucusId ? { ...c, isMember: false, memberCount: Math.max(0, c.memberCount - 1) } : c,
             ),
           );
+          caucusesPageCache = caucusesPageCache?.map((c) =>
+            c.id === caucusId ? { ...c, isMember: false, memberCount: Math.max(0, c.memberCount - 1) } : c,
+          ) ?? null;
         } else {
           const { error } = await supabase.from("caucus_members").insert({ caucus_id: caucusId, user_id: me, role: "member" });
           if (error) throw error;
           setCaucuses(caucuses.map((c) => (c.id === caucusId ? { ...c, isMember: true, memberCount: c.memberCount + 1 } : c)));
+          caucusesPageCache = caucusesPageCache?.map((c) => (c.id === caucusId ? { ...c, isMember: true, memberCount: c.memberCount + 1 } : c)) ?? null;
         }
       } catch (e: any) {
         toast.error(e.message || "Could not update membership");
@@ -185,19 +197,23 @@ export function TessCaucuses() {
         setShowCreateForm(false);
         setCreateName("");
         setCreateDescription("");
-        setCaucuses([
+        const nextCaucuses = [
           {
             id: created.id,
             name: created.title,
             description: created.description ?? "",
             memberCount: 1,
+            chairId: me,
             chair: { name: "You", party: "", image: null },
+            coChairId: null,
             coChair: { name: "—", party: "", image: null },
             isMember: true,
             createdAt: created.created_at,
           },
           ...caucuses,
-        ]);
+        ];
+        setCaucuses(nextCaucuses);
+        caucusesPageCache = nextCaucuses;
       } catch (e: any) {
         toast.error(e.message || "Could not create caucus");
       } finally {
@@ -216,7 +232,6 @@ export function TessCaucuses() {
           <div className="flex items-center justify-between mb-6">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Caucuses</h2>
-              <p className="text-sm text-gray-600">Join or create groups focused on specific issues</p>
             </div>
             <button
               onClick={() => setShowCreateForm(!showCreateForm)}
@@ -320,33 +335,31 @@ export function TessCaucuses() {
                   </button>
                 </div>
 
-                <div className="flex items-center gap-4 text-sm text-gray-600 pt-4 border-t border-gray-200">
-                  <div className="flex items-center gap-1">
+                <div className="grid gap-2 border-t border-gray-200 pt-4 text-sm">
+                  <div className="flex items-center justify-between gap-3 text-gray-600">
                     <Users className="w-4 h-4" />
                     <span>{caucus.memberCount} members</span>
                   </div>
-                  <span>•</span>
-                  <span>
-                    Chair:{" "}
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="w-4 h-4" /> Chair</span>
                     {caucus.chairId ? (
-                      <Link to={`/profile/${caucus.chairId}`} className="text-blue-600 hover:underline">
+                      <Link to={`/profile/${caucus.chairId}`} className="truncate text-blue-600 hover:underline">
                         {caucus.chair.name}
                       </Link>
                     ) : (
-                      "N/A"
+                      <span className="text-gray-600">N/A</span>
                     )}
-                  </span>
-                  <span>•</span>
-                  <span>
-                    Co-Chair:{" "}
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="w-4 h-4" /> Co-Chair</span>
                     {caucus.coChairId ? (
-                      <Link to={`/profile/${caucus.coChairId}`} className="text-blue-600 hover:underline">
+                      <Link to={`/profile/${caucus.coChairId}`} className="truncate text-blue-600 hover:underline">
                         {caucus.coChair.name}
                       </Link>
                     ) : (
-                      "N/A"
+                      <span className="text-gray-600">N/A</span>
                     )}
-                  </span>
+                  </div>
                 </div>
               </div>
             ))

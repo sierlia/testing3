@@ -7,6 +7,18 @@ import { useNavigate } from "react-router";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 
 type CommitteeRow = { id: string; name: string; description: string | null; created_at: string };
+type CommitteesCache = {
+  committees: CommitteeRow[];
+  memberCounts: Record<string, number>;
+  role: "teacher" | "student" | null;
+  settings: any;
+  preferencesSubmitted: boolean;
+  needsPreferences: boolean;
+  meId: string | null;
+  joinedCommitteeIds: Set<string>;
+};
+
+let committeesHomeCache: CommitteesCache | null = null;
 
 export function CommitteesHome() {
   const navigate = useNavigate();
@@ -23,8 +35,20 @@ export function CommitteesHome() {
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
+    if (committeesHomeCache) {
+      setCommittees(committeesHomeCache.committees);
+      setMemberCounts(committeesHomeCache.memberCounts);
+      setRole(committeesHomeCache.role);
+      setSettings(committeesHomeCache.settings);
+      setPreferencesSubmitted(committeesHomeCache.preferencesSubmitted);
+      setNeedsPreferences(committeesHomeCache.needsPreferences);
+      setMeId(committeesHomeCache.meId);
+      setJoinedCommitteeIds(new Set(committeesHomeCache.joinedCommitteeIds));
+      setLoading(false);
+    }
+
     const load = async () => {
-      setLoading(true);
+      if (!committeesHomeCache) setLoading(true);
       try {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id;
@@ -44,6 +68,8 @@ export function CommitteesHome() {
         setSettings(s);
         const allowSelfJoin = !!s?.committees?.allowSelfJoin || s?.committees?.assignmentMode === "self-join";
 
+        let nextPreferencesSubmitted = false;
+        let nextNeedsPreferences = false;
         if ((profile as any)?.role === "student" && !allowSelfJoin) {
           const { data: sub } = await supabase
             .from("committee_preference_submissions")
@@ -52,8 +78,10 @@ export function CommitteesHome() {
             .eq("user_id", me)
             .maybeSingle();
           const submitted = !!sub;
-          setPreferencesSubmitted(submitted);
-          setNeedsPreferences(!submitted);
+          nextPreferencesSubmitted = submitted;
+          nextNeedsPreferences = !submitted;
+          setPreferencesSubmitted(nextPreferencesSubmitted);
+          setNeedsPreferences(nextNeedsPreferences);
         }
 
         const { data: rows, error } = await supabase
@@ -91,6 +119,16 @@ export function CommitteesHome() {
         }
         setMemberCounts(counts);
         setJoinedCommitteeIds(joined);
+        committeesHomeCache = {
+          committees: finalRows as any,
+          memberCounts: counts,
+          role: ((profile as any)?.role ?? null) as any,
+          settings: s,
+          preferencesSubmitted: nextPreferencesSubmitted,
+          needsPreferences: nextNeedsPreferences,
+          meId: me ?? null,
+          joinedCommitteeIds: joined,
+        };
       } catch (e: any) {
         toast.error(e.message || "Could not load committees");
       } finally {
@@ -118,6 +156,15 @@ export function CommitteesHome() {
       if (error) throw error;
       setJoinedCommitteeIds((prev) => new Set(prev).add(committeeId));
       setMemberCounts((prev) => ({ ...prev, [committeeId]: (prev[committeeId] ?? 0) + 1 }));
+      if (committeesHomeCache) {
+        const joined = new Set(committeesHomeCache.joinedCommitteeIds);
+        joined.add(committeeId);
+        committeesHomeCache = {
+          ...committeesHomeCache,
+          joinedCommitteeIds: joined,
+          memberCounts: { ...committeesHomeCache.memberCounts, [committeeId]: (committeesHomeCache.memberCounts[committeeId] ?? 0) + 1 },
+        };
+      }
       toast.success("Joined committee");
     } catch (e: any) {
       if (String(e?.message ?? "").toLowerCase().includes("duplicate")) {
@@ -133,13 +180,13 @@ export function CommitteesHome() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OrganizationsLayout active="committees">
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-4">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-2">
                 <Building2 className="w-5 h-5 text-blue-600" />
-                <h2 className="text-lg font-semibold text-gray-900">Committees</h2>
+                <h2 className="text-xl font-semibold text-gray-900">Committees</h2>
               </div>
               <div className="relative sm:w-72">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
@@ -179,7 +226,7 @@ export function CommitteesHome() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") navigate(`/committees/${c.id}`);
                     }}
-                    className="border border-gray-200 rounded-lg p-4 flex items-start justify-between gap-4 hover:bg-gray-50 transition-colors cursor-pointer"
+                    className="border border-gray-200 rounded-lg bg-white p-4 shadow-sm flex items-start justify-between gap-4 hover:bg-gray-50 transition-colors cursor-pointer"
                   >
                     <div className="min-w-0">
                       <div className="font-semibold text-gray-900 truncate">{c.name}</div>

@@ -62,6 +62,7 @@ export function TeacherSetup() {
     allowDrafts: true,
     billTabs: ["legislative text", "supporting text"] as string[],
     committeeVoteRequired: true,
+    cosponsorAfterCommitteeReport: false,
     calendarAutoPublish: true,
     floorResultsBinding: true,
     floorVoteThreshold: "simple-majority",
@@ -106,6 +107,7 @@ export function TeacherSetup() {
           allowDrafts: s?.bills?.allowDrafts ?? prev.allowDrafts,
           billTabs: s?.bills?.tabs ?? prev.billTabs,
           committeeVoteRequired: s?.bills?.committeeVoteRequired ?? prev.committeeVoteRequired,
+          cosponsorAfterCommitteeReport: s?.bills?.cosponsorAfterCommitteeReport ?? prev.cosponsorAfterCommitteeReport,
           calendarAutoPublish: s?.floor?.calendarAutoPublish ?? prev.calendarAutoPublish,
           floorResultsBinding: s?.floor?.binding ?? prev.floorResultsBinding,
           floorVoteThreshold: s?.floor?.voteThreshold ?? prev.floorVoteThreshold,
@@ -167,6 +169,7 @@ export function TeacherSetup() {
           allowDrafts: settings.allowDrafts,
           tabs: settings.billTabs,
           committeeVoteRequired: settings.committeeVoteRequired,
+          cosponsorAfterCommitteeReport: settings.cosponsorAfterCommitteeReport,
         },
         floor: {
           ...(existing?.floor ?? {}),
@@ -258,6 +261,7 @@ export function TeacherSetup() {
         <div className="space-y-5">
           <Toggle checked={settings.allowDrafts} onChange={(v) => setSettings({ allowDrafts: v })} title="Allow bill drafts" description="Students can save bills before submitting." />
           <Toggle checked={settings.committeeVoteRequired} onChange={(v) => setSettings({ committeeVoteRequired: v })} title="Require committee vote before reporting" description="Committees should vote before reporting bills." />
+          <Toggle checked={settings.cosponsorAfterCommitteeReport} onChange={(v) => setSettings({ cosponsorAfterCommitteeReport: v })} title="Limit cosponsorship until report" description="Students can cosponsor or withdraw only after a committee report has been submitted." />
           <div>
             <label className="mb-2 block text-sm font-semibold text-gray-900">Bill assignment authority</label>
             <select value={settings.billAssignmentAuthority} onChange={(e) => setSettings({ billAssignmentAuthority: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">

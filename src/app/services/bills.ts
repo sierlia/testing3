@@ -166,6 +166,12 @@ export async function fetchBillDetail(billId: string) {
     .single();
   if (bErr) throw bErr;
 
+  const { data: classRow } = await supabase
+    .from('classes')
+    .select('settings')
+    .eq('id', classId)
+    .maybeSingle();
+
   const { data: sponsor } = await supabase
     .from('profiles')
     .select('user_id, display_name, party, constituency_name')
@@ -247,6 +253,7 @@ export async function fetchBillDetail(billId: string) {
     calendar: (calendar as any) ?? null,
     floorSession: (floorSession as any) ?? null,
     floorVotes: (floorVotes ?? []) as any[],
+    classSettings: (classRow as any)?.settings ?? {},
   };
 }
 
@@ -256,7 +263,9 @@ export async function toggleCosponsor(billId: string, shouldCosponsor: boolean) 
   if (!me) throw new Error('Not signed in');
 
   if (shouldCosponsor) {
-    const { error } = await supabase.from('bill_cosponsors').insert({ bill_id: billId, user_id: me });
+    const { error } = await supabase
+      .from('bill_cosponsors')
+      .upsert({ bill_id: billId, user_id: me }, { onConflict: 'bill_id,user_id' });
     if (error) throw error;
   } else {
     const { error } = await supabase.from('bill_cosponsors').delete().eq('bill_id', billId).eq('user_id', me);

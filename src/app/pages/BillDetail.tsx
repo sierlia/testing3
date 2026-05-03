@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
-import { AlertCircle, BookOpen, Check, Circle, Clock, FileText, UserPlus, Users } from "lucide-react";
+import { AlertCircle, BookOpen, Check, Circle, Clock, FileText, Search, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BillActions } from "../components/BillActions";
+import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { fetchBillDetail, toggleCosponsor } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
 
-type TextTab = "legislative" | "supporting";
+type TextTab = "revised" | "original" | "supporting";
 type TrackerStatus = "completed" | "current" | "upcoming";
 type TrackerStep = { label: string; status: TrackerStatus; date?: string | null; note?: string };
+type TrackerItem = TrackerStep | { kind: "split"; steps: [TrackerStep, TrackerStep] };
 type BillAction = { label: string; detail?: string; date: string };
 
 function formatDate(value?: string | null) {
@@ -35,28 +37,58 @@ function latestDate(rows: Array<{ created_at?: string | null; updated_at?: strin
     .sort((a, b) => new Date(String(b)).getTime() - new Date(String(a)).getTime())[0] as string | undefined;
 }
 
-function HorizontalTracker({ steps }: { steps: TrackerStep[] }) {
+function trackerBarClass(status: TrackerStatus) {
+  if (status === "completed") return "bg-blue-600";
+  if (status === "current") return "bg-blue-300";
+  return "bg-gray-200";
+}
+
+function trackerIcon(step: TrackerStep) {
+  return step.status === "completed" ? Check : step.status === "current" ? Clock : Circle;
+}
+
+function TrackerPoint({ step, compact = false }: { step: TrackerStep; compact?: boolean }) {
+  const Icon = trackerIcon(step);
+  return (
+    <div className="flex min-w-0 items-start gap-2">
+      <span
+        className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
+          step.status === "completed" ? "bg-blue-600 text-white" : step.status === "current" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"
+        }`}
+      >
+        <Icon className="h-3 w-3" />
+      </span>
+      <div className="min-w-0">
+        <div className={`${compact ? "text-[11px]" : "text-xs"} truncate font-semibold ${step.status === "upcoming" ? "text-gray-500" : "text-gray-900"}`}>{step.label}</div>
+        <div className="truncate text-[11px] text-gray-500">{step.note || formatDate(step.date) || "Pending"}</div>
+      </div>
+    </div>
+  );
+}
+
+function HorizontalTracker({ steps }: { steps: TrackerItem[] }) {
   return (
     <div className="pt-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {steps.map((step) => {
-          const Icon = step.status === "completed" ? Check : step.status === "current" ? Clock : Circle;
-          return (
-            <div key={step.label} className="min-w-0">
-              <div className={`mb-2 h-1.5 rounded-full ${step.status === "completed" ? "bg-blue-600" : step.status === "current" ? "bg-blue-300" : "bg-gray-200"}`} />
-              <div className="flex items-start gap-2">
-                <span
-                  className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full ${
-                    step.status === "completed" ? "bg-blue-600 text-white" : step.status === "current" ? "bg-blue-100 text-blue-700" : "bg-gray-100 text-gray-400"
-                  }`}
-                >
-                  <Icon className="h-3 w-3" />
-                </span>
-                <div className="min-w-0">
-                  <div className={`truncate text-xs font-semibold ${step.status === "upcoming" ? "text-gray-500" : "text-gray-900"}`}>{step.label}</div>
-                  <div className="truncate text-[11px] text-gray-500">{step.note || formatDate(step.date) || "Pending"}</div>
+          if ("kind" in step) {
+            return (
+              <div key={step.steps.map((item) => item.label).join("-")} className="min-w-0">
+                <div className="mb-2 flex h-1.5 overflow-hidden rounded-full">
+                  <div className={`flex-1 ${trackerBarClass(step.steps[0].status)}`} />
+                  <div className={`flex-1 ${trackerBarClass(step.steps[1].status)}`} />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <TrackerPoint step={step.steps[0]} compact />
+                  <TrackerPoint step={step.steps[1]} compact />
                 </div>
               </div>
+            );
+          }
+          return (
+            <div key={step.label} className="min-w-0">
+              <div className={`mb-2 h-1.5 rounded-full ${trackerBarClass(step.status)}`} />
+              <TrackerPoint step={step} />
             </div>
           );
         })}
@@ -67,7 +99,7 @@ function HorizontalTracker({ steps }: { steps: TrackerStep[] }) {
 
 export function BillDetail() {
   const { id } = useParams();
-  const [activeTab, setActiveTab] = useState<TextTab>("legislative");
+  const [activeTab, setActiveTab] = useState<TextTab>("original");
 
   const [loading, setLoading] = useState(true);
   const [bill, setBill] = useState<any>(null);
@@ -80,9 +112,14 @@ export function BillDetail() {
   const [calendar, setCalendar] = useState<any>(null);
   const [floorSession, setFloorSession] = useState<any>(null);
   const [floorVotes, setFloorVotes] = useState<any[]>([]);
+  const [classSettings, setClassSettings] = useState<any>({});
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentProfile, setCurrentProfile] = useState<any>(null);
   const [userRole, setUserRole] = useState<"student" | "teacher" | "leadership">("student");
+  const [cosponsorPending, setCosponsorPending] = useState(false);
+  const [cosponsorSearch, setCosponsorSearch] = useState("");
+  const [cosponsorPartyFilter, setCosponsorPartyFilter] = useState("all");
+  const [cosponsorSort, setCosponsorSort] = useState<"newest" | "oldest" | "name">("newest");
 
   useEffect(() => {
     const load = async () => {
@@ -104,6 +141,7 @@ export function BillDetail() {
         setCalendar(res.calendar);
         setFloorSession(res.floorSession);
         setFloorVotes(res.floorVotes);
+        setClassSettings(res.classSettings ?? {});
 
         if (me) {
           const { data: p } = await supabase.from("profiles").select("role,display_name,party,constituency_name").eq("user_id", me).maybeSingle();
@@ -120,9 +158,40 @@ export function BillDetail() {
   }, [id]);
 
   const isUserCosponsor = useMemo(() => (currentUserId ? cosponsorIds.includes(currentUserId) : false), [cosponsorIds, currentUserId]);
-  const committeeReportStatus = committeeDoc?.committee_report_submitted_at ? "Submitted" : referral ? "WIP" : "None";
   const committeeCounts = useMemo(() => voteCounts(committeeVotes), [committeeVotes]);
   const floorCounts = useMemo(() => voteCounts(floorVotes), [floorVotes]);
+  const committeePassed = bill ? ["reported", "calendared", "floor", "passed"].includes(bill.status) || (bill.status === "failed" && committeeCounts.yea > committeeCounts.nay) : false;
+  const showRevisedText = Boolean(committeePassed && referral?.committee_id && (committeeDoc?.ydoc_base64 || committeeDoc?.committee_markup_posted_at));
+  const limitCosponsorsAfterReport = !!classSettings?.bills?.cosponsorAfterCommitteeReport;
+  const cosponsorAllowed = !limitCosponsorsAfterReport || Boolean(committeeDoc?.committee_report_submitted_at);
+  const cosponsorPartyOptions = useMemo(
+    () => [...new Set(cosponsors.map((row) => row.party || "Independent"))].sort((a, b) => a.localeCompare(b)),
+    [cosponsors],
+  );
+  const visibleCosponsors = useMemo(() => {
+    const query = cosponsorSearch.trim().toLowerCase();
+    return cosponsors
+      .filter((row) => {
+        const party = row.party || "Independent";
+        const district = row.constituency_name ? formatConstituency(row.constituency_name) : "";
+        const haystack = `${row.display_name ?? ""} ${party} ${district}`.toLowerCase();
+        return (!query || haystack.includes(query)) && (cosponsorPartyFilter === "all" || party === cosponsorPartyFilter);
+      })
+      .sort((a, b) => {
+        if (cosponsorSort === "name") return String(a.display_name ?? "").localeCompare(String(b.display_name ?? ""));
+        const aTime = new Date(a.cosponsored_at ?? 0).getTime();
+        const bTime = new Date(b.cosponsored_at ?? 0).getTime();
+        return cosponsorSort === "oldest" ? aTime - bTime : bTime - aTime;
+      });
+  }, [cosponsorPartyFilter, cosponsorSearch, cosponsorSort, cosponsors]);
+
+  useEffect(() => {
+    if (!bill) return;
+    setActiveTab((prev) => {
+      if (showRevisedText) return prev === "original" || prev === "supporting" || prev === "revised" ? prev : "revised";
+      return prev === "revised" ? "original" : prev;
+    });
+  }, [bill, showRevisedText]);
 
   const actions = useMemo<BillAction[]>(() => {
     if (!bill) return [];
@@ -154,25 +223,35 @@ export function BillDetail() {
 
   const latestAction = actions[0];
 
-  const tracker = useMemo<TrackerStep[]>(() => {
+  const tracker = useMemo<TrackerItem[]>(() => {
     if (!bill) return [];
     const status = bill.status;
+    const markedUp = Boolean(committeeDoc?.committee_markup_posted_at || ["committee_vote", "reported", "calendared", "floor", "passed", "failed"].includes(status));
     const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
     const calendared = Boolean(calendar);
     const floor = Boolean(floorSession?.opened_at);
     const final = ["passed", "failed"].includes(status);
+    const markupDate = committeeDoc?.committee_markup_posted_at || committeeDoc?.committee_vote_finalized_at || committeeDoc?.committee_vote_closed_at || latestDate(committeeVotes);
     return [
       { label: "Introduced", status: "completed", date: bill.created_at },
-      { label: referral?.committee_name ? `Referred to ${referral.committee_name}` : "Referred", status: referral ? "completed" : status === "submitted" ? "current" : "upcoming", date: referral?.referred_at },
+      {
+        kind: "split",
+        steps: [
+          { label: "Referred", status: referral ? "completed" : status === "submitted" ? "current" : "upcoming", date: referral?.referred_at },
+          { label: "Marked up", status: markedUp ? "completed" : referral ? "current" : "upcoming", date: markupDate },
+        ],
+      },
       { label: "Reported", status: reported ? (calendared || floor || final ? "completed" : "current") : referral ? "upcoming" : "upcoming", date: committeeDoc?.committee_vote_finalized_at },
       { label: "Calendared", status: calendared ? (floor || final ? "completed" : "current") : "upcoming", date: calendar?.created_at || calendar?.scheduled_at },
       { label: "Floor", status: floor ? (final ? "completed" : "current") : "upcoming", date: floorSession?.opened_at },
-      { label: status === "failed" ? "Failed" : "Passed", status: final ? "completed" : "upcoming", date: floorSession?.closed_at },
+      { label: "Final", status: final ? "completed" : "upcoming", date: floorSession?.closed_at, note: final ? statusLabel(status) : undefined },
     ];
   }, [bill, calendar, committeeDoc, committeeVotes, floorSession, referral]);
 
-  const toggleCurrentUserCosponsor = async (next: boolean) => {
-    if (!id) return;
+  const toggleCurrentUserCosponsor = async () => {
+    if (!id || !cosponsorAllowed || cosponsorPending) return;
+    const next = currentUserId ? !cosponsorIds.includes(currentUserId) : false;
+    setCosponsorPending(true);
     try {
       await toggleCosponsor(id, next);
       setCosponsorIds((prev) => {
@@ -196,9 +275,11 @@ export function BillDetail() {
         );
       }
       if (!next && currentUserId) setCosponsors((prev) => prev.filter((row) => row.user_id !== currentUserId));
-      toast.success(next ? "Cosponsored" : "Removed cosponsorship");
+      toast.success(next ? "Cosponsored" : "Cosponsorship withdrawn");
     } catch (e: any) {
       toast.error(e.message || "Could not update cosponsorship");
+    } finally {
+      setCosponsorPending(false);
     }
   };
 
@@ -243,12 +324,12 @@ export function BillDetail() {
             <div><span className="font-semibold text-gray-900">Committees:</span> {referral?.committee_name ?? "Not referred"}</div>
             <div>
               <span className="font-semibold text-gray-900">Committee reports:</span>{" "}
-              {referral?.committee_id ? (
+              {referral?.committee_id && committeeDoc?.committee_report_submitted_at ? (
                 <Link to={`/committee/${referral.committee_id}/reports/${bill.id}`} className="font-medium text-blue-600 hover:underline">
-                  {referral.committee_name ?? "Committee"} Report ({committeeReportStatus})
+                  {referral.committee_name ?? "Committee"} Report
                 </Link>
               ) : (
-                committeeReportStatus
+                "Not submitted"
               )}
             </div>
             <div><span className="font-semibold text-gray-900">Latest action:</span> {latestAction ? `${latestAction.label} - ${formatDate(latestAction.date)}` : "No action yet"}</div>
@@ -267,12 +348,21 @@ export function BillDetail() {
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-200">
                 <div className="flex">
+                  {showRevisedText && (
+                    <button
+                      onClick={() => setActiveTab("revised")}
+                      className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === "revised" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
+                    >
+                      <FileText className="h-4 w-4" />
+                      Revised Text
+                    </button>
+                  )}
                   <button
-                    onClick={() => setActiveTab("legislative")}
-                    className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === "legislative" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
+                    onClick={() => setActiveTab("original")}
+                    className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === "original" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
                   >
                     <FileText className="h-4 w-4" />
-                    Legislative Text
+                    Original Text
                   </button>
                   <button
                     onClick={() => setActiveTab("supporting")}
@@ -285,7 +375,17 @@ export function BillDetail() {
               </div>
 
               <div className="p-6">
-                {activeTab === "legislative" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: bill.legislative_text }} />}
+                {activeTab === "revised" && showRevisedText && (
+                  <CollaborativeBillEditor
+                    classId={bill.class_id}
+                    committeeId={referral.committee_id}
+                    billId={bill.id}
+                    initialHtml={bill.legislative_text}
+                    editable={false}
+                    displayMode="clean"
+                  />
+                )}
+                {activeTab === "original" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: bill.legislative_text }} />}
                 {activeTab === "supporting" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: bill.supporting_text || "<p><em>No supporting text</em></p>" }} />}
               </div>
             </div>
@@ -312,19 +412,53 @@ export function BillDetail() {
                 </div>
                 {!isUserSponsor && currentUserId && (
                   <button
-                    onClick={() => void toggleCurrentUserCosponsor(!isUserCosponsor)}
-                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium ${isUserCosponsor ? "bg-gray-100 text-gray-700 hover:bg-gray-200" : "bg-blue-600 text-white hover:bg-blue-700"}`}
+                    onClick={() => void toggleCurrentUserCosponsor()}
+                    disabled={!cosponsorAllowed || cosponsorPending}
+                    title={cosponsorAllowed ? undefined : "Cosponsorship is available after the committee report is submitted."}
+                    className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60 ${isUserCosponsor ? "bg-gray-100 text-gray-700 hover:bg-gray-200" : "bg-blue-600 text-white hover:bg-blue-700"}`}
                   >
                     <UserPlus className="h-3.5 w-3.5" />
-                    {isUserCosponsor ? "Undo" : "Cosponsor"}
+                    {cosponsorPending ? "Saving" : isUserCosponsor ? "Withdraw" : "Cosponsor"}
                   </button>
                 )}
               </div>
+              <div className="mb-4 space-y-2">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={cosponsorSearch}
+                    onChange={(event) => setCosponsorSearch(event.target.value)}
+                    placeholder="Search cosponsors..."
+                    className="w-full rounded-md border border-gray-300 py-1.5 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <select
+                    value={cosponsorPartyFilter}
+                    onChange={(event) => setCosponsorPartyFilter(event.target.value)}
+                    className="rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="all">All parties</option>
+                    {cosponsorPartyOptions.map((party) => (
+                      <option key={party} value={party}>{party}</option>
+                    ))}
+                  </select>
+                  <select
+                    value={cosponsorSort}
+                    onChange={(event) => setCosponsorSort(event.target.value as any)}
+                    className="rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="newest">Newest</option>
+                    <option value="oldest">Oldest</option>
+                    <option value="name">Name</option>
+                  </select>
+                </div>
+              </div>
               <div className="space-y-3">
-                {cosponsors.length === 0 ? (
+                {visibleCosponsors.length === 0 ? (
                   <div className="text-sm italic text-gray-500">No cosponsors yet.</div>
                 ) : (
-                  cosponsors.map((cosponsor) => (
+                  visibleCosponsors.map((cosponsor) => (
                     <div key={cosponsor.user_id} className="rounded-md border border-gray-200 bg-gray-50 p-3">
                       <Link to={`/profile/${cosponsor.user_id}`} className="font-medium text-blue-600 hover:underline">
                         {cosponsor.display_name ?? "Unknown"}

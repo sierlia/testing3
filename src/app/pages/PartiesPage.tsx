@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
-import { Flag, Plus, Shield, Users, Vote } from "lucide-react";
+import { Flag, Plus, Search, Users, Vote } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { PartyCreateForm, NewParty, defaultPartyColor } from "../components/PartyCreateForm";
@@ -10,6 +10,9 @@ import { supabase } from "../utils/supabase";
 type PartyRow = { id: string; name: string; platform: string; color: string; approved: boolean; created_at: string };
 type MemberProfile = { user_id: string; display_name: string | null; party: string | null };
 type LeadershipVote = { party_id: string; position: "chair" | "whip"; candidate_user_id: string };
+type PartiesCache = { settings: any; role: "teacher" | "student" | null; classId: string | null; meId: string | null; parties: PartyRow[]; members: MemberProfile[]; votes: LeadershipVote[] };
+
+let partiesPageCache: PartiesCache | null = null;
 
 function PartyIcon({ name, color }: { name: string; color: string }) {
   const normalized = name.toLowerCase();
@@ -34,6 +37,13 @@ function PartyIcon({ name, color }: { name: string; color: string }) {
   );
 }
 
+function PartyCornerIcon({ name }: { name: string }) {
+  const normalized = name.toLowerCase();
+  if (normalized.includes("democrat")) return <span className="text-2xl" aria-label="Democratic donkey">🫏</span>;
+  if (normalized.includes("republican")) return <span className="text-2xl" aria-label="Republican elephant">🐘</span>;
+  return <Flag className="h-5 w-5 text-gray-300" />;
+}
+
 export function PartiesPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<any>({});
@@ -46,10 +56,22 @@ export function PartiesPage() {
   const [newPartyOpen, setNewPartyOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [draft, setDraft] = useState<NewParty>({ name: "", platform: "", color: "#2563eb" });
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
+    if (partiesPageCache) {
+      setSettings(partiesPageCache.settings);
+      setRole(partiesPageCache.role);
+      setClassId(partiesPageCache.classId);
+      setMeId(partiesPageCache.meId);
+      setParties(partiesPageCache.parties);
+      setMembers(partiesPageCache.members);
+      setVotes(partiesPageCache.votes);
+      setLoading(false);
+    }
+
     const load = async () => {
-      setLoading(true);
+      if (!partiesPageCache) setLoading(true);
       try {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id;
@@ -96,16 +118,15 @@ export function PartiesPage() {
           rows = seeded ?? [];
         }
 
-        setParties(
-          rows.map((party) => ({
+        const nextParties = rows.map((party) => ({
             id: party.id,
             name: party.name,
             platform: party.platform ?? "",
             color: party.color ?? defaultPartyColor(party.name),
             approved: !!party.approved,
             created_at: party.created_at,
-          })),
-        );
+          }));
+        setParties(nextParties);
 
         const { data: memberships } = await supabase.from("class_memberships").select("user_id").eq("class_id", activeClassId).eq("status", "approved");
         const memberIds = (memberships ?? []).map((m: any) => m.user_id);
@@ -116,8 +137,11 @@ export function PartiesPage() {
             .in("user_id", memberIds.length ? memberIds : ["00000000-0000-0000-0000-000000000000"]),
           supabase.from("party_leadership_votes").select("party_id,position,candidate_user_id").eq("class_id", activeClassId),
         ]);
-        setMembers((memberProfiles ?? []) as any);
-        setVotes((voteRows ?? []) as any);
+        const nextMembers = (memberProfiles ?? []) as any;
+        const nextVotes = (voteRows ?? []) as any;
+        setMembers(nextMembers);
+        setVotes(nextVotes);
+        partiesPageCache = { settings: classSettings, role: ((profile as any)?.role ?? null) as any, classId: activeClassId ?? null, meId: me ?? null, parties: nextParties, members: nextMembers, votes: nextVotes };
       } catch (error: any) {
         toast.error(error.message || "Could not load parties");
       } finally {
@@ -130,7 +154,11 @@ export function PartiesPage() {
   const allowStudentCreated = !!settings?.parties?.allowStudentCreated;
   const requireApproval = !!settings?.parties?.requireApproval;
   const canCreate = role === "teacher" || allowStudentCreated;
-  const approvedParties = useMemo(() => parties.filter((party) => party.approved), [parties]);
+  const filteredParties = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    return parties.filter((party) => !query || party.name.toLowerCase().includes(query) || (party.platform ?? "").toLowerCase().includes(query));
+  }, [parties, searchQuery]);
+  const approvedParties = useMemo(() => filteredParties.filter((party) => party.approved), [filteredParties]);
   const pendingParties = useMemo(() => parties.filter((party) => !party.approved), [parties]);
 
   const memberCount = (partyName: string) => members.filter((member) => member.party === partyName).length;
@@ -160,7 +188,9 @@ export function PartiesPage() {
         .select("id,name,platform,color,approved,created_at")
         .single();
       if (error) throw error;
-      setParties([data as any, ...parties]);
+      const nextParties = [data as any, ...parties];
+      setParties(nextParties);
+      if (partiesPageCache) partiesPageCache = { ...partiesPageCache, parties: nextParties };
       setDraft({ name: "", platform: "", color: "#2563eb" });
       setNewPartyOpen(false);
       toast.success(role === "teacher" || !requireApproval ? "Party created" : "Party submitted for approval");
@@ -176,20 +206,31 @@ export function PartiesPage() {
       <Navigation />
       <main className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <OrganizationsLayout active="parties">
-          <div className="mb-6 flex items-center justify-between gap-4">
+          <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold text-gray-900">Parties</h2>
               <p className="text-sm text-gray-600">Class political parties and leadership</p>
             </div>
-            {canCreate && (
-              <button
-                onClick={() => setNewPartyOpen((open) => !open)}
-                className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-              >
-                <Plus className="h-4 w-4" />
-                Create Party
-              </button>
-            )}
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="relative sm:w-72">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Search parties..."
+                  className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              {canCreate && (
+                <button
+                  onClick={() => setNewPartyOpen((open) => !open)}
+                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Party
+                </button>
+              )}
+            </div>
           </div>
 
           {newPartyOpen && (
@@ -227,7 +268,7 @@ export function PartiesPage() {
                             </div>
                           </div>
                         </div>
-                        <Shield className="h-5 w-5 text-gray-300" />
+                        <PartyCornerIcon name={party.name} />
                       </div>
                       <p className="line-clamp-3 text-sm text-gray-600">{party.platform || "No platform yet."}</p>
                       <div className="mt-4 grid gap-2 border-t border-gray-200 pt-4 text-sm">
