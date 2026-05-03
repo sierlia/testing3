@@ -93,6 +93,16 @@ export function CalendarScheduling() {
     setTeacherListMode("uncalendared");
   }, [searchParams]);
 
+  useEffect(() => {
+    const dateParam = searchParams.get("date");
+    if (!dateParam) return;
+    const parsed = new Date(`${dateParam}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return;
+    setCalendarMonth(new Date(parsed.getFullYear(), parsed.getMonth(), 1));
+    setSelectedCalendarDate(parsed);
+    setViewMode("calendar");
+  }, [searchParams]);
+
   const publishedItems = useMemo<CalendarEntry[]>(() => {
     if (role === "teacher") {
       return teacherBills

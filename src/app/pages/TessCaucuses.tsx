@@ -51,6 +51,7 @@ export function TessCaucuses() {
         const { data: auth } = await supabase.auth.getUser();
         const me = auth.user?.id;
         if (!me) return;
+        if (auth.user?.user_metadata?.role === "teacher") setRole("teacher");
         const { data: profile } = await supabase.from("profiles").select("role").eq("user_id", me).maybeSingle();
         setRole(((profile as any)?.role ?? null) as any);
 
@@ -410,7 +411,7 @@ export function TessCaucuses() {
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-2">{caucus.description}</p>
                   </div>
-                  {role !== "teacher" && (
+                  {role === "student" && (
                     <button
                       onClick={(event) => {
                         event.stopPropagation();

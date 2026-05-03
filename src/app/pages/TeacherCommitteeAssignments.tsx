@@ -3,7 +3,7 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { Navigation } from "../components/Navigation";
 import { CommitteeAssignmentColumn } from "../components/CommitteeAssignmentColumn";
-import { Play, Eye, Send, AlertCircle } from "lucide-react";
+import { Play, Save, AlertCircle } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 
@@ -40,12 +40,17 @@ export function TeacherCommitteeAssignments() {
         setClassId(cid);
         if (!cid) return;
 
-        const { data: committeeRows, error: cErr } = await supabase.from("committees").select("id,name").order("created_at", { ascending: true });
+        const { data: committeeRows, error: cErr } = await supabase
+          .from("committees")
+          .select("id,name")
+          .eq("class_id", cid)
+          .order("created_at", { ascending: true });
         if (cErr) throw cErr;
 
         const { data: studentRows, error: sErr } = await supabase
           .from("profiles")
-          .select("user_id,display_name,role")
+          .select("user_id,display_name,role,class_id")
+          .eq("class_id", cid)
           .eq("role", "student")
           .order("display_name", { ascending: true });
         if (sErr) throw sErr;
@@ -80,6 +85,7 @@ export function TeacherCommitteeAssignments() {
         const { data: existingMemberships } = await supabase.from("committee_members").select("committee_id,user_id").in("user_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
         const assignedByUser = new Map<string, string>();
         for (const r of existingMemberships ?? []) assignedByUser.set((r as any).user_id, (r as any).committee_id);
+        if (assignedByUser.size > 0) setAssignmentStage("published");
 
         setStudents(
           (studentRows ?? []).map((s: any) => ({
@@ -139,12 +145,13 @@ export function TeacherCommitteeAssignments() {
 
   const moveStudent = (studentId: string, toCommitteeId: string) => {
     const newStudents = students.map(s => 
-      s.id === studentId ? { ...s, assignedCommittee: toCommitteeId } : s
+      s.id === studentId ? { ...s, assignedCommittee: toCommitteeId === "unassigned" ? undefined : toCommitteeId } : s
     );
     setStudents(newStudents);
+    if (assignmentStage === "published") setAssignmentStage("preview");
   };
 
-  const publishAssignments = () => {
+  const saveAssignments = () => {
     void (async () => {
       if (!classId) return;
       try {
@@ -160,10 +167,10 @@ export function TeacherCommitteeAssignments() {
           const { error } = await supabase.from("committee_members").insert(rows as any);
           if (error) throw error;
         }
-        toast.success("Assignments published");
+        toast.success("Assignments saved");
         setAssignmentStage('published');
       } catch (e: any) {
-        toast.error(e.message || "Could not publish assignments");
+        toast.error(e.message || "Could not save assignments");
       }
     })();
   };
@@ -203,26 +210,22 @@ export function TeacherCommitteeAssignments() {
                   </button>
                 )}
                 
-                {assignmentStage === 'preview' && (
+                {(assignmentStage === 'preview' || assignmentStage === 'published') && (
                   <>
-                    <div className="flex items-center gap-2 px-3 py-2 bg-amber-50 text-amber-700 rounded-md border border-amber-200">
-                      <Eye className="w-4 h-4" />
-                      <span className="text-sm font-medium">Preview Mode</span>
-                    </div>
                     <button
-                      onClick={publishAssignments}
+                      onClick={saveAssignments}
                       className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors font-medium"
                     >
-                      <Send className="w-4 h-4" />
-                      Publish Assignments
+                      <Save className="w-4 h-4" />
+                      Save Assignments
                     </button>
                   </>
                 )}
 
                 {assignmentStage === 'published' && (
                   <div className="flex items-center gap-2 px-3 py-2 bg-green-50 text-green-700 rounded-md border border-green-200">
-                    <Send className="w-4 h-4" />
-                    <span className="text-sm font-medium">Published</span>
+                    <Save className="w-4 h-4" />
+                    <span className="text-sm font-medium">Saved</span>
                   </div>
                 )}
               </div>
@@ -241,37 +244,33 @@ export function TeacherCommitteeAssignments() {
                 Click "Run Assignment Algorithm" to automatically assign students to committees based on their preferences.
               </p>
               <p className="text-blue-600 text-xs">
-                You'll be able to review and make manual adjustments before publishing.
+                You'll be able to review, make manual adjustments, and save the assignments.
               </p>
             </div>
           )}
 
           {(assignmentStage === 'preview' || assignmentStage === 'published') && (
-            <>
-              {/* Committee columns */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+            <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+              <div>
+                <CommitteeAssignmentColumn
+                  committee={{ id: 'unassigned', name: 'Unassigned Students', capacity: 999 }}
+                  students={getUnassignedStudents()}
+                  moveStudent={moveStudent}
+                  isUnassigned
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {committees.map(committee => (
                   <CommitteeAssignmentColumn
                     key={committee.id}
                     committee={committee}
                     students={getStudentsForCommittee(committee.id)}
                     moveStudent={moveStudent}
-                    disabled={assignmentStage === 'published'}
                   />
                 ))}
               </div>
-
-              {/* Unassigned students */}
-              {getUnassignedStudents().length > 0 && (
-                <CommitteeAssignmentColumn
-                  committee={{ id: 'unassigned', name: 'Unassigned Students', capacity: 999 }}
-                  students={getUnassignedStudents()}
-                  moveStudent={moveStudent}
-                  disabled={assignmentStage === 'published'}
-                  isUnassigned
-                />
-              )}
-            </>
+            </div>
           )}
         </main>
       </div>

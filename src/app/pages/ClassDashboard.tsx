@@ -274,8 +274,7 @@ export function ClassDashboard() {
       if (!currentTimelineCardRef.current || !timelineScrollRef.current) return;
       const container = timelineScrollRef.current;
       const card = currentTimelineCardRef.current;
-      const alignRight = currentIndex === visibleWorkflowSteps.length - 1;
-      container.scrollLeft = Math.max(0, card.offsetLeft - (alignRight ? container.clientWidth - card.offsetWidth : 0));
+      container.scrollLeft = Math.max(0, card.offsetLeft - 16);
     });
     return () => window.cancelAnimationFrame(frame);
   }, [currentIndex, timelineExpanded, visibleWorkflowSteps.length]);
@@ -288,15 +287,15 @@ export function ClassDashboard() {
   const workflowAction = (stepId: string) => {
     if (stepId === "setup") {
       return (
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => navigate("/teacher/setup")} variant="outline" className="h-11 px-5 text-base"><Settings className="mr-2 h-5 w-5" />Open setup</Button>
-          <Button onClick={() => void enableClass()} disabled={workflowBusy} className="h-11 px-5 text-base"><Unlock className="mr-2 h-5 w-5" />Enable class</Button>
+        <div className="mt-4 grid gap-2 sm:grid-cols-2">
+          <Button onClick={() => navigate("/teacher/setup")} variant="outline" className="h-11 w-full justify-center px-5 text-base"><Settings className="mr-2 h-5 w-5" />Open setup</Button>
+          <Button onClick={() => void enableClass()} disabled={workflowBusy} className="h-11 w-full justify-center px-5 text-base"><Unlock className="mr-2 h-5 w-5" />Enable class</Button>
         </div>
       );
     }
     if (stepId === "elections") {
       return (
-        <div className="min-w-[360px] rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+        <div className="mt-4 w-full rounded-md border border-gray-200 bg-white p-1 shadow-sm">
           <div className="px-3 py-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
             Elections: {electionsOpen ? "open" : "closed"}
           </div>
@@ -382,15 +381,12 @@ export function ClassDashboard() {
                     {index > 0 && <div className="mt-9 h-0 w-8 border-t-2 border-dashed border-gray-300" />}
                     {isCurrent ? (
                       <div ref={currentTimelineCardRef} className="min-h-48 w-[80vw] min-w-[520px] max-w-[1024px] flex-shrink-0 rounded-lg border border-blue-200 bg-blue-50 p-5">
-                        <div className={`flex flex-wrap gap-4 ${step.id === "setup" || step.id === "elections" ? "items-center justify-between" : "items-start"}`}>
-                          <div className="min-w-0 flex-1">
-                            <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
-                            <h2 className="mt-1 text-2xl font-bold text-gray-900">{step.label}</h2>
-                            <p className="mt-1 text-base text-gray-600">{step.description}</p>
-                          </div>
-                          {(step.id === "setup" || step.id === "elections") && workflowAction(step.id)}
+                        <div className="min-w-0">
+                          <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
+                          <h2 className="mt-1 text-2xl font-bold text-gray-900">{step.label}</h2>
+                          <p className="mt-1 text-base text-gray-600">{step.description}</p>
                         </div>
-                        {step.id !== "setup" && step.id !== "elections" && workflowAction(step.id)}
+                        {workflowAction(step.id)}
                       </div>
                     ) : (
                       <button
@@ -438,13 +434,13 @@ export function ClassDashboard() {
     {
       title: "Legislation",
       actions: [
-        { label: "Sort Bills into Committees", href: "/teacher/bill-sorting", icon: FileText },
+        { label: "Sort bills into committees", href: "/teacher/bill-sorting", icon: FileText },
         { label: "Calendar Bills", href: "/calendar?schedule=1", icon: CalendarIcon },
       ],
     },
     {
       title: "Organizations",
-      actions: [{ label: "Committee Assignments", href: "/teacher/committee-assignments", icon: BookOpen }],
+      actions: [{ label: "Assign to committees", href: "/teacher/committee-assignments", icon: BookOpen }],
     },
   ];
 
@@ -485,7 +481,6 @@ export function ClassDashboard() {
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>Upcoming Events & Deadlines</CardTitle>
-                    <CardDescription>Manage your class schedule and deadlines</CardDescription>
                   </div>
                   <Button onClick={() => navigate("/teacher/deadlines?add=1")}><Plus className="mr-2 h-4 w-4" />Add Deadline</Button>
                 </div>
@@ -496,13 +491,18 @@ export function ClassDashboard() {
                     const events = eventsByDay.get(dayKey(day)) ?? [];
                     const isToday = dayKey(day) === dayKey(new Date());
                     return (
-                      <div key={dayKey(day)} className="group relative">
+                      <button
+                        key={dayKey(day)}
+                        type="button"
+                        onClick={() => navigate(`/calendar?date=${dayKey(day)}`)}
+                        className="group relative text-left"
+                      >
                         <div className={`flex min-h-16 flex-col items-center justify-center rounded-full border text-center text-xs ${events.length ? "border-sky-200 bg-sky-50 text-sky-800" : isToday ? "border-gray-200 bg-gray-100 text-gray-800" : "border-gray-200 bg-white text-gray-500"}`}>
                           <span className="font-semibold">{day.toLocaleDateString(undefined, { weekday: "short" })}</span>
                           <span className="text-lg font-bold">{day.getDate()}</span>
                         </div>
                         {events.length > 0 && (
-                          <div className="pointer-events-none absolute left-1/2 top-full z-10 mt-2 hidden w-56 -translate-x-1/2 space-y-2 rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg group-hover:block">
+                          <div className="pointer-events-none absolute left-full top-0 z-10 ml-2 hidden w-56 space-y-2 rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg group-hover:block">
                             {events.map((event) => (
                               <div key={event.id}>
                                 <div className="font-semibold text-gray-900">{event.title}</div>
@@ -511,7 +511,7 @@ export function ClassDashboard() {
                             ))}
                           </div>
                         )}
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
