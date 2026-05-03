@@ -335,7 +335,7 @@ export function ClassDashboard() {
             </Button>
           </div>
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Class timeline</div>
-          <div className="overflow-x-auto pb-2">
+          <div className="no-scrollbar overflow-x-auto pb-2">
             <div className="flex w-max items-stretch gap-0">
               {visibleWorkflowSteps.map((step, index) => {
                 const isCurrent = index === currentIndex;
@@ -368,7 +368,7 @@ export function ClassDashboard() {
             </div>
           </div>
           {timelineExpanded && (
-            <div className="mt-4 overflow-x-auto">
+            <div className="no-scrollbar mt-4 overflow-x-auto">
               <div className="flex w-max gap-0">
                 {visibleWorkflowSteps.map((step, index) => (
                   <div key={step.id} className="flex flex-shrink-0 items-start">

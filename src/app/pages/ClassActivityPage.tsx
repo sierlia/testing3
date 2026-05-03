@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
-import { AlertCircle, BookOpen, FileText, MessageSquare, Search } from "lucide-react";
+import { AlertCircle, ArrowDown, ArrowUp, BookOpen, FileText, MessageSquare, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "../components/ui/select";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
 
-type SortMode = "newest" | "oldest" | "student" | "type";
+type SortDirection = "desc" | "asc";
 
 function activityIcon(type: string) {
   if (type === "bill") return <FileText className="h-4 w-4 text-blue-600" />;
@@ -21,7 +22,7 @@ export function ClassActivityPage() {
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get("student") ?? "");
   const [typeFilter, setTypeFilter] = useState("all");
   const [contextFilter, setContextFilter] = useState("all");
-  const [sortMode, setSortMode] = useState<SortMode>("newest");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
 
   useEffect(() => {
     setSearchQuery(searchParams.get("student") ?? "");
@@ -40,37 +41,58 @@ export function ClassActivityPage() {
     void load();
   }, [classId]);
 
-  const contexts = useMemo(
-    () => Array.from(new Set(activities.map((activity) => activity.contextName).filter(Boolean) as string[])).sort((a, b) => a.localeCompare(b)),
-    [activities],
-  );
+  const contextGroups = useMemo(() => {
+    const groups = {
+      party: new Set<string>(),
+      committee: new Set<string>(),
+      caucus: new Set<string>(),
+    };
+    activities.forEach((activity) => {
+      if (!activity.contextName || !activity.contextType) return;
+      groups[activity.contextType].add(activity.contextName);
+    });
+    return {
+      party: Array.from(groups.party).sort((a, b) => a.localeCompare(b)),
+      committee: Array.from(groups.committee).sort((a, b) => a.localeCompare(b)),
+      caucus: Array.from(groups.caucus).sort((a, b) => a.localeCompare(b)),
+    };
+  }, [activities]);
 
   const visibleActivities = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return activities
       .filter((activity) => {
         const haystack = `${activity.studentName} ${activity.action} ${activity.type} ${activity.contextName ?? ""}`.toLowerCase();
-        return (!query || haystack.includes(query)) && (typeFilter === "all" || activity.type === typeFilter) && (contextFilter === "all" || activity.contextName === contextFilter);
+        const [selectedContextType, ...selectedContextNameParts] = contextFilter.split(":");
+        const selectedContextName = selectedContextNameParts.join(":");
+        const contextMatches = contextFilter === "all" || (activity.contextType === selectedContextType && activity.contextName === selectedContextName);
+        return (!query || haystack.includes(query)) && (typeFilter === "all" || activity.type === typeFilter) && contextMatches;
       })
-      .sort((a, b) => {
-        if (sortMode === "oldest") return a.timestamp.getTime() - b.timestamp.getTime();
-        if (sortMode === "student") return a.studentName.localeCompare(b.studentName);
-        if (sortMode === "type") return a.type.localeCompare(b.type);
-        return b.timestamp.getTime() - a.timestamp.getTime();
-      });
-  }, [activities, contextFilter, searchQuery, sortMode, typeFilter]);
+      .sort((a, b) => (sortDirection === "asc" ? a.timestamp.getTime() - b.timestamp.getTime() : b.timestamp.getTime() - a.timestamp.getTime()));
+  }, [activities, contextFilter, searchQuery, sortDirection, typeFilter]);
+
+  const renderContextGroup = (label: string, type: "party" | "committee" | "caucus", items: string[]) => (
+    <SelectGroup>
+      <SelectLabel>{label}</SelectLabel>
+      {items.length ? (
+        items.map((item) => <SelectItem key={`${type}:${item}`} value={`${type}:${item}`}>{item}</SelectItem>)
+      ) : (
+        <SelectItem value={`${type}:__none`} disabled>No {label.toLowerCase()}</SelectItem>
+      )}
+    </SelectGroup>
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Student Activity</h1>
           <p className="mt-1 text-sm text-gray-600">Search and sort activity by student, organization, and type.</p>
         </div>
 
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_14rem_10rem]">
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_12rem_16rem_9rem]">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
@@ -80,24 +102,37 @@ export function ClassActivityPage() {
                 className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="all">All types</option>
-              <option value="bill">Bills</option>
-              <option value="comment">Comments</option>
-              <option value="letter">Dear Colleague</option>
-              <option value="committee">Committees</option>
-              <option value="caucus">Caucuses</option>
-            </select>
-            <select value={contextFilter} onChange={(event) => setContextFilter(event.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="all">All organizations</option>
-              {contexts.map((context) => <option key={context} value={context}>{context}</option>)}
-            </select>
-            <select value={sortMode} onChange={(event) => setSortMode(event.target.value as SortMode)} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="newest">Newest</option>
-              <option value="oldest">Oldest</option>
-              <option value="student">Student</option>
-              <option value="type">Type</option>
-            </select>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger><SelectValue placeholder="All types" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All types</SelectItem>
+                <SelectItem value="bill">Bills</SelectItem>
+                <SelectItem value="comment">Comments</SelectItem>
+                <SelectItem value="letter">Dear Colleague</SelectItem>
+                <SelectItem value="committee">Committees</SelectItem>
+                <SelectItem value="caucus">Caucuses</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={contextFilter} onValueChange={setContextFilter}>
+              <SelectTrigger><SelectValue placeholder="All organizations" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All organizations</SelectItem>
+                <SelectSeparator />
+                {renderContextGroup("Parties", "party", contextGroups.party)}
+                <SelectSeparator />
+                {renderContextGroup("Committees", "committee", contextGroups.committee)}
+                <SelectSeparator />
+                {renderContextGroup("Caucuses", "caucus", contextGroups.caucus)}
+              </SelectContent>
+            </Select>
+            <button
+              type="button"
+              onClick={() => setSortDirection((current) => (current === "desc" ? "asc" : "desc"))}
+              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              Time
+              {sortDirection === "desc" ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
+            </button>
           </div>
         </div>
 

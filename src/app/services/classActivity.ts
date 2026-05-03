@@ -10,6 +10,7 @@ export type ClassActivity = {
   timestamp: Date;
   type: ClassActivityType;
   contextName?: string;
+  contextType?: "party" | "committee" | "caucus";
   detail?: string;
 };
 
@@ -89,6 +90,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       timestamp: new Date(row.created_at),
       type: "bill",
       contextName: authorMap.get(row.author_user_id)?.party ?? undefined,
+      contextType: authorMap.get(row.author_user_id)?.party ? "party" : undefined,
     });
   }
   for (const r of committeeMembers.data ?? []) {
@@ -102,6 +104,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       timestamp: new Date(row.created_at),
       type: "committee",
       contextName,
+      contextType: "committee",
     });
   }
   for (const r of caucusMembers.data ?? []) {
@@ -115,6 +118,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       timestamp: new Date(row.created_at),
       type: "caucus",
       contextName,
+      contextType: "caucus",
     });
   }
   for (const r of letters.data ?? []) {
@@ -127,6 +131,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       timestamp: new Date(row.created_at),
       type: "letter",
       contextName: authorMap.get(row.sender_user_id)?.party ?? undefined,
+      contextType: authorMap.get(row.sender_user_id)?.party ? "party" : undefined,
     });
   }
   for (const r of caucusComments.data ?? []) {
@@ -141,6 +146,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       timestamp: new Date(row.created_at),
       type: "comment",
       contextName,
+      contextType: "caucus",
       detail: row.body,
     });
   }
@@ -156,6 +162,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       timestamp: new Date(row.created_at),
       type: "comment",
       contextName,
+      contextType: "committee",
       detail: row.body,
     });
   }

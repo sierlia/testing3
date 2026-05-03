@@ -145,6 +145,7 @@ export function ClassManagePage() {
 
   const approvedStudents = filteredStudents.filter((student) => student.status === "approved");
   const pendingStudents = filteredStudents.filter((student) => student.status === "pending");
+  const totalApprovedStudents = students.filter((student) => student.status === "approved").length;
 
   const rosterTable = (rows: Student[], pending = false) => (
     rows.length === 0 ? (
@@ -225,21 +226,30 @@ export function ClassManagePage() {
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div className="flex flex-wrap items-stretch gap-3">
+          <div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1>
               <p className="mt-1 text-sm text-gray-600">Student roster</p>
             </div>
-            <div className="inline-flex min-h-[64px] items-center gap-3 rounded-md border border-gray-200 bg-white px-4 py-2 shadow-sm">
-              <span className="text-base font-semibold text-gray-600">Join code:</span>
-              <span className="font-mono text-2xl font-bold leading-none text-blue-700">{classDetails.classCode}</span>
-              <button type="button" onClick={() => void copyJoinCode()} className="rounded p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Copy join code">
+          </div>
+          <div className="flex flex-col items-end gap-3">
+            <TeacherClassTabs classId={classId} active="roster" />
+          </div>
+        </div>
+
+        <div className="mb-4 flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="text-sm font-semibold uppercase tracking-wide text-gray-500">Join code</div>
+            <div className="mt-1 flex flex-wrap items-center gap-3">
+              <span className="font-mono text-3xl font-bold leading-none text-blue-700">{classDetails.classCode}</span>
+              <button type="button" onClick={() => void copyJoinCode()} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Copy join code">
                 <Copy className="h-5 w-5" />
               </button>
             </div>
           </div>
-          <div className="flex flex-col items-end gap-3">
-            <TeacherClassTabs classId={classId} active="roster" />
+          <div className="rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-right">
+            <div className="text-sm font-semibold uppercase tracking-wide text-gray-500">Total students</div>
+            <div className="mt-1 text-3xl font-bold text-gray-900">{totalApprovedStudents}</div>
           </div>
         </div>
 

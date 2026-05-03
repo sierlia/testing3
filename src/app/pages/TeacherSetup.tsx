@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { useParams } from "react-router";
 import { Bell, Calendar, CheckSquare, FileText, Save, Scale, Settings, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { supabase } from "../utils/supabase";
 import { defaultPartyColor } from "../components/PartyCreateForm";
 
@@ -37,13 +38,24 @@ const settingsTabIds: TabId[] = ["bills", "floor", "leadership", "calendar", "pr
 
 function Toggle({ checked, onChange, title, description }: { checked: boolean; onChange: (next: boolean) => void; title: string; description: string }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg bg-gray-50 p-4 transition-colors hover:bg-blue-50">
+    <label className="flex cursor-pointer items-start gap-3 rounded-lg p-2 transition-colors hover:bg-gray-50">
       <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600" />
       <span>
-        <span className="block text-sm font-semibold text-gray-900">{title}</span>
-        <span className="block text-xs text-gray-600">{description}</span>
+        <span className="block text-base font-semibold text-gray-900">{title}</span>
+        <span className="block text-sm text-gray-600">{description}</span>
       </span>
     </label>
+  );
+}
+
+function SettingSelect({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: ReactNode }) {
+  return (
+    <Select value={value} onValueChange={onValueChange}>
+      <SelectTrigger className="h-10">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>{children}</SelectContent>
+    </Select>
   );
 }
 
@@ -230,7 +242,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-6">
           <div>
-            <label className="mb-3 block text-sm font-semibold text-gray-900">Allowed Parties</label>
+            <label className="mb-3 block text-base font-semibold text-gray-900">Allowed Parties</label>
             <div className="grid gap-3 sm:grid-cols-2">
               {allParties.map((party) => (
                 <Toggle key={party} checked={settings.allowedParties.includes(party)} onChange={() => setSettings({ allowedParties: settings.allowedParties.includes(party) ? settings.allowedParties.filter((p) => p !== party) : [...settings.allowedParties, party] })} title={party} description="Create and approve this party for the class." />
@@ -240,11 +252,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <Toggle checked={settings.allowStudentCreatedParties} onChange={(v) => setSettings({ allowStudentCreatedParties: v })} title="Allow student-created parties" description="Students can propose custom parties from the organizations area." />
           <Toggle checked={settings.requirePartyApproval} onChange={(v) => setSettings({ requirePartyApproval: v })} title="Require approval for new parties" description="Student-created parties stay pending until approved." />
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">Party leadership</label>
-            <select value={settings.partyLeadershipElectionMode} onChange={(e) => setSettings({ partyLeadershipElectionMode: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
-              <option value="elected">Members elect leadership</option>
-              <option value="teacher-assigned">Teacher assigns leadership</option>
-            </select>
+            <label className="mb-2 block text-base font-semibold text-gray-900">Party leadership</label>
+            <SettingSelect value={settings.partyLeadershipElectionMode} onValueChange={(value) => setSettings({ partyLeadershipElectionMode: value })}>
+              <SelectItem value="elected">Members elect leadership</SelectItem>
+              <SelectItem value="teacher-assigned">Teacher assigns leadership</SelectItem>
+            </SettingSelect>
           </div>
         </div>
       );
@@ -264,19 +276,19 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <Toggle checked={settings.allowSelfJoinCommittees} onChange={(v) => setSettings({ allowSelfJoinCommittees: v })} title="Allow students to join committees on their own" description="When off, students submit preference rankings." />
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-900">Assignment mode</label>
-              <select value={settings.committeeAssignmentMode} onChange={(e) => setSettings({ committeeAssignmentMode: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
-                <option value="preference">Preference assigned</option>
-                <option value="random">Random</option>
-                <option value="self-join">Self join</option>
-              </select>
+              <label className="mb-2 block text-base font-semibold text-gray-900">Assignment mode</label>
+              <SettingSelect value={settings.committeeAssignmentMode} onValueChange={(value) => setSettings({ committeeAssignmentMode: value })}>
+                <SelectItem value="preference">Preference assigned</SelectItem>
+                <SelectItem value="random">Random</SelectItem>
+                <SelectItem value="self-join">Self join</SelectItem>
+              </SettingSelect>
             </div>
             <div>
-              <label className="mb-2 block text-sm font-semibold text-gray-900">Chair selection</label>
-              <select value={settings.chairElectionMode} onChange={(e) => setSettings({ chairElectionMode: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
-                <option value="elected">Committee vote</option>
-                <option value="teacher-assigned">Teacher assigned</option>
-              </select>
+              <label className="mb-2 block text-base font-semibold text-gray-900">Chair selection</label>
+              <SettingSelect value={settings.chairElectionMode} onValueChange={(value) => setSettings({ chairElectionMode: value })}>
+                <SelectItem value="elected">Committee vote</SelectItem>
+                <SelectItem value="teacher-assigned">Teacher assigned</SelectItem>
+              </SettingSelect>
             </div>
           </div>
         </div>
@@ -289,12 +301,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <Toggle checked={settings.committeeVoteRequired} onChange={(v) => setSettings({ committeeVoteRequired: v })} title="Require committee vote before reporting" description="Committees should vote before reporting bills." />
           <Toggle checked={settings.cosponsorAfterCommitteeReport} onChange={(v) => setSettings({ cosponsorAfterCommitteeReport: v })} title="Limit cosponsorship until report" description="Students can cosponsor or withdraw only after a committee report has been submitted." />
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">Bill assignment authority</label>
-            <select value={settings.billAssignmentAuthority} onChange={(e) => setSettings({ billAssignmentAuthority: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
-              <option value="teacher">Teacher only</option>
-              <option value="leadership">Majority leadership</option>
-              <option value="clerk">Clerk automatic</option>
-            </select>
+            <label className="mb-2 block text-base font-semibold text-gray-900">Bill assignment authority</label>
+            <SettingSelect value={settings.billAssignmentAuthority} onValueChange={(value) => setSettings({ billAssignmentAuthority: value })}>
+              <SelectItem value="teacher">Teacher only</SelectItem>
+              <SelectItem value="leadership">Majority leadership</SelectItem>
+              <SelectItem value="clerk">Clerk automatic</SelectItem>
+            </SettingSelect>
           </div>
         </div>
       );
@@ -305,12 +317,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <Toggle checked={settings.floorResultsBinding} onChange={(v) => setSettings({ floorResultsBinding: v })} title="Floor vote results determine outcome" description="Passed/failed status is applied when votes close." />
           <Toggle checked={settings.showVoteResultsLive} onChange={(v) => setSettings({ showVoteResultsLive: v })} title="Show floor results live" description="Students can see vote totals as ballots come in." />
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">Pass threshold</label>
-            <select value={settings.floorVoteThreshold} onChange={(e) => setSettings({ floorVoteThreshold: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
-              <option value="simple-majority">Simple majority</option>
-              <option value="absolute-majority">Majority of enrolled students</option>
-              <option value="two-thirds">Two-thirds</option>
-            </select>
+            <label className="mb-2 block text-base font-semibold text-gray-900">Pass threshold</label>
+            <SettingSelect value={settings.floorVoteThreshold} onValueChange={(value) => setSettings({ floorVoteThreshold: value })}>
+              <SelectItem value="simple-majority">Simple majority</SelectItem>
+              <SelectItem value="absolute-majority">Majority of enrolled students</SelectItem>
+              <SelectItem value="two-thirds">Two-thirds</SelectItem>
+            </SettingSelect>
           </div>
         </div>
       );
@@ -319,18 +331,18 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-5">
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">Committee leadership</label>
-            <select value={settings.chairElectionMode} onChange={(e) => setSettings({ chairElectionMode: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
-              <option value="elected">Members elect chair/ranking member</option>
-              <option value="teacher-assigned">Teacher assigns roles</option>
-            </select>
+            <label className="mb-2 block text-base font-semibold text-gray-900">Committee leadership</label>
+            <SettingSelect value={settings.chairElectionMode} onValueChange={(value) => setSettings({ chairElectionMode: value })}>
+              <SelectItem value="elected">Members elect chair/ranking member</SelectItem>
+              <SelectItem value="teacher-assigned">Teacher assigns roles</SelectItem>
+            </SettingSelect>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-semibold text-gray-900">Party leadership</label>
-            <select value={settings.partyLeadershipElectionMode} onChange={(e) => setSettings({ partyLeadershipElectionMode: e.target.value })} className="w-full rounded-md border border-gray-300 px-3 py-2">
-              <option value="elected">Party members elect leadership</option>
-              <option value="teacher-assigned">Teacher assigns roles</option>
-            </select>
+            <label className="mb-2 block text-base font-semibold text-gray-900">Party leadership</label>
+            <SettingSelect value={settings.partyLeadershipElectionMode} onValueChange={(value) => setSettings({ partyLeadershipElectionMode: value })}>
+              <SelectItem value="elected">Party members elect leadership</SelectItem>
+              <SelectItem value="teacher-assigned">Teacher assigns roles</SelectItem>
+            </SettingSelect>
           </div>
         </div>
       );
@@ -339,7 +351,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-5">
           <Toggle checked={settings.calendarAutoPublish} onChange={(v) => setSettings({ calendarAutoPublish: v })} title="Publish calendared bills immediately" description="Students see bills as soon as the teacher calendars them." />
-          <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">Teachers calendar bills from the Floor Calendar page after committees report them.</div>
+          <div className="rounded-md border border-gray-200 bg-white p-4 text-sm text-gray-700">Teachers calendar bills from the Floor Calendar page after committees report them.</div>
         </div>
       );
     }
@@ -367,7 +379,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <Navigation />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-2">
             <Settings className="h-7 w-7 text-blue-600" />
@@ -398,7 +410,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       </main>
 
       <div className="fixed bottom-0 left-0 right-0 z-10 border-t border-gray-200 bg-white shadow-lg">
-        <div className="mx-auto flex max-w-6xl items-center justify-end px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-end px-4 py-4 sm:px-6 lg:px-8">
           <button onClick={() => void handleSave()} disabled={!hasChanges} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
             <Save className="h-4 w-4" />
             Save Settings

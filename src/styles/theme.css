@@ -41,6 +41,26 @@
   --sidebar-ring: oklch(0.708 0 0);
 }
 
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+select {
+  cursor: pointer;
+  border-color: rgb(209 213 219);
+  background-color: white;
+  box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+}
+
+select:hover {
+  background-color: rgb(249 250 251);
+}
+
 /* Tiptap collaboration cursors (Google Docs-like) */
 .collaboration-cursor__caret {
   position: relative;
