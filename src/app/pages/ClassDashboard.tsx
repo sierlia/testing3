@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   AlertCircle,
@@ -56,6 +56,7 @@ export function ClassDashboard() {
   const [billStats, setBillStats] = useState({ total: 0, waitingReferral: 0, waitingCalendar: 0 });
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const currentTimelineCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const setActive = async () => {
@@ -199,7 +200,7 @@ export function ClassDashboard() {
     const next: any = {
       workflow: { ...(classSettings.workflow ?? {}), stage },
       ...(stage === "setup" ? { class: { ...(classSettings.class ?? {}), joinEnabled: false } } : {}),
-      ...(stage === "elections" ? { elections: { ...(classSettings.elections ?? {}), open: true, concluded: false } } : {}),
+      ...(stage === "elections" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: false } } : {}),
       ...(stage === "assign_committees" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: true } } : {}),
       ...(stage === "legislation" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: true } } : {}),
     };
@@ -225,22 +226,28 @@ export function ClassDashboard() {
   };
 
   const concludeElections = async () => {
-    const nextStage = classSettings?.committees?.allowSelfJoin || classSettings?.committees?.assignmentMode === "self-join" ? "legislation" : "assign_committees";
     await updateClassSettings({
       elections: { ...(classSettings.elections ?? {}), open: false, concluded: true },
-      workflow: { ...(classSettings.workflow ?? {}), stage: nextStage },
+      workflow: { ...(classSettings.workflow ?? {}), stage: "elections" },
     });
   };
 
   const workflowStepRaw = classSettings?.workflow?.stage ?? "setup";
   const workflowStep = ["open_elections", "conclude_elections"].includes(workflowStepRaw) ? "elections" : workflowStepRaw;
   const classJoinEnabled = Boolean(classSettings?.class?.joinEnabled);
+  const electionsOpen = Boolean(classSettings?.elections?.open);
   const committeeSelfJoin = classSettings?.committees?.allowSelfJoin || classSettings?.committees?.assignmentMode === "self-join";
   const visibleWorkflowSteps = workflowSteps.filter((step) => step.id !== "assign_committees" || !committeeSelfJoin);
   const foundWorkflowIndex = visibleWorkflowSteps.findIndex((step) => step.id === workflowStep);
   const currentIndex = foundWorkflowIndex >= 0 ? foundWorkflowIndex : Math.max(0, visibleWorkflowSteps.findIndex((step) => step.id === "legislation"));
-  const currentWorkflowStep = visibleWorkflowSteps[currentIndex] ?? visibleWorkflowSteps[0];
-  const futureWorkflowSteps = visibleWorkflowSteps.slice(currentIndex + 1);
+
+  useEffect(() => {
+    if (!currentTimelineCardRef.current) return;
+    currentTimelineCardRef.current.scrollIntoView({
+      block: "nearest",
+      inline: currentIndex === visibleWorkflowSteps.length - 1 ? "end" : "start",
+    });
+  }, [currentIndex, timelineExpanded, visibleWorkflowSteps.length]);
 
   const workflowAction = (stepId: string) => {
     if (stepId === "setup") {
@@ -253,9 +260,30 @@ export function ClassDashboard() {
     }
     if (stepId === "elections") {
       return (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={() => void openElections()} disabled={workflowBusy}><Vote className="mr-2 h-4 w-4" />Open elections</Button>
-          <Button onClick={() => void concludeElections()} disabled={workflowBusy} variant="outline"><Vote className="mr-2 h-4 w-4" />Close elections</Button>
+        <div className="mt-4 max-w-sm rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+          <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+            Elections: {electionsOpen ? "open" : "closed"}
+          </div>
+          <div className="grid grid-cols-2 gap-1">
+            <button
+              type="button"
+              onClick={() => void openElections()}
+              disabled={workflowBusy}
+              className={`inline-flex items-center justify-center gap-2 rounded px-3 py-2 text-sm font-semibold transition disabled:opacity-50 ${electionsOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
+            >
+              <Vote className="h-4 w-4" />
+              Open
+            </button>
+            <button
+              type="button"
+              onClick={() => void concludeElections()}
+              disabled={workflowBusy}
+              className={`inline-flex items-center justify-center gap-2 rounded px-3 py-2 text-sm font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-gray-900 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
+            >
+              <Vote className="h-4 w-4" />
+              Closed
+            </button>
+          </div>
         </div>
       );
     }
@@ -296,6 +324,7 @@ export function ClassDashboard() {
             >
               {classJoinEnabled ? <Unlock className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-gray-500" />}
               {classJoinEnabled ? "Class join is enabled" : "Class join is currently closed"}
+              <Pencil className="h-3.5 w-3.5 text-gray-400" />
               <span className="hidden rounded bg-white px-2 py-0.5 text-xs font-medium text-blue-700 shadow-sm group-hover:inline">
                 {classJoinEnabled ? "Disable" : "Enable"}
               </span>
@@ -308,26 +337,34 @@ export function ClassDashboard() {
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Class timeline</div>
           <div className="overflow-x-auto pb-2">
             <div className="flex w-max items-stretch gap-0">
-              <div className="w-[520px] flex-shrink-0 rounded-lg border border-blue-200 bg-blue-50 p-5">
-                <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
-                <h2 className="mt-1 text-xl font-bold text-gray-900">{currentWorkflowStep.label}</h2>
-                <p className="mt-1 text-sm text-gray-600">{currentWorkflowStep.description}</p>
-                {workflowAction(currentWorkflowStep.id)}
-              </div>
-              {futureWorkflowSteps.map((step, index) => (
-                <div key={step.id} className="flex flex-shrink-0 items-stretch">
-                  <div className="mt-9 h-0 w-8 border-t-2 border-dashed border-gray-300" />
-                  <button
-                    type="button"
-                    onClick={() => confirmWorkflowStage(step.id, index === 0 ? "advance" : "skip")}
-                    className="w-[260px] flex-shrink-0 rounded-lg border border-gray-200 bg-gray-50 p-5 text-left opacity-60 transition hover:opacity-100"
-                  >
-                    <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{index === 0 ? "After that" : "Future"}</div>
-                    <h3 className="mt-1 font-semibold text-gray-700">{step.label}</h3>
-                    <p className="mt-1 text-sm text-gray-500">{step.description}</p>
-                  </button>
-                </div>
-              ))}
+              {visibleWorkflowSteps.map((step, index) => {
+                const isCurrent = index === currentIndex;
+                const isPast = index < currentIndex;
+                const moveMode = isPast ? "revert" : index === currentIndex + 1 ? "advance" : "skip";
+                return (
+                  <div key={step.id} className="flex flex-shrink-0 items-stretch">
+                    {index > 0 && <div className="mt-9 h-0 w-8 border-t-2 border-dashed border-gray-300" />}
+                    {isCurrent ? (
+                      <div ref={currentTimelineCardRef} className="min-h-48 w-[80vw] min-w-[520px] max-w-[1024px] flex-shrink-0 rounded-lg border border-blue-200 bg-blue-50 p-5">
+                        <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
+                        <h2 className="mt-1 text-xl font-bold text-gray-900">{step.label}</h2>
+                        <p className="mt-1 text-sm text-gray-600">{step.description}</p>
+                        {workflowAction(step.id)}
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => confirmWorkflowStage(step.id, moveMode)}
+                        className={`min-h-48 w-[260px] flex-shrink-0 rounded-lg border border-gray-200 p-5 text-left transition hover:opacity-100 ${isPast ? "bg-gray-50 text-gray-400 opacity-75 hover:bg-gray-100" : "bg-gray-50 text-gray-500 opacity-60 hover:bg-gray-100"}`}
+                      >
+                        <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">{isPast ? "Previous" : "Upcoming"}</div>
+                        <h3 className="mt-1 font-semibold text-gray-700">{step.label}</h3>
+                        <p className="mt-1 text-sm text-gray-500">{step.description}</p>
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
           {timelineExpanded && (
@@ -353,7 +390,7 @@ export function ClassDashboard() {
         </CardContent>
       </Card>
     ),
-    [billStats, classJoinEnabled, currentIndex, currentWorkflowStep, futureWorkflowSteps, timelineExpanded, workflowBusy, classSettings],
+    [billStats, classJoinEnabled, currentIndex, electionsOpen, visibleWorkflowSteps, timelineExpanded, workflowBusy, classSettings],
   );
 
   const actionSections = [
