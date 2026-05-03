@@ -1,12 +1,12 @@
-import { useEffect, useState } from "react";
-import { useParams } from "react-router";
-import { CheckCircle2, FileText, Pencil, Save, Sparkles, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { Link, useParams } from "react-router";
+import { CheckCircle2, ExternalLink, FileText, Maximize2, Move, Pencil, Save, Send, Sparkles, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { CommitteeTabs, markCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
-import { closeCommitteeVote, submitCommitteeReport } from "../services/bills";
+import { closeCommitteeVote, finalizeCommitteeVote, submitCommitteeReport } from "../services/bills";
 
 type BillRow = {
   id: string;
@@ -27,6 +27,7 @@ type CommitteeBill = {
 };
 
 type VoteChoice = "yea" | "nay" | "present";
+type VoteRow = { user_id: string; vote: VoteChoice; voterName: string };
 
 const votePageCache = new Map<
   string,
@@ -39,6 +40,57 @@ const votePageCache = new Map<
   }
 >();
 
+function namesForVote(votes: VoteRow[], choice: VoteChoice) {
+  return votes.filter((row) => row.vote === choice).map((row) => row.voterName).sort((a, b) => a.localeCompare(b));
+}
+
+function VoteTotal({
+  choice,
+  count,
+  names,
+  active,
+  disabled,
+  onVote,
+}: {
+  choice: VoteChoice;
+  count: number;
+  names: string[];
+  active: boolean;
+  disabled: boolean;
+  onVote: () => void;
+}) {
+  const color = choice === "yea" ? "green" : choice === "nay" ? "red" : "gray";
+  const activeClass =
+    color === "green"
+      ? "border-green-300 bg-green-50 text-green-800"
+      : color === "red"
+        ? "border-red-300 bg-red-50 text-red-800"
+        : "border-gray-300 bg-gray-100 text-gray-800";
+  const normalClass =
+    color === "green"
+      ? "border-gray-200 bg-white text-green-700 hover:bg-green-50"
+      : color === "red"
+        ? "border-gray-200 bg-white text-red-700 hover:bg-red-50"
+        : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50";
+
+  return (
+    <div className="group relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={onVote}
+        className={`w-full rounded-md border p-3 text-center transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${active ? activeClass : normalClass}`}
+      >
+        <div className="text-2xl font-bold">{count}</div>
+        <div className="text-xs font-medium capitalize">{choice}</div>
+      </button>
+      <div className="pointer-events-none absolute left-1/2 top-full z-30 mt-2 hidden w-48 -translate-x-1/2 rounded-md border border-gray-200 bg-white p-2 text-left text-xs text-gray-700 shadow-lg group-hover:block">
+        {names.length ? names.map((name) => <div key={name} className="truncate py-0.5">{name}</div>) : <div className="text-gray-500">No votes yet</div>}
+      </div>
+    </div>
+  );
+}
+
 export function CommitteeVote() {
   const { id } = useParams();
   const committeeId = id!;
@@ -50,11 +102,16 @@ export function CommitteeVote() {
   const [committeeName, setCommitteeName] = useState("Committee");
   const [bills, setBills] = useState<CommitteeBill[]>([]);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
-  const [votes, setVotes] = useState<Array<{ user_id: string; vote: VoteChoice; voterName: string }>>([]);
+  const [votes, setVotes] = useState<VoteRow[]>([]);
+  const [voteClosedAt, setVoteClosedAt] = useState<string | null>(null);
+  const [reportSubmittedAt, setReportSubmittedAt] = useState<string | null>(null);
   const [voting, setVoting] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [finalizing, setFinalizing] = useState(false);
   const [submittingReport, setSubmittingReport] = useState(false);
   const [textView, setTextView] = useState<"edited" | "clean" | "original">("edited");
+  const [reportPoppedOut, setReportPoppedOut] = useState(false);
+  const [reportWindowPos, setReportWindowPos] = useState({ x: 120, y: 120 });
 
   useEffect(() => {
     const load = async () => {
@@ -143,41 +200,92 @@ export function CommitteeVote() {
 
   const selected = bills.find((bill) => bill.id === selectedBillId) ?? null;
 
+  const loadVotes = async (billId: string) => {
+    const { data, error } = await supabase
+      .from("bill_committee_votes")
+      .select("user_id,vote")
+      .eq("committee_id", committeeId)
+      .eq("bill_id", billId);
+    if (error) throw error;
+    const voterIds = [...new Set((data ?? []).map((vote: any) => vote.user_id))];
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("user_id,display_name")
+      .in("user_id", voterIds.length ? voterIds : ["00000000-0000-0000-0000-000000000000"]);
+    const nameMap = new Map((profiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
+    setVotes((data ?? []).map((vote: any) => ({ user_id: vote.user_id, vote: vote.vote, voterName: nameMap.get(vote.user_id) ?? "Member" })));
+  };
+
+  const loadDocState = async (billId: string) => {
+    const { data, error } = await supabase
+      .from("committee_bill_docs")
+      .select("committee_vote_closed_at,committee_report_submitted_at")
+      .eq("committee_id", committeeId)
+      .eq("bill_id", billId)
+      .maybeSingle();
+    if (error) throw error;
+    setVoteClosedAt((data as any)?.committee_vote_closed_at ?? null);
+    setReportSubmittedAt((data as any)?.committee_report_submitted_at ?? null);
+  };
+
   useEffect(() => {
     if (!selectedBillId || !classId) {
       setVotes([]);
+      setVoteClosedAt(null);
+      setReportSubmittedAt(null);
       return;
     }
+
     let cancelled = false;
-    const loadVotes = async () => {
+    const refreshVotes = async () => {
       try {
-        const { data, error } = await supabase
-          .from("bill_committee_votes")
-          .select("user_id,vote")
-          .eq("committee_id", committeeId)
-          .eq("bill_id", selectedBillId);
-        if (error) throw error;
-        const voterIds = [...new Set((data ?? []).map((vote: any) => vote.user_id))];
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("user_id,display_name")
-          .in("user_id", voterIds.length ? voterIds : ["00000000-0000-0000-0000-000000000000"]);
-        const nameMap = new Map((profiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
-        if (!cancelled) {
-          setVotes((data ?? []).map((vote: any) => ({ user_id: vote.user_id, vote: vote.vote, voterName: nameMap.get(vote.user_id) ?? "Member" })));
-        }
+        await loadVotes(selectedBillId);
       } catch (e: any) {
         if (!cancelled) toast.error(e.message || "Could not load committee votes");
       }
     };
-    void loadVotes();
+    const refreshDoc = async () => {
+      try {
+        await loadDocState(selectedBillId);
+      } catch {
+        if (!cancelled) {
+          setVoteClosedAt(null);
+          setReportSubmittedAt(null);
+        }
+      }
+    };
+    void refreshVotes();
+    void refreshDoc();
+
+    const voteChannel = supabase
+      .channel(`committee-votes:${committeeId}:${selectedBillId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "bill_committee_votes", filter: `bill_id=eq.${selectedBillId}` }, () => void refreshVotes())
+      .subscribe();
+    const docChannel = supabase
+      .channel(`committee-vote-doc:${committeeId}:${selectedBillId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "committee_bill_docs", filter: `bill_id=eq.${selectedBillId}` }, () => void refreshDoc())
+      .subscribe();
+
     return () => {
       cancelled = true;
+      void supabase.removeChannel(voteChannel);
+      void supabase.removeChannel(docChannel);
     };
   }, [classId, committeeId, selectedBillId]);
 
+  const voteCounts = votes.reduce(
+    (acc, row) => ({ ...acc, [row.vote]: (acc[row.vote] ?? 0) + 1 }),
+    { yea: 0, nay: 0, present: 0 } as Record<VoteChoice, number>,
+  );
+  const myVote = meId ? votes.find((vote) => vote.user_id === meId)?.vote ?? null : null;
+  const voteLocked = Boolean(voteClosedAt);
+
   const castCommitteeVote = async (vote: VoteChoice) => {
     if (!selected || !classId || !meId) return;
+    if (voteLocked) {
+      toast.error("Voting is closed");
+      return;
+    }
     if (selected.status !== "committee_vote") {
       toast.error("This bill has not been proposed for committee vote");
       return;
@@ -197,12 +305,7 @@ export function CommitteeVote() {
         { onConflict: "bill_id,committee_id,user_id" },
       );
       if (error) throw error;
-      const { data: profile } = await supabase.from("profiles").select("display_name").eq("user_id", meId).maybeSingle();
-      setVotes((prev) => [
-        ...prev.filter((row) => row.user_id !== meId),
-        { user_id: meId, vote, voterName: (profile as any)?.display_name ?? "You" },
-      ]);
-      toast.success("Vote recorded");
+      await loadVotes(selected.id);
     } catch (e: any) {
       toast.error(e.message || "Could not record vote");
     } finally {
@@ -215,6 +318,7 @@ export function CommitteeVote() {
     setSubmittingReport(true);
     try {
       await submitCommitteeReport(selected.id, committeeId);
+      setReportSubmittedAt(new Date().toISOString());
       toast.success("Committee report submitted");
     } catch (e: any) {
       toast.error(e.message || "Could not submit report");
@@ -225,10 +329,32 @@ export function CommitteeVote() {
 
   const closeSelectedVote = async () => {
     if (!selected) return;
-    const approved = voteCounts.yea > voteCounts.nay;
     setClosing(true);
     try {
-      await closeCommitteeVote(selected.id, approved);
+      await closeCommitteeVote(selected.id, committeeId);
+      setVoteClosedAt(new Date().toISOString());
+      toast.success("Vote closed");
+    } catch (e: any) {
+      toast.error(e.message || "Could not close vote");
+    } finally {
+      setClosing(false);
+    }
+  };
+
+  const finalizeSelectedBill = async () => {
+    if (!selected) return;
+    if (!voteClosedAt) {
+      toast.error("Close the vote before finalizing");
+      return;
+    }
+    if (!reportSubmittedAt) {
+      toast.error("Submit the committee report before finalizing");
+      return;
+    }
+    const approved = voteCounts.yea > voteCounts.nay;
+    setFinalizing(true);
+    try {
+      await finalizeCommitteeVote(selected.id, committeeId, approved);
       setBills((prev) => {
         const next = prev.filter((bill) => bill.id !== selected.id);
         setSelectedBillId(next[0]?.id ?? null);
@@ -243,19 +369,47 @@ export function CommitteeVote() {
         });
         return next;
       });
-      toast.success(approved ? "Vote closed; bill calendared" : "Vote closed; bill rejected");
+      toast.success(approved ? "Bill reported to the calendar queue" : "Bill rejected");
     } catch (e: any) {
-      toast.error(e.message || "Could not close vote");
+      toast.error(e.message || "Could not finalize bill");
     } finally {
-      setClosing(false);
+      setFinalizing(false);
     }
   };
 
-  const voteCounts = votes.reduce(
-    (acc, row) => ({ ...acc, [row.vote]: (acc[row.vote] ?? 0) + 1 }),
-    { yea: 0, nay: 0, present: 0 } as Record<VoteChoice, number>,
-  );
-  const myVote = meId ? votes.find((vote) => vote.user_id === meId)?.vote ?? null : null;
+  const beginReportDrag = (event: MouseEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    const startX = event.clientX;
+    const startY = event.clientY;
+    const start = reportWindowPos;
+    const onMove = (move: globalThis.MouseEvent) => {
+      setReportWindowPos({
+        x: Math.max(12, start.x + move.clientX - startX),
+        y: Math.max(12, start.y + move.clientY - startY),
+      });
+    };
+    const onUp = () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  };
+
+  const reportEditor = selected && classId ? (
+    <CollaborativeBillEditor
+      classId={classId}
+      committeeId={committeeId}
+      billId={selected.id}
+      documentId={`${selected.id}:report`}
+      storageColumn="committee_report_ydoc_base64"
+      initialHtml="<p></p>"
+      editable={!reportSubmittedAt}
+      trackDeletes={false}
+    />
+  ) : null;
+
+  const finalizeDisabled = finalizing || !voteClosedAt || !reportSubmittedAt;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -313,65 +467,47 @@ export function CommitteeVote() {
                         <div className="mt-1 text-xl font-bold text-gray-900">{selected.title}</div>
                         <div className="mt-1 text-sm text-gray-600">Sponsor: {selected.sponsor}</div>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => void submitReport()}
-                          disabled={submittingReport}
-                          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                        >
-                          <Save className="h-4 w-4" />
-                          {submittingReport ? "Submitting" : "Submit report"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => void closeSelectedVote()}
-                          disabled={closing}
-                          className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                        >
-                          <XCircle className="h-4 w-4" />
-                          {closing ? "Closing" : "Close vote"}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void finalizeSelectedBill()}
+                        disabled={finalizeDisabled}
+                        className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                      >
+                        <Send className="h-4 w-4" />
+                        {finalizing ? "Finalizing" : "Finalize"}
+                      </button>
                     </div>
                   </div>
 
                   <div className="space-y-6 p-5">
                     <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
-                      <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
                         <div>
                           <h3 className="font-semibold text-gray-900">Committee Vote</h3>
-                          <p className="text-sm text-gray-600">Members can vote yea, nay, or present.</p>
+                          <p className="text-sm text-gray-600">{voteLocked ? `Closed ${new Date(voteClosedAt!).toLocaleString()}` : "Click a total to cast or change your vote."}</p>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {(["yea", "nay", "present"] as VoteChoice[]).map((choice) => (
-                            <button
-                              key={choice}
-                              type="button"
-                              disabled={voting}
-                              onClick={() => void castCommitteeVote(choice)}
-                              className={`rounded-md px-3 py-2 text-sm font-medium capitalize ${
-                                myVote === choice ? "bg-blue-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-                              } disabled:opacity-50`}
-                            >
-                              {choice}
-                            </button>
-                          ))}
-                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void closeSelectedVote()}
+                          disabled={closing || voteLocked}
+                          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          <XCircle className="h-4 w-4" />
+                          {closing ? "Closing" : voteLocked ? "Vote closed" : "Close vote"}
+                        </button>
                       </div>
-                      <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                        <div className="rounded bg-white p-3">
-                          <div className="text-xl font-bold text-green-700">{voteCounts.yea}</div>
-                          <div className="text-xs text-gray-600">Yea</div>
-                        </div>
-                        <div className="rounded bg-white p-3">
-                          <div className="text-xl font-bold text-red-700">{voteCounts.nay}</div>
-                          <div className="text-xs text-gray-600">Nay</div>
-                        </div>
-                        <div className="rounded bg-white p-3">
-                          <div className="text-xl font-bold text-gray-700">{voteCounts.present}</div>
-                          <div className="text-xs text-gray-600">Present</div>
-                        </div>
+                      <div className="grid grid-cols-3 gap-3">
+                        {(["yea", "nay", "present"] as VoteChoice[]).map((choice) => (
+                          <VoteTotal
+                            key={choice}
+                            choice={choice}
+                            count={voteCounts[choice]}
+                            names={namesForVote(votes, choice)}
+                            active={myVote === choice}
+                            disabled={voting || voteLocked}
+                            onVote={() => void castCommitteeVote(choice)}
+                          />
+                        ))}
                       </div>
                     </div>
 
@@ -432,17 +568,33 @@ export function CommitteeVote() {
                     </div>
 
                     <div className="border-t border-gray-200 pt-5">
-                      <h3 className="mb-3 text-lg font-semibold text-gray-900">Committee Report</h3>
-                      <CollaborativeBillEditor
-                        classId={classId}
-                        committeeId={committeeId}
-                        billId={selected.id}
-                        documentId={`${selected.id}:report`}
-                        storageColumn="committee_report_ydoc_base64"
-                        initialHtml="<p></p>"
-                        editable
-                        trackDeletes={false}
-                      />
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-gray-900">Committee Report</h3>
+                          {reportSubmittedAt && <div className="text-xs text-gray-500">Submitted {new Date(reportSubmittedAt).toLocaleString()}</div>}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <Link to={`/committee/${committeeId}/reports/${selected.id}`} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            <ExternalLink className="h-4 w-4" />
+                            Open page
+                          </Link>
+                          <button type="button" onClick={() => setReportPoppedOut(true)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                            <Maximize2 className="h-4 w-4" />
+                            Pop out
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void submitReport()}
+                            disabled={submittingReport || Boolean(reportSubmittedAt)}
+                            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                          >
+                            <Save className="h-4 w-4" />
+                            {submittingReport ? "Submitting" : reportSubmittedAt ? "Submitted" : "Submit report"}
+                          </button>
+                        </div>
+                      </div>
+                      {!reportPoppedOut && reportEditor}
+                      {reportPoppedOut && <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm text-gray-600">Report is open in a draggable window.</div>}
                     </div>
                   </div>
                 </>
@@ -453,6 +605,23 @@ export function CommitteeVote() {
           </div>
         )}
       </main>
+
+      {reportPoppedOut && selected && classId && (
+        <div className="fixed z-50 w-[min(760px,calc(100vw-24px))] rounded-lg border border-gray-300 bg-white shadow-2xl" style={{ left: reportWindowPos.x, top: reportWindowPos.y }}>
+          <div onMouseDown={beginReportDrag} className="flex cursor-move items-center justify-between gap-3 rounded-t-lg border-b border-gray-200 bg-gray-50 px-3 py-2">
+            <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-gray-900">
+              <Move className="h-4 w-4 flex-shrink-0 text-gray-500" />
+              <span className="truncate">Committee Report - {selected.number}</span>
+            </div>
+            <button type="button" onMouseDown={(event) => event.stopPropagation()} onClick={() => setReportPoppedOut(false)} className="rounded p-1 text-gray-500 hover:bg-gray-200 hover:text-gray-700">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="max-h-[75vh] overflow-y-auto p-4">
+            {reportEditor}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

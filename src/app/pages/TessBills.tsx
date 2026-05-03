@@ -308,8 +308,8 @@ export function TessBills() {
                         if (event.key === "Enter" || event.key === " ") handleBillClick(bill);
                       }}
                       className={`block w-full p-4 text-left transition-colors ${
-                        authoredByMe ? "bg-yellow-50/70 hover:bg-yellow-100" : "hover:bg-gray-50"
-                      } ${selectedBill?.id === bill.id && rowMode === "preview" ? "bg-blue-50 hover:bg-blue-50" : ""}`}
+                        authoredByMe ? "bg-emerald-50/70 hover:bg-emerald-100" : "hover:bg-gray-50"
+                      } ${selectedBill?.id === bill.id && rowMode === "preview" ? (authoredByMe ? "bg-emerald-100 hover:bg-emerald-100" : "bg-blue-50 hover:bg-blue-50") : ""}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">

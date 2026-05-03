@@ -137,12 +137,15 @@ export function BillDetail() {
     const committeeVoteDate = latestDate(committeeVotes);
     if (committeeVoteDate) {
       const passed = committeeCounts.yea > committeeCounts.nay;
-      const decided = ["calendared", "floor", "passed", "failed"].includes(bill.status);
+      const decided = ["reported", "calendared", "floor", "passed", "failed"].includes(bill.status);
       rows.push({
         label: decided ? (passed ? "Passed committee" : "Failed in committee") : "Committee vote recorded",
         detail: `${committeeCounts.yea} yeas to ${committeeCounts.nay} nays${committeeCounts.present ? `, ${committeeCounts.present} present` : ""}`,
-        date: committeeVoteDate,
+        date: committeeDoc?.committee_vote_finalized_at || committeeDoc?.committee_vote_closed_at || committeeVoteDate,
       });
+    }
+    if (committeeDoc?.committee_vote_closed_at && !["reported", "calendared", "floor", "passed", "failed"].includes(bill.status)) {
+      rows.push({ label: "Committee vote closed", detail: `${committeeCounts.yea} yeas to ${committeeCounts.nay} nays`, date: committeeDoc.committee_vote_closed_at });
     }
     if (committeeDoc?.committee_report_submitted_at) rows.push({ label: "Committee report submitted", detail: referral?.committee_name ?? "Committee", date: committeeDoc.committee_report_submitted_at });
     if (calendar?.created_at || calendar?.scheduled_at) rows.push({ label: "Calendared", detail: calendar?.scheduled_at ? `Scheduled for ${new Date(calendar.scheduled_at).toLocaleString()}` : undefined, date: calendar.created_at || calendar.scheduled_at });
@@ -165,8 +168,8 @@ export function BillDetail() {
       { label: "Review", status: status === "in_committee" ? "current" : referral && isPastStatus(status, "in_committee") ? "completed" : "upcoming", date: committeeDoc?.updated_at },
       { label: "Vote", status: status === "committee_vote" ? "current" : beyondCommittee ? "completed" : "upcoming", date: latestDate(committeeVotes) },
       { label: "Report", status: committeeDoc?.committee_report_submitted_at ? "completed" : status === "committee_vote" ? "current" : "upcoming", date: committeeDoc?.committee_report_submitted_at, note: committeeDoc?.committee_report_submitted_at ? undefined : referral ? "WIP" : undefined },
-      { label: "Calendared", status: status === "calendared" ? "current" : ["floor", "passed", "failed"].includes(status) ? "completed" : "upcoming", date: calendar?.created_at || calendar?.scheduled_at },
-      { label: "Floor", status: status === "floor" ? "current" : ["passed", "failed"].includes(status) ? "completed" : "upcoming", date: floorSession?.opened_at },
+      { label: "Calendared", status: calendar ? (status === "calendared" ? "current" : ["floor", "passed", "failed"].includes(status) ? "completed" : "completed") : "upcoming", date: calendar?.created_at || calendar?.scheduled_at },
+      { label: "Floor", status: floorSession?.opened_at ? (status === "floor" ? "current" : ["passed", "failed"].includes(status) ? "completed" : "completed") : "upcoming", date: floorSession?.opened_at },
       { label: "Final", status: ["passed", "failed"].includes(status) ? "completed" : "upcoming", date: floorSession?.closed_at, note: ["passed", "failed"].includes(status) ? statusLabel(status) : undefined },
     ];
   }, [bill, calendar, committeeDoc, committeeVotes, floorSession, referral]);
@@ -241,7 +244,16 @@ export function BillDetail() {
               <span className="text-gray-500"> ({sponsor?.party ?? "Independent"}{sponsorDistrict ? `-${sponsorDistrict}` : ""})</span>
             </div>
             <div><span className="font-semibold text-gray-900">Committees:</span> {referral?.committee_name ?? "Not referred"}</div>
-            <div><span className="font-semibold text-gray-900">Committee reports:</span> {committeeReportStatus}</div>
+            <div>
+              <span className="font-semibold text-gray-900">Committee reports:</span>{" "}
+              {referral?.committee_id ? (
+                <Link to={`/committee/${referral.committee_id}/reports/${bill.id}`} className="font-medium text-blue-600 hover:underline">
+                  {committeeReportStatus}
+                </Link>
+              ) : (
+                committeeReportStatus
+              )}
+            </div>
             <div><span className="font-semibold text-gray-900">Latest action:</span> {latestAction ? `${latestAction.label} - ${formatDate(latestAction.date)}` : "No action yet"}</div>
           </div>
           <HorizontalTracker steps={tracker} />

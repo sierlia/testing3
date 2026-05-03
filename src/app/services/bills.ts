@@ -196,7 +196,7 @@ export async function fetchBillDetail(billId: string) {
     referralCommitteeId
       ? supabase
           .from('committee_bill_docs')
-          .select('updated_at,committee_report_submitted_at,ydoc_base64,committee_report_ydoc_base64')
+          .select('updated_at,committee_report_submitted_at,committee_vote_closed_at,committee_vote_finalized_at,ydoc_base64,committee_report_ydoc_base64')
           .eq('bill_id', billId)
           .eq('committee_id', referralCommitteeId)
           .maybeSingle()
@@ -364,11 +364,44 @@ export async function proposeBillForCommitteeVote(billId: string) {
   if (error) throw error;
 }
 
-export async function closeCommitteeVote(billId: string, approved: boolean) {
+export async function closeCommitteeVote(billId: string, committeeId: string) {
   const { classId } = await getCurrentProfileClass();
+  const { error } = await supabase.from('committee_bill_docs').upsert(
+    {
+      bill_id: billId,
+      committee_id: committeeId,
+      class_id: classId,
+      committee_vote_closed_at: new Date().toISOString(),
+    } as any,
+    { onConflict: 'bill_id,committee_id' },
+  );
+  if (error) throw error;
+}
+
+export async function finalizeCommitteeVote(billId: string, committeeId: string, approved: boolean) {
+  const { classId } = await getCurrentProfileClass();
+  const now = new Date().toISOString();
+  const { data: existingDoc } = await supabase
+    .from('committee_bill_docs')
+    .select('committee_vote_closed_at')
+    .eq('bill_id', billId)
+    .eq('committee_id', committeeId)
+    .maybeSingle();
+  const { error: docError } = await supabase.from('committee_bill_docs').upsert(
+    {
+      bill_id: billId,
+      committee_id: committeeId,
+      class_id: classId,
+      committee_vote_closed_at: (existingDoc as any)?.committee_vote_closed_at ?? now,
+      committee_vote_finalized_at: now,
+    } as any,
+    { onConflict: 'bill_id,committee_id' },
+  );
+  if (docError) throw docError;
+
   const { error } = await supabase
     .from('bills')
-    .update({ status: approved ? 'calendared' : 'failed' } as any)
+    .update({ status: approved ? 'reported' : 'failed' } as any)
     .eq('id', billId)
     .eq('class_id', classId);
   if (error) throw error;
