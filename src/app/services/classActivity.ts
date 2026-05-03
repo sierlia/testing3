@@ -11,6 +11,7 @@ export type ClassActivity = {
   type: ClassActivityType;
   contextName?: string;
   contextType?: "party" | "committee" | "caucus";
+  targetUrl?: string;
   detail?: string;
 };
 
@@ -91,6 +92,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       type: "bill",
       contextName: authorMap.get(row.author_user_id)?.party ?? undefined,
       contextType: authorMap.get(row.author_user_id)?.party ? "party" : undefined,
+      targetUrl: `/bills/${row.id}`,
     });
   }
   for (const r of committeeMembers.data ?? []) {
@@ -105,6 +107,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       type: "committee",
       contextName,
       contextType: "committee",
+      targetUrl: `/committees/${row.committee_id}`,
     });
   }
   for (const r of caucusMembers.data ?? []) {
@@ -119,6 +122,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       type: "caucus",
       contextName,
       contextType: "caucus",
+      targetUrl: `/caucuses/${row.caucus_id}`,
     });
   }
   for (const r of letters.data ?? []) {
@@ -132,6 +136,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       type: "letter",
       contextName: authorMap.get(row.sender_user_id)?.party ?? undefined,
       contextType: authorMap.get(row.sender_user_id)?.party ? "party" : undefined,
+      targetUrl: `/letters/${row.id}`,
     });
   }
   for (const r of caucusComments.data ?? []) {
@@ -147,6 +152,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       type: "comment",
       contextName,
       contextType: "caucus",
+      targetUrl: caucusId ? `/caucuses/${caucusId}?announcement=${row.announcement_id}` : undefined,
       detail: row.body,
     });
   }
@@ -163,6 +169,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       type: "comment",
       contextName,
       contextType: "committee",
+      targetUrl: committeeId ? `/committees/${committeeId}?announcement=${row.announcement_id}` : undefined,
       detail: row.body,
     });
   }

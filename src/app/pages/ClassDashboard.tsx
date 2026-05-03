@@ -57,6 +57,7 @@ export function ClassDashboard() {
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const currentTimelineCardRef = useRef<HTMLDivElement | null>(null);
+  const timelineScrollRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const setActive = async () => {
@@ -242,26 +243,34 @@ export function ClassDashboard() {
   const currentIndex = foundWorkflowIndex >= 0 ? foundWorkflowIndex : Math.max(0, visibleWorkflowSteps.findIndex((step) => step.id === "legislation"));
 
   useEffect(() => {
-    if (!currentTimelineCardRef.current) return;
-    currentTimelineCardRef.current.scrollIntoView({
-      block: "nearest",
-      inline: currentIndex === visibleWorkflowSteps.length - 1 ? "end" : "start",
+    const frame = window.requestAnimationFrame(() => {
+      if (!currentTimelineCardRef.current || !timelineScrollRef.current) return;
+      const container = timelineScrollRef.current;
+      const card = currentTimelineCardRef.current;
+      const alignRight = currentIndex === visibleWorkflowSteps.length - 1;
+      container.scrollLeft = Math.max(0, card.offsetLeft - (alignRight ? container.clientWidth - card.offsetWidth : 0));
     });
+    return () => window.cancelAnimationFrame(frame);
   }, [currentIndex, timelineExpanded, visibleWorkflowSteps.length]);
+
+  const ActivityActionLink = ({ activity }: { activity: ClassActivity }) => {
+    if (!activity.targetUrl) return <>{activity.action}</>;
+    return <Link to={activity.targetUrl} className="font-medium text-gray-900 hover:text-blue-600">{activity.action}</Link>;
+  };
 
   const workflowAction = (stepId: string) => {
     if (stepId === "setup") {
       return (
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button onClick={() => navigate("/teacher/setup")} variant="outline"><Settings className="mr-2 h-4 w-4" />Open setup</Button>
-          <Button onClick={() => void enableClass()} disabled={workflowBusy}><Unlock className="mr-2 h-4 w-4" />Enable class</Button>
+        <div className="flex flex-wrap gap-2">
+          <Button onClick={() => navigate("/teacher/setup")} variant="outline" className="h-11 px-5 text-base"><Settings className="mr-2 h-5 w-5" />Open setup</Button>
+          <Button onClick={() => void enableClass()} disabled={workflowBusy} className="h-11 px-5 text-base"><Unlock className="mr-2 h-5 w-5" />Enable class</Button>
         </div>
       );
     }
     if (stepId === "elections") {
       return (
-        <div className="mt-4 max-w-sm rounded-md border border-gray-200 bg-white p-1 shadow-sm">
-          <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <div className="min-w-[360px] rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+          <div className="px-3 py-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
             Elections: {electionsOpen ? "open" : "closed"}
           </div>
           <div className="grid grid-cols-2 gap-1">
@@ -269,18 +278,18 @@ export function ClassDashboard() {
               type="button"
               onClick={() => void openElections()}
               disabled={workflowBusy}
-              className={`inline-flex items-center justify-center gap-2 rounded px-3 py-2 text-sm font-semibold transition disabled:opacity-50 ${electionsOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
+              className={`inline-flex items-center justify-center gap-2 rounded px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${electionsOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
             >
-              <Vote className="h-4 w-4" />
+              <Vote className="h-5 w-5" />
               Open
             </button>
             <button
               type="button"
               onClick={() => void concludeElections()}
               disabled={workflowBusy}
-              className={`inline-flex items-center justify-center gap-2 rounded px-3 py-2 text-sm font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-gray-900 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
+              className={`inline-flex items-center justify-center gap-2 rounded px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-gray-900 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
             >
-              <Vote className="h-4 w-4" />
+              <Vote className="h-5 w-5" />
               Closed
             </button>
           </div>
@@ -303,7 +312,7 @@ export function ClassDashboard() {
             <div className="flex items-center justify-between gap-3 text-xs text-gray-500">Waiting for referral <ChevronRight className="h-4 w-4" /></div>
             <div className="text-xl font-bold text-gray-900">{billStats.waitingReferral}</div>
           </button>
-          <button type="button" onClick={() => navigate("/calendar")} className="rounded-md border border-gray-200 bg-white p-3 text-left hover:bg-gray-50">
+          <button type="button" onClick={() => navigate("/calendar?schedule=1")} className="rounded-md border border-gray-200 bg-white p-3 text-left hover:bg-gray-50">
             <div className="flex items-center justify-between gap-3 text-xs text-gray-500">Waiting to be calendared <ChevronRight className="h-4 w-4" /></div>
             <div className="text-xl font-bold text-gray-900">{billStats.waitingCalendar}</div>
           </button>
@@ -335,7 +344,7 @@ export function ClassDashboard() {
             </Button>
           </div>
           <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Class timeline</div>
-          <div className="no-scrollbar overflow-x-auto pb-2">
+          <div ref={timelineScrollRef} className="no-scrollbar overflow-x-auto pb-2">
             <div className="flex w-max items-stretch gap-0">
               {visibleWorkflowSteps.map((step, index) => {
                 const isCurrent = index === currentIndex;
@@ -346,10 +355,15 @@ export function ClassDashboard() {
                     {index > 0 && <div className="mt-9 h-0 w-8 border-t-2 border-dashed border-gray-300" />}
                     {isCurrent ? (
                       <div ref={currentTimelineCardRef} className="min-h-48 w-[80vw] min-w-[520px] max-w-[1024px] flex-shrink-0 rounded-lg border border-blue-200 bg-blue-50 p-5">
-                        <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
-                        <h2 className="mt-1 text-xl font-bold text-gray-900">{step.label}</h2>
-                        <p className="mt-1 text-sm text-gray-600">{step.description}</p>
-                        {workflowAction(step.id)}
+                        <div className={`flex flex-wrap gap-4 ${step.id === "setup" || step.id === "elections" ? "items-center justify-between" : "items-start"}`}>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
+                            <h2 className="mt-1 text-2xl font-bold text-gray-900">{step.label}</h2>
+                            <p className="mt-1 text-base text-gray-600">{step.description}</p>
+                          </div>
+                          {(step.id === "setup" || step.id === "elections") && workflowAction(step.id)}
+                        </div>
+                        {step.id !== "setup" && step.id !== "elections" && workflowAction(step.id)}
                       </div>
                     ) : (
                       <button
@@ -483,21 +497,21 @@ export function ClassDashboard() {
                   </Link>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
+              <CardContent className="p-0">
+                <div className="divide-y divide-gray-100">
                   {recentActivity.map((activity) => (
-                    <div key={activity.id} className="flex items-start gap-3 rounded-lg bg-gray-50 p-3">
-                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white">{getActivityIcon(activity.type)}</div>
+                    <div key={activity.id} className="flex items-start gap-3 p-4">
+                      <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50">{getActivityIcon(activity.type)}</div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-gray-900">
                           <Link to={`/profile/${activity.studentId}`} className="font-semibold transition-colors hover:text-blue-600">{activity.studentName}</Link>{" "}
-                          {activity.action}
+                          <ActivityActionLink activity={activity} />
                         </p>
                         <p className="mt-0.5 text-xs text-gray-500">{formatTimestamp(activity.timestamp)}</p>
                       </div>
                     </div>
                   ))}
-                  {recentActivity.length === 0 && <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">No recent activity.</div>}
+                  {recentActivity.length === 0 && <div className="p-4 text-sm text-gray-500">No recent activity.</div>}
                 </div>
               </CardContent>
             </Card>

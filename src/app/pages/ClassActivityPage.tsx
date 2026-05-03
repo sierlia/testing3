@@ -14,6 +14,11 @@ function activityIcon(type: string) {
   return <AlertCircle className="h-4 w-4 text-gray-600" />;
 }
 
+function ActivityActionLink({ activity }: { activity: ClassActivity }) {
+  if (!activity.targetUrl) return <>{activity.action}</>;
+  return <Link to={activity.targetUrl} className="font-medium text-gray-900 hover:text-blue-600">{activity.action}</Link>;
+}
+
 export function ClassActivityPage() {
   const { classId } = useParams();
   const [searchParams] = useSearchParams();
@@ -149,7 +154,7 @@ export function ClassActivityPage() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-gray-900">
                       <Link to={`/profile/${activity.studentId}`} className="font-semibold hover:text-blue-600">{activity.studentName}</Link>{" "}
-                      {activity.action}
+                      <ActivityActionLink activity={activity} />
                     </p>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-500">
                       <span>{activity.timestamp.toLocaleString()}</span>
