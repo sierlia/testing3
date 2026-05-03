@@ -19,6 +19,7 @@ type CalendarEntry = {
   bill_id: string;
   scheduled_at: string;
   duration_minutes: number;
+  status?: string;
   bill: { hr_label: string; title: string };
 };
 
@@ -76,6 +77,7 @@ export function CalendarScheduling() {
           bill_id: bill.id,
           scheduled_at: bill.calendar!.scheduled_at,
           duration_minutes: bill.calendar!.duration_minutes,
+          status: bill.status,
           bill: { hr_label: bill.hr_label, title: bill.title },
         }));
     }
@@ -190,35 +192,45 @@ export function CalendarScheduling() {
           </div>
         </div>
 
-        <div className="mt-5">
-          <h3 className="mb-2 text-sm font-semibold text-gray-900">
-            {selectedCalendarDate.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}
-          </h3>
-          {selectedEvents.length === 0 ? (
-            <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">Nothing calendared for this day.</div>
-          ) : (
-            <div className="space-y-2">
-              {selectedEvents
-                .slice()
-                .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
-                .map((item) => (
-                  <Link key={item.id} to={`/bills/${item.bill_id}`} className="flex items-center gap-4 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
-                    <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-md bg-blue-50 text-blue-700">
-                      <Clock className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-mono text-sm font-semibold text-gray-900">{item.bill.hr_label}</div>
-                      <div className="truncate text-sm text-gray-700">{item.bill.title}</div>
-                    </div>
-                    <div className="text-sm font-medium text-gray-700">
-                      {new Date(item.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                    </div>
-                  </Link>
-                ))}
-            </div>
-          )}
-        </div>
       </div>
+    </div>
+  );
+
+  const scheduledList = (
+    <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="border-b border-gray-200 p-5">
+        <h2 className="text-lg font-semibold text-gray-900">Calendared / Floor Bills</h2>
+        <p className="mt-1 text-sm text-gray-500">{selectedCalendarDate.toLocaleDateString(undefined, { month: "long", day: "numeric" })}</p>
+      </div>
+      <div className="max-h-[640px] divide-y divide-gray-100 overflow-y-auto">
+        {publishedItems.length === 0 ? (
+          <div className="p-5 text-sm text-gray-500">No bills have been calendared.</div>
+        ) : (
+          publishedItems
+            .slice()
+            .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
+            .map((item) => (
+              <Link key={item.id} to={`/bills/${item.bill_id}`} className="block p-4 hover:bg-gray-50">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-mono text-sm font-semibold text-gray-900">{item.bill.hr_label}</div>
+                    <div className="mt-1 line-clamp-2 text-sm text-gray-700">{item.bill.title}</div>
+                  </div>
+                  <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
+                </div>
+                <div className="mt-2 text-xs font-medium text-gray-500">{new Date(item.scheduled_at).toLocaleString()}</div>
+                {item.status && <div className="mt-1 text-xs capitalize text-gray-500">{item.status.replace("_", " ")}</div>}
+              </Link>
+            ))
+        )}
+      </div>
+    </div>
+  );
+
+  const calendarLayout = (
+    <div className="grid gap-6 lg:grid-cols-[3fr_1fr]">
+      {publishedCalendar}
+      {scheduledList}
     </div>
   );
 
@@ -235,6 +247,7 @@ export function CalendarScheduling() {
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">Loading calendar...</div>
         ) : role === "teacher" ? (
           <div className="space-y-6">
+            {calendarLayout}
             {teacherBills.length === 0 ? (
               <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No reported bills are ready to calendar.</div>
             ) : (
@@ -270,10 +283,9 @@ export function CalendarScheduling() {
                 </div>
               ))
             )}
-            {publishedCalendar}
           </div>
         ) : (
-          publishedCalendar
+          calendarLayout
         )}
       </main>
     </div>

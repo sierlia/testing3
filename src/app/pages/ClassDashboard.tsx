@@ -12,7 +12,6 @@ import {
   MessageSquare,
   Pencil,
   Plus,
-  RotateCcw,
   Save,
   Settings,
   TrendingUp,
@@ -22,6 +21,7 @@ import {
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { Navigation } from "../components/Navigation";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
 import { supabase } from "../utils/supabase";
@@ -54,6 +54,7 @@ export function ClassDashboard() {
   const [timelineExpanded, setTimelineExpanded] = useState(false);
   const [billStats, setBillStats] = useState({ total: 0, waitingReferral: 0, waitingCalendar: 0 });
   const [workflowBusy, setWorkflowBusy] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   useEffect(() => {
     const setActive = async () => {
@@ -177,21 +178,41 @@ export function ClassDashboard() {
       class: { ...(classSettings.class ?? {}), joinEnabled: true },
       workflow: { ...(classSettings.workflow ?? {}), stage: "open_elections" },
     });
-    alert(`Class is enabled. Have students join with code ${classCode}.`);
   };
 
-  const disableClassJoin = async () => {
-    await updateClassSettings({
-      class: { ...(classSettings.class ?? {}), joinEnabled: false },
+  const toggleClassJoin = () => {
+    setConfirmDialog({
+      title: classJoinEnabled ? "Disable class join?" : "Enable class join?",
+      message: classJoinEnabled ? "Students will no longer be able to join with the class code." : "Students will be able to join with the class code.",
+      confirmLabel: classJoinEnabled ? "Disable join" : "Enable join",
+      danger: classJoinEnabled,
+      onConfirm: async () => {
+        await updateClassSettings({
+          class: { ...(classSettings.class ?? {}), joinEnabled: !classJoinEnabled },
+        });
+      },
     });
   };
 
-  const revertWorkflow = async (stage: string) => {
-    await updateClassSettings({
+  const setWorkflowStage = async (stage: string) => {
+    const next: any = {
       workflow: { ...(classSettings.workflow ?? {}), stage },
       ...(stage === "setup" ? { class: { ...(classSettings.class ?? {}), joinEnabled: false } } : {}),
       ...(stage === "open_elections" ? { elections: { ...(classSettings.elections ?? {}), open: true, concluded: false } } : {}),
       ...(stage === "conclude_elections" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: false } } : {}),
+      ...(stage === "legislation" ? { elections: { ...(classSettings.elections ?? {}), open: false, concluded: true } } : {}),
+    };
+    await updateClassSettings(next);
+  };
+
+  const confirmWorkflowStage = (stage: string, mode: "revert" | "skip" | "advance") => {
+    const target = workflowSteps.find((step) => step.id === stage);
+    setConfirmDialog({
+      title: `${mode === "revert" ? "Revert" : mode === "skip" ? "Skip ahead" : "Advance"} to ${target?.label ?? "stage"}?`,
+      message: mode === "revert" ? "This will move the class timeline back to this stage." : "This will move the class timeline forward to this stage.",
+      confirmLabel: mode === "revert" ? "Revert" : "Move timeline",
+      danger: mode === "revert",
+      onConfirm: () => setWorkflowStage(stage),
     });
   };
 
@@ -229,13 +250,15 @@ export function ClassDashboard() {
     return (
       <div className="mt-4 space-y-4">
         <div className="grid gap-3 sm:grid-cols-3">
-          <div className="rounded-md bg-gray-50 p-3"><div className="text-xs text-gray-500">All bills</div><div className="text-xl font-bold text-gray-900">{billStats.total}</div></div>
-          <div className="rounded-md bg-gray-50 p-3"><div className="text-xs text-gray-500">Waiting for referral</div><div className="text-xl font-bold text-gray-900">{billStats.waitingReferral}</div></div>
-          <div className="rounded-md bg-gray-50 p-3"><div className="text-xs text-gray-500">Waiting to be calendared</div><div className="text-xl font-bold text-gray-900">{billStats.waitingCalendar}</div></div>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Button onClick={() => navigate("/teacher/bill-sorting")}><FileText className="mr-2 h-4 w-4" />Refer bills</Button>
-          <Button onClick={() => navigate("/calendar")} variant="outline"><CalendarIcon className="mr-2 h-4 w-4" />Calendar bills</Button>
+          <div className="rounded-md border border-gray-200 bg-white p-3"><div className="text-xs text-gray-500">All bills</div><div className="text-xl font-bold text-gray-900">{billStats.total}</div></div>
+          <button type="button" onClick={() => navigate("/teacher/bill-sorting")} className="rounded-md border border-gray-200 bg-white p-3 text-left hover:bg-gray-50">
+            <div className="flex items-center justify-between gap-3 text-xs text-gray-500">Waiting for referral <ChevronRight className="h-4 w-4" /></div>
+            <div className="text-xl font-bold text-gray-900">{billStats.waitingReferral}</div>
+          </button>
+          <button type="button" onClick={() => navigate("/calendar")} className="rounded-md border border-gray-200 bg-white p-3 text-left hover:bg-gray-50">
+            <div className="flex items-center justify-between gap-3 text-xs text-gray-500">Waiting to be calendared <ChevronRight className="h-4 w-4" /></div>
+            <div className="text-xl font-bold text-gray-900">{billStats.waitingCalendar}</div>
+          </button>
         </div>
       </div>
     );
@@ -246,15 +269,17 @@ export function ClassDashboard() {
       <Card className="mb-8">
         <CardContent className="p-4">
           <div className="mb-3 flex items-center justify-between gap-3">
-            <div className="flex flex-wrap items-center gap-2 text-sm font-semibold text-gray-700">
+            <button
+              type="button"
+              onClick={toggleClassJoin}
+              className="group flex flex-wrap items-center gap-2 rounded-md px-2 py-1 text-sm font-semibold text-gray-700 hover:bg-gray-50"
+            >
               {classJoinEnabled ? <Unlock className="h-4 w-4 text-green-600" /> : <Lock className="h-4 w-4 text-gray-500" />}
               {classJoinEnabled ? "Class join is enabled" : "Class join is currently closed"}
-              {classJoinEnabled && (
-                <Button variant="ghost" size="sm" onClick={() => void disableClassJoin()} disabled={workflowBusy} className="h-7 px-2 text-xs">
-                  Disable class join
-                </Button>
-              )}
-            </div>
+              <span className="hidden rounded bg-white px-2 py-0.5 text-xs font-medium text-blue-700 shadow-sm group-hover:inline">
+                {classJoinEnabled ? "Disable" : "Enable"}
+              </span>
+            </button>
             <Button variant="ghost" size="sm" onClick={() => setTimelineExpanded((open) => !open)}>
               {timelineExpanded ? "Collapse timeline" : "View full timeline"}
               <ChevronDown className={`ml-1 h-4 w-4 transition-transform ${timelineExpanded ? "rotate-180" : ""}`} />
@@ -271,11 +296,15 @@ export function ClassDashboard() {
             {nextWorkflowStep && (
               <>
                 <div className="mt-9 h-0 min-w-8 border-t-2 border-dashed border-gray-300" />
-                <div className="min-w-[260px] flex-1 rounded-lg border border-gray-200 bg-gray-50 p-5 opacity-60">
+                <button
+                  type="button"
+                  onClick={() => confirmWorkflowStage(nextWorkflowStep.id, "advance")}
+                  className="min-w-[260px] flex-1 rounded-lg border border-gray-200 bg-gray-50 p-5 text-left opacity-60 transition hover:opacity-100"
+                >
                   <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">After that</div>
                   <h3 className="mt-1 font-semibold text-gray-700">{nextWorkflowStep.label}</h3>
                   <p className="mt-1 text-sm text-gray-500">{nextWorkflowStep.description}</p>
-                </div>
+                </button>
               </>
             )}
           </div>
@@ -284,16 +313,15 @@ export function ClassDashboard() {
               {workflowSteps.map((step, index) => (
                 <div key={step.id} className="flex items-start">
                   {index > 0 && <div className="mt-6 h-0 w-8 border-t-2 border-dashed border-gray-300" />}
-                  <div className={`min-w-56 rounded-md border p-3 text-sm ${index < currentIndex ? "border-blue-200 bg-blue-50 text-blue-900" : index === currentIndex ? "border-blue-300 bg-white text-gray-900" : "border-gray-200 bg-gray-50 text-gray-500"}`}>
+                  <button
+                    type="button"
+                    onClick={() => index < currentIndex ? confirmWorkflowStage(step.id, "revert") : index > currentIndex ? confirmWorkflowStage(step.id, "skip") : undefined}
+                    className={`min-h-28 min-w-56 rounded-md border p-3 text-left text-sm transition ${index < currentIndex ? "border-gray-200 bg-gray-50 text-gray-400 hover:bg-gray-100" : index === currentIndex ? "border-blue-300 bg-white text-gray-900" : "border-gray-200 bg-gray-50 text-gray-500 hover:bg-gray-100"}`}
+                  >
                     <div className="font-semibold">{step.label}</div>
-                    <div className="mt-1 text-xs">{index < currentIndex ? "Complete" : index === currentIndex ? "Current" : "Upcoming"}</div>
-                    {index < currentIndex && (
-                      <button type="button" onClick={() => void revertWorkflow(step.id)} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900">
-                        <RotateCcw className="h-3 w-3" />
-                        Revert here
-                      </button>
-                    )}
-                  </div>
+                    <div className="mt-1 text-xs font-medium">{index < currentIndex ? "Revert here" : index === currentIndex ? "Next" : "Skip here"}</div>
+                    <p className="mt-2 line-clamp-2 text-xs opacity-80">{step.description}</p>
+                  </button>
                 </div>
               ))}
             </div>
@@ -303,11 +331,6 @@ export function ClassDashboard() {
     ),
     [billStats, classJoinEnabled, currentIndex, currentWorkflowStep, nextWorkflowStep, timelineExpanded, workflowBusy, classSettings],
   );
-
-  const primaryActions = [
-    { label: "Student Roster", href: `/teacher/class/${classId}/manage`, icon: Users },
-    { label: "Simulation Settings", href: "/teacher/setup", icon: Settings },
-  ];
 
   const actionSections = [
     {
@@ -328,7 +351,7 @@ export function ClassDashboard() {
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-          <div>
+          <div className="min-w-0">
             {className ? (
               <div className="flex flex-wrap items-center gap-2">
                 {editingClassName ? (
@@ -348,12 +371,11 @@ export function ClassDashboard() {
             )}
             <p className="mt-1 text-sm text-gray-600">{studentCount} students enrolled</p>
           </div>
-          {classCode && (
-            <div className="rounded-lg border border-gray-200 bg-white px-4 py-3 text-right shadow-sm">
-              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Join code</div>
-              <div className="mt-1 font-mono text-xl font-bold text-blue-700">{classCode}</div>
-            </div>
-          )}
+          <div className="flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+            <Link to={`/teacher/class/${classId}`} className="rounded px-3 py-2 text-sm font-medium text-blue-700 bg-blue-50">Dashboard</Link>
+            <Link to={`/teacher/class/${classId}/manage`} className="rounded px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Student roster</Link>
+            <Link to="/teacher/setup" className="rounded px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Settings</Link>
+          </div>
         </div>
 
         {workflowTimeline}
@@ -430,19 +452,6 @@ export function ClassDashboard() {
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="space-y-2">
-                  {primaryActions.map((action) => {
-                    const Icon = action.icon;
-                    return (
-                      <Link key={action.label} to={action.href}>
-                        <Button variant="ghost" className="w-full justify-start bg-white text-base text-gray-900 hover:bg-gray-50">
-                          <Icon className="mr-2 h-4 w-4" />
-                          {action.label}
-                        </Button>
-                      </Link>
-                    );
-                  })}
-                </div>
                 {actionSections.map((section) => (
                   <div key={section.title}>
                     <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">{section.title}</h3>
@@ -451,7 +460,7 @@ export function ClassDashboard() {
                         const Icon = action.icon;
                         return (
                           <Link key={action.label} to={action.href}>
-                            <Button variant="ghost" className="w-full justify-start bg-gray-50 hover:bg-gray-100">
+                            <Button variant="ghost" className="w-full justify-start bg-white text-base text-gray-900 hover:bg-gray-50">
                               <Icon className="mr-2 h-4 w-4" />
                               {action.label}
                             </Button>
@@ -466,6 +475,7 @@ export function ClassDashboard() {
           </div>
         </div>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

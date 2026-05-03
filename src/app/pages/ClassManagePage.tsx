@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router";
-import { Check, Search, UserX, Users } from "lucide-react";
+import { Check, Copy, Search, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -129,6 +129,11 @@ export function ClassManagePage() {
     });
   };
 
+  const copyJoinCode = async () => {
+    await navigator.clipboard.writeText(classDetails?.classCode ?? "");
+    toast.success("Join code copied");
+  };
+
   const filteredStudents = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return students.filter((student) => {
@@ -191,9 +196,20 @@ export function ClassManagePage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1>
-          <p className="mt-1 text-sm text-gray-600">Student roster</p>
+        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">{classDetails.name}</h1>
+            <p className="mt-1 text-sm text-gray-600">Student roster</p>
+          </div>
+          <div className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <div className="text-right">
+              <div className="text-xs font-semibold uppercase tracking-wide text-gray-500">Join code</div>
+              <div className="font-mono text-xl font-bold text-blue-700">{classDetails.classCode}</div>
+            </div>
+            <button type="button" onClick={() => void copyJoinCode()} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Copy join code">
+              <Copy className="h-4 w-4" />
+            </button>
+          </div>
         </div>
 
         <Card>
@@ -201,10 +217,6 @@ export function ClassManagePage() {
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle>Students</CardTitle>
-                <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2">
-                  <span className="text-xs font-semibold uppercase tracking-wide text-blue-700">Join code</span>
-                  <span className="font-mono text-lg font-bold text-blue-800">{classDetails.classCode}</span>
-                </div>
               </div>
               <div className="relative w-full sm:max-w-sm self-end">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
