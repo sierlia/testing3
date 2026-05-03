@@ -53,6 +53,7 @@ import { CommitteeDashboard } from "./pages/CommitteeDashboard";
 import { CommitteeVote } from "./pages/CommitteeVote";
 import { CommitteeReportPage } from "./pages/CommitteeReportPage";
 import { ClassSimulationDashboard } from "./pages/ClassSimulationDashboard";
+import { ClassActivityPage } from "./pages/ClassActivityPage";
 
 export const router = createHashRouter([
   {
@@ -82,6 +83,10 @@ export const router = createHashRouter([
   {
     path: "/teacher/class/:classId",
     Component: ClassDashboard,
+  },
+  {
+    path: "/teacher/class/:classId/activity",
+    Component: ClassActivityPage,
   },
   {
     path: "/dashboard",
@@ -201,6 +206,10 @@ export const router = createHashRouter([
   },
   {
     path: "/floor-session",
+    Component: FloorSession,
+  },
+  {
+    path: "/floor",
     Component: FloorSession,
   },
   {

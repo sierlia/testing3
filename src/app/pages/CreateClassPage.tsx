@@ -67,6 +67,8 @@ export function CreateClassPage() {
         },
         bills: { tabs: ['legislative text', 'supporting text'], assignmentAuthority: 'teacher' },
         floor: { binding: true, calendarAutoPublish: true },
+        class: { joinEnabled: false },
+        workflow: { stage: "setup" },
         students: { requireJoinApproval: false },
       };
 

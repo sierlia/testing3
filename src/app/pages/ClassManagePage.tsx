@@ -23,6 +23,7 @@ interface Student {
 interface ClassDetails {
   id: string;
   name: string;
+  classCode: string;
 }
 
 export function ClassManagePage() {
@@ -48,9 +49,9 @@ export function ClassManagePage() {
         });
       }
 
-      const { data: cls, error: cErr } = await supabase.from("classes").select("id,name").eq("id", classId).single();
+      const { data: cls, error: cErr } = await supabase.from("classes").select("id,name,class_code").eq("id", classId).single();
       if (cErr) throw cErr;
-      setClassDetails({ id: cls.id, name: cls.name });
+      setClassDetails({ id: cls.id, name: cls.name, classCode: cls.class_code });
 
       const { data: roster, error: rErr } = await supabase
         .from("class_memberships")
@@ -198,15 +199,16 @@ export function ClassManagePage() {
         <Card>
           <CardHeader>
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <CardTitle>Students</CardTitle>
-              <div className="relative w-full sm:max-w-sm">
+              <div>
+                <CardTitle>Students</CardTitle>
+                <div className="mt-2 inline-flex items-center gap-2 rounded-md border border-blue-100 bg-blue-50 px-3 py-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-blue-700">Join code</span>
+                  <span className="font-mono text-lg font-bold text-blue-800">{classDetails.classCode}</span>
+                </div>
+              </div>
+              <div className="relative w-full sm:max-w-sm self-end">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search students..."
-                  className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search students..." className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               </div>
             </div>
           </CardHeader>

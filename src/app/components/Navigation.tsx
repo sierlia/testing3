@@ -1,4 +1,4 @@
-import { ChevronDown, Building2, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
+import { ChevronDown, Building2, LogOut, Settings, User, Mail, Plus, Layers, Gavel } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
@@ -246,7 +246,7 @@ export function Navigation() {
                         currentPath.startsWith('/notifications') || currentPath.startsWith('/members') ||
                         currentPath.startsWith('/parties') || currentPath.startsWith('/committees') ||
                         currentPath.startsWith('/settings') ||
-                        currentPath === '/elections' || currentPath === '/floor-session' || 
+                        currentPath === '/elections' || currentPath === '/floor-session' || currentPath === '/floor' ||
                         currentPath === '/calendar' || currentPath.startsWith('/profile') ||
                         currentPath === '/resources' || currentPath.startsWith('/tess-');
   
@@ -342,6 +342,13 @@ export function Navigation() {
                 className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
               >
                 Members
+              </Link>
+              <Link
+                to="/floor"
+                className="inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              >
+                <Gavel className="h-4 w-4" />
+                Floor
               </Link>
             </div>
           </div>
