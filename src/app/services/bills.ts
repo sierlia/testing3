@@ -174,15 +174,16 @@ export async function fetchBillDetail(billId: string) {
 
   const { data: cos, error: cErr } = await supabase
     .from('bill_cosponsors')
-    .select('user_id')
+    .select('user_id,created_at')
     .eq('bill_id', billId);
   if (cErr) throw cErr;
 
   const cosponsorIds = (cos ?? []).map((r: any) => r.user_id);
   const { data: cosponsors } = await supabase
     .from('profiles')
-    .select('user_id, display_name, party')
+    .select('user_id, display_name, party, constituency_name')
     .in('user_id', cosponsorIds.length ? cosponsorIds : ['00000000-0000-0000-0000-000000000000']);
+  const cosponsorMap = new Map((cosponsors ?? []).map((p: any) => [p.user_id, p]));
 
   const { data: referral } = await supabase
     .from('bill_referrals')
@@ -190,10 +191,49 @@ export async function fetchBillDetail(billId: string) {
     .eq('bill_id', billId)
     .maybeSingle();
 
+  const referralCommitteeId = (referral as any)?.committee_id as string | undefined;
+  const [{ data: committeeDoc }, { data: committeeVotes }, { data: calendar }, { data: floorSession }, { data: floorVotes }] = await Promise.all([
+    referralCommitteeId
+      ? supabase
+          .from('committee_bill_docs')
+          .select('updated_at,committee_report_submitted_at,ydoc_base64,committee_report_ydoc_base64')
+          .eq('bill_id', billId)
+          .eq('committee_id', referralCommitteeId)
+          .maybeSingle()
+      : ({ data: null } as any),
+    referralCommitteeId
+      ? supabase
+          .from('bill_committee_votes')
+          .select('vote,created_at,updated_at')
+          .eq('bill_id', billId)
+          .eq('committee_id', referralCommitteeId)
+      : ({ data: [] } as any),
+    supabase
+      .from('bill_calendar')
+      .select('scheduled_at,created_at,published')
+      .eq('bill_id', billId)
+      .eq('class_id', classId)
+      .maybeSingle(),
+    supabase
+      .from('bill_floor_sessions')
+      .select('status,opened_at,closed_at,created_at')
+      .eq('bill_id', billId)
+      .eq('class_id', classId)
+      .maybeSingle(),
+    supabase
+      .from('bill_floor_votes')
+      .select('vote,created_at')
+      .eq('bill_id', billId)
+      .eq('class_id', classId),
+  ]);
+
   return {
     bill: bill as any,
     sponsor: sponsor as any,
-    cosponsors: cosponsors ?? [],
+    cosponsors: (cos ?? []).map((row: any) => ({
+      ...(cosponsorMap.get(row.user_id) ?? { user_id: row.user_id, display_name: 'Unknown', party: null, constituency_name: null }),
+      cosponsored_at: row.created_at,
+    })),
     cosponsorIds,
     referral: referral
       ? {
@@ -202,6 +242,11 @@ export async function fetchBillDetail(billId: string) {
           referred_at: (referral as any).referred_at as string,
         }
       : null,
+    committeeDoc: (committeeDoc as any) ?? null,
+    committeeVotes: (committeeVotes ?? []) as any[],
+    calendar: (calendar as any) ?? null,
+    floorSession: (floorSession as any) ?? null,
+    floorVotes: (floorVotes ?? []) as any[],
   };
 }
 
