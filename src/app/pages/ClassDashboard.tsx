@@ -5,6 +5,7 @@ import {
   BookOpen,
   Calendar as CalendarIcon,
   ChevronDown,
+  ChevronRight,
   Clock,
   FileText,
   Lock,
