@@ -14,6 +14,7 @@ type CountData = {
 const defaultCounts: Counts = { dashboard: 0, review: 0, vote: 0 };
 const defaultIds: Record<CountedTabId, string[]> = { dashboard: [], review: [], vote: [] };
 const countDataCache = new Map<string, CountData>();
+const membershipCache = new Map<string, boolean>();
 
 function cloneCountData(data: CountData): CountData {
   return {
@@ -95,7 +96,7 @@ export function markCommitteeSeenIds(committeeId: string, tab: CountedTabId, ids
 export function CommitteeTabs({ committeeId, active }: { committeeId: string; active: TabId }) {
   const [countData, setCountData] = useState<CountData>(() => readCachedCountData(committeeId));
   const [seenVersion, setSeenVersion] = useState(0);
-  const [isMember, setIsMember] = useState(false);
+  const [isMember, setIsMember] = useState(() => membershipCache.get(committeeId) ?? true);
 
   useEffect(() => {
     let cancelled = false;
@@ -113,7 +114,11 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
           ? supabase.from("committee_members").select("user_id").eq("committee_id", committeeId).eq("user_id", uid).maybeSingle()
           : ({ data: null } as any),
       ]);
-      if (!cancelled) setIsMember(Boolean(membership));
+      if (!cancelled) {
+        const nextIsMember = Boolean(membership);
+        membershipCache.set(committeeId, nextIsMember);
+        setIsMember(nextIsMember);
+      }
       const billIds = (refs ?? []).map((row: any) => row.bill_id);
       const { data: statusRows } = billIds.length
         ? await supabase
@@ -189,12 +194,12 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
   ].filter((tab) => tab.id === "dashboard" || isMember);
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
+    <div className={`grid gap-2 rounded-lg border border-gray-200 bg-white p-2 shadow-sm ${tabs.length === 1 ? "grid-cols-1" : "grid-cols-2 sm:grid-cols-4"}`}>
       {tabs.map((tab) => (
         <Link
           key={tab.id}
           to={tab.to}
-          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+          className={`inline-flex min-w-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${
             active === tab.id ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
           }`}
         >

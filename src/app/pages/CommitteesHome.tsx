@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Check, ClipboardList, Search, UserPlus, Users } from "lucide-react";
+import { ClipboardList, LogOut, Search, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate } from "react-router";
@@ -32,6 +32,7 @@ export function CommitteesHome() {
   const [meId, setMeId] = useState<string | null>(null);
   const [joinedCommitteeIds, setJoinedCommitteeIds] = useState<Set<string>>(new Set());
   const [joiningCommitteeId, setJoiningCommitteeId] = useState<string | null>(null);
+  const [leavingCommitteeId, setLeavingCommitteeId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
@@ -177,6 +178,35 @@ export function CommitteesHome() {
     }
   };
 
+  const leaveCommittee = async (committeeId: string) => {
+    if (!meId || !joinedCommitteeIds.has(committeeId)) return;
+    setLeavingCommitteeId(committeeId);
+    try {
+      const { error } = await supabase.from("committee_members").delete().eq("committee_id", committeeId).eq("user_id", meId);
+      if (error) throw error;
+      setJoinedCommitteeIds((prev) => {
+        const next = new Set(prev);
+        next.delete(committeeId);
+        return next;
+      });
+      setMemberCounts((prev) => ({ ...prev, [committeeId]: Math.max(0, (prev[committeeId] ?? 1) - 1) }));
+      if (committeesHomeCache) {
+        const joined = new Set(committeesHomeCache.joinedCommitteeIds);
+        joined.delete(committeeId);
+        committeesHomeCache = {
+          ...committeesHomeCache,
+          joinedCommitteeIds: joined,
+          memberCounts: { ...committeesHomeCache.memberCounts, [committeeId]: Math.max(0, (committeesHomeCache.memberCounts[committeeId] ?? 1) - 1) },
+        };
+      }
+      toast.success("Left committee");
+    } catch (e: any) {
+      toast.error(e.message || "Could not leave committee");
+    } finally {
+      setLeavingCommitteeId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -237,17 +267,18 @@ export function CommitteesHome() {
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
-                            void joinCommittee(c.id);
+                            if (joinedCommitteeIds.has(c.id)) void leaveCommittee(c.id);
+                            else void joinCommittee(c.id);
                           }}
-                          disabled={joinedCommitteeIds.has(c.id) || joiningCommitteeId === c.id}
-                          className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors disabled:cursor-default ${
+                          disabled={joiningCommitteeId === c.id || leavingCommitteeId === c.id}
+                          className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-60 ${
                             joinedCommitteeIds.has(c.id)
-                              ? "bg-green-50 text-green-700 border border-green-200"
-                              : "bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-60"
+                              ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                              : "bg-blue-600 text-white hover:bg-blue-700"
                           }`}
                         >
-                          {joinedCommitteeIds.has(c.id) ? <Check className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                          {joinedCommitteeIds.has(c.id) ? "Joined" : joiningCommitteeId === c.id ? "Joining" : "Join"}
+                          {joinedCommitteeIds.has(c.id) ? <LogOut className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
+                          {joinedCommitteeIds.has(c.id) ? (leavingCommitteeId === c.id ? "Leaving" : "Leave") : joiningCommitteeId === c.id ? "Joining" : "Join"}
                         </button>
                       )}
                     </div>

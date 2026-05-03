@@ -337,7 +337,6 @@ export function CommitteeWorkspace() {
                         <div className="font-mono text-sm font-semibold text-gray-900">{b.number}</div>
                         <div className="text-sm text-gray-700 line-clamp-2">{b.title}</div>
                     <div className="text-xs text-gray-500 mt-1">Sponsor: {b.sponsor}</div>
-                    <div className="mt-2 text-xs rounded bg-gray-100 px-2 py-1 inline-block text-gray-700">{b.status.replace("_", " ")}</div>
                       </div>
                     </div>
                   </button>
@@ -391,6 +390,38 @@ export function CommitteeWorkspace() {
                         )}
 
                         <div className="flex flex-wrap justify-end gap-2">
+                          <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                            <button
+                              type="button"
+                              onClick={() => setTextView("edited")}
+                              className={`inline-flex items-center gap-1.5 px-2 py-1.5 text-xs font-medium transition-colors ${
+                                textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edited
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTextView("clean")}
+                              className={`inline-flex items-center gap-1.5 border-l border-gray-300 px-2 py-1.5 text-xs font-medium transition-colors ${
+                                textView === "clean" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              <Sparkles className="h-3.5 w-3.5" />
+                              Clean
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setTextView("original")}
+                              className={`inline-flex items-center gap-1.5 border-l border-gray-300 px-2 py-1.5 text-xs font-medium transition-colors ${
+                                textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
+                              }`}
+                            >
+                              <FileText className="h-3.5 w-3.5" />
+                              Original
+                            </button>
+                          </div>
                           <button
                             type="button"
                             onClick={() => void postSelectedBillProgress()}
@@ -408,38 +439,6 @@ export function CommitteeWorkspace() {
                           >
                             <Vote className="w-4 h-4" />
                             {selected.status === "committee_vote" ? "Proposed" : proposing ? "Proposing" : "Propose Vote"}
-                          </button>
-                        </div>
-                        <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
-                          <button
-                            type="button"
-                            onClick={() => setTextView("edited")}
-                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors ${
-                              textView === "edited" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <Pencil className="w-4 h-4" />
-                            Edited
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setTextView("clean")}
-                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
-                              textView === "clean" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <Sparkles className="w-4 h-4" />
-                            Clean
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setTextView("original")}
-                            className={`inline-flex items-center gap-2 px-3 py-2 text-sm font-medium transition-colors border-l border-gray-300 ${
-                              textView === "original" ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"
-                            }`}
-                          >
-                            <FileText className="w-4 h-4" />
-                            Original
                           </button>
                         </div>
                       </div>

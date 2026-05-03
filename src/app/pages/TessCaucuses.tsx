@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { Search, Plus, Users, ArrowUpDown, Vote } from "lucide-react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { OrganizationsLayout } from "./OrganizationsLayout";
@@ -22,6 +22,7 @@ interface Caucus {
 let caucusesPageCache: Caucus[] | null = null;
 
 export function TessCaucuses() {
+  const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"createdAt" | "members">("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
@@ -269,9 +270,9 @@ export function TessCaucuses() {
           </div>
         )}
 
-        <div className="mb-6 flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="flex-1 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="relative">
+        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -281,8 +282,6 @@ export function TessCaucuses() {
                 className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
@@ -311,14 +310,21 @@ export function TessCaucuses() {
             <div className="col-span-full text-center py-12 text-gray-500">No caucuses yet</div>
           ) : (
             sortedCaucuses.map((caucus) => (
-              <div key={caucus.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+              <div
+                key={caucus.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate(`/tess-caucuses/${caucus.id}`)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") navigate(`/tess-caucuses/${caucus.id}`);
+                }}
+                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+              >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
-                    <Link to={`/tess-caucuses/${caucus.id}`}>
-                      <h3 className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors mb-2">
-                        {caucus.name}
-                      </h3>
-                    </Link>
+                    <h3 className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors mb-2">
+                      {caucus.name}
+                    </h3>
                     <div className="mb-2 flex items-center gap-2 text-xs text-gray-500">
                       <Users className="w-3.5 h-3.5" />
                       {caucus.memberCount} members
@@ -326,7 +332,10 @@ export function TessCaucuses() {
                     <p className="text-sm text-gray-600 line-clamp-2">{caucus.description}</p>
                   </div>
                   <button
-                    onClick={() => handleJoinLeave(caucus.id)}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      handleJoinLeave(caucus.id);
+                    }}
                     className={`px-4 py-1.5 rounded-md font-medium text-sm transition-colors ${
                       caucus.isMember ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
                     }`}
@@ -339,7 +348,7 @@ export function TessCaucuses() {
                   <div className="flex items-center justify-between gap-3">
                     <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="w-4 h-4" /> Chair</span>
                     {caucus.chairId ? (
-                      <Link to={`/profile/${caucus.chairId}`} className="truncate text-blue-600 hover:underline">
+                      <Link to={`/profile/${caucus.chairId}`} onClick={(event) => event.stopPropagation()} className="truncate text-blue-600 hover:underline">
                         {caucus.chair.name}
                       </Link>
                     ) : (
@@ -349,7 +358,7 @@ export function TessCaucuses() {
                   <div className="flex items-center justify-between gap-3">
                     <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="w-4 h-4" /> Co-Chair</span>
                     {caucus.coChairId ? (
-                      <Link to={`/profile/${caucus.coChairId}`} className="truncate text-blue-600 hover:underline">
+                      <Link to={`/profile/${caucus.coChairId}`} onClick={(event) => event.stopPropagation()} className="truncate text-blue-600 hover:underline">
                         {caucus.coChair.name}
                       </Link>
                     ) : (

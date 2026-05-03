@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { type CSSProperties, useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Flag, Plus, Search, Users, Vote } from "lucide-react";
+import { Flag, LogOut, Plus, Repeat2, Search, UserPlus, Users, Vote } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { PartyCreateForm, NewParty, defaultPartyColor } from "../components/PartyCreateForm";
@@ -42,6 +42,7 @@ function PartyIcon({ name }: { name: string }) {
 }
 
 export function PartiesPage() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<any>({});
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
@@ -157,8 +158,30 @@ export function PartiesPage() {
   }, [parties, searchQuery]);
   const approvedParties = useMemo(() => filteredParties.filter((party) => party.approved), [filteredParties]);
   const pendingParties = useMemo(() => parties.filter((party) => !party.approved), [parties]);
+  const currentPartyName = useMemo(() => members.find((member) => member.user_id === meId)?.party ?? null, [meId, members]);
+  const majorityPartyName = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const member of members) {
+      if (!member.party) continue;
+      counts.set(member.party, (counts.get(member.party) ?? 0) + 1);
+    }
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]);
+    if (!ranked.length || ranked[0][1] === ranked[1]?.[1]) return null;
+    return ranked[0][0];
+  }, [members]);
 
   const memberCount = (partyName: string) => members.filter((member) => member.party === partyName).length;
+  const leadershipLabels = (partyName: string) => {
+    const normalized = partyName.toLowerCase();
+    const isMajorParty = normalized.includes("democrat") || normalized.includes("republican");
+    if (!isMajorParty) return { chair: "Chair", whip: "Vice Chair" };
+    if (!majorityPartyName) return { chair: "Leader", whip: "Whip" };
+    const isMajority = partyName === majorityPartyName;
+    return {
+      chair: isMajority ? "Majority Leader" : "Minority Leader",
+      whip: isMajority ? "Majority Whip" : "Minority Whip",
+    };
+  };
   const leaderFor = (party: PartyRow, position: "chair" | "whip") => {
     const counts = new Map<string, number>();
     for (const vote of votes.filter((row) => row.party_id === party.id && row.position === position)) {
@@ -166,6 +189,20 @@ export function PartiesPage() {
     }
     const winnerId = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     return winnerId ? members.find((member) => member.user_id === winnerId) ?? null : null;
+  };
+
+  const updateMyParty = async (partyName: string | null) => {
+    if (!meId) return;
+    try {
+      const { error } = await supabase.from("profiles").update({ party: partyName }).eq("user_id", meId);
+      if (error) throw error;
+      const nextMembers = members.map((member) => (member.user_id === meId ? { ...member, party: partyName } : member));
+      setMembers(nextMembers);
+      if (partiesPageCache) partiesPageCache = { ...partiesPageCache, members: nextMembers };
+      toast.success(partyName ? `Switched to ${partyName}` : "Left party");
+    } catch (error: any) {
+      toast.error(error.message || "Could not update party");
+    }
   };
 
   const createParty = async () => {
@@ -203,9 +240,9 @@ export function PartiesPage() {
       <Navigation />
       <main className="max-w-6xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
         <OrganizationsLayout active="parties">
-          <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="flex-1 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="relative">
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                 <input
                   value={searchQuery}
@@ -214,16 +251,16 @@ export function PartiesPage() {
                   className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+              {canCreate && (
+                <button
+                  onClick={() => setNewPartyOpen((open) => !open)}
+                  className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+                >
+                  <Plus className="h-4 w-4" />
+                  Create Party
+                </button>
+              )}
             </div>
-            {canCreate && (
-              <button
-                onClick={() => setNewPartyOpen((open) => !open)}
-                className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
-              >
-                <Plus className="h-4 w-4" />
-                Create Party
-              </button>
-            )}
           </div>
 
           {newPartyOpen && (
@@ -242,10 +279,18 @@ export function PartiesPage() {
               {approvedParties.map((party) => {
                 const chair = leaderFor(party, "chair");
                 const whip = leaderFor(party, "whip");
+                const labels = leadershipLabels(party.name);
+                const isCurrentParty = currentPartyName === party.name;
                 return (
-                  <Link
+                  <div
                     key={party.id}
-                    to={`/parties/${party.id}`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigate(`/parties/${party.id}`)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") navigate(`/parties/${party.id}`);
+                    }}
+                    style={{ "--party-color": party.color } as CSSProperties}
                     className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:border-gray-300 hover:shadow-md"
                   >
                     <div className="h-2" style={{ backgroundColor: party.color }} />
@@ -254,27 +299,44 @@ export function PartiesPage() {
                         <div className="flex items-center gap-3">
                           <PartyIcon name={party.name} />
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900 group-hover:text-blue-700">{party.name}</h3>
+                            <h3 className="text-lg font-semibold text-gray-900 group-hover:[color:var(--party-color)]">{party.name}</h3>
                             <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
                               <Users className="h-3.5 w-3.5" />
                               {memberCount(party.name)} members
                             </div>
                           </div>
                         </div>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            void updateMyParty(isCurrentParty ? null : party.name);
+                          }}
+                          className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                            isCurrentParty
+                              ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                              : currentPartyName
+                                ? "border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                : "bg-blue-600 text-white hover:bg-blue-700"
+                          }`}
+                        >
+                          {isCurrentParty ? <LogOut className="h-3.5 w-3.5" /> : currentPartyName ? <Repeat2 className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
+                          {isCurrentParty ? "Leave" : currentPartyName ? "Switch" : "Join"}
+                        </button>
                       </div>
                       <p className="line-clamp-3 text-sm text-gray-600">{party.platform || "No platform yet."}</p>
                       <div className="mt-4 grid gap-2 border-t border-gray-200 pt-4 text-sm">
                         <div className="flex items-center justify-between gap-3">
-                          <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="h-4 w-4" /> Chair</span>
+                          <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="h-4 w-4" /> {labels.chair}</span>
                           <span className="truncate text-gray-600">{chair?.display_name ?? "Not elected"}</span>
                         </div>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="h-4 w-4" /> Whip</span>
+                          <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="h-4 w-4" /> {labels.whip}</span>
                           <span className="truncate text-gray-600">{whip?.display_name ?? "Not elected"}</span>
                         </div>
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>

@@ -332,6 +332,22 @@
     line-height: 1.5;
   }
 
+  button:not(:disabled),
+  a[href],
+  [role="button"]:not([aria-disabled="true"]),
+  summary,
+  select,
+  label[for],
+  input[type="checkbox"],
+  input[type="radio"] {
+    cursor: pointer;
+  }
+
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   input {
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);

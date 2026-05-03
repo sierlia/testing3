@@ -32,6 +32,23 @@ function cacheActiveTeacherClass(userId: string, active: TeacherClass) {
   window.localStorage.setItem(`gavel:activeTeacherClass:${userId}`, JSON.stringify(active));
 }
 
+function readCachedAvatar(userId: string) {
+  try {
+    return window.localStorage.getItem(`gavel:avatar:${userId}`);
+  } catch {
+    return null;
+  }
+}
+
+function cacheAvatar(userId: string, avatarUrl: string | null) {
+  try {
+    if (avatarUrl) window.localStorage.setItem(`gavel:avatar:${userId}`, avatarUrl);
+    else window.localStorage.removeItem(`gavel:avatar:${userId}`);
+  } catch {
+    // ignore storage failures
+  }
+}
+
 export function Navigation() {
   const [organizationsOpen, setOrganizationsOpen] = useState(false);
   const [legislationOpen, setLegislationOpen] = useState(false);
@@ -45,6 +62,7 @@ export function Navigation() {
   const [activeClassName, setActiveClassName] = useState<string>("");
   const [teacherClasses, setTeacherClasses] = useState<TeacherClass[]>([]);
   const [unreadLetters, setUnreadLetters] = useState(0);
+  const classMenuRef = useRef<HTMLDivElement | null>(null);
   const orgCloseTimerRef = useRef<number | null>(null);
   const legislationCloseTimerRef = useRef<number | null>(null);
 
@@ -62,6 +80,8 @@ export function Navigation() {
         setTeacherClasses([]);
         return;
       }
+      const cachedAvatar = readCachedAvatar(user.id);
+      if (cachedAvatar) setAvatarUrl(cachedAvatar);
       const routeClassId = location.pathname.match(/^\/(?:teacher\/class|class)\/([^/]+)/)?.[1] ?? null;
       if ((user.user_metadata as any)?.role === "teacher") {
         const cachedClasses = readTeacherClasses(user.id);
@@ -75,7 +95,9 @@ export function Navigation() {
         }
       }
       const { data } = await supabase.from("profiles").select("avatar_url,class_id,role").eq("user_id", user.id).maybeSingle();
-      setAvatarUrl((data as any)?.avatar_url ?? null);
+      const nextAvatar = (data as any)?.avatar_url ?? null;
+      setAvatarUrl(nextAvatar);
+      cacheAvatar(user.id, nextAvatar);
       let classId = routeClassId ?? (data as any)?.class_id ?? null;
       if ((user.user_metadata as any)?.role === "teacher") {
         const { data: classes } = await supabase
@@ -105,6 +127,17 @@ export function Navigation() {
     };
     void load();
   }, [user?.id, location.pathname]);
+
+  useEffect(() => {
+    if (!classMenuOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && classMenuRef.current?.contains(target)) return;
+      setClassMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [classMenuOpen]);
 
   const switchClass = async (classId: string) => {
     if (!user?.id) return;
@@ -324,7 +357,7 @@ export function Navigation() {
               )}
             </Link>
             {user?.user_metadata?.role === "teacher" && (
-              <div className="relative">
+              <div className="relative" ref={classMenuRef}>
                 <button
                   type="button"
                   onClick={() => setClassMenuOpen((open) => !open)}
@@ -339,6 +372,9 @@ export function Navigation() {
 
                 {classMenuOpen && (
                   <div className="absolute right-0 top-full z-20 mt-2 w-72 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
+                    <div className="border-b border-gray-200 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      My classes
+                    </div>
                     <div className="max-h-72 overflow-y-auto py-1">
                       {teacherClasses.length === 0 ? (
                         <div className="px-4 py-3 text-sm text-gray-500">No classes yet</div>

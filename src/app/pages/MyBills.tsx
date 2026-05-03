@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Edit3, ExternalLink, FileText, Search } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { fetchMyBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
@@ -71,7 +71,7 @@ export function MyBills() {
             <p className="mt-1 text-gray-600">{filtered.length} bills found</p>
           </div>
           <Link to="/bills/create" className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-            <FileText className="h-4 w-4" />
+            <Plus className="h-4 w-4" />
             New Bill
           </Link>
         </div>
@@ -110,7 +110,11 @@ export function MyBills() {
           ) : (
             <div className="divide-y divide-gray-200">
               {filtered.map((bill) => (
-                <div key={bill.id} className="flex items-center justify-between gap-4 p-4">
+                <Link
+                  key={bill.id}
+                  to={bill.status === "draft" ? `/bills/create?draft=${bill.id}` : `/bills/${bill.id}`}
+                  className="flex items-center justify-between gap-4 p-4 transition-colors hover:bg-gray-50"
+                >
                   <div className="min-w-0">
                     <div className="mb-1 flex items-center gap-2">
                       <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
@@ -119,18 +123,7 @@ export function MyBills() {
                     <h2 className="truncate font-semibold text-gray-900">{bill.title}</h2>
                     <p className="mt-1 text-xs text-gray-500">{new Date(bill.created_at).toLocaleDateString()}</p>
                   </div>
-                  <div className="flex flex-shrink-0 items-center gap-2">
-                    {bill.status === "draft" && (
-                      <Link to={`/bills/create?draft=${bill.id}`} className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                        <Edit3 className="h-4 w-4" />
-                        Edit draft
-                      </Link>
-                    )}
-                    <Link to={`/bills/${bill.id}`} className="rounded-md p-2 text-gray-500 hover:bg-gray-50 hover:text-gray-900">
-                      <ExternalLink className="h-4 w-4" />
-                    </Link>
-                  </div>
-                </div>
+                </Link>
               ))}
             </div>
           )}
