@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { BackButton } from "../components/BackButton";
 import { CollapsibleText } from "../components/CollapsibleText";
 import { GraduationCap, MoreHorizontal, Save, X, Users as UsersIcon, Send, Pencil, Trash2, LogOut, UserPlus } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
@@ -819,7 +818,6 @@ export function TessCaucusDetail() {
       <Navigation />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
-        <BackButton />
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
           <div className="flex items-start justify-between gap-4">
             <div>

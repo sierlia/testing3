@@ -9,7 +9,14 @@ export const demoAccounts: Array<{ key: DemoAccountKey; label: string }> = [
   { key: "student2", label: "Student 2" },
 ];
 
-export async function switchDemoAccount(key: DemoAccountKey, options?: { confetti?: boolean }) {
+function currentRoutePath() {
+  const hashPath = window.location.hash.replace(/^#/, "");
+  if (hashPath && hashPath !== "/") return hashPath;
+  return window.location.pathname || "/";
+}
+
+export async function switchDemoAccount(key: DemoAccountKey, options?: { confetti?: boolean; preserveLocation?: boolean }) {
+  const currentPath = currentRoutePath();
   const { data, error } = await supabase.rpc("demo_account_credentials", { account_key: key });
   if (error) throw error;
   const credentials = Array.isArray(data) ? data[0] : data;
@@ -27,8 +34,9 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
   });
   if (signInError) throw signInError;
 
-  const target = credentials.role === "teacher"
+  const defaultTarget = credentials.role === "teacher"
     ? `/teacher/class/${credentials.class_id}`
     : `/class/${credentials.class_id}/dashboard`;
+  const target = options?.preserveLocation && !["/", "/signin", "/signup", "/about"].includes(currentPath) ? currentPath : defaultTarget;
   window.location.hash = target;
 }

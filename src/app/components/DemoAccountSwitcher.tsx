@@ -33,17 +33,27 @@ export function DemoAccountSwitcher() {
   const [demoActive, setDemoActive] = useState(() => window.localStorage.getItem("gavel:demoActive") === "1");
   const [dashboardReady, setDashboardReady] = useState(false);
   const [burst, setBurst] = useState(false);
-  const [dragHint, setDragHint] = useState(false);
+  const [dragHintMounted, setDragHintMounted] = useState(false);
+  const [dragHintVisible, setDragHintVisible] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
+  const dragHintTimerRef = useRef<number | null>(null);
+
+  const hideDragHint = () => {
+    if (dragHintTimerRef.current) window.clearTimeout(dragHintTimerRef.current);
+    dragHintTimerRef.current = null;
+    setDragHintVisible(false);
+    window.setTimeout(() => setDragHintMounted(false), 300);
+  };
 
   const playLaunchEffectsIfNeeded = () => {
     if (window.localStorage.getItem("gavel:demoConfetti") !== "1") return;
     window.localStorage.removeItem("gavel:demoConfetti");
     setBurst(true);
-    setDragHint(true);
+    setDragHintMounted(true);
+    window.requestAnimationFrame(() => setDragHintVisible(true));
     window.setTimeout(() => setBurst(false), 1000);
-    window.setTimeout(() => setDragHint(false), 5000);
+    dragHintTimerRef.current = window.setTimeout(hideDragHint, 5000);
   };
 
   useEffect(() => {
@@ -141,7 +151,7 @@ export function DemoAccountSwitcher() {
   const selectAccount = async (key: DemoAccountKey) => {
     setBusyKey(key);
     try {
-      await switchDemoAccount(key);
+      await switchDemoAccount(key, { preserveLocation: true });
       setOpen(false);
     } catch (error: any) {
       toast.error(error.message || "Could not switch demo account");
@@ -151,9 +161,9 @@ export function DemoAccountSwitcher() {
   };
 
   if (!position) return null;
-  if (!user || !demoActive || !dashboardReady) return null;
-  const menuVerticalClass = position.y < 220 ? "top-full mt-2" : "bottom-full mb-2";
-  const menuHorizontalClass = position.x < 176 ? "left-0" : "right-0";
+  if (!user || !demoActive) return null;
+  const menuVerticalClass = position.y > window.innerHeight - 300 ? "bottom-full mb-2" : "top-full mt-2";
+  const menuHorizontalClass = position.x > window.innerWidth - 240 ? "right-0" : "left-0";
   const activeKey = (user.email?.split("@")[0] ?? "") as DemoAccountKey;
 
   return (
@@ -162,10 +172,11 @@ export function DemoAccountSwitcher() {
       className="fixed z-50 select-none"
       style={{ left: position.x, top: position.y }}
       onPointerDown={(event) => {
+        hideDragHint();
         dragRef.current = { startX: event.clientX, startY: event.clientY, baseX: position.x, baseY: position.y, moved: false };
       }}
     >
-      <div className="rounded-full border border-gray-200 bg-white shadow-lg">
+      <div className="rounded-full border border-blue-700 bg-blue-600 text-white shadow-lg">
         {burst && (
           <div className="pointer-events-none absolute inset-0">
             {["-left-2 -top-2 bg-blue-500", "left-7 -top-4 bg-amber-400", "right-0 -top-3 bg-emerald-500", "-right-2 top-6 bg-pink-500", "left-2 -bottom-2 bg-purple-500"].map((classes, index) => (
@@ -173,8 +184,8 @@ export function DemoAccountSwitcher() {
             ))}
           </div>
         )}
-        {dragHint && (
-          <div className="absolute bottom-full right-0 mb-2 rounded-full bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white shadow-lg">
+        {dragHintMounted && (
+          <div className={`absolute bottom-full right-0 mb-2 px-3 py-1.5 text-sm font-semibold text-blue-700 transition-all duration-300 ${dragHintVisible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             Drag me!
           </div>
         )}
@@ -184,7 +195,7 @@ export function DemoAccountSwitcher() {
             if (dragRef.current?.moved) return;
             setOpen((value) => !value);
           }}
-          className="rounded-full px-4 py-3 text-sm font-semibold text-gray-800 hover:bg-gray-50"
+          className="rounded-full px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
         >
           Demo
         </button>

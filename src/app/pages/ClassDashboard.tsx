@@ -425,7 +425,6 @@ export function ClassDashboard() {
               <ChevronDown className={`ml-1 h-4 w-4 transition-transform ${timelineExpanded ? "rotate-180" : ""}`} />
             </Button>
           </div>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Class timeline</div>
           <div ref={timelineScrollRef} className="no-scrollbar overflow-x-auto pb-2">
             <div className="flex w-max items-stretch gap-0">
               {visibleWorkflowSteps.map((step, index) => {

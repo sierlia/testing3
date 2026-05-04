@@ -553,7 +553,7 @@ export function StudentProfile() {
           <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
         </div>
         <Link to={`/bills?sponsor=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
-          View all <ChevronRight className="h-3.5 w-3.5" />
+          All <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
       <div className="space-y-3">
@@ -587,7 +587,7 @@ export function StudentProfile() {
           <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-900">
             <span>Committees</span>
             <Link to={`/committees?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="mr-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
-              View all <ChevronRight className="h-3 w-3" />
+              All <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
           {orgs.committees.length === 0 ? (
@@ -608,7 +608,7 @@ export function StudentProfile() {
           <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-900">
             <span>Caucuses</span>
             <Link to={`/caucuses?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="mr-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
-              View all <ChevronRight className="h-3 w-3" />
+              All <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
           {orgs.caucuses.length === 0 ? (
@@ -637,7 +637,7 @@ export function StudentProfile() {
           <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
         </div>
         <Link to={`/records?type=letter&author=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
-          View all <ChevronRight className="h-3.5 w-3.5" />
+          All <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
       <div className="space-y-2">

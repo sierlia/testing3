@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router";
 import { CheckCircle, Flag, GraduationCap, LogOut, MoreHorizontal, Pencil, Repeat2, Save, Send, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { BackButton } from "../components/BackButton";
 import { CollapsibleText } from "../components/CollapsibleText";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -591,7 +590,6 @@ export function PartyDetail() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6" style={{ "--party-color": party?.color || "#2563eb" } as CSSProperties}>
-        <BackButton />
         {loading || !party ? (
           <div className="text-sm text-gray-600">Loading...</div>
         ) : (

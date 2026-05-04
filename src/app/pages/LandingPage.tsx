@@ -10,12 +10,12 @@ export function LandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center gap-8">
+        <div className="container relative mx-auto px-4 py-4 flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2">
             <Gavel className="w-8 h-8 text-blue-600" />
             <h1 className="text-2xl font-bold text-gray-900">Gavel</h1>
           </Link>
-          <div className="flex items-center gap-6 text-2xl font-bold">
+          <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-6 text-2xl font-bold">
             <Link to="/" className="text-gray-700 hover:text-gray-900">Home</Link>
             <Link to="/about" className="text-gray-700 hover:text-gray-900">Contact</Link>
             <button

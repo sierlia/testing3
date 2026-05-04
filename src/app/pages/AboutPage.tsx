@@ -10,12 +10,12 @@ export function AboutPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b bg-white">
-        <div className="container mx-auto flex items-center gap-8 px-4 py-4">
+        <div className="container relative mx-auto flex items-center gap-8 px-4 py-4">
           <Link to="/" className="flex items-center gap-2">
             <Gavel className="h-7 w-7 text-blue-600" />
             <span className="text-2xl font-bold text-gray-900">Gavel</span>
           </Link>
-          <nav className="flex items-center gap-6 text-2xl font-bold">
+          <nav className="absolute left-1/2 flex -translate-x-1/2 items-center gap-6 text-2xl font-bold">
             <Link to="/" className="text-gray-700 hover:text-gray-900">Home</Link>
             <Link to="/about" className="text-gray-700 hover:text-gray-900">Contact</Link>
             <button

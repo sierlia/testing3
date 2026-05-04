@@ -52,6 +52,7 @@ function cacheAvatar(userId: string, avatarUrl: string | null) {
 export function Navigation() {
   const [organizationsOpen, setOrganizationsOpen] = useState(false);
   const [legislationOpen, setLegislationOpen] = useState(false);
+  const [floorOpen, setFloorOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [classMenuOpen, setClassMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
@@ -66,6 +67,7 @@ export function Navigation() {
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const orgCloseTimerRef = useRef<number | null>(null);
   const legislationCloseTimerRef = useRef<number | null>(null);
+  const floorCloseTimerRef = useRef<number | null>(null);
 
   const handleSignOut = async () => {
     await signOut();
@@ -203,6 +205,7 @@ export function Navigation() {
       legislationCloseTimerRef.current = null;
     }
     setLegislationOpen(false);
+    setFloorOpen(false);
     setOrganizationsOpen(true);
   };
 
@@ -224,6 +227,7 @@ export function Navigation() {
       orgCloseTimerRef.current = null;
     }
     setOrganizationsOpen(false);
+    setFloorOpen(false);
     setLegislationOpen(true);
   };
 
@@ -232,6 +236,24 @@ export function Navigation() {
     legislationCloseTimerRef.current = window.setTimeout(() => {
       setLegislationOpen(false);
       legislationCloseTimerRef.current = null;
+    }, 140);
+  };
+
+  const openFloor = () => {
+    if (floorCloseTimerRef.current) {
+      window.clearTimeout(floorCloseTimerRef.current);
+      floorCloseTimerRef.current = null;
+    }
+    setLegislationOpen(false);
+    setOrganizationsOpen(false);
+    setFloorOpen(true);
+  };
+
+  const closeFloorSoon = () => {
+    if (floorCloseTimerRef.current) window.clearTimeout(floorCloseTimerRef.current);
+    floorCloseTimerRef.current = window.setTimeout(() => {
+      setFloorOpen(false);
+      floorCloseTimerRef.current = null;
     }, 140);
   };
 
@@ -430,12 +452,25 @@ export function Navigation() {
               >
                 Members
               </Link>
-              <Link
-                to="/floor"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-              >
-                Floor
-              </Link>
+              <div className="relative" onMouseEnter={openFloor} onMouseLeave={closeFloorSoon}>
+                <button
+                  onClick={() => navigate("/floor")}
+                  className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                >
+                  Floor
+                  <ChevronDown className={`w-4 h-4 transition-transform ${floorOpen ? "rotate-180" : ""}`} />
+                </button>
+                {floorOpen && (
+                  <div className="absolute top-full left-0 mt-0 w-40 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openFloor} onMouseLeave={closeFloorSoon}>
+                    <Link to="/floor" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      Live
+                    </Link>
+                    <Link to="/calendar" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      Calendar
+                    </Link>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

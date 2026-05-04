@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { BackButton } from "../components/BackButton";
 import { Search, Plus, Users, ArrowUpDown, Vote, LogOut, UserPlus, Pencil, Trash2 } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
@@ -291,7 +290,6 @@ export function TessCaucuses() {
       <Navigation />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <BackButton className="mb-4" />
         <OrganizationsLayout active="caucuses">
         {showCreateForm && (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
