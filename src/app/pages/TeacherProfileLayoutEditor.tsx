@@ -49,7 +49,12 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
   const [dragPointer, setDragPointer] = useState<{ x: number; y: number } | null>(null);
+  const [sectionWordLimits, setSectionWordLimits] = useState<Record<string, number>>({});
   const dragStartRef = useRef<{ key: string; startX: number; startY: number; moved: boolean } | null>(null);
+
+  const markDirty = () => {
+    if (embedded) window.dispatchEvent(new CustomEvent("gavel:profile-layout-dirty"));
+  };
 
   const load = async () => {
     setLoading(true);
@@ -67,6 +72,8 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         .eq("class_id", activeClass)
         .order("position", { ascending: true });
       if (error) throw error;
+      const { data: cls } = await supabase.from("classes").select("settings").eq("id", activeClass).maybeSingle();
+      setSectionWordLimits(((cls as any)?.settings?.profileSectionWordLimits ?? {}) as Record<string, number>);
       const rows = (data ?? []) as ProfileSection[];
       setSections(rows.length ? rows : defaultSections.map((section) => ({ ...section, class_id: activeClass })));
     } catch (e: any) {
@@ -86,6 +93,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   );
 
   const updateSection = (sectionKey: string, patch: Partial<ProfileSection>) => {
+    markDirty();
     setSections((prev) =>
       prev.map((section) => {
         if (section.section_key !== sectionKey) return section;
@@ -97,6 +105,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   };
 
   const moveSectionTo = (fromKey: string, toKey: string) => {
+    markDirty();
     setSections((prev) => {
       const next = [...prev];
       const from = next.findIndex((section) => section.section_key === fromKey);
@@ -115,6 +124,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
       return;
     }
     const stamp = Date.now();
+    markDirty();
     setSections((prev) => [
       ...prev,
       {
@@ -144,7 +154,14 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
       }));
       const { error } = await supabase.from("class_profile_sections").upsert(payload as any, { onConflict: "class_id,section_key" });
       if (error) throw error;
-      toast.success("Profile layout saved");
+      const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
+      const nextSettings = {
+        ...(((cls as any)?.settings ?? {}) as any),
+        profileSectionWordLimits: sectionWordLimits,
+      };
+      const { error: settingsError } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
+      if (settingsError) throw settingsError;
+      if (!embedded) toast.success("Profile layout saved");
       await load();
     } catch (e: any) {
       toast.error(e.message || "Could not save profile layout");
@@ -152,6 +169,16 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
       setSaving(false);
     }
   };
+
+  useEffect(() => {
+    if (!embedded) return;
+    const saveFromSettings = () => {
+      void saveLayout();
+    };
+    window.addEventListener("gavel:save-profile-layout", saveFromSettings);
+    return () => window.removeEventListener("gavel:save-profile-layout", saveFromSettings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [embedded, classId, normalizedSections, sectionWordLimits]);
 
   const removeSectionNow = async (section: ProfileSection) => {
     if (!classId) return;
@@ -214,8 +241,13 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
     if (!drag) return;
     drag.moved = drag.moved || Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4;
     setDragPointer({ x: event.clientX, y: event.clientY });
+    const cards = Array.from(document.querySelectorAll<HTMLElement>("[data-profile-section-key]"));
+    const generousTarget = cards.find((card) => {
+      const rect = card.getBoundingClientRect();
+      return event.clientX >= rect.left - 48 && event.clientX <= rect.right + 48 && event.clientY >= rect.top - 48 && event.clientY <= rect.bottom + 48;
+    });
     const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
-    const key = target?.closest("[data-profile-section-key]")?.getAttribute("data-profile-section-key") ?? null;
+    const key = generousTarget?.getAttribute("data-profile-section-key") ?? target?.closest("[data-profile-section-key]")?.getAttribute("data-profile-section-key") ?? null;
     if (key && key !== drag.key) setDragOverKey(key);
   };
 
@@ -254,10 +286,12 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
             );
           })}
         </div>
-        <button type="button" onClick={() => void saveLayout()} disabled={saving || loading} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-          <Save className="h-4 w-4" />
-          Save Layout
-        </button>
+        {!embedded && (
+          <button type="button" onClick={() => void saveLayout()} disabled={saving || loading} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+            <Save className="h-4 w-4" />
+            Save Layout
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -317,6 +351,23 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
                   </div>
                 </div>
                 <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{typeLabels[section.section_type]}</div>
+                {section.section_type === "long_response" && (
+                  <label className="mt-3 block text-xs font-semibold text-gray-600">
+                    Max words
+                    <input
+                      type="number"
+                      min={1}
+                      max={2000}
+                      value={sectionWordLimits[section.section_key] ?? 1000}
+                      onChange={(event) => {
+                        markDirty();
+                        const value = Math.min(2000, Math.max(1, Number(event.target.value) || 1000));
+                        setSectionWordLimits((current) => ({ ...current, [section.section_key]: value }));
+                      }}
+                      className="mt-1 block w-24 rounded-md border border-gray-300 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </label>
+                )}
               </div>
               </div>
             );

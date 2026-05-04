@@ -95,6 +95,7 @@ export function StudentProfile() {
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [orgs, setOrgs] = useState<{ committees: Array<{ id: string; name: string }>; caucuses: Array<{ id: string; name: string }> }>({ committees: [], caucuses: [] });
   const [profileSections, setProfileSections] = useState<ProfileSectionRow[]>(defaultProfileSections);
+  const [profileSectionWordLimits, setProfileSectionWordLimits] = useState<Record<string, number>>({});
   const [profileWordLimit, setProfileWordLimit] = useState(1000);
 
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
@@ -150,9 +151,10 @@ export function StudentProfile() {
         setAvatarPosition({ x: storedPosition.x, y: storedPosition.y });
       }
       setUpdatedAt(pr.updated_at || pr.created_at || new Date().toISOString());
-      if (pr.class_id) {
-        const { data: cls } = await supabase.from("classes").select("settings").eq("id", pr.class_id).maybeSingle();
-        setProfileWordLimit(Math.min(2000, Math.max(1, Number((cls as any)?.settings?.wordLimits?.profileLongResponse ?? 1000))));
+        if (pr.class_id) {
+          const { data: cls } = await supabase.from("classes").select("settings").eq("id", pr.class_id).maybeSingle();
+          setProfileWordLimit(Math.min(2000, Math.max(1, Number((cls as any)?.settings?.wordLimits?.profileLongResponse ?? 1000))));
+          setProfileSectionWordLimits(((cls as any)?.settings?.profileSectionWordLimits ?? {}) as Record<string, number>);
       }
 
       let authoredQuery = supabase
@@ -310,8 +312,9 @@ export function StudentProfile() {
 
   const saveEdit = async (section: Exclude<EditingSection, null>) => {
     if (!profile) return;
-    if (countWords(editingContent) > profileWordLimit) {
-      toast.error(`This section is limited to ${profileWordLimit} words.`);
+    const sectionLimit = profileSectionWordLimits[section] ?? profileWordLimit;
+    if (countWords(editingContent) > sectionLimit) {
+      toast.error(`This section is limited to ${sectionLimit} words.`);
       return;
     }
     if (section === "personal_statement") {

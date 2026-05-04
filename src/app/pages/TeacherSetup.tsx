@@ -40,25 +40,37 @@ const settingsTabIds: TabId[] = ["bills", "organizations", "elections", "profile
 type AuthorityTag = { id: string; label: string; type: "teacher" | "role" | "member"; locked?: boolean };
 type MemberOption = { id: string; name: string; email: string; role: string };
 
-function Toggle({ checked, onChange, title, description }: { checked: boolean; onChange: (next: boolean) => void; title: string; description: string }) {
+function Toggle({ checked, onChange, title, description, disabled = false }: { checked: boolean; onChange: (next: boolean) => void; title: string; description?: string; disabled?: boolean }) {
   return (
-    <label className="flex cursor-pointer items-start gap-3 rounded-lg p-2 transition-colors hover:bg-gray-50">
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600" />
-      <span>
+    <label className={`flex items-start gap-3 rounded-lg p-2 transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-gray-50"}`}>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+        className={`mt-0.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${checked ? "bg-blue-600" : "bg-gray-300"} disabled:cursor-not-allowed`}
+        aria-pressed={checked}
+      >
+        <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-5" : "translate-x-0.5"}`} />
+      </button>
+      <span className="min-w-0">
         <span className="block text-base font-semibold text-gray-900">{title}</span>
-        <span className="block text-sm text-gray-600">{description}</span>
+        {description && <span className="block text-sm text-gray-600">{description}</span>}
       </span>
     </label>
   );
 }
 
-function SettingsGroup({ title, children }: { title: string; children: ReactNode }) {
+function SettingsGroup({ title, children, disabled = false }: { title: string; children: ReactNode; disabled?: boolean }) {
   return (
     <section className="space-y-4 border-b border-gray-100 pb-6 last:border-b-0 last:pb-0">
-      <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
-      <div className="space-y-4">{children}</div>
+      <h3 className="text-xs font-black uppercase tracking-[0.18em] text-gray-500">{title}</h3>
+      <div className={`space-y-4 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
     </section>
   );
+}
+
+function DisabledBlock({ disabled, children }: { disabled: boolean; children: ReactNode }) {
+  return <div className={`space-y-4 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>;
 }
 
 function SettingSelect({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: ReactNode }) {
@@ -74,7 +86,7 @@ function SettingSelect({ value, onValueChange, children }: { value: string; onVa
 
 function WordLimitInput({ label, value, max, onChange }: { label: string; value: number; max: number; onChange: (value: number) => void }) {
   return (
-    <label className="block">
+    <label className="block max-w-52">
       <span className="mb-1 block text-base font-semibold text-gray-900">{label}</span>
       <input
         type="number"
@@ -82,7 +94,7 @@ function WordLimitInput({ label, value, max, onChange }: { label: string; value:
         max={max}
         value={value}
         onChange={(event) => onChange(Math.min(max, Math.max(1, Number(event.target.value) || 1)))}
-        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
       <span className="mt-1 block text-xs text-gray-500">Maximum allowed: {max.toLocaleString()} words</span>
     </label>
@@ -138,6 +150,17 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     teacherPermissions: "full",
     studentPermissions: "standard",
     leadershipPermissions: "moderate",
+    studentCanCreateBills: true,
+    studentCanComment: true,
+    studentCanReact: true,
+    allOrganizationsCanPost: true,
+    allOrganizationsCanComment: true,
+    partiesCanElectLeaders: true,
+    partiesCanPostAnnouncements: true,
+    committeesCanEditBills: true,
+    committeesCanVoteBills: true,
+    caucusesCanPostAnnouncements: true,
+    caucusesCanElectLeaders: true,
     notifyOnAnnouncements: true,
     notifyOnCalendaredBills: true,
     requireJoinApproval: false,
@@ -229,6 +252,17 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           teacherPermissions: s?.permissions?.teacher ?? prev.teacherPermissions,
           studentPermissions: s?.permissions?.student ?? prev.studentPermissions,
           leadershipPermissions: s?.permissions?.leadership ?? prev.leadershipPermissions,
+          studentCanCreateBills: s?.permissions?.students?.createBills ?? prev.studentCanCreateBills,
+          studentCanComment: s?.permissions?.students?.comment ?? prev.studentCanComment,
+          studentCanReact: s?.permissions?.students?.react ?? prev.studentCanReact,
+          allOrganizationsCanPost: s?.permissions?.allOrganizations?.postAnnouncements ?? prev.allOrganizationsCanPost,
+          allOrganizationsCanComment: s?.permissions?.allOrganizations?.comment ?? prev.allOrganizationsCanComment,
+          partiesCanElectLeaders: s?.permissions?.parties?.electLeaders ?? prev.partiesCanElectLeaders,
+          partiesCanPostAnnouncements: s?.permissions?.parties?.postAnnouncements ?? prev.partiesCanPostAnnouncements,
+          committeesCanEditBills: s?.permissions?.committees?.editBills ?? prev.committeesCanEditBills,
+          committeesCanVoteBills: s?.permissions?.committees?.voteBills ?? prev.committeesCanVoteBills,
+          caucusesCanPostAnnouncements: s?.permissions?.caucuses?.postAnnouncements ?? prev.caucusesCanPostAnnouncements,
+          caucusesCanElectLeaders: s?.permissions?.caucuses?.electLeaders ?? prev.caucusesCanElectLeaders,
           notifyOnAnnouncements: s?.notifications?.announcements ?? prev.notifyOnAnnouncements,
           notifyOnCalendaredBills: s?.notifications?.calendaredBills ?? prev.notifyOnCalendaredBills,
           requireJoinApproval: s?.students?.requireJoinApproval ?? prev.requireJoinApproval,
@@ -247,6 +281,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     };
     void load();
   }, [params.classId]);
+
+  useEffect(() => {
+    const markDirty = () => setHasChanges(true);
+    window.addEventListener("gavel:profile-layout-dirty", markDirty);
+    return () => window.removeEventListener("gavel:profile-layout-dirty", markDirty);
+  }, []);
 
   const syncPartiesAndCommittees = async (classId: string) => {
     if (settings.allowedParties.length) {
@@ -347,6 +387,32 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 teacher: settings.teacherPermissions,
                 student: settings.studentPermissions,
                 leadership: settings.leadershipPermissions,
+                students: {
+                  ...(existing?.permissions?.students ?? {}),
+                  createBills: settings.studentCanCreateBills,
+                  comment: settings.studentCanComment,
+                  react: settings.studentCanReact,
+                },
+                allOrganizations: {
+                  ...(existing?.permissions?.allOrganizations ?? {}),
+                  postAnnouncements: settings.allOrganizationsCanPost,
+                  comment: settings.allOrganizationsCanComment,
+                },
+                parties: {
+                  ...(existing?.permissions?.parties ?? {}),
+                  electLeaders: settings.partiesCanElectLeaders,
+                  postAnnouncements: settings.partiesCanPostAnnouncements,
+                },
+                committees: {
+                  ...(existing?.permissions?.committees ?? {}),
+                  editBills: settings.committeesCanEditBills,
+                  voteBills: settings.committeesCanVoteBills,
+                },
+                caucuses: {
+                  ...(existing?.permissions?.caucuses ?? {}),
+                  postAnnouncements: settings.caucusesCanPostAnnouncements,
+                  electLeaders: settings.caucusesCanElectLeaders,
+                },
               },
               notifications: {
                 ...(existing?.notifications ?? {}),
@@ -371,6 +437,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       const { error } = await supabase.from("classes").update({ settings: nextSettings }).eq("id", activeClassId);
       if (error) throw error;
       if (mode === "setup") await syncPartiesAndCommittees(activeClassId);
+      window.dispatchEvent(new CustomEvent("gavel:save-profile-layout"));
       toast.success("Settings saved");
       setHasChanges(false);
     } catch (e: any) {
@@ -483,7 +550,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         <div className="space-y-6">
           <SettingsGroup title="Text">
             <Toggle checked={settings.allowDrafts} onChange={(v) => setSettings({ allowDrafts: v })} title="Allow bill drafts" description="Students can save bills before submitting." />
-            <WordLimitInput label="Bill word limit" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />
+            <DisabledBlock disabled={!settings.allowDrafts}>
+              <WordLimitInput label="Bill word limit" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />
+            </DisabledBlock>
           </SettingsGroup>
           <SettingsGroup title="Cosponsorship">
             <div>
@@ -494,19 +563,21 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 <SelectItem value="never">Never</SelectItem>
               </SettingSelect>
             </div>
-            <Toggle checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
+            <Toggle checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} disabled={settings.cosponsorshipMode === "never"} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
           </SettingsGroup>
           <SettingsGroup title="Floor">
             <Toggle checked={settings.enableFloor} onChange={(v) => setSettings({ enableFloor: v })} title="Enable floor" description="Use the floor page for debate queues and final votes." />
-            <Toggle checked={settings.floorResultsBinding} onChange={(v) => setSettings({ floorResultsBinding: v })} title="Floor vote results determine outcome" description="Passed or failed status is applied when floor votes are posted." />
-            <div>
-              <label className="mb-2 block text-base font-semibold text-gray-900">Floor pass threshold</label>
-              <SettingSelect value={settings.floorVoteThreshold} onValueChange={(value) => setSettings({ floorVoteThreshold: value })}>
-                <SelectItem value="simple-majority">Simple majority</SelectItem>
-                <SelectItem value="absolute-majority">Majority of enrolled students</SelectItem>
-                <SelectItem value="two-thirds">Two-thirds</SelectItem>
-              </SettingSelect>
-            </div>
+            <DisabledBlock disabled={!settings.enableFloor}>
+              <Toggle checked={settings.floorResultsBinding} onChange={(v) => setSettings({ floorResultsBinding: v })} title="Floor vote results determine outcome" description="Passed or failed status is applied when floor votes are posted." />
+              <div>
+                <label className="mb-2 block text-base font-semibold text-gray-900">Floor pass threshold</label>
+                <SettingSelect value={settings.floorVoteThreshold} onValueChange={(value) => setSettings({ floorVoteThreshold: value })}>
+                  <SelectItem value="simple-majority">Simple majority</SelectItem>
+                  <SelectItem value="absolute-majority">Majority of enrolled students</SelectItem>
+                  <SelectItem value="two-thirds">Two-thirds</SelectItem>
+                </SettingSelect>
+              </div>
+            </DisabledBlock>
           </SettingsGroup>
         </div>
       );
@@ -521,7 +592,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               <Toggle checked={settings.enableCaucuses} onChange={(v) => setSettings({ enableCaucuses: v })} title="Enable caucuses" description="Students can form caucuses and post announcements." />
             </div>
           </SettingsGroup>
-          <SettingsGroup title="Text limits">
+          <SettingsGroup title="Text limits" disabled={!settings.enableParties && !settings.enableCommittees && !settings.enableCaucuses}>
             <div className="grid gap-4 sm:grid-cols-2">
               <WordLimitInput label="Name and description word limit" value={settings.organizationDescriptionWordLimit} max={500} onChange={(value) => setSettings({ organizationDescriptionWordLimit: value })} />
               <WordLimitInput label="Committee report word limit" value={settings.committeeReportWordLimit} max={2000} onChange={(value) => setSettings({ committeeReportWordLimit: value })} />
@@ -529,7 +600,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               <WordLimitInput label="Comment word limit" value={settings.commentWordLimit} max={500} onChange={(value) => setSettings({ commentWordLimit: value })} />
             </div>
           </SettingsGroup>
-          <SettingsGroup title="Bill assignment authority">
+          <SettingsGroup title="Bill assignment authority" disabled={!settings.enableCommittees}>
             <div className="rounded-lg border border-gray-200 bg-white p-3">
               <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500">
                 {settings.billAssignmentAuthorityTags.map((tag) => (
@@ -557,10 +628,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </SettingsGroup>
           <SettingsGroup title="Committee voting">
             <Toggle checked={settings.billsVotedAfterCommittee} onChange={(v) => setSettings({ billsVotedAfterCommittee: v, committeeVoteRequired: v })} title="Bills are voted on after committee review" description="Committee members vote before a bill can be reported." />
-            <div>
-              <label className="mb-1 block text-base font-semibold text-gray-900">Committee vote pass threshold</label>
-              <input type="number" min={1} max={100} value={settings.committeeVotePassThresholdPct} onChange={(event) => setSettings({ committeeVotePassThresholdPct: Math.min(100, Math.max(1, Number(event.target.value) || 50)) })} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-            </div>
+            <DisabledBlock disabled={!settings.billsVotedAfterCommittee || !settings.enableCommittees}>
+              <div>
+                <label className="mb-1 block text-base font-semibold text-gray-900">Committee vote pass threshold</label>
+                <input type="number" min={1} max={100} value={settings.committeeVotePassThresholdPct} onChange={(event) => setSettings({ committeeVotePassThresholdPct: Math.min(100, Math.max(1, Number(event.target.value) || 50)) })} className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </div>
+            </DisabledBlock>
           </SettingsGroup>
         </div>
       );
@@ -570,17 +643,21 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         <div className="space-y-6">
           <SettingsGroup title="House leadership election">
             <Toggle checked={settings.enableHouseLeadershipElection} onChange={(v) => setSettings({ enableHouseLeadershipElection: v })} title="Enable House leadership election" description="Students can vote for Speaker of the House from the floor page." />
-            <SettingSelect value={settings.houseLeadershipElectionMode} onValueChange={(value) => setSettings({ houseLeadershipElectionMode: value })}>
-              <SelectItem value="student-vote">Student vote</SelectItem>
-              <SelectItem value="teacher-posted">Teacher posts result</SelectItem>
-            </SettingSelect>
+            <DisabledBlock disabled={!settings.enableHouseLeadershipElection}>
+              <SettingSelect value={settings.houseLeadershipElectionMode} onValueChange={(value) => setSettings({ houseLeadershipElectionMode: value })}>
+                <SelectItem value="student-vote">Student vote</SelectItem>
+                <SelectItem value="teacher-posted">Teacher posts result</SelectItem>
+              </SettingSelect>
+            </DisabledBlock>
           </SettingsGroup>
           <SettingsGroup title="Organization elections">
             <Toggle checked={settings.enableOrganizationElections} onChange={(v) => setSettings({ enableOrganizationElections: v })} title="Enable organization elections" description="Parties, committees, and caucuses can run their leadership elections." />
-            <SettingSelect value={settings.organizationElectionMode} onValueChange={(value) => setSettings({ organizationElectionMode: value })}>
-              <SelectItem value="student-vote">Members vote</SelectItem>
-              <SelectItem value="teacher-posted">Teacher posts result</SelectItem>
-            </SettingSelect>
+            <DisabledBlock disabled={!settings.enableOrganizationElections}>
+              <SettingSelect value={settings.organizationElectionMode} onValueChange={(value) => setSettings({ organizationElectionMode: value })}>
+                <SelectItem value="student-vote">Members vote</SelectItem>
+                <SelectItem value="teacher-posted">Teacher posts result</SelectItem>
+              </SettingSelect>
+            </DisabledBlock>
           </SettingsGroup>
         </div>
       );
@@ -590,9 +667,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         <div className="space-y-6">
           <SettingsGroup title="Profile availability">
             <Toggle checked={settings.profilesEnabled} onChange={(v) => setSettings({ profilesEnabled: v })} title="Enable profiles" description="Students can view and complete profile sections." />
-            <WordLimitInput label="Profile long response word limit" value={settings.profileLongResponseWordLimit} max={2000} onChange={(value) => setSettings({ profileLongResponseWordLimit: value })} />
+            <DisabledBlock disabled={!settings.profilesEnabled}>
+              <WordLimitInput label="Profile long response word limit" value={settings.profileLongResponseWordLimit} max={2000} onChange={(value) => setSettings({ profileLongResponseWordLimit: value })} />
+            </DisabledBlock>
           </SettingsGroup>
-          <SettingsGroup title="Profile layout editor">
+          <SettingsGroup title="Profile layout editor" disabled={!settings.profilesEnabled}>
             <ProfileLayoutEditor embedded />
           </SettingsGroup>
         </div>
@@ -601,31 +680,26 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "permissions") {
       return (
         <div className="space-y-6">
-          <SettingsGroup title="Role permissions">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <label className="mb-2 block text-base font-semibold text-gray-900">Teachers</label>
-                <SettingSelect value={settings.teacherPermissions} onValueChange={(value) => setSettings({ teacherPermissions: value })}>
-                  <SelectItem value="full">Full control</SelectItem>
-                  <SelectItem value="moderate">Moderation only</SelectItem>
-                </SettingSelect>
-              </div>
-              <div>
-                <label className="mb-2 block text-base font-semibold text-gray-900">Students</label>
-                <SettingSelect value={settings.studentPermissions} onValueChange={(value) => setSettings({ studentPermissions: value })}>
-                  <SelectItem value="standard">Standard participation</SelectItem>
-                  <SelectItem value="restricted">Read and vote only</SelectItem>
-                </SettingSelect>
-              </div>
-              <div>
-                <label className="mb-2 block text-base font-semibold text-gray-900">Organization leadership</label>
-                <SettingSelect value={settings.leadershipPermissions} onValueChange={(value) => setSettings({ leadershipPermissions: value })}>
-                  <SelectItem value="moderate">Moderate organization spaces</SelectItem>
-                  <SelectItem value="post-only">Post announcements only</SelectItem>
-                  <SelectItem value="standard">Same as members</SelectItem>
-                </SettingSelect>
-              </div>
-            </div>
+          <SettingsGroup title="Students">
+            <Toggle checked={settings.studentCanCreateBills} onChange={(v) => setSettings({ studentCanCreateBills: v })} title="Create bills" />
+            <Toggle checked={settings.studentCanComment} onChange={(v) => setSettings({ studentCanComment: v })} title="Comment in allowed spaces" />
+            <Toggle checked={settings.studentCanReact} onChange={(v) => setSettings({ studentCanReact: v })} title="React to announcements and comments" />
+          </SettingsGroup>
+          <SettingsGroup title="All organizations">
+            <Toggle checked={settings.allOrganizationsCanPost} onChange={(v) => setSettings({ allOrganizationsCanPost: v })} title="Post announcements" />
+            <Toggle checked={settings.allOrganizationsCanComment} onChange={(v) => setSettings({ allOrganizationsCanComment: v })} title="Comment on announcements" />
+          </SettingsGroup>
+          <SettingsGroup title="Parties" disabled={!settings.enableParties}>
+            <Toggle checked={settings.partiesCanElectLeaders} onChange={(v) => setSettings({ partiesCanElectLeaders: v })} title="Run leadership elections" />
+            <Toggle checked={settings.partiesCanPostAnnouncements} onChange={(v) => setSettings({ partiesCanPostAnnouncements: v })} title="Post party announcements" />
+          </SettingsGroup>
+          <SettingsGroup title="Committees" disabled={!settings.enableCommittees}>
+            <Toggle checked={settings.committeesCanEditBills} onChange={(v) => setSettings({ committeesCanEditBills: v })} title="Edit referred bills" />
+            <Toggle checked={settings.committeesCanVoteBills} onChange={(v) => setSettings({ committeesCanVoteBills: v })} title="Vote on referred bills" />
+          </SettingsGroup>
+          <SettingsGroup title="Caucuses" disabled={!settings.enableCaucuses}>
+            <Toggle checked={settings.caucusesCanPostAnnouncements} onChange={(v) => setSettings({ caucusesCanPostAnnouncements: v })} title="Post caucus announcements" />
+            <Toggle checked={settings.caucusesCanElectLeaders} onChange={(v) => setSettings({ caucusesCanElectLeaders: v })} title="Run caucus elections" />
           </SettingsGroup>
         </div>
       );

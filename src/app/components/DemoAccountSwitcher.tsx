@@ -49,6 +49,12 @@ export function DemoAccountSwitcher() {
   const playLaunchEffectsIfNeeded = () => {
     if (window.localStorage.getItem("gavel:demoConfetti") !== "1") return;
     window.localStorage.removeItem("gavel:demoConfetti");
+    if (window.localStorage.getItem("gavel:demoCenter") === "1") {
+      window.localStorage.removeItem("gavel:demoCenter");
+      const centered = { x: Math.max(16, Math.round(window.innerWidth / 2 - 42)), y: Math.max(16, Math.round(window.innerHeight / 2 - 24)) };
+      setPosition(centered);
+      window.localStorage.setItem(storageKey, JSON.stringify(centered));
+    }
     setBurst(true);
     setDragHintMounted(true);
     window.requestAnimationFrame(() => setDragHintVisible(true));
@@ -178,14 +184,14 @@ export function DemoAccountSwitcher() {
     >
       <div className="rounded-full border border-blue-700 bg-blue-600 text-white shadow-lg">
         {burst && (
-          <div className="pointer-events-none absolute inset-0">
-            {["-left-2 -top-2 bg-blue-500", "left-7 -top-4 bg-amber-400", "right-0 -top-3 bg-emerald-500", "-right-2 top-6 bg-pink-500", "left-2 -bottom-2 bg-purple-500"].map((classes, index) => (
-              <span key={index} className={`absolute h-2 w-2 animate-ping rounded-full ${classes}`} />
+          <div className="pointer-events-none absolute inset-0 scale-125 animate-pulse">
+            {["-left-4 -top-3 h-3 w-3 bg-blue-500", "left-8 -top-6 h-4 w-4 bg-amber-400", "right-0 -top-5 h-3.5 w-3.5 bg-emerald-500", "-right-4 top-7 h-4 w-4 bg-pink-500", "left-2 -bottom-4 h-3 w-3 bg-purple-500", "right-8 -bottom-5 h-3.5 w-3.5 bg-sky-400"].map((classes, index) => (
+              <span key={index} className={`absolute animate-ping rounded-full ${classes}`} />
             ))}
           </div>
         )}
         {dragHintMounted && (
-          <div className={`absolute bottom-full right-0 mb-2 px-3 py-1.5 text-sm font-semibold text-blue-700 transition-all duration-300 ${dragHintVisible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
+          <div className={`absolute bottom-full right-0 mb-2 whitespace-nowrap px-3 py-1.5 text-sm font-semibold text-blue-700 transition-all duration-300 ${dragHintVisible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
             Drag me!
           </div>
         )}

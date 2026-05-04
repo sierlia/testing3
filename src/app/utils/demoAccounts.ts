@@ -26,6 +26,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
   if (options?.confetti) {
     window.localStorage.setItem("gavel:demoOpenedAt", String(Date.now()));
     window.localStorage.setItem("gavel:demoConfetti", "1");
+    window.localStorage.setItem("gavel:demoCenter", "1");
   }
   await supabase.auth.signOut();
   const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -37,6 +38,10 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
   const defaultTarget = credentials.role === "teacher"
     ? `/teacher/class/${credentials.class_id}`
     : `/class/${credentials.class_id}/dashboard`;
-  const target = options?.preserveLocation && !["/", "/signin", "/signup", "/about"].includes(currentPath) ? currentPath : defaultTarget;
+  const isPublicRoute = ["/", "/signin", "/signup", "/about"].includes(currentPath);
+  const incompatibleRoleRoute =
+    (credentials.role === "student" && currentPath.startsWith("/teacher/")) ||
+    (credentials.role === "teacher" && currentPath.startsWith("/class/"));
+  const target = options?.preserveLocation && !isPublicRoute && !incompatibleRoleRoute ? currentPath : defaultTarget;
   window.location.hash = target;
 }
