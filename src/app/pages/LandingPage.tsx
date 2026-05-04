@@ -6,7 +6,7 @@ import { switchDemoAccount } from "../utils/demoAccounts";
 
 export function PublicNav({ active }: { active: "home" | "contact" }) {
   const linkClass = (id: "home" | "contact") =>
-    `relative text-2xl font-bold transition-colors ${active === id ? "text-blue-700" : "text-gray-700 hover:text-gray-900"}`;
+    `text-lg font-bold transition-colors ${active === id ? "text-blue-700" : "text-gray-700 hover:text-gray-900"}`;
   return (
     <header className="border-b bg-white/90 backdrop-blur-sm">
       <div className="container relative mx-auto flex items-center gap-8 px-4 py-4">
@@ -15,26 +15,20 @@ export function PublicNav({ active }: { active: "home" | "contact" }) {
           <h1 className="text-2xl font-bold text-gray-900">Gavel</h1>
         </Link>
         <nav className="absolute left-1/2 flex -translate-x-1/2 items-center gap-7">
-          <Link to="/" className={linkClass("home")}>
-            Home
-            {active === "home" && <span className="absolute -bottom-2 left-0 right-0 h-1 rounded-full bg-blue-600" />}
-          </Link>
-          <Link to="/about" className={linkClass("contact")}>
-            Contact
-            {active === "contact" && <span className="absolute -bottom-2 left-0 right-0 h-1 rounded-full bg-blue-600" />}
-          </Link>
+          <Link to="/" className={linkClass("home")}>Home</Link>
+          <Link to="/about" className={linkClass("contact")}>Contact</Link>
           <button
             type="button"
             onClick={async () => {
               try {
-                await switchDemoAccount("student1", { confetti: true });
+                await switchDemoAccount("teacher1", { confetti: true });
               } catch (error: any) {
                 toast.error(error.message || "Could not open demo");
               }
             }}
-            className="text-2xl font-bold text-gray-700 transition-colors hover:text-gray-900"
+            className="text-lg font-bold text-gray-700 transition-colors hover:text-gray-900"
           >
-            Demo
+            Enter Demo
           </button>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm font-medium">
@@ -71,7 +65,7 @@ export function LandingPage() {
                   variant="outline"
                   onClick={async () => {
                     try {
-                      await switchDemoAccount("student1", { confetti: true });
+                      await switchDemoAccount("teacher1", { confetti: true });
                     } catch (error: any) {
                       toast.error(error.message || "Could not open demo");
                     }

@@ -46,11 +46,10 @@ export function SignUpPage() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm text-gray-600 mb-6">
-                <li>• Create unlimited classes</li>
-                <li>• Generate join codes for students</li>
-                <li>• Manage committees and assignments</li>
-                <li>• Track student progress</li>
-                <li>• Full admin controls</li>
+                <li>Create unlimited, highly-customizable simulations</li>
+                <li>Generate join codes and invite other teachers</li>
+                <li>Manage parties, committees, and caucuses</li>
+                <li>Track student progress with assignments</li>
               </ul>
               <Button className="w-full" size="lg">
                 Sign Up as Teacher
@@ -73,11 +72,11 @@ export function SignUpPage() {
             </CardHeader>
             <CardContent>
               <ul className="space-y-2 text-sm text-gray-600 mb-6">
-                <li>• Join with a class code</li>
-                <li>• Choose your constituency and party</li>
-                <li>• Draft and sponsor bills</li>
-                <li>• Participate in committees</li>
-                <li>• Vote on legislation</li>
+                <li>Join with a class code</li>
+                <li>Choose your constituency and part</li>
+                <li>Draft and cosponsor bills</li>
+                <li>Participate in committees, caucuses, and elections</li>
+                <li>Vote on legislation</li>
               </ul>
               <Button className="w-full" size="lg" variant="outline">
                 Sign Up as Student
@@ -102,7 +101,6 @@ export function SignUpPage() {
     </div>
   );
 }
-
 function TeacherSignUp({ onBack }: { onBack: () => void }) {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
@@ -161,7 +159,7 @@ function TeacherSignUp({ onBack }: { onBack: () => void }) {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Button variant="ghost" onClick={onBack} className="mb-4">
-          ← Back
+          â† Back
         </Button>
 
         <Card>
@@ -215,7 +213,7 @@ function TeacherSignUp({ onBack }: { onBack: () => void }) {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
@@ -228,7 +226,7 @@ function TeacherSignUp({ onBack }: { onBack: () => void }) {
                 <Input
                   id="confirmPassword"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                   required
@@ -304,7 +302,7 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <Button variant="ghost" onClick={onBack} className="mb-4">
-          ← Back
+          â† Back
         </Button>
 
         <Card>
@@ -348,7 +346,7 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   value={formData.password}
                   onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                   required
@@ -361,7 +359,7 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
                 <Input
                   id="confirmPassword"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢"
                   value={formData.confirmPassword}
                   onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
                   required

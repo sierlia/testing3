@@ -25,7 +25,7 @@ function isDashboardPath(path: string) {
 }
 
 export function DemoAccountSwitcher() {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const [routePath, setRoutePath] = useState(() => currentAppPath());
   const [open, setOpen] = useState(false);
   const [busyKey, setBusyKey] = useState<DemoAccountKey | null>(null);
@@ -51,7 +51,7 @@ export function DemoAccountSwitcher() {
     window.localStorage.removeItem("gavel:demoConfetti");
     if (window.localStorage.getItem("gavel:demoCenter") === "1") {
       window.localStorage.removeItem("gavel:demoCenter");
-      const centered = { x: Math.max(16, Math.round(window.innerWidth / 2 - 42)), y: Math.max(16, Math.round(window.innerHeight / 2 - 24)) };
+      const centered = { x: Math.max(16, Math.round(window.innerWidth / 2 - 42)), y: Math.max(16, Math.round(window.innerHeight * 0.58)) };
       setPosition(centered);
       window.localStorage.setItem(storageKey, JSON.stringify(centered));
     }
@@ -166,6 +166,12 @@ export function DemoAccountSwitcher() {
     }
   };
 
+  const endDemo = async () => {
+    setOpen(false);
+    await signOut();
+    window.location.hash = "/";
+  };
+
   if (!position) return null;
   if (!user || !demoActive) return null;
   const menuVerticalClass = position.y > window.innerHeight - 300 ? "bottom-full mb-2" : "top-full mt-2";
@@ -191,7 +197,7 @@ export function DemoAccountSwitcher() {
           </div>
         )}
         {dragHintMounted && (
-          <div className={`absolute bottom-full right-0 mb-2 whitespace-nowrap px-3 py-1.5 text-sm font-semibold text-blue-700 transition-all duration-300 ${dragHintVisible ? "translate-y-0 opacity-100" : "translate-y-3 opacity-0"}`}>
+          <div className={`absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 text-sm font-semibold text-blue-700 transition-all duration-300 ${dragHintVisible ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0"}`}>
             Drag me!
           </div>
         )}
@@ -222,6 +228,15 @@ export function DemoAccountSwitcher() {
               {busyKey === account.key ? "Opening..." : account.label}
             </button>
           ))}
+          <div className="my-1 border-t border-gray-100" />
+          <button
+            type="button"
+            disabled={busyKey !== null}
+            onClick={() => void endDemo()}
+            className="block w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-red-600 hover:bg-red-50 disabled:opacity-60"
+          >
+            End demo
+          </button>
         </div>
       )}
     </div>
