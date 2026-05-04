@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation } from "react-router";
 import { toast } from "sonner";
 import { demoAccounts, DemoAccountKey, switchDemoAccount } from "../utils/demoAccounts";
 import { useAuth } from "../utils/AuthContext";
@@ -16,9 +15,18 @@ function readPosition() {
   return null;
 }
 
+function currentAppPath() {
+  const hashPath = window.location.hash.replace(/^#/, "");
+  return hashPath || window.location.pathname;
+}
+
+function isDashboardPath(path: string) {
+  return path.includes("/dashboard") || path.startsWith("/class/") || path.startsWith("/teacher/class/");
+}
+
 export function DemoAccountSwitcher() {
   const { user } = useAuth();
-  const location = useLocation();
+  const [routePath, setRoutePath] = useState(() => currentAppPath());
   const [open, setOpen] = useState(false);
   const [busyKey, setBusyKey] = useState<DemoAccountKey | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -68,13 +76,24 @@ export function DemoAccountSwitcher() {
     setDashboardReady(false);
     const onReady = () => setDashboardReady(true);
     window.addEventListener("gavel:dashboard-ready", onReady);
-    const isDashboardRoute = location.pathname.includes("/dashboard") || location.pathname.startsWith("/class/") || location.pathname.startsWith("/teacher/class/");
-    const fallback = isDashboardRoute ? window.setTimeout(() => setDashboardReady(true), 1200) : null;
+    const fallback = isDashboardPath(routePath) ? window.setTimeout(() => setDashboardReady(true), 1200) : null;
     return () => {
       window.removeEventListener("gavel:dashboard-ready", onReady);
       if (fallback) window.clearTimeout(fallback);
     };
-  }, [location.pathname, user?.id]);
+  }, [routePath, user?.id]);
+
+  useEffect(() => {
+    const updateRoute = () => setRoutePath(currentAppPath());
+    window.addEventListener("hashchange", updateRoute);
+    window.addEventListener("popstate", updateRoute);
+    const interval = window.setInterval(updateRoute, 500);
+    return () => {
+      window.removeEventListener("hashchange", updateRoute);
+      window.removeEventListener("popstate", updateRoute);
+      window.clearInterval(interval);
+    };
+  }, []);
 
   useEffect(() => {
     if (!dashboardReady || !demoActive) return;
