@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Activity, Check, Copy, Download, MoreHorizontal, Search, UserX, Users } from "lucide-react";
+import { Activity, Check, Copy, Download, MailPlus, MoreHorizontal, Search, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -16,7 +16,7 @@ interface RosterMember {
   name: string;
   email: string;
   joinedAt: string;
-  status: "approved" | "pending";
+  status: "approved" | "pending" | "invited";
   position: string;
   role: "student" | "teacher";
   party: string;
@@ -33,6 +33,7 @@ interface ClassDetails {
   id: string;
   name: string;
   classCode: string;
+  teacherId: string;
 }
 
 export function ClassManagePage() {
@@ -46,12 +47,17 @@ export function ClassManagePage() {
   const [sortBy, setSortBy] = useState<"name" | "role" | "party" | "sponsored">("name");
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState<"student" | "teacher">("student");
+  const [inviteBusy, setInviteBusy] = useState(false);
 
   const loadClassData = async () => {
     if (!classId) return;
     setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
+      setCurrentUserId(user?.id ?? null);
       if (user) {
         await supabase.from("profiles").upsert({
           user_id: user.id,
@@ -61,9 +67,9 @@ export function ClassManagePage() {
         });
       }
 
-      const { data: cls, error: cErr } = await supabase.from("classes").select("id,name,class_code").eq("id", classId).single();
+      const { data: cls, error: cErr } = await supabase.from("classes").select("id,name,class_code,teacher_id").eq("id", classId).single();
       if (cErr) throw cErr;
-      setClassDetails({ id: cls.id, name: cls.name, classCode: cls.class_code });
+      setClassDetails({ id: cls.id, name: cls.name, classCode: cls.class_code, teacherId: cls.teacher_id });
 
       const { data: roster, error: rErr } = await supabase
         .from("class_memberships")
@@ -117,7 +123,7 @@ export function ClassManagePage() {
           name: profileMap.get(row.user_id)?.display_name ?? "Student",
           email: row.email ?? "N/A",
           joinedAt: row.created_at,
-          status: (row.status ?? "approved") as "approved" | "pending",
+          status: (row.status ?? "approved") as "approved" | "pending" | "invited",
           role: (profileMap.get(row.user_id)?.role ?? row.role ?? "student") as "student" | "teacher",
           position: "N/A",
           party: profileMap.get(row.user_id)?.party ?? "N/A",
@@ -141,21 +147,21 @@ export function ClassManagePage() {
     void loadClassData();
   }, [classId]);
 
-  const approveStudent = async (studentId: string) => {
+  const approveMember = async (memberId: string) => {
     if (!classId) return;
     const { error } = await supabase
       .from("class_memberships")
       .update({ status: "approved", approved_at: new Date().toISOString() })
-      .eq("user_id", studentId)
+      .eq("user_id", memberId)
       .eq("class_id", classId);
-    if (error) return toast.error("Failed to approve student");
-    toast.success("Student approved");
+    if (error) return toast.error("Failed to approve member");
+    toast.success("Member approved");
     await loadClassData();
   };
 
-  const removeStudent = (student: RosterMember) => {
+  const removeMember = (student: RosterMember) => {
     setConfirmDialog({
-      title: "Remove student?",
+      title: "Remove member?",
       message: `${student.name} will be removed from this class.`,
       confirmLabel: "Remove",
       danger: true,
@@ -164,10 +170,33 @@ export function ClassManagePage() {
         const { error } = await supabase.from("class_memberships").delete().eq("user_id", student.id).eq("class_id", classId);
         if (error) throw error;
         await supabase.from("profiles").update({ class_id: null } as any).eq("user_id", student.id).eq("class_id", classId);
-        toast.success("Student removed");
+        toast.success("Member removed");
         await loadClassData();
       },
     });
+  };
+
+  const inviteMember = async () => {
+    if (!classId || !inviteEmail.trim()) return;
+    const email = inviteEmail.trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      toast.error("please enter a valid email address");
+      return;
+    }
+    setInviteBusy(true);
+    try {
+      const rpcName = inviteRole === "teacher" ? "invite_teacher_to_class" : "invite_student_to_class";
+      const args = inviteRole === "teacher" ? { target_class: classId, teacher_email: email } : { target_class: classId, student_email: email };
+      const { error } = await supabase.rpc(rpcName, args as any);
+      if (error) throw error;
+      toast.success("invitation sent if user exists");
+      setInviteEmail("");
+      await loadClassData();
+    } catch (e: any) {
+      toast.error(e.message === "EMAIL_REQUIRED" ? "please enter a valid email address" : "invitation sent if user exists");
+    } finally {
+      setInviteBusy(false);
+    }
   };
 
   const copyJoinCode = async () => {
@@ -189,8 +218,8 @@ export function ClassManagePage() {
     });
   }, [roleFilter, searchQuery, sortBy, students]);
 
-  const approvedStudents = filteredStudents.filter((student) => student.status === "approved");
-  const pendingStudents = filteredStudents.filter((student) => student.status === "pending");
+  const approvedMembers = filteredStudents.filter((student) => student.status === "approved");
+  const pendingMembers = filteredStudents.filter((student) => student.status !== "approved");
   const totalApprovedStudents = students.filter((student) => student.status === "approved" && student.role === "student").length;
   const totalApprovedTeachers = students.filter((student) => student.status === "approved" && student.role === "teacher").length;
 
@@ -215,7 +244,7 @@ export function ClassManagePage() {
       if (key === "caucuses") return member.caucuses.map((item) => item.name).join("; ");
       return String((member as any)[key] ?? "");
     };
-    const csv = [columns.join(","), ...approvedStudents.map((member) => columns.map((column) => `"${valueFor(member, column).replace(/"/g, '""')}"`).join(","))].join("\n");
+    const csv = [columns.join(","), ...approvedMembers.map((member) => columns.map((column) => `"${valueFor(member, column).replace(/"/g, '""')}"`).join(","))].join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -251,9 +280,23 @@ export function ClassManagePage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {rows.map((student) => (
-              <TableRow key={student.id} className="hover:bg-transparent">
-                <TableCell className="sticky left-0 z-10 bg-white font-medium"><Link to={`/profile/${student.id}`} className="text-blue-600 hover:underline">{student.name}</Link></TableCell>
+            {rows.map((student) => {
+              const isTeacher = student.role === "teacher";
+              const isOwner = student.id === classDetails?.teacherId;
+              const isCurrentUser = student.id === currentUserId;
+              const rowClass = isTeacher || isOwner || isCurrentUser ? "bg-emerald-50" : "bg-white";
+              const nameClass = isTeacher || isOwner || isCurrentUser ? "text-emerald-700" : "text-blue-600";
+              return (
+              <TableRow key={student.id} className={`${rowClass} hover:bg-transparent`}>
+                <TableCell className={`sticky left-0 z-10 font-medium ${rowClass}`}>
+                  <Link to={`/profile/${student.id}`} className={`${nameClass} hover:underline`}>{student.name}</Link>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {isOwner && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Owner</span>}
+                    {isCurrentUser && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">You</span>}
+                    {pending && student.status === "pending" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Join request</span>}
+                    {pending && student.status === "invited" && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Invitation sent</span>}
+                  </div>
+                </TableCell>
                 <TableCell>{student.email}</TableCell>
                 <TableCell className="capitalize">{student.role}</TableCell>
                 <TableCell>{student.position}</TableCell>
@@ -264,22 +307,23 @@ export function ClassManagePage() {
                 <TableCell><Link to={`/dear-colleague/inbox?author=${encodeURIComponent(student.name)}`} className="text-blue-600 hover:underline">{student.letters}</Link></TableCell>
                 <TableCell>{linkList(student.committees, "/committees")}</TableCell>
                 <TableCell>{linkList(student.caucuses, "/caucuses")}</TableCell>
-                <TableCell className="sticky right-0 z-10 bg-white text-right">
+                <TableCell className={`sticky right-0 z-10 text-right ${rowClass}`}>
                   <div className="relative inline-flex">
                     <button type="button" onClick={() => setActionMenuOpen((open) => open === student.id ? null : student.id)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Actions">
                       <MoreHorizontal className="h-4 w-4" />
                     </button>
                     {actionMenuOpen === student.id && (
                       <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-gray-200 bg-white p-1 text-left shadow-lg">
-                        {pending && <button type="button" onClick={() => void approveStudent(student.id)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Check className="h-4 w-4" />Approve</button>}
+                        {pending && student.status === "pending" && <button type="button" onClick={() => void approveMember(student.id)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Check className="h-4 w-4" />Approve</button>}
                         <Link to={`/teacher/class/${classId}/activity?student=${encodeURIComponent(student.name)}`} className="flex items-center gap-2 rounded px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"><Activity className="h-4 w-4" />View activity</Link>
-                        <button type="button" onClick={() => removeStudent(student)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-red-600 hover:bg-red-50"><UserX className="h-4 w-4" />Remove</button>
+                        <button type="button" onClick={() => removeMember(student)} className="flex w-full items-center gap-2 rounded px-3 py-2 text-sm text-red-600 hover:bg-red-50"><UserX className="h-4 w-4" />Remove</button>
                       </div>
                     )}
                   </div>
                 </TableCell>
               </TableRow>
-            ))}
+            );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -370,18 +414,35 @@ export function ClassManagePage() {
                 </button>
               </div>
             </div>
+            <div className="mt-4 flex flex-col gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center">
+              <MailPlus className="hidden h-5 w-5 text-gray-500 sm:block" />
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={(event) => setInviteEmail(event.target.value)}
+                placeholder="Invite by email"
+                className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "student" | "teacher")} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
+                <option value="student">Student</option>
+                <option value="teacher">Teacher</option>
+              </select>
+              <Button type="button" onClick={() => void inviteMember()} disabled={inviteBusy || !inviteEmail.trim()}>
+                Invite
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
               <div className="py-10 text-center text-sm text-gray-500">Loading students...</div>
             ) : (
-              <Tabs defaultValue="students">
+              <Tabs defaultValue="members">
                 <TabsList>
-                  <TabsTrigger value="students">Students</TabsTrigger>
+                  <TabsTrigger value="members">Members</TabsTrigger>
                   <TabsTrigger value="pending">Pending</TabsTrigger>
                 </TabsList>
-                <TabsContent value="students">{rosterTable(approvedStudents)}</TabsContent>
-                <TabsContent value="pending">{rosterTable(pendingStudents, true)}</TabsContent>
+                <TabsContent value="members">{rosterTable(approvedMembers)}</TabsContent>
+                <TabsContent value="pending">{rosterTable(pendingMembers, true)}</TabsContent>
               </Tabs>
             )}
           </CardContent>

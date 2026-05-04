@@ -518,7 +518,6 @@ export function ClassDashboard() {
                           void saveClassName();
                         }
                       }}
-                      onBlur={() => void saveClassName()}
                       className="rounded-md border-2 border-dashed border-gray-300 bg-transparent px-3 py-2 text-3xl font-bold text-gray-900 outline-none hover:border-blue-300 focus:border-blue-500"
                     />
                     <button type="button" onClick={() => void saveClassName()} className="rounded-md p-2 text-blue-600 hover:bg-blue-50" aria-label="Save class name"><Save className="h-5 w-5" /></button>

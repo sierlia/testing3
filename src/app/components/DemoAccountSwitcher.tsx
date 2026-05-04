@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { demoAccounts, DemoAccountKey, switchDemoAccount } from "../utils/demoAccounts";
 
-const storageKey = "gavel:demoSwitcherPosition";
+const storageKey = "gavel:demoSwitcherPosition:v2";
 
 function readPosition() {
   try {
@@ -18,6 +18,7 @@ export function DemoAccountSwitcher() {
   const [open, setOpen] = useState(false);
   const [busyKey, setBusyKey] = useState<DemoAccountKey | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
 
   useEffect(() => {
@@ -52,6 +53,17 @@ export function DemoAccountSwitcher() {
     };
   }, [position]);
 
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && rootRef.current?.contains(target)) return;
+      setOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [open]);
+
   const selectAccount = async (key: DemoAccountKey) => {
     setBusyKey(key);
     try {
@@ -68,6 +80,7 @@ export function DemoAccountSwitcher() {
 
   return (
     <div
+      ref={rootRef}
       className="fixed z-50 select-none"
       style={{ left: position.x, top: position.y }}
       onPointerDown={(event) => {

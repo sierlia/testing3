@@ -21,6 +21,10 @@ begin
     email,
     encrypted_password,
     email_confirmed_at,
+    confirmation_token,
+    email_change,
+    email_change_token_new,
+    recovery_token,
     raw_app_meta_data,
     raw_user_meta_data,
     created_at,
@@ -28,13 +32,17 @@ begin
     is_anonymous
   )
   values
-    ('00000000-0000-0000-0000-000000000000', teacher_one, 'authenticated', 'authenticated', 'teacher1@gavel.demo', crypt(demo_password, gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Teacher 1","role":"teacher","demo":true}'::jsonb, now(), now(), false),
-    ('00000000-0000-0000-0000-000000000000', teacher_two, 'authenticated', 'authenticated', 'teacher2@gavel.demo', crypt(demo_password, gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Teacher 2","role":"teacher","demo":true}'::jsonb, now(), now(), false),
-    ('00000000-0000-0000-0000-000000000000', student_one, 'authenticated', 'authenticated', 'student1@gavel.demo', crypt(demo_password, gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Student 1","role":"student","demo":true}'::jsonb, now(), now(), false),
-    ('00000000-0000-0000-0000-000000000000', student_two, 'authenticated', 'authenticated', 'student2@gavel.demo', crypt(demo_password, gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Student 2","role":"student","demo":true}'::jsonb, now(), now(), false)
+    ('00000000-0000-0000-0000-000000000000', teacher_one, 'authenticated', 'authenticated', 'teacher1@gavel.demo', crypt(demo_password, gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Teacher 1","role":"teacher","demo":true}'::jsonb, now(), now(), false),
+    ('00000000-0000-0000-0000-000000000000', teacher_two, 'authenticated', 'authenticated', 'teacher2@gavel.demo', crypt(demo_password, gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Teacher 2","role":"teacher","demo":true}'::jsonb, now(), now(), false),
+    ('00000000-0000-0000-0000-000000000000', student_one, 'authenticated', 'authenticated', 'student1@gavel.demo', crypt(demo_password, gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Student 1","role":"student","demo":true}'::jsonb, now(), now(), false),
+    ('00000000-0000-0000-0000-000000000000', student_two, 'authenticated', 'authenticated', 'student2@gavel.demo', crypt(demo_password, gen_salt('bf')), now(), '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{"name":"Student 2","role":"student","demo":true}'::jsonb, now(), now(), false)
   on conflict (id) do update
     set encrypted_password = excluded.encrypted_password,
         email_confirmed_at = coalesce(auth.users.email_confirmed_at, now()),
+        confirmation_token = '',
+        email_change = '',
+        email_change_token_new = '',
+        recovery_token = '',
         raw_app_meta_data = excluded.raw_app_meta_data,
         raw_user_meta_data = excluded.raw_user_meta_data,
         updated_at = now();

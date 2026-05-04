@@ -5,8 +5,6 @@ import { NotificationBadge } from "./NotificationBadge";
 import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "./DefaultAvatar";
-import { switchDemoAccount } from "../utils/demoAccounts";
-import { toast } from "sonner";
 
 type TeacherClass = { id: string; name: string };
 
@@ -311,25 +309,22 @@ export function Navigation() {
             </div>
 
             <div className="hidden md:flex items-center gap-1">
-              <Link
-                to={dashboardLink}
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-              >
-                Home
-              </Link>
-              <button
-                type="button"
-                onClick={async () => {
-                  try {
-                    await switchDemoAccount("student1");
-                  } catch (error: any) {
-                    toast.error(error.message || "Could not open demo");
-                  }
-                }}
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-              >
-                Demo
-              </button>
+              {!user && (
+                <>
+                  <Link
+                    to={dashboardLink}
+                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                  >
+                    Home
+                  </Link>
+                  <Link
+                    to="/"
+                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                  >
+                    Demo
+                  </Link>
+                </>
+              )}
               <div className="relative" onMouseEnter={openLegislation} onMouseLeave={closeLegislationSoon}>
                 <button
                   onClick={() => navigate("/bills")}
