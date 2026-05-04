@@ -23,7 +23,7 @@ export function DemoAccountSwitcher() {
   useEffect(() => {
     const saved = readPosition();
     if (saved) setPosition(saved);
-    else setPosition({ x: 16, y: Math.max(16, window.innerHeight - 76) });
+    else setPosition({ x: Math.max(16, window.innerWidth - 96), y: Math.max(16, window.innerHeight - 76) });
   }, []);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ export function DemoAccountSwitcher() {
       const drag = dragRef.current;
       if (!drag) return;
       const next = {
-        x: Math.min(window.innerWidth - 230, Math.max(8, drag.baseX + event.clientX - drag.startX)),
+        x: Math.min(window.innerWidth - 96, Math.max(8, drag.baseX + event.clientX - drag.startX)),
         y: Math.min(window.innerHeight - 64, Math.max(8, drag.baseY + event.clientY - drag.startY)),
       };
       drag.moved = drag.moved || Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4;
@@ -87,7 +87,7 @@ export function DemoAccountSwitcher() {
         </button>
       </div>
       {open && (
-        <div className="absolute bottom-full left-0 mb-2 w-44 overflow-hidden rounded-2xl border border-gray-200 bg-white p-1 shadow-xl">
+        <div className="absolute bottom-full right-0 mb-2 w-44 overflow-hidden rounded-2xl border border-gray-200 bg-white p-1 shadow-xl">
           {demoAccounts.map((account) => (
             <button
               key={account.key}

@@ -111,7 +111,11 @@ stable
 security definer
 set search_path = public
 as $$
-  select *
+  select
+    accounts.email::text,
+    accounts.password::text,
+    accounts.role::text,
+    accounts.class_id::uuid
   from (
     values
       ('student1', 'student1@gavel.demo', '123456', 'student', '00000000-0000-4000-8000-000000000100'::uuid),
@@ -119,7 +123,7 @@ as $$
       ('teacher1', 'teacher1@gavel.demo', '123456', 'teacher', '00000000-0000-4000-8000-000000000100'::uuid),
       ('teacher2', 'teacher2@gavel.demo', '123456', 'teacher', '00000000-0000-4000-8000-000000000100'::uuid)
   ) as accounts(key, email, password, role, class_id)
-  where key = lower(trim(account_key))
+  where accounts.key = lower(trim(account_key))
 $$;
 
 revoke all on function public.demo_account_credentials(text) from public;
