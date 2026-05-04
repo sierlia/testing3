@@ -10,19 +10,19 @@ export function LandingPage() {
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
       {/* Header */}
       <header className="border-b bg-white/80 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="container mx-auto px-4 py-4 flex items-center gap-8">
+          <Link to="/" className="flex items-center gap-2">
             <Gavel className="w-8 h-8 text-blue-600" />
             <h1 className="text-2xl font-bold text-gray-900">Gavel</h1>
-          </div>
-          <div className="flex items-center gap-5 text-sm font-medium">
-            <a href="#/" className="text-gray-700 hover:text-gray-900">Home</a>
+          </Link>
+          <div className="flex items-center gap-6 text-2xl font-bold">
+            <Link to="/" className="text-gray-700 hover:text-gray-900">Home</Link>
             <Link to="/about" className="text-gray-700 hover:text-gray-900">Contact</Link>
             <button
               type="button"
               onClick={async () => {
                 try {
-                  await switchDemoAccount("student1");
+                  await switchDemoAccount("student1", { confetti: true });
                 } catch (error: any) {
                   toast.error(error.message || "Could not open demo");
                 }
@@ -31,6 +31,8 @@ export function LandingPage() {
             >
               Demo
             </button>
+          </div>
+          <div className="ml-auto flex items-center gap-3 text-sm font-medium">
             <Button variant="outline" asChild>
               <Link to="/signin">Sign In</Link>
             </Button>

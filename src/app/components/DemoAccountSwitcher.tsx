@@ -21,9 +21,20 @@ export function DemoAccountSwitcher() {
   const [busyKey, setBusyKey] = useState<DemoAccountKey | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [demoActive, setDemoActive] = useState(() => window.localStorage.getItem("gavel:demoActive") === "1");
+  const [dashboardReady, setDashboardReady] = useState(false);
   const [burst, setBurst] = useState(false);
+  const [dragHint, setDragHint] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
+
+  const playLaunchEffectsIfNeeded = () => {
+    if (window.localStorage.getItem("gavel:demoConfetti") !== "1") return;
+    window.localStorage.removeItem("gavel:demoConfetti");
+    setBurst(true);
+    setDragHint(true);
+    window.setTimeout(() => setBurst(false), 1000);
+    window.setTimeout(() => setDragHint(false), 5000);
+  };
 
   useEffect(() => {
     const saved = readPosition();
@@ -34,14 +45,35 @@ export function DemoAccountSwitcher() {
   useEffect(() => {
     const onDemoOpened = () => {
       setDemoActive(true);
-      setBurst(true);
-      window.setTimeout(() => setBurst(false), 1000);
+      if (dashboardReady) playLaunchEffectsIfNeeded();
+    };
+    const onDemoEnded = () => {
+      setDemoActive(false);
+      setOpen(false);
     };
     window.addEventListener("gavel:demo-opened", onDemoOpened);
+    window.addEventListener("gavel:demo-ended", onDemoEnded);
     const openedAt = Number(window.localStorage.getItem("gavel:demoOpenedAt") ?? 0);
     if (Date.now() - openedAt < 2000) onDemoOpened();
-    return () => window.removeEventListener("gavel:demo-opened", onDemoOpened);
-  }, []);
+    return () => {
+      window.removeEventListener("gavel:demo-opened", onDemoOpened);
+      window.removeEventListener("gavel:demo-ended", onDemoEnded);
+    };
+  }, [dashboardReady]);
+
+  useEffect(() => {
+    setDemoActive(window.localStorage.getItem("gavel:demoActive") === "1");
+    setDashboardReady(false);
+    const onReady = () => setDashboardReady(true);
+    window.addEventListener("gavel:dashboard-ready", onReady);
+    return () => window.removeEventListener("gavel:dashboard-ready", onReady);
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!dashboardReady || !demoActive) return;
+    playLaunchEffectsIfNeeded();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dashboardReady, demoActive]);
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -93,7 +125,7 @@ export function DemoAccountSwitcher() {
   };
 
   if (!position) return null;
-  if (!user && !demoActive) return null;
+  if (!user || !demoActive || !dashboardReady) return null;
   const menuVerticalClass = position.y < 220 ? "top-full mt-2" : "bottom-full mb-2";
   const menuHorizontalClass = position.x < 176 ? "left-0" : "right-0";
 
@@ -112,6 +144,11 @@ export function DemoAccountSwitcher() {
             {["-left-2 -top-2 bg-blue-500", "left-7 -top-4 bg-amber-400", "right-0 -top-3 bg-emerald-500", "-right-2 top-6 bg-pink-500", "left-2 -bottom-2 bg-purple-500"].map((classes, index) => (
               <span key={index} className={`absolute h-2 w-2 animate-ping rounded-full ${classes}`} />
             ))}
+          </div>
+        )}
+        {dragHint && (
+          <div className="absolute bottom-full right-0 mb-2 rounded-full bg-gray-900 px-3 py-1.5 text-sm font-semibold text-white shadow-lg">
+            Drag me!
           </div>
         )}
         <button

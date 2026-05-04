@@ -154,25 +154,30 @@ export function DearColleagueInbox() {
     setSelected(it);
   };
 
-  const markAsRead = async (it: LetterItem) => {
-    if (it.mailbox !== "inbox" || it.read_at) return;
+  const setReadState = async (it: LetterItem, read: boolean) => {
+    if (it.mailbox !== "inbox") return;
     try {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;
       if (!uid) return;
-      const now = new Date().toISOString();
+      const readAt = read ? new Date().toISOString() : null;
       const { error } = await supabase
         .from("dear_colleague_recipients")
-        .update({ read_at: now })
+        .update({ read_at: readAt })
         .eq("letter_id", it.letter_id)
         .eq("recipient_user_id", uid);
       if (error) throw error;
-      setItems((prev) => prev.map((x) => (x.mailbox === "inbox" && x.letter_id === it.letter_id ? { ...x, read_at: now } : x)));
-      setSelected((prev) => (prev && prev.mailbox === "inbox" && prev.letter_id === it.letter_id ? { ...prev, read_at: now } : prev));
+      setItems((prev) => prev.map((x) => (x.mailbox === "inbox" && x.letter_id === it.letter_id ? { ...x, read_at: readAt } : x)));
+      setSelected((prev) => (prev && prev.mailbox === "inbox" && prev.letter_id === it.letter_id ? { ...prev, read_at: readAt } : prev));
     } catch (e: any) {
-      toast.error(e.message || "Could not mark read");
+      toast.error(e.message || "Could not update read status");
     }
   };
+
+  useEffect(() => {
+    if (selected?.mailbox === "inbox" && !selected.read_at) void setReadState(selected, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selected?.letter_id, selected?.mailbox]);
 
   const unreadCount = useMemo(() => items.filter((i) => i.mailbox === "inbox" && !i.read_at).length, [items]);
   const visibleItems = useMemo(() => items.filter((i) => i.mailbox === mailbox), [items, mailbox]);
@@ -312,16 +317,14 @@ export function DearColleagueInbox() {
                       </Link>
                       {selected.mailbox === "inbox" && (
                         <>
-                        {!selected.read_at && (
                           <button
                             type="button"
-                            onClick={() => void markAsRead(selected)}
+                            onClick={() => void setReadState(selected, !selected.read_at)}
                             className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                           >
                             <CheckCircle className="w-4 h-4" />
-                            Mark as read
+                            {selected.read_at ? "Mark as unread" : "Mark as read"}
                           </button>
-                        )}
                         <button
                           type="button"
                           onClick={() => navigate(`/dear-colleague/compose?to=${encodeURIComponent(selected.from_user_id)}&subject=${encodeURIComponent(replySubject)}&replyTo=${encodeURIComponent(selected.letter_id)}`)}

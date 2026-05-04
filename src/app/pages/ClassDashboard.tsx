@@ -500,6 +500,10 @@ export function ClassDashboard() {
     },
   ];
 
+  useEffect(() => {
+    if (className) window.dispatchEvent(new CustomEvent("gavel:dashboard-ready"));
+  }, [className]);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />

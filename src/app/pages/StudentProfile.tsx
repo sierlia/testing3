@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import {
   Award,
+  ArrowRight,
   ChevronDown,
   ChevronUp,
   FileText,
@@ -118,6 +119,7 @@ export function StudentProfile() {
   const [avatarPosition, setAvatarPosition] = useState({ x: 50, y: 50 });
   const [draggingAvatar, setDraggingAvatar] = useState(false);
   const [profileNameFocused, setProfileNameFocused] = useState(false);
+  const avatarDragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number } | null>(null);
   useUnsavedChangesPrompt(Boolean(editingSection));
 
   useEffect(() => {
@@ -343,6 +345,7 @@ export function StudentProfile() {
       if (uploadError) throw uploadError;
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
       await saveProfile({ avatar_url: data.publicUrl } as any);
+      window.dispatchEvent(new CustomEvent("gavel:avatar-updated", { detail: { userId: profile.user_id, avatarUrl: data.publicUrl } }));
       setPhotoModalTab("center");
       setPhotoModalOpen(true);
       toast.success("Profile photo updated");
@@ -355,12 +358,14 @@ export function StudentProfile() {
     if (!profile) return;
     const written = { ...(profile.written_responses || {}), avatar_position: next };
     await saveProfile({ written_responses: written } as any);
+    setPhotoModalOpen(false);
   };
 
-  const updateAvatarDrag = (clientX: number, clientY: number, target: HTMLElement) => {
-    const rect = target.getBoundingClientRect();
-    const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+  const updateAvatarDrag = (clientX: number, clientY: number) => {
+    const drag = avatarDragRef.current;
+    if (!drag) return;
+    const x = Math.max(0, Math.min(100, drag.baseX - ((clientX - drag.startX) / 2.8)));
+    const y = Math.max(0, Math.min(100, drag.baseY - ((clientY - drag.startY) / 2.8)));
     setAvatarPosition({ x, y });
   };
 
@@ -549,7 +554,9 @@ export function StudentProfile() {
           <FileText className="h-5 w-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
         </div>
-        <Link to={`/bills?sponsor=${profile?.user_id ?? ""}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">View all</Link>
+        <Link to={`/bills?sponsor=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+          View all <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
       <div className="space-y-3">
         {billsAuthored.length ? (
@@ -581,7 +588,9 @@ export function StudentProfile() {
         <div>
           <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-900">
             <span>Committees</span>
-            <Link to={`/committees?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">View all</Link>
+            <Link to={`/committees?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="mr-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
+              View all <ArrowRight className="h-3 w-3" />
+            </Link>
           </div>
           {orgs.committees.length === 0 ? (
             <div className="text-sm text-gray-500">None</div>
@@ -600,7 +609,9 @@ export function StudentProfile() {
         <div>
           <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-900">
             <span>Caucuses</span>
-            <Link to={`/caucuses?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">View all</Link>
+            <Link to={`/caucuses?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="mr-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
+              View all <ArrowRight className="h-3 w-3" />
+            </Link>
           </div>
           {orgs.caucuses.length === 0 ? (
             <div className="text-sm text-gray-500">None</div>
@@ -627,7 +638,9 @@ export function StudentProfile() {
           <Mail className="h-5 w-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
         </div>
-        <Link to={`/records?type=letter&author=${profile?.user_id ?? ""}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">View all</Link>
+        <Link to={`/records?type=letter&author=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+          View all <ArrowRight className="h-3.5 w-3.5" />
+        </Link>
       </div>
       <div className="space-y-2">
         {lettersAuthored.length ? lettersAuthored.map((letter) => (
@@ -661,7 +674,7 @@ export function StudentProfile() {
                 onClick={() => {
                   if (!isMe) return;
                   setPhotoModalOpen(true);
-                  setPhotoModalTab(profile.avatar_url ? "center" : "upload");
+                  setPhotoModalTab("upload");
                 }}
                 disabled={!isMe}
                 className="relative rounded-full text-left disabled:cursor-default"
@@ -1200,19 +1213,26 @@ export function StudentProfile() {
                     role="button"
                     tabIndex={0}
                     onPointerDown={(event) => {
+                      event.currentTarget.setPointerCapture(event.pointerId);
+                      avatarDragRef.current = { startX: event.clientX, startY: event.clientY, baseX: avatarPosition.x, baseY: avatarPosition.y };
                       setDraggingAvatar(true);
-                      updateAvatarDrag(event.clientX, event.clientY, event.currentTarget);
                     }}
                     onPointerMove={(event) => {
-                      if (draggingAvatar) updateAvatarDrag(event.clientX, event.clientY, event.currentTarget);
+                      if (draggingAvatar) updateAvatarDrag(event.clientX, event.clientY);
                     }}
                     onPointerUp={() => {
                       setDraggingAvatar(false);
-                      void saveAvatarPosition();
+                      avatarDragRef.current = null;
                     }}
-                    className="mx-auto h-48 w-48 touch-none overflow-hidden rounded-full border border-gray-200 bg-gray-100"
+                    onPointerCancel={() => {
+                      setDraggingAvatar(false);
+                      avatarDragRef.current = null;
+                    }}
+                    className="relative mx-auto h-72 w-full touch-none overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
                   >
-                    {profile.avatar_url && <img src={profile.avatar_url} alt="Profile preview" className="h-full w-full object-cover" style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }} />}
+                    {profile.avatar_url && <img src={profile.avatar_url} alt="Profile preview" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }} draggable={false} />}
+                    <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0_95px,rgba(17,24,39,0.48)_96px)]" />
+                    <div className="pointer-events-none absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(17,24,39,0.25)]" />
                   </div>
                   <p className="text-center text-sm text-gray-600">Drag the image to choose what sits in the circle.</p>
                   <button type="button" onClick={() => void saveAvatarPosition()} className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">

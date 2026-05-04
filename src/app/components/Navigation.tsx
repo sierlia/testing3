@@ -250,6 +250,17 @@ export function Navigation() {
   }, [user?.id]);
 
   useEffect(() => {
+    const onAvatarUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId: string; avatarUrl: string | null }>).detail;
+      if (!detail || detail.userId !== user?.id) return;
+      setAvatarUrl(detail.avatarUrl);
+      cacheAvatar(detail.userId, detail.avatarUrl);
+    };
+    window.addEventListener("gavel:avatar-updated", onAvatarUpdated);
+    return () => window.removeEventListener("gavel:avatar-updated", onAvatarUpdated);
+  }, [user?.id]);
+
+  useEffect(() => {
     const onClassRenamed = (event: Event) => {
       const detail = (event as CustomEvent<{ classId: string; name: string }>).detail;
       if (!detail || !user?.id) return;

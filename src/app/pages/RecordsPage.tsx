@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { FileText, Mail, Search } from "lucide-react";
+import { FileText, Mail, Search, SlidersHorizontal } from "lucide-react";
 import { Navigation } from "../components/Navigation";
-import { BackButton } from "../components/BackButton";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { supabase } from "../utils/supabase";
 
@@ -22,6 +21,7 @@ export function RecordsPage() {
   const [loading, setLoading] = useState(true);
   const [records, setRecords] = useState<RecordItem[]>([]);
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
+  const [sortBy, setSortBy] = useState(searchParams.get("sort") ?? "newest");
   const typeFilter = searchParams.get("type") ?? "all";
   const authorFilter = searchParams.get("author") ?? "";
 
@@ -86,8 +86,12 @@ export function RecordsPage() {
       .filter((record) => typeFilter === "all" || record.type === typeFilter)
       .filter((record) => !authorFilter || record.authorId === authorFilter)
       .filter((record) => !q || `${record.title} ${record.subtitle}`.toLowerCase().includes(q))
-      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-  }, [authorFilter, query, records, typeFilter]);
+      .sort((a, b) => {
+        if (sortBy === "oldest") return new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (sortBy === "title") return a.title.localeCompare(b.title);
+        return new Date(b.date).getTime() - new Date(a.date).getTime();
+      });
+  }, [authorFilter, query, records, sortBy, typeFilter]);
 
   const setType = (type: string) => {
     const next = new URLSearchParams(searchParams);
@@ -96,11 +100,18 @@ export function RecordsPage() {
     setSearchParams(next);
   };
 
+  const setSort = (sort: string) => {
+    setSortBy(sort);
+    const next = new URLSearchParams(searchParams);
+    if (sort === "newest") next.delete("sort");
+    else next.set("sort", sort);
+    setSearchParams(next);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <BackButton className="mb-4" />
         <div className="mb-6">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold text-gray-900">Records</h1>
@@ -111,18 +122,28 @@ export function RecordsPage() {
           </div>
           <p className="mt-1 text-gray-600">Search Dear Colleague letters and committee reports.</p>
         </div>
-        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="mb-6 rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-col gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records..." className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search records..." className="w-full rounded-lg border border-gray-300 py-3 pl-10 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <div className="inline-flex rounded-md border border-gray-200 bg-white p-1">
-              {["all", "letter", "report"].map((type) => (
-                <button key={type} type="button" onClick={() => setType(type)} className={`rounded px-3 py-1.5 text-sm font-semibold capitalize ${typeFilter === type || (type === "all" && typeFilter === "all") ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
-                  {type === "letter" ? "Letters" : type === "report" ? "Reports" : "All"}
-                </button>
-              ))}
+            <div className="flex flex-wrap items-center gap-3 border-t border-gray-100 pt-3">
+              <div className="inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1">
+                {["all", "letter", "report"].map((type) => (
+                  <button key={type} type="button" onClick={() => setType(type)} className={`rounded-md px-3 py-1.5 text-sm font-semibold capitalize ${typeFilter === type || (type === "all" && typeFilter === "all") ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-white"}`}>
+                    {type === "letter" ? "Letters" : type === "report" ? "Reports" : "All"}
+                  </button>
+                ))}
+              </div>
+              <label className="ml-auto flex items-center gap-2 text-sm font-medium text-gray-700">
+                <SlidersHorizontal className="h-4 w-4 text-gray-400" />
+                <select value={sortBy} onChange={(event) => setSort(event.target.value)} className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500">
+                  <option value="newest">Newest first</option>
+                  <option value="oldest">Oldest first</option>
+                  <option value="title">Title</option>
+                </select>
+              </label>
             </div>
           </div>
         </div>

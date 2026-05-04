@@ -234,6 +234,10 @@ export function ClassSimulationDashboard() {
     });
   }, []);
 
+  useEffect(() => {
+    if (!loading) window.dispatchEvent(new CustomEvent("gavel:dashboard-ready"));
+  }, [loading]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">

@@ -39,6 +39,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     window.localStorage.removeItem("gavel:demoActive");
     window.localStorage.removeItem("gavel:demoOpenedAt");
+    window.localStorage.removeItem("gavel:demoConfetti");
+    window.dispatchEvent(new CustomEvent("gavel:demo-ended"));
     setUser(null);
   };
 

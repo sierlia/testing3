@@ -47,8 +47,7 @@ export function ClassManagePage() {
   const [roleFilter, setRoleFilter] = useState<"all" | "student" | "teacher">("all");
   const [positionFilter, setPositionFilter] = useState("all");
   const [partyFilter, setPartyFilter] = useState("all");
-  const [committeeFilter, setCommitteeFilter] = useState("all");
-  const [caucusFilter, setCaucusFilter] = useState("all");
+  const [organizationFilter, setOrganizationFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"first" | "last" | "sponsored" | "passed" | "failed" | "cosponsored" | "letters">("first");
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; left: number } | null>(null);
@@ -61,6 +60,7 @@ export function ClassManagePage() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportColumns, setExportColumns] = useState<string[]>(["name", "email", "role", "positions", "party", "constituency", "sponsored", "passed", "failed", "cosponsored", "letters", "committees", "caucuses"]);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const actionMenuRef = useRef<HTMLDivElement | null>(null);
 
   const loadClassData = async () => {
     if (!classId) return;
@@ -189,12 +189,23 @@ export function ClassManagePage() {
 
   useEffect(() => {
     if (!actionMenuOpen) return;
-    const close = () => setActionMenuOpen(null);
+    const close = () => {
+      setActionMenuOpen(null);
+      setActionMenuPosition(null);
+    };
+    const closeOnOutside = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("[data-roster-actions]")) return;
+      if (target && actionMenuRef.current?.contains(target)) return;
+      close();
+    };
     window.addEventListener("scroll", close, true);
     window.addEventListener("resize", close);
+    document.addEventListener("pointerdown", closeOnOutside);
     return () => {
       window.removeEventListener("scroll", close, true);
       window.removeEventListener("resize", close);
+      document.removeEventListener("pointerdown", closeOnOutside);
     };
   }, [actionMenuOpen]);
 
@@ -270,8 +281,12 @@ export function ClassManagePage() {
       if (roleFilter !== "all" && student.role !== roleFilter) return false;
       if (positionFilter !== "all" && student.position !== positionFilter) return false;
       if (partyFilter !== "all" && student.party !== partyFilter) return false;
-      if (committeeFilter !== "all" && !student.committees.some((committee) => committee.name === committeeFilter)) return false;
-      if (caucusFilter !== "all" && !student.caucuses.some((caucus) => caucus.name === caucusFilter)) return false;
+      if (organizationFilter !== "all") {
+        const [kind, ...nameParts] = organizationFilter.split(":");
+        const name = nameParts.join(":");
+        if (kind === "committee" && !student.committees.some((committee) => committee.name === name)) return false;
+        if (kind === "caucus" && !student.caucuses.some((caucus) => caucus.name === name)) return false;
+      }
       if (!query) return true;
       return `${student.name} ${displayPersonName(student.name)} ${student.email} ${student.party} ${student.committees.map((item) => item.name).join(" ")} ${student.caucuses.map((item) => item.name).join(" ")}`.toLowerCase().includes(query);
     }).sort((a, b) => {
@@ -284,7 +299,7 @@ export function ClassManagePage() {
       if (sortBy === "last") return namePart(a.name, "last").localeCompare(namePart(b.name, "last")) || namePart(a.name, "first").localeCompare(namePart(b.name, "first"));
       return namePart(a.name, "first").localeCompare(namePart(b.name, "first")) || namePart(a.name, "last").localeCompare(namePart(b.name, "last"));
     });
-  }, [caucusFilter, committeeFilter, partyFilter, positionFilter, roleFilter, searchQuery, sortBy, students]);
+  }, [organizationFilter, partyFilter, positionFilter, roleFilter, searchQuery, sortBy, students]);
 
   const approvedMembers = filteredStudents.filter((student) => student.status === "approved");
   const pendingMembers = filteredStudents.filter((student) => student.status !== "approved");
@@ -299,8 +314,15 @@ export function ClassManagePage() {
   const partyOptions = useMemo(() => Array.from(new Set(students.map((student) => student.party).filter((value) => value && value !== "N/A"))).sort(), [students]);
   const committeeOptions = useMemo(() => Array.from(new Set(students.flatMap((student) => student.committees.map((committee) => committee.name)))).sort(), [students]);
   const caucusOptions = useMemo(() => Array.from(new Set(students.flatMap((student) => student.caucuses.map((caucus) => caucus.name)))).sort(), [students]);
-  const stickyShadowLeft = tableScroll.atStart ? "" : "shadow-[8px_0_16px_-12px_rgba(15,23,42,0.55)]";
-  const stickyShadowRight = tableScroll.atEnd ? "" : "shadow-[-8px_0_16px_-12px_rgba(15,23,42,0.55)]";
+  const organizationOptions = useMemo(
+    () => [
+      ...committeeOptions.map((name) => ({ value: `committee:${name}`, label: name, group: "Committees" })),
+      ...caucusOptions.map((name) => ({ value: `caucus:${name}`, label: name, group: "Caucuses" })),
+    ],
+    [caucusOptions, committeeOptions],
+  );
+  const stickyShadowLeft = tableScroll.atStart ? "" : "shadow-[14px_0_22px_-12px_rgba(15,23,42,0.55)] ring-1 ring-gray-100";
+  const stickyShadowRight = tableScroll.atEnd ? "" : "shadow-[-14px_0_22px_-12px_rgba(15,23,42,0.55)] ring-1 ring-gray-100";
 
   const updateTableScroll = (element = scrollRef.current) => {
     if (!element) return;
@@ -387,7 +409,7 @@ export function ClassManagePage() {
               <th className="min-w-28 px-5 py-3 text-left font-medium">Letters</th>
               <th className="min-w-52 px-5 py-3 text-left font-medium">Committees</th>
               <th className="min-w-52 px-5 py-3 text-left font-medium">Caucuses</th>
-              <th className={`sticky right-0 z-20 min-w-20 bg-white px-3 py-3 text-right font-medium ${stickyShadowRight}`}>Actions</th>
+              <th className={`sticky right-0 z-20 min-w-14 bg-white px-2 py-3 text-right font-medium ${stickyShadowRight}`}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -420,16 +442,19 @@ export function ClassManagePage() {
                 <td className="px-5 py-3"><Link to={`/dear-colleague/inbox?author=${encodeURIComponent(student.name)}`} className="text-blue-600 hover:underline">{student.letters}</Link></td>
                 <td className="px-5 py-3">{linkList(student.committees, "/committees")}</td>
                 <td className="px-5 py-3">{linkList(student.caucuses, "/caucuses")}</td>
-                <td className={`sticky right-0 z-10 px-3 py-3 text-right ${stickyShadowRight} ${rowClass}`}>
+                <td className={`sticky right-0 z-10 px-2 py-3 text-right ${stickyShadowRight} ${rowClass}`}>
                   <div className="inline-flex">
                     <button
                       type="button"
                       onClick={(event) => {
                         const rect = event.currentTarget.getBoundingClientRect();
                         const top = rect.bottom + 150 > window.innerHeight ? Math.max(8, rect.top - 138) : rect.bottom + 6;
-                        setActionMenuPosition({ top, left: Math.max(8, rect.right - 176) });
+                        const rightSide = rect.right + 8;
+                        const left = rightSide + 176 <= window.innerWidth - 8 ? rightSide : Math.max(8, rect.left - 184);
+                        setActionMenuPosition({ top, left });
                         setActionMenuOpen((open) => open === student.id ? null : student.id);
                       }}
+                      data-roster-actions
                       className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                       aria-label="Actions"
                     >
@@ -538,13 +563,14 @@ export function ClassManagePage() {
                   <option value="all">All parties</option>
                   {partyOptions.map((party) => <option key={party} value={party}>{party}</option>)}
                 </select>
-                <select value={committeeFilter} onChange={(event) => setCommitteeFilter(event.target.value)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                  <option value="all">All committees</option>
-                  {committeeOptions.map((committee) => <option key={committee} value={committee}>{committee}</option>)}
-                </select>
-                <select value={caucusFilter} onChange={(event) => setCaucusFilter(event.target.value)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                  <option value="all">All caucuses</option>
-                  {caucusOptions.map((caucus) => <option key={caucus} value={caucus}>{caucus}</option>)}
+                <select value={organizationFilter} onChange={(event) => setOrganizationFilter(event.target.value)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
+                  <option value="all">All organizations</option>
+                  {organizationOptions.some((option) => option.group === "Committees") && <optgroup label="Committees">
+                    {organizationOptions.filter((option) => option.group === "Committees").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </optgroup>}
+                  {organizationOptions.some((option) => option.group === "Caucuses") && <optgroup label="Caucuses">
+                    {organizationOptions.filter((option) => option.group === "Caucuses").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+                  </optgroup>}
                 </select>
                 <select value={sortBy} onChange={(event) => setSortBy(event.target.value as any)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
                   <option value="first">Sort first name</option>
@@ -590,6 +616,7 @@ export function ClassManagePage() {
       </main>
       {actionMenuOpen && actionMenuPosition && (
         <div
+          ref={actionMenuRef}
           className="fixed z-[100] w-44 rounded-md border border-gray-200 bg-white p-1 text-left shadow-xl"
           style={{ top: actionMenuPosition.top, left: actionMenuPosition.left }}
         >

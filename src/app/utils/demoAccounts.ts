@@ -9,15 +9,17 @@ export const demoAccounts: Array<{ key: DemoAccountKey; label: string }> = [
   { key: "student2", label: "Student 2" },
 ];
 
-export async function switchDemoAccount(key: DemoAccountKey) {
+export async function switchDemoAccount(key: DemoAccountKey, options?: { confetti?: boolean }) {
   const { data, error } = await supabase.rpc("demo_account_credentials", { account_key: key });
   if (error) throw error;
   const credentials = Array.isArray(data) ? data[0] : data;
   if (!credentials?.email || !credentials?.password) throw new Error("Demo account is not configured.");
 
   window.localStorage.setItem("gavel:demoActive", "1");
-  window.localStorage.setItem("gavel:demoOpenedAt", String(Date.now()));
-  window.dispatchEvent(new CustomEvent("gavel:demo-opened"));
+  if (options?.confetti) {
+    window.localStorage.setItem("gavel:demoOpenedAt", String(Date.now()));
+    window.localStorage.setItem("gavel:demoConfetti", "1");
+  }
   await supabase.auth.signOut();
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: credentials.email,

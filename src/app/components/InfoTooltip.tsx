@@ -14,7 +14,7 @@ export function InfoTooltip({ label, children }: { label: string; children: Reac
           <CircleHelp className="h-4 w-4" />
         </button>
       </TooltipTrigger>
-      <TooltipContent className="max-w-sm whitespace-normal text-left leading-5">
+      <TooltipContent side="right" align="start" sideOffset={8} className="max-w-sm whitespace-normal text-left leading-5">
         {children}
       </TooltipContent>
     </Tooltip>
