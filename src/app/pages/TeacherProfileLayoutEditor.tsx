@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type DragEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import { FileText, GripVertical, Layout, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
@@ -48,6 +48,8 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [dragPointer, setDragPointer] = useState<{ x: number; y: number } | null>(null);
+  const dragStartRef = useRef<{ key: string; startX: number; startY: number; moved: boolean } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -200,18 +202,31 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
     });
   };
 
-  const onDragStart = (event: DragEvent<HTMLDivElement>, sectionKey: string) => {
+  const onPointerStart = (event: PointerEvent<HTMLButtonElement>, sectionKey: string) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragStartRef.current = { key: sectionKey, startX: event.clientX, startY: event.clientY, moved: false };
     setDraggingKey(sectionKey);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", sectionKey);
+    setDragPointer({ x: event.clientX, y: event.clientY });
   };
 
-  const onDrop = (event: DragEvent<HTMLDivElement>, sectionKey: string) => {
-    event.preventDefault();
-    const fromKey = event.dataTransfer.getData("text/plain") || draggingKey;
-    if (fromKey) moveSectionTo(fromKey, sectionKey);
+  const onPointerMove = (event: PointerEvent<HTMLButtonElement>) => {
+    const drag = dragStartRef.current;
+    if (!drag) return;
+    drag.moved = drag.moved || Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4;
+    setDragPointer({ x: event.clientX, y: event.clientY });
+    const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
+    const key = target?.closest("[data-profile-section-key]")?.getAttribute("data-profile-section-key") ?? null;
+    if (key && key !== drag.key) setDragOverKey(key);
+  };
+
+  const finishPointerDrag = () => {
+    const fromKey = dragStartRef.current?.key ?? draggingKey;
+    const toKey = dragOverKey;
+    if (fromKey && toKey && fromKey !== toKey) moveSectionTo(fromKey, toKey);
+    dragStartRef.current = null;
     setDraggingKey(null);
     setDragOverKey(null);
+    setDragPointer(null);
   };
 
   const usedSingleTypes = new Set(sections.filter((section) => section.section_type !== "long_response").map((section) => section.section_type));
@@ -254,28 +269,27 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
             return (
               <div key={section.section_key} className={`${section.width === "full" ? "col-span-2" : ""}`}>
               {dragOverKey === section.section_key && draggingKey !== section.section_key && (
-                <div className="mb-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-4 text-sm font-medium text-blue-700">
-                  Drop here
+                <div className="mb-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-6 text-sm font-medium text-blue-700">
+                  Move here
                 </div>
               )}
               <div
-                draggable
-                onDragStart={(event) => onDragStart(event, section.section_key)}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragOverKey(section.section_key);
-                }}
-                onDragLeave={() => setDragOverKey((key) => key === section.section_key ? null : key)}
-                onDrop={(event) => onDrop(event, section.section_key)}
-                onDragEnd={() => {
-                  setDraggingKey(null);
-                  setDragOverKey(null);
-                }}
-                className={`rounded-lg border bg-white p-4 shadow-sm transition ${draggingKey === section.section_key ? "border-blue-300 opacity-60" : "border-gray-200"}`}
+                data-profile-section-key={section.section_key}
+                className={`rounded-lg border bg-white p-4 shadow-sm transition ${draggingKey === section.section_key ? "border-blue-300 opacity-50" : "border-gray-200"}`}
               >
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <GripVertical className="h-4 w-4 cursor-grab text-gray-400" />
+                    <button
+                      type="button"
+                      onPointerDown={(event) => onPointerStart(event, section.section_key)}
+                      onPointerMove={onPointerMove}
+                      onPointerUp={finishPointerDrag}
+                      onPointerCancel={finishPointerDrag}
+                      className="touch-none rounded p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
+                      aria-label={`Move ${section.title}`}
+                    >
+                      <GripVertical className="h-4 w-4 cursor-grab" />
+                    </button>
                     <Icon className="h-4 w-4 text-blue-600" />
                     {section.section_type === "long_response" ? (
                       <input
@@ -307,6 +321,14 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
               </div>
             );
           })}
+        </div>
+      )}
+      {draggingKey && dragPointer && (
+        <div
+          className="pointer-events-none fixed z-[120] rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 shadow-xl"
+          style={{ left: dragPointer.x + 12, top: dragPointer.y + 12 }}
+        >
+          Moving section
         </div>
       )}
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />

@@ -267,8 +267,10 @@ export function BillDetail() {
   const floorCounts = useMemo(() => voteCounts(floorVotes), [floorVotes]);
   const committeePassed = bill ? ["reported", "calendared", "floor", "passed"].includes(bill.status) || (bill.status === "failed" && committeeCounts.yea > committeeCounts.nay) : false;
   const showRevisedText = Boolean(committeePassed && referral?.committee_id && (committeeDoc?.ydoc_base64 || committeeDoc?.committee_markup_posted_at));
-  const limitCosponsorsAfterReport = !!classSettings?.bills?.cosponsorAfterCommitteeReport;
-  const cosponsorAllowed = !limitCosponsorsAfterReport || Boolean(committeeDoc?.committee_report_submitted_at);
+  const cosponsorshipMode = classSettings?.bills?.cosponsorshipMode ?? (classSettings?.bills?.cosponsorAfterCommitteeReport ? "after_report" : "always");
+  const reportSubmitted = Boolean(committeeDoc?.committee_report_submitted_at);
+  const cosponsorAllowed = cosponsorshipMode === "always" || (cosponsorshipMode === "before_report" && !reportSubmitted) || (cosponsorshipMode === "after_report" && reportSubmitted);
+  const showCosponsors = classSettings?.bills?.showCosponsors !== false;
   const cosponsorPartyOptions = useMemo(
     () => [...new Set(cosponsors.map((row) => row.party || "Independent"))].sort((a, b) => a.localeCompare(b)),
     [cosponsors],
@@ -670,7 +672,7 @@ export function BillDetail() {
           </div>
 
           <aside className="space-y-6">
-            <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            {showCosponsors && <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
                   <Users className="h-5 w-5 text-gray-600" />
@@ -680,7 +682,7 @@ export function BillDetail() {
                   <button
                     onClick={() => void toggleCurrentUserCosponsor()}
                     disabled={!cosponsorAllowed || cosponsorPending}
-                    title={cosponsorAllowed ? undefined : "Cosponsorship is available after the committee report is submitted."}
+                    title={cosponsorAllowed ? undefined : "Cosponsorship is not available at this stage."}
                     className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60 ${isUserCosponsor ? "bg-gray-100 text-gray-700 hover:bg-gray-200" : "bg-blue-600 text-white hover:bg-blue-700"}`}
                   >
                     <UserPlus className="h-3.5 w-3.5" />
@@ -735,7 +737,7 @@ export function BillDetail() {
                   ))
                 )}
               </div>
-            </div>
+            </div>}
 
             <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
               <h2 className="mb-4 font-semibold text-gray-900">Actions</h2>

@@ -7,6 +7,7 @@ import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { displayPersonName } from "../utils/displayName";
 import { supabase } from "../utils/supabase";
 
@@ -44,9 +45,7 @@ export function ClassManagePage() {
   const [students, setStudents] = useState<RosterMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | "student" | "teacher">("all");
-  const [positionFilter, setPositionFilter] = useState("all");
-  const [partyFilter, setPartyFilter] = useState("all");
+  const [titleFilter, setTitleFilter] = useState("all");
   const [organizationFilter, setOrganizationFilter] = useState("all");
   const [sortBy, setSortBy] = useState<"first" | "last" | "sponsored" | "passed" | "failed" | "cosponsored" | "letters">("first");
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
@@ -278,12 +277,16 @@ export function ClassManagePage() {
       return part === "first" ? raw : "";
     };
     return students.filter((student) => {
-      if (roleFilter !== "all" && student.role !== roleFilter) return false;
-      if (positionFilter !== "all" && student.position !== positionFilter) return false;
-      if (partyFilter !== "all" && student.party !== partyFilter) return false;
+      if (titleFilter !== "all") {
+        const [kind, ...valueParts] = titleFilter.split(":");
+        const value = valueParts.join(":");
+        if (kind === "role" && student.role !== value) return false;
+        if (kind === "position" && student.position !== value) return false;
+      }
       if (organizationFilter !== "all") {
         const [kind, ...nameParts] = organizationFilter.split(":");
         const name = nameParts.join(":");
+        if (kind === "party" && student.party !== name) return false;
         if (kind === "committee" && !student.committees.some((committee) => committee.name === name)) return false;
         if (kind === "caucus" && !student.caucuses.some((caucus) => caucus.name === name)) return false;
       }
@@ -299,10 +302,17 @@ export function ClassManagePage() {
       if (sortBy === "last") return namePart(a.name, "last").localeCompare(namePart(b.name, "last")) || namePart(a.name, "first").localeCompare(namePart(b.name, "first"));
       return namePart(a.name, "first").localeCompare(namePart(b.name, "first")) || namePart(a.name, "last").localeCompare(namePart(b.name, "last"));
     });
-  }, [organizationFilter, partyFilter, positionFilter, roleFilter, searchQuery, sortBy, students]);
+  }, [organizationFilter, searchQuery, sortBy, students, titleFilter]);
 
   const approvedMembers = filteredStudents.filter((student) => student.status === "approved");
-  const pendingMembers = filteredStudents.filter((student) => student.status !== "approved");
+  const pendingMembers = students
+    .filter((student) => student.status !== "approved")
+    .filter((student) => {
+      const query = searchQuery.trim().toLowerCase();
+      if (!query) return true;
+      return `${student.name} ${displayPersonName(student.name)} ${student.email}`.toLowerCase().includes(query);
+    })
+    .sort((a, b) => a.name.localeCompare(b.name));
   const totalApprovedStudents = students.filter((student) => student.status === "approved" && student.role === "student").length;
   const totalApprovedTeachers = students.filter((student) => student.status === "approved" && student.role === "teacher").length;
 
@@ -316,10 +326,11 @@ export function ClassManagePage() {
   const caucusOptions = useMemo(() => Array.from(new Set(students.flatMap((student) => student.caucuses.map((caucus) => caucus.name)))).sort(), [students]);
   const organizationOptions = useMemo(
     () => [
+      ...partyOptions.map((name) => ({ value: `party:${name}`, label: name, group: "Parties" })),
       ...committeeOptions.map((name) => ({ value: `committee:${name}`, label: name, group: "Committees" })),
       ...caucusOptions.map((name) => ({ value: `caucus:${name}`, label: name, group: "Caucuses" })),
     ],
-    [caucusOptions, committeeOptions],
+    [caucusOptions, committeeOptions, partyOptions],
   );
   const stickyShadowLeft = tableScroll.atStart ? "" : "shadow-[14px_0_22px_-12px_rgba(15,23,42,0.55)] ring-1 ring-gray-100";
   const stickyShadowRight = tableScroll.atEnd ? "" : "shadow-[-14px_0_22px_-12px_rgba(15,23,42,0.55)] ring-1 ring-gray-100";
@@ -471,6 +482,40 @@ export function ClassManagePage() {
     )
   );
 
+  const pendingTable = (rows: RosterMember[]) => (
+    rows.length === 0 ? (
+      <div className="py-10 text-center text-sm text-gray-500">
+        <Users className="mx-auto mb-3 h-10 w-10 text-gray-300" />
+        No pending members found.
+      </div>
+    ) : (
+      <div className="overflow-hidden rounded-md border border-gray-200">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50 text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-4 py-3 text-left font-medium">Name</th>
+              <th className="px-4 py-3 text-left font-medium">Email</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 bg-white">
+            {rows.map((student) => (
+              <tr key={student.id}>
+                <td className="px-4 py-3">
+                  <Link to={`/profile/${student.id}`} className="font-medium text-blue-600 hover:underline">{displayPersonName(student.name)}</Link>
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {student.status === "pending" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Join request</span>}
+                    {student.status === "invited" && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Invitation sent</span>}
+                  </div>
+                </td>
+                <td className="px-4 py-3 text-gray-700">{student.email}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    )
+  );
+
   if (!classDetails && loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -550,41 +595,44 @@ export function ClassManagePage() {
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search roster..." className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value as any)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                  <option value="all">All roles</option>
-                  <option value="student">Students</option>
-                  <option value="teacher">Teachers</option>
-                </select>
-                <select value={positionFilter} onChange={(event) => setPositionFilter(event.target.value)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                  <option value="all">All positions</option>
-                  {positionOptions.map((position) => <option key={position} value={position}>{position}</option>)}
-                </select>
-                <select value={partyFilter} onChange={(event) => setPartyFilter(event.target.value)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                  <option value="all">All parties</option>
-                  {partyOptions.map((party) => <option key={party} value={party}>{party}</option>)}
-                </select>
-                <select value={organizationFilter} onChange={(event) => setOrganizationFilter(event.target.value)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                  <option value="all">All organizations</option>
-                  {organizationOptions.some((option) => option.group === "Committees") && <optgroup label="Committees">
-                    {organizationOptions.filter((option) => option.group === "Committees").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </optgroup>}
-                  {organizationOptions.some((option) => option.group === "Caucuses") && <optgroup label="Caucuses">
-                    {organizationOptions.filter((option) => option.group === "Caucuses").map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
-                  </optgroup>}
-                </select>
-                <select value={sortBy} onChange={(event) => setSortBy(event.target.value as any)} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                  <option value="first">Sort first name</option>
-                  <option value="last">Sort last name</option>
-                  <option value="sponsored">Sort sponsored</option>
-                  <option value="passed">Sort passed</option>
-                  <option value="failed">Sort failed</option>
-                  <option value="cosponsored">Sort cosponsored</option>
-                  <option value="letters">Sort letters</option>
-                </select>
-                <button type="button" onClick={() => setExportDialogOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                  <Download className="h-4 w-4" />
-                  Export
-                </button>
+                {rosterTab === "members" && (
+                  <>
+                    <Select value={titleFilter} onValueChange={setTitleFilter}>
+                      <SelectTrigger className="h-10 w-[180px] bg-white"><SelectValue placeholder="All titles" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All titles</SelectItem>
+                        <SelectItem value="role:teacher">Teachers</SelectItem>
+                        <SelectItem value="role:student">Students</SelectItem>
+                        {positionOptions.map((position) => <SelectItem key={position} value={`position:${position}`}>{position}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Select value={organizationFilter} onValueChange={setOrganizationFilter}>
+                      <SelectTrigger className="h-10 w-[210px] bg-white"><SelectValue placeholder="All organizations" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All organizations</SelectItem>
+                        {organizationOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.group}: {option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
+                      <SelectTrigger className="h-10 w-[180px] bg-white"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="first">Sort first name</SelectItem>
+                        <SelectItem value="last">Sort last name</SelectItem>
+                        <SelectItem value="sponsored">Sort sponsored</SelectItem>
+                        <SelectItem value="passed">Sort passed</SelectItem>
+                        <SelectItem value="failed">Sort failed</SelectItem>
+                        <SelectItem value="cosponsored">Sort cosponsored</SelectItem>
+                        <SelectItem value="letters">Sort letters</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <button type="button" onClick={() => setExportDialogOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <Download className="h-4 w-4" />
+                      Export
+                    </button>
+                  </>
+                )}
               </div>
             </div>
           </CardHeader>
@@ -608,7 +656,7 @@ export function ClassManagePage() {
                       Invite
                     </Button>
                   </div>
-                  {rosterTable(pendingMembers, true)}
+                  {pendingTable(pendingMembers)}
                 </>
             )}
           </CardContent>

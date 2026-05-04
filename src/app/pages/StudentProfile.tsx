@@ -3,8 +3,8 @@ import { Link, useParams } from "react-router";
 import { toast } from "sonner";
 import {
   Award,
-  ArrowRight,
   ChevronDown,
+  ChevronRight,
   ChevronUp,
   FileText,
   Flag,
@@ -28,7 +28,6 @@ import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituencyFull, normalizeConstituencyId } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
-import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
 import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
 import { displayPersonName, nameInputPlaceholder } from "../utils/displayName";
 
@@ -113,7 +112,6 @@ export function StudentProfile() {
   const [constituencyDraftId, setConstituencyDraftId] = useState<string | null>(null);
   const [unavailableConstituencies, setUnavailableConstituencies] = useState<string[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
-  const [teacherProfileTab, setTeacherProfileTab] = useState<"example" | "layout">("example");
   const [photoModalOpen, setPhotoModalOpen] = useState(false);
   const [photoModalTab, setPhotoModalTab] = useState<"upload" | "center">("upload");
   const [avatarPosition, setAvatarPosition] = useState({ x: 50, y: 50 });
@@ -239,7 +237,7 @@ export function StudentProfile() {
   }, [id]);
 
   useEffect(() => {
-    if (teacherProfileTab !== "example" || !profile?.class_id) return;
+    if (!profile?.class_id) return;
     (async () => {
       const { data: sections } = await supabase
         .from("class_profile_sections")
@@ -252,7 +250,7 @@ export function StudentProfile() {
       }));
       setProfileSections(rows.length ? rows : defaultProfileSections);
     })();
-  }, [teacherProfileTab, profile?.class_id]);
+  }, [profile?.class_id]);
 
   const isMe = authUserId !== null && profile?.user_id === authUserId;
   const canChooseRepresentation = isMe && profile?.role !== "teacher";
@@ -555,7 +553,7 @@ export function StudentProfile() {
           <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
         </div>
         <Link to={`/bills?sponsor=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
-          View all <ArrowRight className="h-3.5 w-3.5" />
+          View all <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
       <div className="space-y-3">
@@ -589,7 +587,7 @@ export function StudentProfile() {
           <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-900">
             <span>Committees</span>
             <Link to={`/committees?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="mr-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
-              View all <ArrowRight className="h-3 w-3" />
+              View all <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
           {orgs.committees.length === 0 ? (
@@ -610,7 +608,7 @@ export function StudentProfile() {
           <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-900">
             <span>Caucuses</span>
             <Link to={`/caucuses?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="mr-3 inline-flex items-center gap-1 text-xs font-semibold text-blue-600 hover:text-blue-700">
-              View all <ArrowRight className="h-3 w-3" />
+              View all <ChevronRight className="h-3 w-3" />
             </Link>
           </div>
           {orgs.caucuses.length === 0 ? (
@@ -639,7 +637,7 @@ export function StudentProfile() {
           <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
         </div>
         <Link to={`/records?type=letter&author=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
-          View all <ArrowRight className="h-3.5 w-3.5" />
+          View all <ChevronRight className="h-3.5 w-3.5" />
         </Link>
       </div>
       <div className="space-y-2">
@@ -773,34 +771,9 @@ export function StudentProfile() {
           </div>
         </div>
 
-        {isTeacherProfile && isMe && (
-          <div className="mb-6 rounded-full border border-gray-200 bg-white p-1 shadow-sm">
-            <div className="grid grid-cols-2 gap-1">
-              <button
-                type="button"
-                onClick={() => setTeacherProfileTab("example")}
-                className={`rounded-full px-4 py-2 text-sm font-medium ${teacherProfileTab === "example" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
-              >
-                Example profile
-              </button>
-              <button
-                type="button"
-                onClick={() => setTeacherProfileTab("layout")}
-                className={`rounded-full px-4 py-2 text-sm font-medium ${teacherProfileTab === "layout" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}
-              >
-                Edit profile layout
-              </button>
-            </div>
-          </div>
-        )}
-
-        {isTeacherProfile && isMe && teacherProfileTab === "layout" ? (
-          <ProfileLayoutEditor embedded />
-        ) : (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-            {profileSections.map(renderProfileSection)}
-          </div>
-        )}
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {profileSections.map(renderProfileSection)}
+        </div>
         {false && (
         <>
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">

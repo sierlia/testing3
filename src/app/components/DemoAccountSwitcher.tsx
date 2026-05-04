@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocation } from "react-router";
 import { toast } from "sonner";
 import { demoAccounts, DemoAccountKey, switchDemoAccount } from "../utils/demoAccounts";
 import { useAuth } from "../utils/AuthContext";
@@ -17,6 +18,7 @@ function readPosition() {
 
 export function DemoAccountSwitcher() {
   const { user } = useAuth();
+  const location = useLocation();
   const [open, setOpen] = useState(false);
   const [busyKey, setBusyKey] = useState<DemoAccountKey | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
@@ -66,8 +68,13 @@ export function DemoAccountSwitcher() {
     setDashboardReady(false);
     const onReady = () => setDashboardReady(true);
     window.addEventListener("gavel:dashboard-ready", onReady);
-    return () => window.removeEventListener("gavel:dashboard-ready", onReady);
-  }, [user?.id]);
+    const isDashboardRoute = location.pathname.includes("/dashboard") || location.pathname.startsWith("/class/") || location.pathname.startsWith("/teacher/class/");
+    const fallback = isDashboardRoute ? window.setTimeout(() => setDashboardReady(true), 1200) : null;
+    return () => {
+      window.removeEventListener("gavel:dashboard-ready", onReady);
+      if (fallback) window.clearTimeout(fallback);
+    };
+  }, [location.pathname, user?.id]);
 
   useEffect(() => {
     if (!dashboardReady || !demoActive) return;
@@ -128,6 +135,7 @@ export function DemoAccountSwitcher() {
   if (!user || !demoActive || !dashboardReady) return null;
   const menuVerticalClass = position.y < 220 ? "top-full mt-2" : "bottom-full mb-2";
   const menuHorizontalClass = position.x < 176 ? "left-0" : "right-0";
+  const activeKey = (user.email?.split("@")[0] ?? "") as DemoAccountKey;
 
   return (
     <div
@@ -171,7 +179,9 @@ export function DemoAccountSwitcher() {
               type="button"
               disabled={busyKey !== null}
               onClick={() => void selectAccount(account.key)}
-              className="block w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:opacity-60"
+              className={`block w-full rounded-xl px-3 py-2 text-left text-sm font-medium disabled:opacity-60 ${
+                activeKey === account.key ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+              }`}
             >
               {busyKey === account.key ? "Opening..." : account.label}
             </button>
