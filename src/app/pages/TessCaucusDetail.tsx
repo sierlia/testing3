@@ -653,6 +653,16 @@ export function TessCaucusDetail() {
     }
   };
 
+  const editComment = async (commentId: string, body: string) => {
+    if (!selectedAnnouncementId || !body.trim()) return;
+    const { error } = await supabase.from("caucus_comments").update({ body: body.trim() }).eq("id", commentId);
+    if (error) return toast.error(error.message || "Could not edit comment");
+    setCommentsByAnnouncement((prev) => ({
+      ...prev,
+      [selectedAnnouncementId]: (prev[selectedAnnouncementId] ?? []).map((comment) => comment.id === commentId ? { ...comment, body: body.trim() } : comment),
+    }));
+  };
+
   const toggleAnnouncementReaction = async (announcementId: string, emoji: ReactionEmoji) => {
     if (!meId || !canComment) return;
     const mine = announcementReactions[announcementId]?.mine?.has(emoji) ?? false;
@@ -1018,6 +1028,8 @@ export function TessCaucusDetail() {
                           onSubmitComment={submitComment}
                           canDeleteComments={isTeacher}
                           onDeleteComment={deleteComment}
+                          canEditComment={(comment) => isTeacher || comment.author_user_id === meId}
+                          onEditComment={editComment}
                         />
                       </div>
 

@@ -28,6 +28,7 @@ import { fetchClassActivity, ClassActivity } from "../services/classActivity";
 import { fetchCalendaredBillsForCurrentClass } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
+import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
 
 interface CalendarEvent {
   id: string;
@@ -53,6 +54,7 @@ export function ClassDashboard() {
   const [classCode, setClassCode] = useState("");
   const [classSettings, setClassSettings] = useState<any>({});
   const [studentCount, setStudentCount] = useState(0);
+  const [teacherCount, setTeacherCount] = useState(0);
   const [recentActivity, setRecentActivity] = useState<ClassActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [selectedUpcomingDay, setSelectedUpcomingDay] = useState<string | null>(null);
@@ -64,6 +66,7 @@ export function ClassDashboard() {
   const [inviteBusy, setInviteBusy] = useState(false);
   const currentTimelineCardRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  useUnsavedChangesPrompt(editingClassName && classNameDraft.trim() !== className);
 
   useEffect(() => {
     const setActive = async () => {
@@ -82,9 +85,9 @@ export function ClassDashboard() {
   const loadDashboard = async () => {
     if (!classId) return;
     try {
-      const [{ data: cls, error: cErr }, { count: rosterCount }, { data: billRows }] = await Promise.all([
+      const [{ data: cls, error: cErr }, { data: rosterRows }, { data: billRows }] = await Promise.all([
         supabase.from("classes").select("name,class_code,settings").eq("id", classId).maybeSingle(),
-        supabase.from("class_memberships").select("user_id", { count: "exact", head: true }).eq("class_id", classId).eq("status", "approved"),
+        supabase.from("class_memberships").select("user_id,role").eq("class_id", classId).eq("status", "approved"),
         supabase.from("bills").select("id,status").eq("class_id", classId),
       ]);
       if (cErr) throw cErr;
@@ -93,7 +96,8 @@ export function ClassDashboard() {
       setClassNameDraft((cls as any)?.name ?? "Class");
       setClassCode((cls as any)?.class_code ?? "");
       setClassSettings(settings);
-      setStudentCount(rosterCount ?? 0);
+      setStudentCount((rosterRows ?? []).filter((row: any) => row.role === "student").length);
+      setTeacherCount((rosterRows ?? []).filter((row: any) => row.role === "teacher").length);
       const statsRows = (billRows ?? []) as any[];
       setBillStats({
         total: statsRows.length,
@@ -505,7 +509,18 @@ export function ClassDashboard() {
               <div className="flex flex-wrap items-center gap-2">
                 {editingClassName ? (
                   <>
-                    <input value={classNameDraft} onChange={(event) => setClassNameDraft(event.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-3xl font-bold text-gray-900" />
+                    <input
+                      value={classNameDraft}
+                      onChange={(event) => setClassNameDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          void saveClassName();
+                        }
+                      }}
+                      onBlur={() => void saveClassName()}
+                      className="rounded-md border-2 border-dashed border-gray-300 bg-transparent px-3 py-2 text-3xl font-bold text-gray-900 outline-none hover:border-blue-300 focus:border-blue-500"
+                    />
                     <button type="button" onClick={() => void saveClassName()} className="rounded-md p-2 text-blue-600 hover:bg-blue-50" aria-label="Save class name"><Save className="h-5 w-5" /></button>
                   </>
                 ) : (
@@ -518,7 +533,9 @@ export function ClassDashboard() {
             ) : (
               <div className="h-9 w-64 animate-pulse rounded bg-gray-200" />
             )}
-            <p className="mt-1 text-sm text-gray-600">{studentCount} students enrolled</p>
+            <p className="mt-1 text-sm text-gray-600">
+              {studentCount} student{studentCount === 1 ? "" : "s"}, {teacherCount} teacher{teacherCount === 1 ? "" : "s"} enrolled
+            </p>
           </div>
           <TeacherClassTabs classId={classId} active="dashboard" />
         </div>

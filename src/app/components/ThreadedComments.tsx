@@ -35,6 +35,8 @@ export function ThreadedComments({
   onSubmitComment,
   canDeleteComments = false,
   onDeleteComment,
+  canEditComment,
+  onEditComment,
 }: {
   comments: ThreadComment[];
   meId: string | null;
@@ -43,10 +45,14 @@ export function ThreadedComments({
   onSubmitComment: (body: string, parentCommentId: string | null) => Promise<void>;
   canDeleteComments?: boolean;
   onDeleteComment?: (commentId: string) => Promise<void>;
+  canEditComment?: (comment: ThreadComment) => boolean;
+  onEditComment?: (commentId: string, body: string) => Promise<void>;
 }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState("");
 
   const { roots, childrenByParent, byId } = useMemo(() => {
     const byParent: Record<string, ThreadComment[]> = {};
@@ -105,21 +111,47 @@ export function ThreadedComments({
                 </Link>
                 <span className="text-gray-500 text-xs ml-2">{formatDate(comment.created_at)}</span>
               </div>
-              {canDeleteComments && onDeleteComment && (
-                <button
-                  type="button"
-                  onClick={() => void onDeleteComment(comment.id)}
-                  className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
-                  aria-label="Delete comment"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                </button>
-              )}
+              {(canDeleteComments && onDeleteComment) || (canEditComment?.(comment) && onEditComment) ? (
+                <div className="flex items-center gap-1">
+                  {canEditComment?.(comment) && onEditComment && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingId(comment.id);
+                        setEditDraft(comment.body);
+                      }}
+                      className="rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  {canDeleteComments && onDeleteComment && (
+                    <button
+                      type="button"
+                      onClick={() => void onDeleteComment(comment.id)}
+                      className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600"
+                      aria-label="Delete comment"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              ) : null}
             </div>
-            <div className="text-sm text-gray-700 whitespace-pre-wrap mt-1">
-              {parentName ? <span className="text-blue-600 font-medium">@{parentName} </span> : null}
-              {comment.body}
-            </div>
+            {editingId === comment.id && onEditComment ? (
+              <div className="mt-2 space-y-2">
+                <textarea value={editDraft} onChange={(event) => setEditDraft(event.target.value)} rows={3} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                <div className="flex gap-2">
+                  <button type="button" onClick={async () => { await onEditComment(comment.id, editDraft.trim()); setEditingId(null); }} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+                  <button type="button" onClick={() => setEditingId(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm text-gray-700 whitespace-pre-wrap mt-1">
+                {parentName ? <span className="text-blue-600 font-medium">@{parentName} </span> : null}
+                {comment.body}
+              </div>
+            )}
             <div className="flex items-center gap-3 mt-2">
               <ReactionsBar summary={reactionsByCommentId[comment.id]} onToggle={(e) => onToggleReaction(comment.id, e)} canReact={!!meId} />
               <button

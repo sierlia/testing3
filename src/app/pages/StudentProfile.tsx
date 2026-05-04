@@ -26,6 +26,7 @@ import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituencyFull, normalizeConstituencyId } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
+import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
 
 type EditingSection = string | null;
 
@@ -90,6 +91,7 @@ export function StudentProfile() {
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [orgs, setOrgs] = useState<{ committees: Array<{ id: string; name: string }>; caucuses: Array<{ id: string; name: string }> }>({ committees: [], caucuses: [] });
   const [profileSections, setProfileSections] = useState<ProfileSectionRow[]>(defaultProfileSections);
+  const [profileWordLimit, setProfileWordLimit] = useState(1000);
 
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
   const [editingContent, setEditingContent] = useState<string>("");
@@ -107,6 +109,7 @@ export function StudentProfile() {
   const [unavailableConstituencies, setUnavailableConstituencies] = useState<string[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [teacherProfileTab, setTeacherProfileTab] = useState<"example" | "layout">("example");
+  useUnsavedChangesPrompt(Boolean(editingSection));
 
   useEffect(() => {
     (async () => {
@@ -134,6 +137,10 @@ export function StudentProfile() {
 
       setProfile(pr);
       setUpdatedAt(pr.updated_at || pr.created_at || new Date().toISOString());
+      if (pr.class_id) {
+        const { data: cls } = await supabase.from("classes").select("settings").eq("id", pr.class_id).maybeSingle();
+        setProfileWordLimit(Math.min(2000, Math.max(1, Number((cls as any)?.settings?.wordLimits?.profileLongResponse ?? 1000))));
+      }
 
       let authoredQuery = supabase
         .from("bill_display")
@@ -285,6 +292,10 @@ export function StudentProfile() {
 
   const saveEdit = async (section: Exclude<EditingSection, null>) => {
     if (!profile) return;
+    if (countWords(editingContent) > profileWordLimit) {
+      toast.error(`This section is limited to ${profileWordLimit} words.`);
+      return;
+    }
     if (section === "personal_statement") {
       await saveProfile({ personal_statement: editingContent } as any);
     } else if (section === "key_issues") {
@@ -456,6 +467,9 @@ export function StudentProfile() {
               rows={section.width === "full" ? 10 : 7}
               className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500"
             />
+            <div className={`text-xs ${countWords(editingContent) > profileWordLimit ? "text-red-600" : "text-gray-500"}`}>
+              {countWords(editingContent)} / {profileWordLimit} words
+            </div>
             {section.section_key === "key_issues" && <div className="text-xs text-gray-500">Enter one issue per line.</div>}
             <div className="flex items-center gap-2">
               <button
@@ -618,6 +632,12 @@ export function StudentProfile() {
                     value={profile.display_name || ""}
                     maxLength={64}
                     onChange={(e) => setProfile({ ...profile, display_name: e.target.value.slice(0, 64) })}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        e.currentTarget.blur();
+                      }
+                    }}
                     onBlur={() => void saveProfile({ display_name: profile.display_name } as any, true)}
                     placeholder="Your name"
                   />

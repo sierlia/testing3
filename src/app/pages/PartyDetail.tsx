@@ -76,6 +76,10 @@ export function PartyDetail() {
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   const [newAnnouncement, setNewAnnouncement] = useState("");
   const [newComment, setNewComment] = useState("");
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
+  const [editingAnnouncementBody, setEditingAnnouncementBody] = useState("");
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingCommentBody, setEditingCommentBody] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<"name" | "district">("name");
   const [votes, setVotes] = useState<Array<{ position: "chair" | "whip"; voter_user_id: string; candidate_user_id: string }>>([]);
@@ -461,6 +465,27 @@ export function PartyDetail() {
     }
   };
 
+  const editAnnouncement = async () => {
+    if (!editingAnnouncementId || !editingAnnouncementBody.trim()) return;
+    const { error } = await supabase.from("party_announcements").update({ body: editingAnnouncementBody.trim() }).eq("id", editingAnnouncementId);
+    if (error) return toast.error(error.message || "Could not edit announcement");
+    setAnnouncements((prev) => prev.map((announcement) => announcement.id === editingAnnouncementId ? { ...announcement, body: editingAnnouncementBody.trim() } : announcement));
+    setEditingAnnouncementId(null);
+    setEditingAnnouncementBody("");
+  };
+
+  const editComment = async () => {
+    if (!selectedAnnouncement || !editingCommentId || !editingCommentBody.trim()) return;
+    const { error } = await supabase.from("party_comments").update({ body: editingCommentBody.trim() }).eq("id", editingCommentId);
+    if (error) return toast.error(error.message || "Could not edit comment");
+    setComments((prev) => ({
+      ...prev,
+      [selectedAnnouncement.id]: (prev[selectedAnnouncement.id] ?? []).map((comment) => comment.id === editingCommentId ? { ...comment, body: editingCommentBody.trim() } : comment),
+    }));
+    setEditingCommentId(null);
+    setEditingCommentBody("");
+  };
+
   const castLeadershipVote = async (position: "chair" | "whip", candidateId: string) => {
     if (!party || !meId || !isMember) return;
     if (hasOptedOut(position, candidateId)) return toast.error("This candidate opted out");
@@ -680,16 +705,38 @@ export function PartyDetail() {
                         <div className="space-y-4">
                           <div className="relative rounded-md border border-gray-200 bg-white p-4">
                             {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
-                            <div className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</div>
+                            {editingAnnouncementId === selectedAnnouncement.id ? (
+                              <div className="space-y-2">
+                                <textarea value={editingAnnouncementBody} onChange={(event) => setEditingAnnouncementBody(event.target.value)} rows={4} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                                <div className="flex gap-2">
+                                  <button type="button" onClick={() => void editAnnouncement()} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+                                  <button type="button" onClick={() => setEditingAnnouncementId(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</div>
+                            )}
                             <div className="mt-2 text-xs text-gray-500">
                               <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={partyAuthorLinkClass(selectedAnnouncement.author)}>{displayAuthorName(selectedAnnouncement.author)}</Link> • {new Date(selectedAnnouncement.created_at).toLocaleString()}
                             </div>
-                            {isTeacher && (
-                              <div className="mt-3 flex justify-end">
+                            {(isTeacher || selectedAnnouncement.author_user_id === meId) && (
+                              <div className="mt-3 flex justify-end gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingAnnouncementId(selectedAnnouncement.id);
+                                    setEditingAnnouncementBody(selectedAnnouncement.body);
+                                  }}
+                                  className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                                >
+                                  Edit
+                                </button>
+                                {isTeacher && (
                                 <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
                                   <Trash2 className="h-3.5 w-3.5" />
                                   Delete
                                 </button>
+                                )}
                               </div>
                             )}
                           </div>
@@ -705,7 +752,29 @@ export function PartyDetail() {
                                     </button>
                                   )}
                                 </div>
-                                <div className="mt-1 text-gray-700">{comment.body}</div>
+                                {editingCommentId === comment.id ? (
+                                  <div className="mt-2 space-y-2">
+                                    <textarea value={editingCommentBody} onChange={(event) => setEditingCommentBody(event.target.value)} rows={3} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                                    <div className="flex gap-2">
+                                      <button type="button" onClick={() => void editComment()} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+                                      <button type="button" onClick={() => setEditingCommentId(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="mt-1 text-gray-700">{comment.body}</div>
+                                )}
+                                {(isTeacher || comment.author_user_id === meId) && editingCommentId !== comment.id && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setEditingCommentId(comment.id);
+                                      setEditingCommentBody(comment.body);
+                                    }}
+                                    className="mt-2 text-xs text-gray-500 hover:text-gray-900"
+                                  >
+                                    Edit
+                                  </button>
+                                )}
                               </div>
                             ))}
                           </div>

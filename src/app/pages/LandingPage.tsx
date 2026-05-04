@@ -2,6 +2,8 @@ import { Link } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Gavel, BookOpen, Users } from 'lucide-react';
+import { toast } from 'sonner';
+import { switchDemoAccount } from '../utils/demoAccounts';
 
 export function LandingPage() {
   return (
@@ -14,6 +16,21 @@ export function LandingPage() {
             <h1 className="text-2xl font-bold text-gray-900">Gavel</h1>
           </div>
           <div className="flex gap-3">
+            <Button variant="ghost" asChild>
+              <a href="#/">Home</a>
+            </Button>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await switchDemoAccount("student1");
+                } catch (error: any) {
+                  toast.error(error.message || "Could not open demo");
+                }
+              }}
+            >
+              Demo
+            </Button>
             <Button variant="outline" asChild>
               <Link to="/signin">Sign In</Link>
             </Button>

@@ -59,6 +59,23 @@ function SettingSelect({ value, onValueChange, children }: { value: string; onVa
   );
 }
 
+function WordLimitInput({ label, value, max, onChange }: { label: string; value: number; max: number; onChange: (value: number) => void }) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-base font-semibold text-gray-900">{label}</span>
+      <input
+        type="number"
+        min={1}
+        max={max}
+        value={value}
+        onChange={(event) => onChange(Math.min(max, Math.max(1, Number(event.target.value) || 1)))}
+        className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <span className="mt-1 block text-xs text-gray-500">Maximum allowed: {max.toLocaleString()} words</span>
+    </label>
+  );
+}
+
 function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const params = useParams();
   const [loading, setLoading] = useState(true);
@@ -92,6 +109,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     notifyOnAnnouncements: true,
     notifyOnCalendaredBills: true,
     requireJoinApproval: false,
+    profileLongResponseWordLimit: 1000,
+    billWordLimit: 5000,
+    committeeReportWordLimit: 2000,
+    organizationDescriptionWordLimit: 500,
+    announcementWordLimit: 1000,
+    commentWordLimit: 500,
   });
 
   const setSettings = (patch: Partial<typeof settings>) => {
@@ -138,6 +161,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           notifyOnAnnouncements: s?.notifications?.announcements ?? prev.notifyOnAnnouncements,
           notifyOnCalendaredBills: s?.notifications?.calendaredBills ?? prev.notifyOnCalendaredBills,
           requireJoinApproval: s?.students?.requireJoinApproval ?? prev.requireJoinApproval,
+          profileLongResponseWordLimit: s?.wordLimits?.profileLongResponse ?? prev.profileLongResponseWordLimit,
+          billWordLimit: s?.wordLimits?.bill ?? prev.billWordLimit,
+          committeeReportWordLimit: s?.wordLimits?.committeeReport ?? prev.committeeReportWordLimit,
+          organizationDescriptionWordLimit: s?.wordLimits?.organizationDescription ?? prev.organizationDescriptionWordLimit,
+          announcementWordLimit: s?.wordLimits?.announcement ?? prev.announcementWordLimit,
+          commentWordLimit: s?.wordLimits?.comment ?? prev.commentWordLimit,
         }));
       } catch (e: any) {
         toast.error(e.message || "Could not load settings");
@@ -226,6 +255,15 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               students: {
                 ...(existing?.students ?? {}),
                 requireJoinApproval: settings.requireJoinApproval,
+              },
+              wordLimits: {
+                ...(existing?.wordLimits ?? {}),
+                profileLongResponse: Math.min(2000, Math.max(1, Number(settings.profileLongResponseWordLimit) || 1000)),
+                bill: Math.min(5000, Math.max(1, Number(settings.billWordLimit) || 5000)),
+                committeeReport: Math.min(2000, Math.max(1, Number(settings.committeeReportWordLimit) || 2000)),
+                organizationDescription: Math.min(500, Math.max(1, Number(settings.organizationDescriptionWordLimit) || 500)),
+                announcement: Math.min(1000, Math.max(1, Number(settings.announcementWordLimit) || 1000)),
+                comment: Math.min(500, Math.max(1, Number(settings.commentWordLimit) || 500)),
               },
             }),
       };
@@ -329,6 +367,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               <SelectItem value="clerk">Clerk automatic</SelectItem>
             </SettingSelect>
           </div>
+          <WordLimitInput label="Bill draft word limit" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />
+          <WordLimitInput label="Committee report word limit" value={settings.committeeReportWordLimit} max={2000} onChange={(value) => setSettings({ committeeReportWordLimit: value })} />
         </div>
       );
     }
@@ -381,6 +421,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         <div className="space-y-5">
           <Toggle checked={settings.profileDistrictRequired} onChange={(v) => setSettings({ profileDistrictRequired: v })} title="Require constituency" description="Students should choose a district for their profile." />
           <Toggle checked={settings.profilePartyRequired} onChange={(v) => setSettings({ profilePartyRequired: v })} title="Require party" description="Students should choose or join a party." />
+          <WordLimitInput label="Profile long response word limit" value={settings.profileLongResponseWordLimit} max={2000} onChange={(value) => setSettings({ profileLongResponseWordLimit: value })} />
           <a href="/teacher/profile-layout-editor" className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-base font-semibold text-gray-900 hover:bg-gray-50">
             <UserCog className="h-4 w-4" />
             Edit profile layout
@@ -393,6 +434,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         <Toggle checked={settings.notifyOnAnnouncements} onChange={(v) => setSettings({ notifyOnAnnouncements: v })} title="Announcement notifications" description="Class organization announcements can notify students." />
         <Toggle checked={settings.notifyOnCalendaredBills} onChange={(v) => setSettings({ notifyOnCalendaredBills: v })} title="Calendared bill notifications" description="Notify students when bills are placed on the floor calendar." />
         <Toggle checked={settings.requireJoinApproval} onChange={(v) => setSettings({ requireJoinApproval: v })} title="Require student join approval" description="New students appear in the pending roster until approved." />
+        <div className="grid gap-4 sm:grid-cols-2">
+          <WordLimitInput label="Announcement word limit" value={settings.announcementWordLimit} max={1000} onChange={(value) => setSettings({ announcementWordLimit: value })} />
+          <WordLimitInput label="Comment word limit" value={settings.commentWordLimit} max={500} onChange={(value) => setSettings({ commentWordLimit: value })} />
+          <WordLimitInput label="Organization description word limit" value={settings.organizationDescriptionWordLimit} max={500} onChange={(value) => setSettings({ organizationDescriptionWordLimit: value })} />
+        </div>
       </div>
     );
   };
