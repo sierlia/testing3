@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
+import { CollapsibleText } from "../components/CollapsibleText";
 import { GraduationCap, MoreHorizontal, Save, X, Users as UsersIcon, Send, Pencil, Trash2, LogOut, UserPlus } from "lucide-react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
@@ -995,7 +996,7 @@ export function TessCaucusDetail() {
                     <div className="space-y-4">
                       <div className="relative border border-gray-200 rounded-md p-4 bg-white">
                         {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
-                        <div className="text-sm text-gray-900 whitespace-pre-line">{selectedAnnouncement.body}</div>
+                        <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
                         <div className="text-xs text-gray-500 mt-2">
                           <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={authorLinkClass(selectedAnnouncement.author)}>
                             {displayAuthorName(selectedAnnouncement.author)}

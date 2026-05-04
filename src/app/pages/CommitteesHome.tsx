@@ -4,7 +4,7 @@ import { BackButton } from "../components/BackButton";
 import { ClipboardList, LogOut, Pencil, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
-import { useNavigate } from "react-router";
+import { useNavigate, useSearchParams } from "react-router";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
@@ -24,9 +24,11 @@ let committeesHomeCache: CommitteesCache | null = null;
 
 export function CommitteesHome() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [committees, setCommittees] = useState<CommitteeRow[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [memberNames, setMemberNames] = useState<Record<string, string[]>>({});
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
   const [settings, setSettings] = useState<any>({});
   const [preferencesSubmitted, setPreferencesSubmitted] = useState<boolean>(false);
@@ -35,7 +37,7 @@ export function CommitteesHome() {
   const [joinedCommitteeIds, setJoinedCommitteeIds] = useState<Set<string>>(new Set());
   const [joiningCommitteeId, setJoiningCommitteeId] = useState<string | null>(null);
   const [leavingCommitteeId, setLeavingCommitteeId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [editingCommittee, setEditingCommittee] = useState<CommitteeRow | null>(null);
 
@@ -122,6 +124,17 @@ export function CommitteesHome() {
           counts[cid] = (counts[cid] ?? 0) + 1;
           if ((r as any).user_id === me) joined.add(cid);
         }
+        const profileIds = [...new Set((memRows ?? []).map((row: any) => row.user_id))];
+        const { data: memberProfiles } = profileIds.length
+          ? await supabase.from("profiles").select("user_id,display_name").in("user_id", profileIds)
+          : ({ data: [] } as any);
+        const profileNameMap = new Map((memberProfiles ?? []).map((row: any) => [row.user_id, row.display_name ?? "Member"]));
+        const names: Record<string, string[]> = {};
+        for (const row of memRows ?? []) {
+          const cid = (row as any).committee_id;
+          names[cid] = [...(names[cid] ?? []), profileNameMap.get((row as any).user_id) ?? "Member"];
+        }
+        setMemberNames(names);
         setMemberCounts(counts);
         setJoinedCommitteeIds(joined);
         committeesHomeCache = {
@@ -146,9 +159,9 @@ export function CommitteesHome() {
   const items = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     return committees
-      .filter((committee) => !query || committee.name.toLowerCase().includes(query) || (committee.description ?? "").toLowerCase().includes(query))
+      .filter((committee) => !query || committee.name.toLowerCase().includes(query) || (committee.description ?? "").toLowerCase().includes(query) || (memberNames[committee.id] ?? []).some((name) => name.toLowerCase().includes(query)))
       .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0 }));
-  }, [committees, memberCounts, searchQuery]);
+  }, [committees, memberCounts, memberNames, searchQuery]);
   const canSelfJoin = role === "student" && (!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
 
   const joinCommittee = async (committeeId: string) => {

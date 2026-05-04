@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { demoAccounts, DemoAccountKey, switchDemoAccount } from "../utils/demoAccounts";
+import { useAuth } from "../utils/AuthContext";
 
 const storageKey = "gavel:demoSwitcherPosition:v2";
 
@@ -15,9 +16,12 @@ function readPosition() {
 }
 
 export function DemoAccountSwitcher() {
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
   const [busyKey, setBusyKey] = useState<DemoAccountKey | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const [demoActive, setDemoActive] = useState(() => window.localStorage.getItem("gavel:demoActive") === "1");
+  const [burst, setBurst] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
 
@@ -25,6 +29,18 @@ export function DemoAccountSwitcher() {
     const saved = readPosition();
     if (saved) setPosition(saved);
     else setPosition({ x: Math.max(16, window.innerWidth - 96), y: Math.max(16, window.innerHeight - 76) });
+  }, []);
+
+  useEffect(() => {
+    const onDemoOpened = () => {
+      setDemoActive(true);
+      setBurst(true);
+      window.setTimeout(() => setBurst(false), 1000);
+    };
+    window.addEventListener("gavel:demo-opened", onDemoOpened);
+    const openedAt = Number(window.localStorage.getItem("gavel:demoOpenedAt") ?? 0);
+    if (Date.now() - openedAt < 2000) onDemoOpened();
+    return () => window.removeEventListener("gavel:demo-opened", onDemoOpened);
   }, []);
 
   useEffect(() => {
@@ -77,6 +93,7 @@ export function DemoAccountSwitcher() {
   };
 
   if (!position) return null;
+  if (!user && !demoActive) return null;
   const menuVerticalClass = position.y < 220 ? "top-full mt-2" : "bottom-full mb-2";
   const menuHorizontalClass = position.x < 176 ? "left-0" : "right-0";
 
@@ -90,6 +107,13 @@ export function DemoAccountSwitcher() {
       }}
     >
       <div className="rounded-full border border-gray-200 bg-white shadow-lg">
+        {burst && (
+          <div className="pointer-events-none absolute inset-0">
+            {["-left-2 -top-2 bg-blue-500", "left-7 -top-4 bg-amber-400", "right-0 -top-3 bg-emerald-500", "-right-2 top-6 bg-pink-500", "left-2 -bottom-2 bg-purple-500"].map((classes, index) => (
+              <span key={index} className={`absolute h-2 w-2 animate-ping rounded-full ${classes}`} />
+            ))}
+          </div>
+        )}
         <button
           type="button"
           onClick={() => {
@@ -103,6 +127,7 @@ export function DemoAccountSwitcher() {
       </div>
       {open && (
         <div className={`absolute ${menuVerticalClass} ${menuHorizontalClass} w-44 overflow-hidden rounded-2xl border border-gray-200 bg-white p-1 shadow-xl`}>
+          <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Switch demo users</div>
           {demoAccounts.map((account) => (
             <button
               key={account.key}

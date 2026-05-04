@@ -11,7 +11,8 @@ interface Student {
   id: string;
   name: string;
   preferences: string[];
-  assignedCommittee?: string;
+  preferenceLabels?: string[];
+  assignedCommittees: string[];
 }
 
 interface Committee {
@@ -27,6 +28,9 @@ export function TeacherCommitteeAssignments() {
   const [classId, setClassId] = useState<string | null>(null);
   const [committees, setCommittees] = useState<Committee[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
+  const [globalCapacity, setGlobalCapacity] = useState(0);
+  const [assignmentsPerStudent, setAssignmentsPerStudent] = useState(1);
+  const [classSettings, setClassSettings] = useState<any>({});
 
   useEffect(() => {
     const load = async () => {
@@ -39,6 +43,11 @@ export function TeacherCommitteeAssignments() {
         const cid = (prof as any)?.class_id ?? null;
         setClassId(cid);
         if (!cid) return;
+        const { data: classRow } = await supabase.from("classes").select("settings").eq("id", cid).maybeSingle();
+        const settings = (classRow as any)?.settings ?? {};
+        setClassSettings(settings);
+        const savedCapacities = settings?.committees?.capacities ?? {};
+        setAssignmentsPerStudent(Math.max(1, Number(settings?.committees?.assignmentsPerStudent ?? 1) || 1));
 
         const { data: committeeRows, error: cErr } = await supabase
           .from("committees")
@@ -59,7 +68,9 @@ export function TeacherCommitteeAssignments() {
         const numCommittees = Math.max(1, (committeeRows ?? []).length);
         const baseCap = Math.ceil(numStudents / numCommittees);
 
-        setCommittees((committeeRows ?? []).map((c: any) => ({ id: c.id, name: c.name, capacity: baseCap })));
+        const nextCommittees = (committeeRows ?? []).map((c: any) => ({ id: c.id, name: c.name, capacity: Math.max(1, Number(savedCapacities[c.id] ?? baseCap) || baseCap) }));
+        setCommittees(nextCommittees);
+        setGlobalCapacity(baseCap);
 
         const studentIds = (studentRows ?? []).map((s: any) => s.user_id);
         const { data: prefRows } = await supabase
@@ -83,8 +94,11 @@ export function TeacherCommitteeAssignments() {
         }
 
         const { data: existingMemberships } = await supabase.from("committee_members").select("committee_id,user_id").in("user_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
-        const assignedByUser = new Map<string, string>();
-        for (const r of existingMemberships ?? []) assignedByUser.set((r as any).user_id, (r as any).committee_id);
+        const assignedByUser = new Map<string, string[]>();
+        for (const r of existingMemberships ?? []) {
+          const uid = (r as any).user_id;
+          assignedByUser.set(uid, [...(assignedByUser.get(uid) ?? []), (r as any).committee_id]);
+        }
         if (assignedByUser.size > 0) setAssignmentStage("published");
 
         setStudents(
@@ -92,7 +106,7 @@ export function TeacherCommitteeAssignments() {
             id: s.user_id,
             name: s.display_name ?? "Student",
             preferences: prefsByUser.get(s.user_id) ?? [],
-            assignedCommittee: assignedByUser.get(s.user_id),
+            assignedCommittees: assignedByUser.get(s.user_id) ?? [],
           })),
         );
       } catch (e: any) {
@@ -106,49 +120,68 @@ export function TeacherCommitteeAssignments() {
 
   const runAssignmentAlgorithm = () => {
     if (committees.length === 0) return;
-    const newStudents = [...students];
+    const newStudents = students.map((student) => ({ ...student, assignedCommittees: [] as string[] }));
     const committeeCounts: Record<string, number> = {};
-    
-    // Initialize counts
     committees.forEach(c => committeeCounts[c.id] = 0);
 
-    // Sort students randomly to be fair
-    const shuffled = [...newStudents].sort(() => Math.random() - 0.5);
+    for (let round = 0; round < assignmentsPerStudent; round += 1) {
+      const ordered = [...newStudents].sort((a, b) => {
+        const aChoice = a.preferences[round] ? 0 : 1;
+        const bChoice = b.preferences[round] ? 0 : 1;
+        return aChoice - bChoice || a.name.localeCompare(b.name);
+      });
 
-    shuffled.forEach(student => {
-      student.assignedCommittee = undefined;
-      // Try preferences in order
-      for (const pref of student.preferences) {
-        const committee = committees.find(c => c.id === pref);
-        if (committee && committeeCounts[pref] < committee.capacity) {
-          student.assignedCommittee = pref;
-          committeeCounts[pref]++;
-          break;
-        }
-      }
-      
-      // If no preference available, assign to first available committee
-      if (!student.assignedCommittee) {
-        for (const committee of committees) {
-          if (committeeCounts[committee.id] < committee.capacity) {
-            student.assignedCommittee = committee.id;
-            committeeCounts[committee.id]++;
+      for (const student of ordered) {
+        const rankedChoices = [...student.preferences, ...committees.map((committee) => committee.id)].filter((id, index, arr) => arr.indexOf(id) === index);
+        for (const committeeId of rankedChoices) {
+          const committee = committees.find(c => c.id === committeeId);
+          if (!committee || student.assignedCommittees.includes(committeeId)) continue;
+          if (committeeCounts[committeeId] < committee.capacity) {
+            student.assignedCommittees.push(committeeId);
+            committeeCounts[committeeId]++;
             break;
           }
         }
       }
-    });
+    }
+
+    const unfilled = newStudents.filter((student) => student.assignedCommittees.length < assignmentsPerStudent).length;
+    if (unfilled) toast.warning(`${unfilled} student${unfilled === 1 ? "" : "s"} could not receive all requested committee assignments because capacity is full.`);
 
     setStudents(newStudents);
     setAssignmentStage('preview');
   };
 
   const moveStudent = (studentId: string, toCommitteeId: string) => {
-    const newStudents = students.map(s => 
-      s.id === studentId ? { ...s, assignedCommittee: toCommitteeId === "unassigned" ? undefined : toCommitteeId } : s
-    );
+    const newStudents = students.map((s) => {
+      if (s.id !== studentId) return s;
+      if (toCommitteeId === "unassigned") return { ...s, assignedCommittees: [] };
+      const next = s.assignedCommittees.includes(toCommitteeId)
+        ? s.assignedCommittees.filter((id) => id !== toCommitteeId)
+        : [...(s.assignedCommittees.length >= assignmentsPerStudent ? s.assignedCommittees.slice(1) : s.assignedCommittees), toCommitteeId];
+      return { ...s, assignedCommittees: next };
+    });
     setStudents(newStudents);
     if (assignmentStage === "published") setAssignmentStage("preview");
+  };
+
+  const applyGlobalCapacity = () => {
+    setCommittees((prev) => prev.map((committee) => ({ ...committee, capacity: Math.max(1, globalCapacity) })));
+  };
+
+  const saveCapacitySettings = async (nextCommittees = committees, nextAssignmentsPerStudent = assignmentsPerStudent) => {
+    if (!classId) return;
+    const capacities = Object.fromEntries(nextCommittees.map((committee) => [committee.id, committee.capacity]));
+    const nextSettings = {
+      ...classSettings,
+      committees: {
+        ...(classSettings.committees ?? {}),
+        capacities,
+        assignmentsPerStudent: nextAssignmentsPerStudent,
+      },
+    };
+    setClassSettings(nextSettings);
+    await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
   };
 
   const saveAssignments = () => {
@@ -162,11 +195,12 @@ export function TeacherCommitteeAssignments() {
         if (committeeIds.length) {
           await supabase.from("committee_members").delete().in("committee_id", committeeIds);
         }
-        const rows = students.filter((s) => s.assignedCommittee).map((s) => ({ committee_id: s.assignedCommittee, user_id: s.id, role: "member" }));
+        const rows = students.flatMap((s) => s.assignedCommittees.map((committeeId) => ({ committee_id: committeeId, user_id: s.id, role: "member" })));
         if (rows.length) {
           const { error } = await supabase.from("committee_members").insert(rows as any);
           if (error) throw error;
         }
+        await saveCapacitySettings();
         toast.success("Assignments saved");
         setAssignmentStage('published');
       } catch (e: any) {
@@ -176,11 +210,16 @@ export function TeacherCommitteeAssignments() {
   };
 
   const getStudentsForCommittee = (committeeId: string) => {
-    return students.filter(s => s.assignedCommittee === committeeId);
+    return students.filter(s => s.assignedCommittees.includes(committeeId));
   };
 
   const getUnassignedStudents = () => {
-    return students.filter(s => !s.assignedCommittee);
+    return students.filter(s => s.assignedCommittees.length === 0);
+  };
+
+  const withPreferenceLabels = (rows: Student[]) => {
+    const names = new Map(committees.map((committee) => [committee.id, committee.name]));
+    return rows.map((student) => ({ ...student, preferenceLabels: student.preferences.map((id) => names.get(id) ?? id) }));
   };
 
   return (
@@ -234,6 +273,37 @@ export function TeacherCommitteeAssignments() {
                 {students.length} total students • {committees.length} committees
               </div>
             </div>
+            <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 md:grid-cols-3">
+              <label className="text-sm font-medium text-gray-700">
+                Committees per student
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.max(1, committees.length)}
+                  value={assignmentsPerStudent}
+                  onChange={(event) => setAssignmentsPerStudent(Math.max(1, Math.min(committees.length || 1, Number(event.target.value) || 1)))}
+                  className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2"
+                />
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                Set all max capacities
+                <div className="mt-1 flex gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    value={globalCapacity}
+                    onChange={(event) => setGlobalCapacity(Math.max(1, Number(event.target.value) || 1))}
+                    className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2"
+                  />
+                  <button type="button" onClick={applyGlobalCapacity} className="rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    Apply
+                  </button>
+                </div>
+              </label>
+              <div className="rounded-md bg-gray-50 p-3 text-sm text-gray-600">
+                Hover a student card to see their submitted committee rankings.
+              </div>
+            </div>
           </div>
 
           {assignmentStage === 'pending' && (
@@ -254,7 +324,7 @@ export function TeacherCommitteeAssignments() {
               <div>
                 <CommitteeAssignmentColumn
                   committee={{ id: 'unassigned', name: 'Unassigned Students', capacity: 999 }}
-                  students={getUnassignedStudents()}
+                  students={withPreferenceLabels(getUnassignedStudents())}
                   moveStudent={moveStudent}
                   isUnassigned
                 />
@@ -262,12 +332,23 @@ export function TeacherCommitteeAssignments() {
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {committees.map(committee => (
-                  <CommitteeAssignmentColumn
-                    key={committee.id}
-                    committee={committee}
-                    students={getStudentsForCommittee(committee.id)}
-                    moveStudent={moveStudent}
-                  />
+                  <div key={committee.id} className="space-y-2">
+                    <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500">
+                      Max capacity
+                      <input
+                        type="number"
+                        min={1}
+                        value={committee.capacity}
+                        onChange={(event) => setCommittees((prev) => prev.map((row) => row.id === committee.id ? { ...row, capacity: Math.max(1, Number(event.target.value) || 1) } : row))}
+                        className="mt-1 w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm font-medium normal-case tracking-normal"
+                      />
+                    </label>
+                    <CommitteeAssignmentColumn
+                      committee={committee}
+                      students={withPreferenceLabels(getStudentsForCommittee(committee.id))}
+                      moveStudent={moveStudent}
+                    />
+                  </div>
                 ))}
               </div>
             </div>

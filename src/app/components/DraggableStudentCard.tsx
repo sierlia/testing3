@@ -6,7 +6,8 @@ interface Student {
   id: string;
   name: string;
   preferences: string[];
-  assignedCommittee?: string;
+  preferenceLabels?: string[];
+  assignedCommittees?: string[];
 }
 
 interface DraggableStudentCardProps {
@@ -43,6 +44,7 @@ export function DraggableStudentCard({
   return (
     <div
       ref={ref}
+      title={student.preferences.length ? `Rankings: ${(student.preferenceLabels ?? student.preferences).map((pref, index) => `${index + 1}. ${pref}`).join(", ")}` : "No rankings submitted"}
       className={`
         bg-gray-50 border rounded-md px-3 py-2 flex items-center justify-between gap-2 transition-all
         ${isDragging ? 'opacity-50' : ''}

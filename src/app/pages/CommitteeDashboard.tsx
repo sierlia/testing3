@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
+import { CollapsibleText } from "../components/CollapsibleText";
 import { supabase } from "../utils/supabase";
 import { GraduationCap, LogOut, MoreHorizontal, Users, Send, Pencil, Save, X, UserPlus, Trash2, UserX } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
@@ -1059,7 +1060,7 @@ export function CommitteeDashboard() {
                     <div className="space-y-4">
                       <div className="relative border border-gray-200 rounded-md p-4 bg-white">
                         {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
-                        <div className="text-sm text-gray-900 whitespace-pre-line">{selectedAnnouncement.body}</div>
+                        <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
                         <div className="text-xs text-gray-500 mt-2">
                           <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={authorLinkClass(selectedAnnouncement.author)}>
                             {displayAuthorName(selectedAnnouncement.author)}

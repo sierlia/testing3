@@ -6,7 +6,8 @@ interface Student {
   id: string;
   name: string;
   preferences: string[];
-  assignedCommittee?: string;
+  preferenceLabels?: string[];
+  assignedCommittees?: string[];
 }
 
 interface Committee {

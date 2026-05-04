@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
+import { CollapsibleText } from "../components/CollapsibleText";
 import { ConstituencyPicker, getConstituencyById } from "../components/ConstituencyPicker";
 import {
   getPartyIdByName,
@@ -89,6 +90,7 @@ export function StudentProfile() {
   const [profile, setProfile] = useState<ProfileRow | null>(null);
   const [billsAuthored, setBillsAuthored] = useState<any[]>([]);
   const [billsCosponsored, setBillsCosponsored] = useState<any[]>([]);
+  const [lettersAuthored, setLettersAuthored] = useState<any[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [orgs, setOrgs] = useState<{ committees: Array<{ id: string; name: string }>; caucuses: Array<{ id: string; name: string }> }>({ committees: [], caucuses: [] });
   const [profileSections, setProfileSections] = useState<ProfileSectionRow[]>(defaultProfileSections);
@@ -110,6 +112,10 @@ export function StudentProfile() {
   const [unavailableConstituencies, setUnavailableConstituencies] = useState<string[]>([]);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [teacherProfileTab, setTeacherProfileTab] = useState<"example" | "layout">("example");
+  const [photoModalOpen, setPhotoModalOpen] = useState(false);
+  const [photoModalTab, setPhotoModalTab] = useState<"upload" | "center">("upload");
+  const [avatarPosition, setAvatarPosition] = useState({ x: 50, y: 50 });
+  const [draggingAvatar, setDraggingAvatar] = useState(false);
   useUnsavedChangesPrompt(Boolean(editingSection));
 
   useEffect(() => {
@@ -137,6 +143,10 @@ export function StudentProfile() {
         };
 
       setProfile(pr);
+      const storedPosition = (pr.written_responses as any)?.avatar_position;
+      if (storedPosition && typeof storedPosition.x === "number" && typeof storedPosition.y === "number") {
+        setAvatarPosition({ x: storedPosition.x, y: storedPosition.y });
+      }
       setUpdatedAt(pr.updated_at || pr.created_at || new Date().toISOString());
       if (pr.class_id) {
         const { data: cls } = await supabase.from("classes").select("settings").eq("id", pr.class_id).maybeSingle();
@@ -216,6 +226,11 @@ export function StudentProfile() {
         committees: (cm ?? []).map((r: any) => ({ id: r.committees.id, name: r.committees.name })),
         caucuses: (ca ?? []).map((r: any) => ({ id: r.caucuses.id, name: r.caucuses.title })),
       });
+
+      let lettersQuery = supabase.from("dear_colleague_letters").select("id,subject,created_at,class_id").eq("sender_user_id", uid);
+      if (pr.class_id) lettersQuery = lettersQuery.eq("class_id", pr.class_id);
+      const { data: letters } = await lettersQuery.order("created_at", { ascending: false }).limit(5);
+      setLettersAuthored(letters ?? []);
     })();
   }, [id]);
 
@@ -315,6 +330,10 @@ export function StudentProfile() {
 
   const handleUploadAvatar = async (f: File) => {
     if (!profile) return;
+    if (!/^image\/(png|jpeg)$/.test(f.type)) {
+      toast.error("Profile pictures must be PNG or JPG files.");
+      return;
+    }
     try {
       const ext = f.name.split(".").pop();
       const path = `${profile.user_id}/${Date.now()}.${ext}`;
@@ -322,10 +341,25 @@ export function StudentProfile() {
       if (uploadError) throw uploadError;
       const { data } = supabase.storage.from("avatars").getPublicUrl(path);
       await saveProfile({ avatar_url: data.publicUrl } as any);
+      setPhotoModalTab("center");
+      setPhotoModalOpen(true);
       toast.success("Profile photo updated");
     } catch (e: any) {
       toast.error(e.message || "Could not upload photo");
     }
+  };
+
+  const saveAvatarPosition = async (next = avatarPosition) => {
+    if (!profile) return;
+    const written = { ...(profile.written_responses || {}), avatar_position: next };
+    await saveProfile({ written_responses: written } as any);
+  };
+
+  const updateAvatarDrag = (clientX: number, clientY: number, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
+    setAvatarPosition({ x, y });
   };
 
   const savePartySelection = async () => {
@@ -487,7 +521,7 @@ export function StudentProfile() {
             </div>
           </div>
         ) : value.trim() ? (
-          section.section_key === "key_issues" ? (
+          section.section_key === "key_issues" && countWords(value) < 500 ? (
             <ul className="space-y-2">
               {lines.map((issue, index) => (
                 <li key={`${section.section_key}-${index}`} className="flex items-start text-gray-700">
@@ -497,13 +531,7 @@ export function StudentProfile() {
               ))}
             </ul>
           ) : (
-            <div className="space-y-4 text-gray-700">
-              {value.split("\n\n").map((para, index) => (
-                <p key={`${section.section_key}-${index}`} className="whitespace-pre-line">
-                  {para}
-                </p>
-              ))}
-            </div>
+            <CollapsibleText text={value} limit={500} className="text-gray-700" />
           )
         ) : (
           <p className="italic text-gray-400">{exampleEmptyText}</p>
@@ -514,9 +542,12 @@ export function StudentProfile() {
 
   const renderLegislationSection = (section: ProfileSectionRow) => (
     <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
-      <div className="mb-4 flex items-center gap-2">
-        <FileText className="h-5 w-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <FileText className="h-5 w-5 text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+        </div>
+        <Link to={`/bills?sponsor=${profile?.user_id ?? ""}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">View all</Link>
       </div>
       <div className="space-y-3">
         {billsAuthored.length ? (
@@ -538,13 +569,18 @@ export function StudentProfile() {
 
   const renderOrganizationsSection = (section: ProfileSectionRow) => (
     <section key={section.section_key} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm md:col-span-2">
-      <div className="mb-4 flex items-center gap-2">
-        <Users className="h-5 w-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Users className="h-5 w-5 text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+        </div>
       </div>
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div>
-          <div className="mb-2 text-sm font-medium text-gray-900">Committees</div>
+          <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-900">
+            <span>Committees</span>
+            <Link to={`/committees?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">View all</Link>
+          </div>
           {orgs.committees.length === 0 ? (
             <div className="text-sm text-gray-500">None</div>
           ) : (
@@ -560,7 +596,10 @@ export function StudentProfile() {
           )}
         </div>
         <div>
-          <div className="mb-2 text-sm font-medium text-gray-900">Caucuses</div>
+          <div className="mb-2 flex items-center justify-between gap-2 text-sm font-medium text-gray-900">
+            <span>Caucuses</span>
+            <Link to={`/caucuses?q=${encodeURIComponent(profile?.display_name ?? "")}`} className="text-xs font-semibold text-blue-600 hover:text-blue-700">View all</Link>
+          </div>
           {orgs.caucuses.length === 0 ? (
             <div className="text-sm text-gray-500">None</div>
           ) : (
@@ -581,11 +620,21 @@ export function StudentProfile() {
 
   const renderLettersSection = (section: ProfileSectionRow) => (
     <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
-      <div className="mb-3 flex items-center gap-2">
-        <Mail className="h-5 w-5 text-blue-600" />
-        <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Mail className="h-5 w-5 text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+        </div>
+        <Link to={`/records?type=letter&author=${profile?.user_id ?? ""}`} className="text-sm font-medium text-blue-600 hover:text-blue-700">View all</Link>
       </div>
-      <p className="text-gray-600">Coming soon</p>
+      <div className="space-y-2">
+        {lettersAuthored.length ? lettersAuthored.map((letter) => (
+          <Link key={letter.id} to={`/letters/${letter.id}`} className="block rounded-md bg-gray-50 p-3 text-sm hover:bg-gray-100">
+            <div className="font-semibold text-gray-900">{letter.subject || "Dear Colleague Letter"}</div>
+            <div className="mt-1 text-xs text-gray-500">{new Date(letter.created_at).toLocaleDateString()}</div>
+          </Link>
+        )) : <p className="text-sm text-gray-500">No Dear Colleague letters yet</p>}
+      </div>
     </section>
   );
 
@@ -605,28 +654,32 @@ export function StudentProfile() {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4">
-              <div className="relative">
+              <button
+                type="button"
+                onClick={() => {
+                  if (!isMe) return;
+                  setPhotoModalOpen(true);
+                  setPhotoModalTab(profile.avatar_url ? "center" : "upload");
+                }}
+                disabled={!isMe}
+                className="relative rounded-full text-left disabled:cursor-default"
+              >
                 {profile.avatar_url ? (
                   <img
                     src={profile.avatar_url}
                     alt={profile.display_name || "Profile"}
                     className="w-16 h-16 rounded-full object-cover"
+                    style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }}
                   />
                 ) : (
                   <DefaultAvatar className="w-16 h-16" iconClassName="w-8 h-8 text-gray-500" />
                 )}
                 {isMe && (
-                  <label className="absolute -top-1 -right-1 w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center hover:bg-blue-700 transition-colors shadow-sm cursor-pointer">
+                  <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700">
                     <Pencil className="w-3 h-3" />
-                    <input
-                      type="file"
-                      className="hidden"
-                      accept="image/*"
-                      onChange={(e) => e.target.files?.[0] && handleUploadAvatar(e.target.files[0])}
-                    />
-                  </label>
+                  </span>
                 )}
-              </div>
+              </button>
               <div className="min-w-0 flex-1 sm:min-w-[24rem]">
                 {isMe ? (
                   <input
@@ -1102,6 +1155,68 @@ export function StudentProfile() {
         </div>
       )}
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
+      {photoModalOpen && isMe && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 p-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Profile picture</h2>
+                <p className="text-sm text-gray-500">Upload or adjust how your photo is centered.</p>
+              </div>
+              <button type="button" onClick={() => setPhotoModalOpen(false)} className="rounded-md p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2 p-4">
+              <button type="button" onClick={() => setPhotoModalTab("upload")} className={`rounded-full px-4 py-2 text-sm font-semibold ${photoModalTab === "upload" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700"}`}>Upload</button>
+              <button type="button" onClick={() => setPhotoModalTab("center")} disabled={!profile.avatar_url} className={`rounded-full px-4 py-2 text-sm font-semibold disabled:opacity-40 ${photoModalTab === "center" ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700"}`}>Centering</button>
+            </div>
+            <div className="p-4 pt-0">
+              {photoModalTab === "upload" ? (
+                <label
+                  onDragOver={(event) => event.preventDefault()}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    const file = event.dataTransfer.files?.[0];
+                    if (file) void handleUploadAvatar(file);
+                  }}
+                  className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-gray-300 p-10 text-center hover:border-blue-400 hover:bg-blue-50"
+                >
+                  <input type="file" className="hidden" accept="image/png,image/jpeg" onChange={(event) => event.target.files?.[0] && void handleUploadAvatar(event.target.files[0])} />
+                  <Pencil className="mb-3 h-8 w-8 text-blue-600" />
+                  <div className="text-sm font-semibold text-gray-900">Drag a file into this box or click to upload a profile picture.</div>
+                  <div className="mt-2 text-xs text-gray-500">Accepted formats: PNG and JPG.</div>
+                </label>
+              ) : (
+                <div className="space-y-4">
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onPointerDown={(event) => {
+                      setDraggingAvatar(true);
+                      updateAvatarDrag(event.clientX, event.clientY, event.currentTarget);
+                    }}
+                    onPointerMove={(event) => {
+                      if (draggingAvatar) updateAvatarDrag(event.clientX, event.clientY, event.currentTarget);
+                    }}
+                    onPointerUp={() => {
+                      setDraggingAvatar(false);
+                      void saveAvatarPosition();
+                    }}
+                    className="mx-auto h-48 w-48 touch-none overflow-hidden rounded-full border border-gray-200 bg-gray-100"
+                  >
+                    {profile.avatar_url && <img src={profile.avatar_url} alt="Profile preview" className="h-full w-full object-cover" style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }} />}
+                  </div>
+                  <p className="text-center text-sm text-gray-600">Drag the image to choose what sits in the circle.</p>
+                  <button type="button" onClick={() => void saveAvatarPosition()} className="w-full rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                    Save centering
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

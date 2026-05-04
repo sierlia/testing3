@@ -313,13 +313,13 @@ export function Navigation() {
                 <>
                   <Link
                     to={dashboardLink}
-                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                    className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
                   >
                     Home
                   </Link>
                   <Link
                     to="/"
-                    className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                    className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
                   >
                     Demo
                   </Link>
@@ -345,6 +345,13 @@ export function Navigation() {
                   </div>
                 )}
               </div>
+
+              <Link
+                to="/records"
+                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+              >
+                Records
+              </Link>
 
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                 <button

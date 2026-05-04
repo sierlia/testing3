@@ -4,6 +4,7 @@ import { CheckCircle, Flag, GraduationCap, LogOut, MoreHorizontal, Pencil, Repea
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
+import { CollapsibleText } from "../components/CollapsibleText";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
@@ -716,7 +717,7 @@ export function PartyDetail() {
                                 </div>
                               </div>
                             ) : (
-                              <div className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</div>
+                              <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
                             )}
                             <div className="mt-2 text-xs text-gray-500">
                               <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={partyAuthorLinkClass(selectedAnnouncement.author)}>{displayAuthorName(selectedAnnouncement.author)}</Link> • {new Date(selectedAnnouncement.created_at).toLocaleString()}

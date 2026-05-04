@@ -303,8 +303,15 @@ export function DearColleagueInbox() {
                         <span>{formatDate(selected.created_at)}</span>
                       </div>
                     </div>
-                    {selected.mailbox === "inbox" && (
-                      <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        to={`/letters/${selected.letter_id}`}
+                        className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        Open page
+                      </Link>
+                      {selected.mailbox === "inbox" && (
+                        <>
                         {!selected.read_at && (
                           <button
                             type="button"
@@ -323,8 +330,9 @@ export function DearColleagueInbox() {
                           <PenSquare className="w-4 h-4" />
                           Reply
                         </button>
-                      </div>
-                    )}
+                        </>
+                      )}
+                    </div>
                   </div>
 
                   <h2 className="text-xl font-bold text-gray-900 mb-4">{selected.subject}</h2>

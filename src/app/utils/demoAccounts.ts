@@ -15,6 +15,9 @@ export async function switchDemoAccount(key: DemoAccountKey) {
   const credentials = Array.isArray(data) ? data[0] : data;
   if (!credentials?.email || !credentials?.password) throw new Error("Demo account is not configured.");
 
+  window.localStorage.setItem("gavel:demoActive", "1");
+  window.localStorage.setItem("gavel:demoOpenedAt", String(Date.now()));
+  window.dispatchEvent(new CustomEvent("gavel:demo-opened"));
   await supabase.auth.signOut();
   const { error: signInError } = await supabase.auth.signInWithPassword({
     email: credentials.email,

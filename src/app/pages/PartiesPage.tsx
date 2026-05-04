@@ -176,8 +176,14 @@ export function PartiesPage() {
   const canCreate = role === "teacher" || allowStudentCreated;
   const filteredParties = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
-    return parties.filter((party) => !query || party.name.toLowerCase().includes(query) || (party.platform ?? "").toLowerCase().includes(query));
-  }, [parties, searchQuery]);
+    return parties.filter((party) => {
+      const partyMembers = members.filter((member) => member.party && comparablePartyName(member.party) === comparablePartyName(party.name));
+      return !query
+        || party.name.toLowerCase().includes(query)
+        || (party.platform ?? "").toLowerCase().includes(query)
+        || partyMembers.some((member) => (member.display_name ?? "").toLowerCase().includes(query));
+    });
+  }, [members, parties, searchQuery]);
   const memberCount = (partyName: string) => {
     const comparable = comparablePartyName(partyName);
     return members.filter((member) => member.party && comparablePartyName(member.party) === comparable).length;

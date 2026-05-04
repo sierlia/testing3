@@ -15,12 +15,10 @@ export function LandingPage() {
             <Gavel className="w-8 h-8 text-blue-600" />
             <h1 className="text-2xl font-bold text-gray-900">Gavel</h1>
           </div>
-          <div className="flex gap-3">
-            <Button variant="ghost" asChild>
-              <a href="#/">Home</a>
-            </Button>
-            <Button
-              variant="outline"
+          <div className="flex items-center gap-5 text-sm font-medium">
+            <a href="#/" className="text-gray-700 hover:text-gray-900">Home</a>
+            <button
+              type="button"
               onClick={async () => {
                 try {
                   await switchDemoAccount("student1");
@@ -28,9 +26,10 @@ export function LandingPage() {
                   toast.error(error.message || "Could not open demo");
                 }
               }}
+              className="text-gray-700 hover:text-gray-900"
             >
               Demo
-            </Button>
+            </button>
             <Button variant="outline" asChild>
               <Link to="/signin">Sign In</Link>
             </Button>

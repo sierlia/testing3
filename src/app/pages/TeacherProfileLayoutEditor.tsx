@@ -47,6 +47,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   const [saving, setSaving] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -210,6 +211,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
     const fromKey = event.dataTransfer.getData("text/plain") || draggingKey;
     if (fromKey) moveSectionTo(fromKey, sectionKey);
     setDraggingKey(null);
+    setDragOverKey(null);
   };
 
   const usedSingleTypes = new Set(sections.filter((section) => section.section_type !== "long_response").map((section) => section.section_type));
@@ -250,24 +252,40 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
           {normalizedSections.map((section, index) => {
             const Icon = sectionIcon(section.section_type);
             return (
+              <div key={section.section_key} className={`${section.width === "full" ? "col-span-2" : ""}`}>
+              {dragOverKey === section.section_key && draggingKey !== section.section_key && (
+                <div className="mb-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-4 text-sm font-medium text-blue-700">
+                  Drop here
+                </div>
+              )}
               <div
-                key={section.section_key}
                 draggable
                 onDragStart={(event) => onDragStart(event, section.section_key)}
-                onDragOver={(event) => event.preventDefault()}
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragOverKey(section.section_key);
+                }}
+                onDragLeave={() => setDragOverKey((key) => key === section.section_key ? null : key)}
                 onDrop={(event) => onDrop(event, section.section_key)}
-                onDragEnd={() => setDraggingKey(null)}
-                className={`rounded-lg border bg-white p-4 shadow-sm transition ${section.width === "full" ? "col-span-2" : ""} ${draggingKey === section.section_key ? "border-blue-300 opacity-60" : "border-gray-200"}`}
+                onDragEnd={() => {
+                  setDraggingKey(null);
+                  setDragOverKey(null);
+                }}
+                className={`rounded-lg border bg-white p-4 shadow-sm transition ${draggingKey === section.section_key ? "border-blue-300 opacity-60" : "border-gray-200"}`}
               >
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div className="flex min-w-0 flex-1 items-center gap-2">
                     <GripVertical className="h-4 w-4 cursor-grab text-gray-400" />
                     <Icon className="h-4 w-4 text-blue-600" />
-                    <input
-                      value={section.title}
-                      onChange={(event) => updateSection(section.section_key, { title: event.target.value })}
-                      className="min-w-0 flex-1 border-b border-transparent bg-transparent text-base font-semibold text-gray-900 outline-none hover:border-gray-300 focus:border-blue-500"
-                    />
+                    {section.section_type === "long_response" ? (
+                      <input
+                        value={section.title}
+                        onChange={(event) => updateSection(section.section_key, { title: event.target.value })}
+                        className="min-w-0 flex-1 border-b border-gray-300 bg-transparent text-base font-semibold text-gray-900 outline-none focus:border-blue-500"
+                      />
+                    ) : (
+                      <div className="min-w-0 flex-1 text-base font-semibold text-gray-900">{section.title}</div>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <button
@@ -284,15 +302,8 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
                     </button>
                   </div>
                 </div>
-                <div className="grid gap-3 sm:grid-cols-1">
-                  <select value={section.section_type} onChange={(event) => updateSection(section.section_key, { section_type: event.target.value as SectionType })} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                    {Object.entries(typeLabels).map(([value, label]) => (
-                      <option key={value} value={value} disabled={value !== section.section_type && value !== "long_response" && usedSingleTypes.has(value as SectionType)}>
-                        {label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{typeLabels[section.section_type]}</div>
+              </div>
               </div>
             );
           })}

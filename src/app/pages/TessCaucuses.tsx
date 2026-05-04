@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
 import { Search, Plus, Users, ArrowUpDown, Vote, LogOut, UserPlus, Pencil, Trash2 } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link, useNavigate, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { OrganizationsLayout } from "./OrganizationsLayout";
@@ -13,6 +13,7 @@ interface Caucus {
   name: string;
   description: string;
   memberCount: number;
+  memberNames?: string[];
   chairId: string | null;
   chair: { name: string; party: string; image: string | null };
   coChairId: string | null;
@@ -25,7 +26,8 @@ let caucusesPageCache: Caucus[] | null = null;
 
 export function TessCaucuses() {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [sortBy, setSortBy] = useState<"createdAt" | "members">("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [showCreateForm, setShowCreateForm] = useState(false);
@@ -95,6 +97,7 @@ export function TessCaucuses() {
             name: c.title,
             description: c.description ?? "",
             memberCount: members.length,
+            memberNames: members.map((member: any) => profileMap.get(member.user_id)?.display_name ?? "Member"),
             chairId: chair?.user_id ?? null,
             chair: {
               name: chairProfile?.display_name ?? "N/A",
@@ -129,7 +132,8 @@ export function TessCaucuses() {
       caucuses.filter(
         (caucus) =>
           caucus.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          caucus.description.toLowerCase().includes(searchQuery.toLowerCase()),
+          caucus.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (caucus.memberNames ?? []).some((name) => name.toLowerCase().includes(searchQuery.toLowerCase())),
       ),
     [caucuses, searchQuery],
   );
