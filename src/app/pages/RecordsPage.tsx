@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { FileText, Mail, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
+import { InfoTooltip } from "../components/InfoTooltip";
 import { supabase } from "../utils/supabase";
 
 type RecordItem = {
@@ -101,7 +102,13 @@ export function RecordsPage() {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <BackButton className="mb-4" />
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Records</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold text-gray-900">Records</h1>
+            <InfoTooltip label="What are records?">
+              <p>The real Congressional Record is the official published account of congressional proceedings, debate, statements, and related materials. It gives the public a searchable history of what happened in Congress.</p>
+              <p className="mt-2">In this simulation, Records collects Dear Colleague letters and submitted committee reports so class work can be searched and revisited.</p>
+            </InfoTooltip>
+          </div>
           <p className="mt-1 text-gray-600">Search Dear Colleague letters and committee reports.</p>
         </div>
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

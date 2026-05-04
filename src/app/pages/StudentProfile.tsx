@@ -29,6 +29,7 @@ import { formatConstituencyFull, normalizeConstituencyId } from "../utils/consti
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
 import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
+import { displayPersonName, nameInputPlaceholder } from "../utils/displayName";
 
 type EditingSection = string | null;
 
@@ -116,6 +117,7 @@ export function StudentProfile() {
   const [photoModalTab, setPhotoModalTab] = useState<"upload" | "center">("upload");
   const [avatarPosition, setAvatarPosition] = useState({ x: 50, y: 50 });
   const [draggingAvatar, setDraggingAvatar] = useState(false);
+  const [profileNameFocused, setProfileNameFocused] = useState(false);
   useUnsavedChangesPrompt(Boolean(editingSection));
 
   useEffect(() => {
@@ -684,20 +686,25 @@ export function StudentProfile() {
                 {isMe ? (
                   <input
                     className="mb-2 w-full rounded-md border-2 border-dashed border-gray-300 bg-transparent px-3 py-1 text-2xl font-bold text-gray-900 outline-none hover:border-blue-300 focus:border-blue-500"
-                    value={profile.display_name || ""}
+                    value={profileNameFocused ? (profile.display_name || "") : displayPersonName(profile.display_name || "")}
                     maxLength={64}
                     onChange={(e) => setProfile({ ...profile, display_name: e.target.value.slice(0, 64) })}
+                    onFocus={() => setProfileNameFocused(true)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
                         e.currentTarget.blur();
                       }
                     }}
-                    onBlur={() => void saveProfile({ display_name: profile.display_name } as any, true)}
-                    placeholder="Your name"
+                    onBlur={() => {
+                      setProfileNameFocused(false);
+                      void saveProfile({ display_name: profile.display_name } as any, true);
+                    }}
+                    placeholder={nameInputPlaceholder()}
+                    title="Enter your name as First Name, Last Name. If there is no comma, the full entry is treated as your first name."
                   />
                 ) : (
-                  <h1 className="text-2xl font-bold text-gray-900 mb-2">{profile.display_name || "Student"}</h1>
+                  <h1 className="text-2xl font-bold text-gray-900 mb-2">{displayPersonName(profile.display_name || "Student")}</h1>
                 )}
                 {isTeacherProfile ? (
                   <div className="inline-flex rounded-full bg-green-100 px-3 py-1 text-sm font-semibold text-green-800">Teacher</div>

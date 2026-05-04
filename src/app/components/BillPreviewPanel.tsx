@@ -7,6 +7,7 @@ interface Bill {
   title: string;
   sponsorId?: string;
   sponsor: string;
+  sponsorRole?: string | null;
   sponsorParty: string;
   sponsorDistrict?: string;
   committee: string;
@@ -92,7 +93,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
             <User className="w-4 h-4" />
             <span className="font-medium">Sponsor:</span>
             {bill.sponsorId ? (
-              <Link to={`/profile/${bill.sponsorId}`} className="text-blue-600 hover:underline">
+              <Link to={`/profile/${bill.sponsorId}`} className={`${bill.sponsorRole === "teacher" ? "text-green-700" : "text-blue-600"} hover:underline`}>
                 {bill.sponsor}
               </Link>
             ) : (

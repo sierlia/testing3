@@ -3,10 +3,10 @@ import { supabase } from "./supabase";
 export type DemoAccountKey = "student1" | "student2" | "teacher1" | "teacher2";
 
 export const demoAccounts: Array<{ key: DemoAccountKey; label: string }> = [
-  { key: "student1", label: "Student 1" },
-  { key: "student2", label: "Student 2" },
   { key: "teacher1", label: "Teacher 1" },
   { key: "teacher2", label: "Teacher 2" },
+  { key: "student1", label: "Student 1" },
+  { key: "student2", label: "Student 2" },
 ];
 
 export async function switchDemoAccount(key: DemoAccountKey) {

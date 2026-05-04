@@ -326,7 +326,14 @@ function MarkdownEnabledEditor({
         </div>
       </div>
       <p className="text-sm text-gray-600 mb-3">{description}</p>
-      <div className={`bill-editor-shell border rounded-md overflow-hidden ${error ? "border-red-500" : "border-gray-300"}`}>
+      <div
+        className={`bill-editor-shell border rounded-md overflow-hidden ${error ? "border-red-500" : "border-gray-300"}`}
+        onClick={(event) => {
+          if ((event.target as HTMLElement).closest("button")) return;
+          if (mode === "default") quillRef.current?.getEditor().focus();
+          if (mode === "markdown") textareaRef.current?.focus();
+        }}
+      >
         {mode === "default" && (
           <>
             <FormattingToolbar actions={defaultActions} />

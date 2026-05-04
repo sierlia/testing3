@@ -14,6 +14,7 @@ export interface BillRecord {
     display_name: string | null;
     party: string | null;
     constituency_name?: string | null;
+    role?: string | null;
   } | null;
   committee_name?: string | null;
   cosponsor_count?: number;
@@ -22,5 +23,6 @@ export interface BillRecord {
     display_name: string | null;
     party: string | null;
     constituency_name?: string | null;
+    role?: string | null;
   }>;
 }

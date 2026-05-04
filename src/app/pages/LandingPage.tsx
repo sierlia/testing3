@@ -17,6 +17,7 @@ export function LandingPage() {
           </div>
           <div className="flex items-center gap-5 text-sm font-medium">
             <a href="#/" className="text-gray-700 hover:text-gray-900">Home</a>
+            <Link to="/about" className="text-gray-700 hover:text-gray-900">Contact</Link>
             <button
               type="button"
               onClick={async () => {

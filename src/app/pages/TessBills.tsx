@@ -3,10 +3,12 @@ import { Link, useNavigate, useSearchParams } from "react-router";
 import { Check, Circle, Clock, ExternalLink, Eye, FileText, Plus, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BillPreviewPanel } from "../components/BillPreviewPanel";
+import { InfoTooltip } from "../components/InfoTooltip";
 import { fetchBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 import { useAuth } from "../utils/AuthContext";
 import { formatConstituency } from "../utils/constituency";
+import { displayPersonName } from "../utils/displayName";
 
 type RowMode = "preview" | "open";
 type SortKey = "number" | "newest" | "oldest" | "title" | "sponsor" | "status" | "cosponsors";
@@ -20,6 +22,7 @@ interface BillView {
   sponsor: string;
   sponsorParty: string;
   sponsorDistrict: string;
+  sponsorRole: string | null;
   committee: string;
   status: string;
   lastUpdated: string;
@@ -101,9 +104,10 @@ const toBillView = (bill: BillRecord): BillView => ({
   billNumber: bill.bill_number ?? 0,
   title: bill.title,
   sponsorId: bill.author_user_id,
-  sponsor: bill.profiles?.display_name ?? "Unknown",
+  sponsor: displayPersonName(bill.profiles?.display_name ?? "Unknown"),
   sponsorParty: bill.profiles?.party ?? "Independent",
   sponsorDistrict: formatConstituency(bill.profiles?.constituency_name),
+  sponsorRole: bill.profiles?.role ?? null,
   committee: bill.committee_name ?? "",
   status: bill.status,
   lastUpdated: bill.created_at,
@@ -115,7 +119,7 @@ const toBillView = (bill: BillRecord): BillView => ({
   cosponsorCount: bill.cosponsor_count ?? 0,
   cosponsors: (bill.cosponsors ?? []).map((c) => ({
     id: c.user_id,
-    name: c.display_name ?? "Unknown",
+    name: displayPersonName(c.display_name ?? "Unknown"),
     party: c.party ?? "Independent",
     district: formatConstituency(c.constituency_name),
   })),
@@ -229,7 +233,13 @@ export function TessBills() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">All Bills</h1>
+            <div className="mb-2 flex items-center gap-2">
+              <h1 className="text-3xl font-bold text-gray-900">All Bills</h1>
+              <InfoTooltip label="What are bills?">
+                <p>A bill is a proposed law. In the simulation, bills are written by members, referred to committees, revised or reported, calendared, and considered on the floor.</p>
+                <p className="mt-2">All Bills shows bills from the user's cohort.</p>
+              </InfoTooltip>
+            </div>
             <p className="text-gray-600">{filteredBills.length} bills found</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
@@ -337,7 +347,7 @@ export function TessBills() {
                             <Link
                               to={`/profile/${bill.sponsorId}`}
                               onClick={(event) => event.stopPropagation()}
-                              className="font-medium text-blue-600 hover:underline"
+                              className={`font-medium hover:underline ${bill.sponsorRole === "teacher" ? "text-green-700" : "text-blue-600"}`}
                             >
                               {bill.sponsor}
                             </Link>

@@ -250,6 +250,25 @@ export function Navigation() {
   }, [user?.id]);
 
   useEffect(() => {
+    const onClassRenamed = (event: Event) => {
+      const detail = (event as CustomEvent<{ classId: string; name: string }>).detail;
+      if (!detail || !user?.id) return;
+      setTeacherClasses((current) => {
+        const next = current.map((classItem) => classItem.id === detail.classId ? { ...classItem, name: detail.name } : classItem);
+        cacheTeacherClasses(user.id, next);
+        return next;
+      });
+      if (activeClassId === detail.classId) {
+        const active = { id: detail.classId, name: detail.name };
+        setActiveClassName(detail.name);
+        cacheActiveTeacherClass(user.id, active);
+      }
+    };
+    window.addEventListener("gavel:class-renamed", onClassRenamed);
+    return () => window.removeEventListener("gavel:class-renamed", onClassRenamed);
+  }, [activeClassId, user?.id]);
+
+  useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
       .channel(`letters:${user.id}`)
@@ -312,7 +331,7 @@ export function Navigation() {
               {!user && (
                 <>
                   <Link
-                    to={dashboardLink}
+                    to="/"
                     className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
                   >
                     Home
@@ -322,6 +341,12 @@ export function Navigation() {
                     className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
                   >
                     Demo
+                  </Link>
+                  <Link
+                    to="/about"
+                    className="text-sm font-medium text-gray-700 hover:text-gray-900 transition-colors"
+                  >
+                    Contact
                   </Link>
                 </>
               )}

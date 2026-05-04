@@ -174,11 +174,18 @@ select:focus {
 .bill-editor-shell .ql-container.ql-snow {
   border: 0;
   font-size: 1rem;
+  min-height: inherit;
+  cursor: text;
 }
 
 .bill-editor-shell .ql-editor {
   min-height: inherit;
   padding: 1rem;
+  cursor: text;
+}
+
+.bill-default-editor {
+  min-height: inherit;
 }
 
 .bill-editor-shell .ql-editor.ql-blank::before {

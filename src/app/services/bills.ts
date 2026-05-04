@@ -39,7 +39,7 @@ export async function fetchBillsForCurrentClass() {
   const profileIds = [...new Set([...authorIds, ...cosponsorIds])];
   const { data: profiles } = await supabase
     .from('profiles')
-    .select('user_id, display_name, party, constituency_name')
+    .select('user_id, display_name, party, constituency_name, role')
     .in('user_id', profileIds.length ? profileIds : ['00000000-0000-0000-0000-000000000000']);
   const profileMap = new Map((profiles ?? []).map((p: any) => [p.user_id, p]));
   const cosponsorsByBill = new Map<string, any[]>();

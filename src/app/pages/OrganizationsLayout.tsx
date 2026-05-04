@@ -1,11 +1,18 @@
 import { ReactNode } from "react";
 import { Link } from "react-router";
+import { InfoTooltip } from "../components/InfoTooltip";
 
 export function OrganizationsLayout({ active, children }: { active: "parties" | "committees" | "caucuses"; children: ReactNode }) {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Organizations</h1>
+        <div className="mb-2 flex items-center gap-2">
+          <h1 className="text-3xl font-bold text-gray-900">Organizations</h1>
+          <InfoTooltip label="What are organizations?">
+            <p>Parties organize members around political goals and help choose leaders. Committees specialize in policy areas, review bills, and decide whether legislation should move forward. Caucuses are member groups formed around shared interests or priorities.</p>
+            <p className="mt-2">In the simulation, students can join organizations, participate in announcements and elections, serve in leadership, and collaborate on legislative work.</p>
+          </InfoTooltip>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-[180px_1fr]">

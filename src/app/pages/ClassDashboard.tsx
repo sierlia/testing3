@@ -214,6 +214,7 @@ export function ClassDashboard() {
     const { error } = await supabase.from("classes").update({ name: classNameDraft.trim() }).eq("id", classId);
     if (error) return;
     setClassName(classNameDraft.trim());
+    window.dispatchEvent(new CustomEvent("gavel:class-renamed", { detail: { classId, name: classNameDraft.trim() } }));
     setEditingClassName(false);
   };
 
@@ -641,20 +642,25 @@ export function ClassDashboard() {
               <CardContent className="p-0">
                 <div className="divide-y divide-gray-100">
                   {recentActivity.map((activity) => (
-                    <Link
+                    <div
                       key={activity.id}
-                      to={activity.targetUrl || `/profile/${activity.studentId}`}
-                      className="flex items-start gap-3 p-4 transition-colors hover:bg-gray-50"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => navigate(activity.targetUrl || `/profile/${activity.studentId}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") navigate(activity.targetUrl || `/profile/${activity.studentId}`);
+                      }}
+                      className="flex cursor-pointer items-start gap-3 p-4 transition-colors hover:bg-gray-50"
                     >
                       <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50">{getActivityIcon(activity.type)}</div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-gray-900">
-                          <span className="font-semibold">{activity.studentName}</span>{" "}
+                          <Link to={`/profile/${activity.studentId}`} onClick={(event) => event.stopPropagation()} className={`font-semibold hover:underline ${activity.studentRole === "teacher" ? "text-green-700" : "text-gray-900 hover:text-blue-600"}`}>{activity.studentName}</Link>{" "}
                           <span className="font-medium text-gray-900">{activity.action}</span>
                         </p>
                         <p className="mt-0.5 text-xs text-gray-500">{formatTimestamp(activity.timestamp)}</p>
                       </div>
-                    </Link>
+                    </div>
                   ))}
                   {recentActivity.length === 0 && <div className="p-4 text-sm text-gray-500">No recent activity.</div>}
                 </div>

@@ -12,6 +12,7 @@ import { DeleteHighlight, EditHighlight, LinkMark, TextAlignment, UnderlineMark 
 import { fetchBillDetail, toggleCosponsor } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
+import { displayPersonName } from "../utils/displayName";
 
 type TextTab = "revised" | "original" | "supporting";
 type TrackerStatus = "completed" | "current" | "upcoming";
@@ -134,7 +135,7 @@ function TrackerPoint({ step, compact = false }: { step: TrackerStep; compact?: 
         <Icon className="h-3 w-3" />
       </span>
       <div className="min-w-0">
-        <div className={`${compact ? "text-[11px]" : "text-xs"} truncate font-semibold ${step.status === "upcoming" ? "text-gray-500" : "text-gray-900"}`}>{step.label}</div>
+        <div className={`${compact ? "text-[11px]" : "text-xs"} whitespace-normal leading-tight font-semibold ${step.status === "upcoming" ? "text-gray-500" : "text-gray-900"}`}>{step.label}</div>
         <div className="truncate text-[11px] text-gray-500">{step.note || formatDate(step.date) || "Pending"}</div>
       </div>
     </>
@@ -562,7 +563,7 @@ export function BillDetail() {
     );
   }
 
-  const sponsorName = sponsor?.display_name ?? "Unknown";
+  const sponsorName = displayPersonName(sponsor?.display_name ?? "Unknown");
   const sponsorDistrict = formatConstituency(sponsor?.constituency_name);
   const isUserSponsor = sponsor?.user_id === currentUserId || bill.author_user_id === currentUserId;
   const overrideCommitteeOptions =
@@ -594,10 +595,10 @@ export function BillDetail() {
           <div className="grid gap-2 text-sm text-gray-700">
             <div>
               <span className="font-semibold text-gray-900">Sponsor:</span>{" "}
-              <Link to={`/profile/${sponsor?.user_id ?? bill.author_user_id}`} className="font-medium text-blue-600 hover:underline">
+              <Link to={`/profile/${sponsor?.user_id ?? bill.author_user_id}`} className={`font-medium hover:underline ${sponsor?.role === "teacher" ? "text-green-700" : "text-blue-600"}`}>
                 {sponsorName}
               </Link>
-              <span className="text-gray-500"> ({sponsor?.party ?? "Independent"}{sponsorDistrict ? `-${sponsorDistrict}` : ""})</span>
+              {sponsor?.role !== "teacher" && <span className="text-gray-500"> ({sponsor?.party ?? "Independent"}{sponsorDistrict ? `-${sponsorDistrict}` : ""})</span>}
             </div>
             <div><span className="font-semibold text-gray-900">Committees:</span> {referral?.committee_name ?? "Not referred"}</div>
             <div>
@@ -726,7 +727,7 @@ export function BillDetail() {
                   visibleCosponsors.map((cosponsor) => (
                     <div key={cosponsor.user_id} className="rounded-md border border-gray-200 bg-gray-50 p-3">
                       <Link to={`/profile/${cosponsor.user_id}`} className={`font-medium hover:underline ${cosponsor.role === "teacher" ? "text-green-700" : "text-blue-600"}`}>
-                        {cosponsor.display_name ?? "Unknown"}
+                        {displayPersonName(cosponsor.display_name ?? "Unknown")}
                       </Link>
                       {cosponsor.role !== "teacher" && <div className="text-xs text-gray-600">{cosponsor.party ?? "Independent"}{cosponsor.constituency_name ? ` - ${formatConstituency(cosponsor.constituency_name)}` : ""}</div>}
                       <div className="mt-1 text-xs text-gray-500">Cosponsored {formatDate(cosponsor.cosponsored_at)}</div>

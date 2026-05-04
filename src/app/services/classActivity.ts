@@ -1,4 +1,5 @@
 import { supabase } from "../utils/supabase";
+import { displayPersonName } from "../utils/displayName";
 
 export type ClassActivityType = "bill" | "letter" | "caucus" | "committee" | "comment";
 
@@ -6,6 +7,7 @@ export type ClassActivity = {
   id: string;
   studentId: string;
   studentName: string;
+  studentRole?: string | null;
   action: string;
   timestamp: Date;
   type: ClassActivityType;
@@ -75,10 +77,11 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
 
   const { data: authors } = await supabase
     .from("profiles")
-    .select("user_id,display_name,party")
+    .select("user_id,display_name,party,role")
     .in("user_id", authorIds.size ? Array.from(authorIds) : ["00000000-0000-0000-0000-000000000000"]);
   const authorMap = new Map((authors ?? []).map((a: any) => [a.user_id, a]));
-  const studentName = (id: string) => authorMap.get(id)?.display_name ?? "Unknown";
+  const studentName = (id: string) => displayPersonName(authorMap.get(id)?.display_name ?? "Unknown");
+  const studentRole = (id: string) => authorMap.get(id)?.role ?? null;
 
   const activity: ClassActivity[] = [];
   for (const r of bills.data ?? []) {
@@ -87,6 +90,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       id: row.id,
       studentId: row.author_user_id,
       studentName: studentName(row.author_user_id),
+      studentRole: studentRole(row.author_user_id),
       action: billAction(row.status, row.bill_number, row.title),
       timestamp: new Date(row.created_at),
       type: "bill",
@@ -102,6 +106,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       id: `${row.committee_id}:${row.user_id}:${row.created_at}`,
       studentId: row.user_id,
       studentName: studentName(row.user_id),
+      studentRole: studentRole(row.user_id),
       action: `joined ${contextName}`,
       timestamp: new Date(row.created_at),
       type: "committee",
@@ -117,6 +122,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       id: `${row.caucus_id}:${row.user_id}:${row.created_at}`,
       studentId: row.user_id,
       studentName: studentName(row.user_id),
+      studentRole: studentRole(row.user_id),
       action: `joined ${contextName}`,
       timestamp: new Date(row.created_at),
       type: "caucus",
@@ -131,6 +137,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       id: row.id,
       studentId: row.sender_user_id,
       studentName: studentName(row.sender_user_id),
+      studentRole: studentRole(row.sender_user_id),
       action: `sent a Dear Colleague letter${row.subject ? `: ${row.subject}` : ""}`,
       timestamp: new Date(row.created_at),
       type: "letter",
@@ -147,6 +154,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       id: row.id,
       studentId: row.author_user_id,
       studentName: studentName(row.author_user_id),
+      studentRole: studentRole(row.author_user_id),
       action: `commented in ${contextName}: "${clip(row.body)}"`,
       timestamp: new Date(row.created_at),
       type: "comment",
@@ -164,6 +172,7 @@ export async function fetchClassActivity(classId: string, limit = 100): Promise<
       id: row.id,
       studentId: row.author_user_id,
       studentName: studentName(row.author_user_id),
+      studentRole: studentRole(row.author_user_id),
       action: `commented in ${contextName}: "${clip(row.body)}"`,
       timestamp: new Date(row.created_at),
       type: "comment",

@@ -56,6 +56,7 @@ import { ClassSimulationDashboard } from "./pages/ClassSimulationDashboard";
 import { ClassActivityPage } from "./pages/ClassActivityPage";
 import { HelpPage } from "./pages/HelpPage";
 import { RecordsPage } from "./pages/RecordsPage";
+import { AboutPage } from "./pages/AboutPage";
 
 export const router = createHashRouter([
   {
@@ -69,6 +70,10 @@ export const router = createHashRouter([
   {
     path: "/signup",
     Component: SignUpPage,
+  },
+  {
+    path: "/about",
+    Component: AboutPage,
   },
   {
     path: "/teacher/dashboard",

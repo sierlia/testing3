@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { BackButton } from "../components/BackButton";
+import { HelpContactForm } from "../components/HelpContactForm";
 import { Navigation } from "../components/Navigation";
 
 const sections = [
@@ -267,6 +268,9 @@ export function HelpPage() {
               </p>
             </div>
           </Section>
+          <div className="pt-8">
+            <HelpContactForm />
+          </div>
         </article>
       </main>
     </div>
