@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { BackButton } from "../components/BackButton";
 import { Navigation } from "../components/Navigation";
 
 const sections = [
@@ -49,6 +50,7 @@ export function HelpPage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <BackButton className="mb-4" />
         <article className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
           <header className="border-b border-gray-200 pb-6">
             <h1 className="text-4xl font-bold tracking-tight text-gray-900">Help Guide</h1>

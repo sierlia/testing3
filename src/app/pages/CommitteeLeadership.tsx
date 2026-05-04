@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import { CheckCircle, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { CommitteeTabs } from "../components/CommitteeTabs";
 import { supabase } from "../utils/supabase";
@@ -337,6 +338,7 @@ export function CommitteeLeadership() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <BackButton />
         {loading || !committee ? (
           <div className="text-sm text-gray-600">Loading...</div>
         ) : (

@@ -7,6 +7,7 @@ import * as Y from "yjs";
 import { yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { DeleteHighlight, EditHighlight, LinkMark, TextAlignment, UnderlineMark } from "../components/CollaborativeBillEditor";
 import { fetchBillDetail, toggleCosponsor } from "../services/bills";
 import { supabase } from "../utils/supabase";
@@ -577,6 +578,7 @@ export function BillDetail() {
       <Navigation />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <BackButton className="mb-4" />
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <span className="font-mono text-lg font-bold text-gray-900">{bill.hr_label}</span>

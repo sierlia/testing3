@@ -77,6 +77,8 @@ export function DemoAccountSwitcher() {
   };
 
   if (!position) return null;
+  const menuVerticalClass = position.y < 220 ? "top-full mt-2" : "bottom-full mb-2";
+  const menuHorizontalClass = position.x < 176 ? "left-0" : "right-0";
 
   return (
     <div
@@ -100,7 +102,7 @@ export function DemoAccountSwitcher() {
         </button>
       </div>
       {open && (
-        <div className="absolute bottom-full right-0 mb-2 w-44 overflow-hidden rounded-2xl border border-gray-200 bg-white p-1 shadow-xl">
+        <div className={`absolute ${menuVerticalClass} ${menuHorizontalClass} w-44 overflow-hidden rounded-2xl border border-gray-200 bg-white p-1 shadow-xl`}>
           {demoAccounts.map((account) => (
             <button
               key={account.key}

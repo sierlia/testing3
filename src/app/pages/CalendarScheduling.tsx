@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { Calendar, ChevronLeft, ChevronRight, Clock, Save } from "lucide-react";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { fetchCalendaredBillsForCurrentClass, fetchReportedBillsForTeacherCalendar, getCurrentProfileClass, saveBillCalendarEntry } from "../services/bills";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
@@ -383,6 +384,7 @@ export function CalendarScheduling() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <BackButton className="mb-4" />
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="mb-2 text-3xl font-bold text-gray-900">Calendar</h1>

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { supabase } from "../utils/supabase";
 import { GraduationCap, LogOut, MoreHorizontal, Users, Send, Pencil, Save, X, UserPlus, Trash2, UserX } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
@@ -920,6 +921,7 @@ export function CommitteeDashboard() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        <BackButton />
         <div className="flex items-start justify-between gap-4">
           <div>
             {editingName ? (

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
 
@@ -53,6 +54,7 @@ export function CommitteeReportPage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        <BackButton className="mb-4" />
         {loading ? (
           <div className="text-sm text-gray-600">Loading...</div>
         ) : !committeeId || !billId || !classId || !bill ? (

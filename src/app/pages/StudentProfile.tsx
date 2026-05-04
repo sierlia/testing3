@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { ConstituencyPicker, getConstituencyById } from "../components/ConstituencyPicker";
 import {
   getPartyIdByName,
@@ -600,6 +601,7 @@ export function StudentProfile() {
       <Navigation />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <BackButton className="mb-4" />
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-start gap-4">

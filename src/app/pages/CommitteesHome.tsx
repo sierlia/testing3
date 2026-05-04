@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { ClipboardList, LogOut, Pencil, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -253,6 +254,7 @@ export function CommitteesHome() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <BackButton className="mb-4" />
         <OrganizationsLayout active="committees">
           <div className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">

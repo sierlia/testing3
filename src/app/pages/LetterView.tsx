@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { Mail, Copy, Check, Calendar, User } from "lucide-react";
 import { useParams } from "react-router";
 
@@ -53,6 +54,7 @@ Representative, District 1`,
       <Navigation />
       
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <BackButton className="mb-4" />
         {/* Header */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex items-start justify-between mb-4">

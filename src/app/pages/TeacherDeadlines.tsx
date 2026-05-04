@@ -3,6 +3,7 @@ import { Plus, X, Calendar, Users, ClipboardList } from "lucide-react";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { supabase } from "../utils/supabase";
 
 type AudienceType = "all" | "caucus" | "party" | "committee";
@@ -183,6 +184,7 @@ export function TeacherDeadlines() {
       <Navigation />
 
       <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <BackButton className="mb-4" />
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Deadlines & Assignments</h1>

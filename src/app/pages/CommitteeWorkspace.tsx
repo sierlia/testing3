@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router";
 import { ChevronLeft, ChevronRight, FileText, Pencil, Send, Sparkles, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -332,6 +333,7 @@ export function CommitteeWorkspace() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <BackButton className="mb-4" />
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName}</h1>
         </div>

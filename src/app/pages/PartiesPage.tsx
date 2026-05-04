@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { Flag, LogOut, Pencil, Plus, Repeat2, Search, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { PartyCreateForm, NewParty, defaultPartyColor } from "../components/PartyCreateForm";
 import { supabase } from "../utils/supabase";
@@ -368,6 +369,7 @@ export function PartiesPage() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+        <BackButton className="mb-4" />
         <OrganizationsLayout active="parties">
           <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">

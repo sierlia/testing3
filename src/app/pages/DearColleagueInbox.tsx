@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router";
 import { Calendar, CheckCircle, Mail, PenSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
@@ -204,6 +205,7 @@ export function DearColleagueInbox() {
       <Navigation />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <BackButton className="mb-4" />
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Dear Colleague Letters</h1>

@@ -49,7 +49,6 @@ export function ClassManagePage() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"student" | "teacher">("student");
   const [inviteBusy, setInviteBusy] = useState(false);
 
   const loadClassData = async () => {
@@ -185,9 +184,7 @@ export function ClassManagePage() {
     }
     setInviteBusy(true);
     try {
-      const rpcName = inviteRole === "teacher" ? "invite_teacher_to_class" : "invite_student_to_class";
-      const args = inviteRole === "teacher" ? { target_class: classId, teacher_email: email } : { target_class: classId, student_email: email };
-      const { error } = await supabase.rpc(rpcName, args as any);
+      const { error } = await supabase.rpc("invite_student_to_class", { target_class: classId, student_email: email });
       if (error) throw error;
       toast.success("invitation sent if user exists");
       setInviteEmail("");
@@ -211,6 +208,7 @@ export function ClassManagePage() {
       if (!query) return true;
       return student.name.toLowerCase().includes(query) || student.email.toLowerCase().includes(query) || student.party.toLowerCase().includes(query);
     }).sort((a, b) => {
+      if (a.role !== b.role) return a.role === "teacher" ? -1 : 1;
       if (sortBy === "role") return a.role.localeCompare(b.role) || a.name.localeCompare(b.name);
       if (sortBy === "party") return a.party.localeCompare(b.party) || a.name.localeCompare(b.name);
       if (sortBy === "sponsored") return b.sponsored.length - a.sponsored.length || a.name.localeCompare(b.name);
@@ -236,8 +234,9 @@ export function ClassManagePage() {
     ) : "N/A";
 
   const exportRoster = () => {
-    const columns = ["name", "email", "role", "position", "party", "constituency", "sponsored", "cosponsored", "letters", "committees", "caucuses"];
+    const columns = ["name", "email", "role", "positions", "party", "constituency", "sponsored", "cosponsored", "letters", "committees", "caucuses"];
     const valueFor = (member: RosterMember, key: string) => {
+      if (key === "positions") return member.position;
       if (key === "sponsored") return member.sponsored.map((bill) => bill.label).join("; ");
       if (key === "cosponsored") return member.cosponsored.map((bill) => bill.label).join("; ");
       if (key === "committees") return member.committees.map((item) => item.name).join("; ");
@@ -262,21 +261,21 @@ export function ClassManagePage() {
       </div>
     ) : (
       <div className="overflow-x-auto">
-        <Table>
+        <Table className="min-w-[1700px]">
           <TableHeader>
             <TableRow>
-              <TableHead className="sticky left-0 z-10 bg-white">Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Position</TableHead>
-              <TableHead>Party</TableHead>
-              <TableHead>Constituency</TableHead>
-              <TableHead>Sponsored</TableHead>
-              <TableHead>Cosponsored</TableHead>
-              <TableHead>Letters</TableHead>
-              <TableHead>Committees</TableHead>
-              <TableHead>Caucuses</TableHead>
-              <TableHead className="sticky right-0 z-10 bg-white text-right">Actions</TableHead>
+              <TableHead className="sticky left-0 z-10 min-w-56 bg-white px-5 shadow-[8px_0_12px_-12px_rgba(15,23,42,0.45)]">Name</TableHead>
+              <TableHead className="min-w-64 px-5">Email</TableHead>
+              <TableHead className="min-w-28 px-5">Role</TableHead>
+              <TableHead className="min-w-36 px-5">Positions</TableHead>
+              <TableHead className="min-w-56 px-5">Party</TableHead>
+              <TableHead className="min-w-44 px-5">Constituency</TableHead>
+              <TableHead className="min-w-52 px-5">Sponsored</TableHead>
+              <TableHead className="min-w-52 px-5">Cosponsored</TableHead>
+              <TableHead className="min-w-28 px-5">Letters</TableHead>
+              <TableHead className="min-w-52 px-5">Committees</TableHead>
+              <TableHead className="min-w-52 px-5">Caucuses</TableHead>
+              <TableHead className="sticky right-0 z-10 min-w-24 bg-white px-5 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -288,7 +287,7 @@ export function ClassManagePage() {
               const nameClass = isTeacher || isOwner || isCurrentUser ? "text-emerald-700" : "text-blue-600";
               return (
               <TableRow key={student.id} className={`${rowClass} hover:bg-transparent`}>
-                <TableCell className={`sticky left-0 z-10 font-medium ${rowClass}`}>
+                <TableCell className={`sticky left-0 z-10 px-5 font-medium shadow-[8px_0_12px_-12px_rgba(15,23,42,0.45)] ${rowClass}`}>
                   <Link to={`/profile/${student.id}`} className={`${nameClass} hover:underline`}>{student.name}</Link>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {isOwner && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Owner</span>}
@@ -297,17 +296,17 @@ export function ClassManagePage() {
                     {pending && student.status === "invited" && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Invitation sent</span>}
                   </div>
                 </TableCell>
-                <TableCell>{student.email}</TableCell>
-                <TableCell className="capitalize">{student.role}</TableCell>
-                <TableCell>{student.position}</TableCell>
-                <TableCell>{student.party !== "N/A" ? <Link to={`/parties?party=${encodeURIComponent(student.party)}`} className="text-blue-600 hover:underline">{student.party}</Link> : "N/A"}</TableCell>
-                <TableCell>{student.constituency}</TableCell>
-                <TableCell>{linkList(student.sponsored, "/bills")}</TableCell>
-                <TableCell>{linkList(student.cosponsored, "/bills")}</TableCell>
-                <TableCell><Link to={`/dear-colleague/inbox?author=${encodeURIComponent(student.name)}`} className="text-blue-600 hover:underline">{student.letters}</Link></TableCell>
-                <TableCell>{linkList(student.committees, "/committees")}</TableCell>
-                <TableCell>{linkList(student.caucuses, "/caucuses")}</TableCell>
-                <TableCell className={`sticky right-0 z-10 text-right ${rowClass}`}>
+                <TableCell className="px-5">{student.email}</TableCell>
+                <TableCell className="px-5 capitalize">{student.role}</TableCell>
+                <TableCell className="px-5">{student.position}</TableCell>
+                <TableCell className="px-5">{student.party !== "N/A" ? <Link to={`/parties?party=${encodeURIComponent(student.party)}`} className="text-blue-600 hover:underline">{student.party}</Link> : "N/A"}</TableCell>
+                <TableCell className="px-5">{student.constituency}</TableCell>
+                <TableCell className="px-5">{linkList(student.sponsored, "/bills")}</TableCell>
+                <TableCell className="px-5">{linkList(student.cosponsored, "/bills")}</TableCell>
+                <TableCell className="px-5"><Link to={`/dear-colleague/inbox?author=${encodeURIComponent(student.name)}`} className="text-blue-600 hover:underline">{student.letters}</Link></TableCell>
+                <TableCell className="px-5">{linkList(student.committees, "/committees")}</TableCell>
+                <TableCell className="px-5">{linkList(student.caucuses, "/caucuses")}</TableCell>
+                <TableCell className={`sticky right-0 z-10 px-5 text-right shadow-[-8px_0_12px_-12px_rgba(15,23,42,0.45)] ${rowClass}`}>
                   <div className="relative inline-flex">
                     <button type="button" onClick={() => setActionMenuOpen((open) => open === student.id ? null : student.id)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Actions">
                       <MoreHorizontal className="h-4 w-4" />
@@ -414,23 +413,6 @@ export function ClassManagePage() {
                 </button>
               </div>
             </div>
-            <div className="mt-4 flex flex-col gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center">
-              <MailPlus className="hidden h-5 w-5 text-gray-500 sm:block" />
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(event) => setInviteEmail(event.target.value)}
-                placeholder="Invite by email"
-                className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as "student" | "teacher")} className="rounded-md border border-gray-300 px-2 py-2 text-sm">
-                <option value="student">Student</option>
-                <option value="teacher">Teacher</option>
-              </select>
-              <Button type="button" onClick={() => void inviteMember()} disabled={inviteBusy || !inviteEmail.trim()}>
-                Invite
-              </Button>
-            </div>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -442,7 +424,22 @@ export function ClassManagePage() {
                   <TabsTrigger value="pending">Pending</TabsTrigger>
                 </TabsList>
                 <TabsContent value="members">{rosterTable(approvedMembers)}</TabsContent>
-                <TabsContent value="pending">{rosterTable(pendingMembers, true)}</TabsContent>
+                <TabsContent value="pending">
+                  <div className="mb-4 flex flex-col gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 sm:flex-row sm:items-center">
+                    <MailPlus className="hidden h-5 w-5 text-gray-500 sm:block" />
+                    <input
+                      type="email"
+                      value={inviteEmail}
+                      onChange={(event) => setInviteEmail(event.target.value)}
+                      placeholder="Invite student by email"
+                      className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <Button type="button" onClick={() => void inviteMember()} disabled={inviteBusy || !inviteEmail.trim()}>
+                      Invite
+                    </Button>
+                  </div>
+                  {rosterTable(pendingMembers, true)}
+                </TabsContent>
               </Tabs>
             )}
           </CardContent>
