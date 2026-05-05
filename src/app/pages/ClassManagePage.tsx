@@ -6,7 +6,7 @@ import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { displayPersonName } from "../utils/displayName";
 import { supabase } from "../utils/supabase";
@@ -332,8 +332,8 @@ export function ClassManagePage() {
     ],
     [caucusOptions, committeeOptions, partyOptions],
   );
-  const stickyShadowLeft = tableScroll.atStart ? "" : "relative after:absolute after:bottom-0 after:right-0 after:top-0 after:w-4 after:translate-x-full after:bg-gradient-to-r after:from-slate-400/30 after:to-transparent after:content-['']";
-  const stickyShadowRight = tableScroll.atEnd ? "" : "relative before:absolute before:bottom-0 before:left-0 before:top-0 before:w-4 before:-translate-x-full before:bg-gradient-to-l before:from-slate-400/30 before:to-transparent before:content-['']";
+  const stickyShadowLeft = `relative after:pointer-events-none after:absolute after:bottom-0 after:right-0 after:top-0 after:w-5 after:translate-x-full after:bg-gradient-to-r after:from-slate-400/18 after:via-slate-300/10 after:to-transparent after:transition-opacity after:duration-300 after:content-[''] ${tableScroll.atStart ? "after:opacity-0" : "after:opacity-100"}`;
+  const stickyShadowRight = `relative before:pointer-events-none before:absolute before:bottom-0 before:left-0 before:top-0 before:w-5 before:-translate-x-full before:bg-gradient-to-l before:from-slate-400/18 before:via-slate-300/10 before:to-transparent before:transition-opacity before:duration-300 before:content-[''] ${tableScroll.atEnd ? "before:opacity-0" : "before:opacity-100"}`;
 
   const updateTableScroll = (element = scrollRef.current) => {
     if (!element) return;
@@ -403,7 +403,7 @@ export function ClassManagePage() {
         No members found.
       </div>
     ) : (
-      <div ref={scrollRef} onScroll={(event) => updateTableScroll(event.currentTarget)} className="overflow-x-auto" onMouseEnter={() => updateTableScroll()}>
+      <div ref={scrollRef} onScroll={(event) => updateTableScroll(event.currentTarget)} className="overflow-x-auto rounded-lg border border-gray-200 bg-white" onMouseEnter={() => updateTableScroll()}>
         <table className="min-w-[2050px] w-full caption-bottom text-sm">
           <thead>
             <tr className="border-b">
@@ -574,9 +574,8 @@ export function ClassManagePage() {
 
         <Card>
           <CardHeader>
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-3">
-                <CardTitle>Roster</CardTitle>
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="flex shrink-0 flex-wrap items-center gap-3">
                 <div className="inline-flex rounded-full border border-gray-200 bg-gray-100 p-1">
                   {(["members", "pending"] as const).map((tab) => (
                     <button
@@ -590,15 +589,15 @@ export function ClassManagePage() {
                   ))}
                 </div>
               </div>
-              <div className="flex w-full flex-wrap gap-2 sm:w-auto">
-                <div className="relative min-w-[15rem] flex-1">
+              <div className="flex w-full flex-wrap items-center gap-2 xl:w-auto xl:flex-nowrap">
+                <div className="relative min-w-[13rem] flex-1 xl:w-56 xl:flex-none">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} placeholder="Search roster..." className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 {rosterTab === "members" && (
                   <>
                     <Select value={titleFilter} onValueChange={setTitleFilter}>
-                      <SelectTrigger className="h-10 w-[180px] bg-white"><SelectValue placeholder="All titles" /></SelectTrigger>
+                      <SelectTrigger className="h-10 w-[150px] bg-white"><SelectValue placeholder="All titles" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All titles</SelectItem>
                         <SelectItem value="role:teacher">Teachers</SelectItem>
@@ -607,7 +606,7 @@ export function ClassManagePage() {
                       </SelectContent>
                     </Select>
                     <Select value={organizationFilter} onValueChange={setOrganizationFilter}>
-                      <SelectTrigger className="h-10 w-[210px] bg-white"><SelectValue placeholder="All organizations" /></SelectTrigger>
+                      <SelectTrigger className="h-10 w-[180px] bg-white"><SelectValue placeholder="All organizations" /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All organizations</SelectItem>
                         {organizationOptions.map((option) => (
@@ -616,7 +615,7 @@ export function ClassManagePage() {
                       </SelectContent>
                     </Select>
                     <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
-                      <SelectTrigger className="h-10 w-[180px] bg-white"><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-10 w-[150px] bg-white"><SelectValue /></SelectTrigger>
                       <SelectContent>
                         <SelectItem value="first">Sort first name</SelectItem>
                         <SelectItem value="last">Sort last name</SelectItem>
@@ -627,7 +626,7 @@ export function ClassManagePage() {
                         <SelectItem value="letters">Sort letters</SelectItem>
                       </SelectContent>
                     </Select>
-                    <button type="button" onClick={() => setExportDialogOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <button type="button" onClick={() => setExportDialogOpen(true)} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <Download className="h-4 w-4" />
                       Export
                     </button>

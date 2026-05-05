@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { User } from "lucide-react";
 import { toast } from "sonner";
 import { demoAccounts, DemoAccountKey, switchDemoAccount } from "../utils/demoAccounts";
 import { useAuth } from "../utils/AuthContext";
@@ -15,26 +16,14 @@ function readPosition() {
   return null;
 }
 
-function currentAppPath() {
-  const hashPath = window.location.hash.replace(/^#/, "");
-  return hashPath || window.location.pathname;
-}
-
-function isDashboardPath(path: string) {
-  return path.includes("/dashboard") || path.startsWith("/class/") || path.startsWith("/teacher/class/");
-}
-
 export function DemoAccountSwitcher() {
   const { user, signOut } = useAuth();
-  const [routePath, setRoutePath] = useState(() => currentAppPath());
   const [open, setOpen] = useState(false);
   const [busyKey, setBusyKey] = useState<DemoAccountKey | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [demoActive, setDemoActive] = useState(() => window.localStorage.getItem("gavel:demoActive") === "1");
-  const [dashboardReady, setDashboardReady] = useState(false);
   const [burst, setBurst] = useState(false);
   const [justAppeared, setJustAppeared] = useState(false);
-  const [loadingProgress, setLoadingProgress] = useState(12);
   const [dragHintMounted, setDragHintMounted] = useState(false);
   const [dragHintVisible, setDragHintVisible] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -92,46 +81,10 @@ export function DemoAccountSwitcher() {
   }, []);
 
   useEffect(() => {
-    setDemoActive(window.localStorage.getItem("gavel:demoActive") === "1");
-    setDashboardReady(false);
-    const onReady = () => setDashboardReady(true);
-    window.addEventListener("gavel:dashboard-ready", onReady);
-    const fallback = isDashboardPath(routePath) ? window.setTimeout(() => setDashboardReady(true), 1200) : null;
-    return () => {
-      window.removeEventListener("gavel:dashboard-ready", onReady);
-      if (fallback) window.clearTimeout(fallback);
-    };
-  }, [routePath, user?.id]);
-
-  useEffect(() => {
-    const updateRoute = () => setRoutePath(currentAppPath());
-    window.addEventListener("hashchange", updateRoute);
-    window.addEventListener("popstate", updateRoute);
-    const interval = window.setInterval(updateRoute, 500);
-    return () => {
-      window.removeEventListener("hashchange", updateRoute);
-      window.removeEventListener("popstate", updateRoute);
-      window.clearInterval(interval);
-    };
-  }, []);
-
-  useEffect(() => {
     if (!demoActive) return;
     playLaunchEffectsIfNeeded();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoActive, user?.id]);
-
-  useEffect(() => {
-    if (!demoActive || dashboardReady) {
-      setLoadingProgress(100);
-      return;
-    }
-    setLoadingProgress(12);
-    const interval = window.setInterval(() => {
-      setLoadingProgress((value) => Math.min(92, value + Math.max(2, Math.round((96 - value) * 0.12))));
-    }, 220);
-    return () => window.clearInterval(interval);
-  }, [dashboardReady, demoActive, user?.id]);
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -206,12 +159,6 @@ export function DemoAccountSwitcher() {
       }}
     >
       <div className={`relative rounded-full border border-blue-700 bg-blue-600 p-1 text-white shadow-lg transition-transform duration-300 ${justAppeared ? "scale-110" : "scale-100"}`}>
-        {demoActive && !dashboardReady && (
-          <div
-            className="pointer-events-none absolute -inset-1 rounded-full"
-            style={{ background: `conic-gradient(#2563eb ${loadingProgress}%, rgba(37,99,235,0.18) ${loadingProgress}%)` }}
-          />
-        )}
         <div className="relative rounded-full bg-blue-600">
         {burst && (
           <div className="pointer-events-none absolute inset-0 scale-125 animate-pulse">
@@ -231,8 +178,9 @@ export function DemoAccountSwitcher() {
             if (dragRef.current?.moved) return;
             setOpen((value) => !value);
           }}
-          className="rounded-full px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+          className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
         >
+          <User className="h-4 w-4" />
           Demo
         </button>
         </div>

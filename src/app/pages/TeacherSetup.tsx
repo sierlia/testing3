@@ -76,10 +76,10 @@ function SwitchControl({ checked, onChange, disabled = false }: { checked: boole
 
 function SettingsGroup({ title, children, disabled = false, action }: { title: string; children: ReactNode; disabled?: boolean; action?: ReactNode }) {
   return (
-    <section className="space-y-4 border-b border-gray-100 pb-6 last:border-b-0 last:pb-0">
-      <div className="flex items-center justify-between gap-6">
-        <h3 className="text-base font-semibold text-gray-900">{title}</h3>
-        {action}
+    <section className="space-y-4 border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
+      <div className="flex items-center gap-2">
+        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
+        {action && <div className="shrink-0">{action}</div>}
       </div>
       <div className={`space-y-4 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
     </section>
@@ -639,25 +639,28 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "bills") {
       return (
         <div className="space-y-6">
-          <SettingsGroup title="Text">
-            <Toggle checked={settings.allowDrafts} onChange={(v) => setSettings({ allowDrafts: v })} title="Allow bill drafts" description="Students can save bills before submitting." />
+          <SettingsGroup title="Text" action={<SwitchControl checked={settings.allowDrafts} onChange={(v) => setSettings({ allowDrafts: v })} />}>
+            <div className="text-sm text-gray-600">Students can save bills before submitting.</div>
             <DisabledBlock disabled={!settings.allowDrafts}>
               <WordLimitInput label="Bill word limit" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />
             </DisabledBlock>
           </SettingsGroup>
-          <SettingsGroup title="Cosponsorship">
-            <div>
-              <label className="mb-2 block text-base font-semibold text-gray-900">Allow cosponsorship</label>
-              <SettingSelect value={settings.cosponsorshipMode} onValueChange={(value) => setSettings({ cosponsorshipMode: value, cosponsorAfterCommitteeReport: value === "after_report" })}>
+          <SettingsGroup
+            title="Cosponsorship"
+            action={
+              <div className="w-64">
+                <SettingSelect value={settings.cosponsorshipMode} onValueChange={(value) => setSettings({ cosponsorshipMode: value, cosponsorAfterCommitteeReport: value === "after_report" })}>
                 <SelectItem value="always">Always</SelectItem>
                 <SelectItem value="before_report">Before the bill is reported from committee</SelectItem>
                 <SelectItem value="never">Never</SelectItem>
-              </SettingSelect>
-            </div>
+                </SettingSelect>
+              </div>
+            }
+          >
             <Toggle checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} disabled={settings.cosponsorshipMode === "never"} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
           </SettingsGroup>
-          <SettingsGroup title="Floor">
-            <Toggle checked={settings.enableFloor} onChange={(v) => setSettings({ enableFloor: v })} title="Enable floor" description="Use the floor page for debate queues and final votes." />
+          <SettingsGroup title="Floor" action={<SwitchControl checked={settings.enableFloor} onChange={(v) => setSettings({ enableFloor: v })} />}>
+            <div className="text-sm text-gray-600">Use the floor page for debate queues and final votes.</div>
             <DisabledBlock disabled={!settings.enableFloor}>
               <Toggle checked={settings.floorResultsBinding} onChange={(v) => setSettings({ floorResultsBinding: v })} title="Floor vote results determine outcome" description="Passed or failed status is applied when floor votes are posted." />
               <div>
@@ -676,12 +679,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "organizations") {
       return (
         <div className="space-y-6">
-          <SettingsGroup title="Organizations">
-            <SettingRow
-              title="Enable organizations"
-              description="Turn parties, committees, and caucuses on or off for this class."
-              control={<SwitchControl checked={settings.enableOrganizations} onChange={(v) => setSettings({ enableOrganizations: v, enableParties: v, enableCommittees: v, enableCaucuses: v })} />}
-            />
+          <SettingsGroup title="Organizations" action={<SwitchControl checked={settings.enableOrganizations} onChange={(v) => setSettings({ enableOrganizations: v, enableParties: v, enableCommittees: v, enableCaucuses: v })} />}>
+            <div className="text-sm text-gray-600">Turn parties, committees, and caucuses on or off for this class.</div>
             <DisabledBlock disabled={!settings.enableOrganizations}>
               <SettingRow
                 title="Organization name and description word limit"
@@ -756,8 +755,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "elections") {
       return (
         <div className="space-y-6">
-          <SettingsGroup title="House leadership election">
-            <Toggle checked={settings.enableHouseLeadershipElection} onChange={(v) => setSettings({ enableHouseLeadershipElection: v })} title="Enable House leadership election" description="Students can vote for Speaker of the House from the floor page." />
+          <SettingsGroup title="House leadership election" action={<SwitchControl checked={settings.enableHouseLeadershipElection} onChange={(v) => setSettings({ enableHouseLeadershipElection: v })} />}>
+            <div className="text-sm text-gray-600">Students can vote for Speaker of the House from the floor page.</div>
             <DisabledBlock disabled={!settings.enableHouseLeadershipElection}>
               <SettingSelect value={settings.houseLeadershipElectionMode} onValueChange={(value) => setSettings({ houseLeadershipElectionMode: value })}>
                 <SelectItem value="student-vote">Student vote</SelectItem>
@@ -765,8 +764,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               </SettingSelect>
             </DisabledBlock>
           </SettingsGroup>
-          <SettingsGroup title="Organization elections">
-            <Toggle checked={settings.enableOrganizationElections} onChange={(v) => setSettings({ enableOrganizationElections: v })} title="Enable organization elections" description="Parties, committees, and caucuses can run their leadership elections." />
+          <SettingsGroup title="Organization elections" action={<SwitchControl checked={settings.enableOrganizationElections} onChange={(v) => setSettings({ enableOrganizationElections: v })} />}>
+            <div className="text-sm text-gray-600">Parties, committees, and caucuses can run their leadership elections.</div>
             <DisabledBlock disabled={!settings.enableOrganizationElections}>
               <SettingSelect value={settings.organizationElectionMode} onValueChange={(value) => setSettings({ organizationElectionMode: value })}>
                 <SelectItem value="student-vote">Members vote</SelectItem>
@@ -780,8 +779,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "profiles") {
       return (
         <div className="space-y-6">
-          <SettingsGroup title="Profile availability">
-            <Toggle checked={settings.profilesEnabled} onChange={(v) => setSettings({ profilesEnabled: v })} title="Enable profiles" description="Students can view and complete profile sections." />
+          <SettingsGroup title="Profiles" action={<SwitchControl checked={settings.profilesEnabled} onChange={(v) => setSettings({ profilesEnabled: v })} />}>
+            <div className="text-sm text-gray-600">Students can view and complete profile sections.</div>
             <DisabledBlock disabled={!settings.profilesEnabled}>
               <WordLimitInput label="Profile long response word limit" value={settings.profileLongResponseWordLimit} max={2000} onChange={(value) => setSettings({ profileLongResponseWordLimit: value })} />
             </DisabledBlock>
