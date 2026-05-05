@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { ClipboardList, LogOut, Pencil, Search, Trash2, UserPlus, Users } from "lucide-react";
+import { ClipboardList, LogOut, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router";
@@ -30,6 +30,7 @@ export function CommitteesHome() {
   const [memberNames, setMemberNames] = useState<Record<string, string[]>>({});
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
   const [settings, setSettings] = useState<any>({});
+  const [activeClassId, setActiveClassId] = useState<string | null>(null);
   const [preferencesSubmitted, setPreferencesSubmitted] = useState<boolean>(false);
   const [needsPreferences, setNeedsPreferences] = useState(false);
   const [meId, setMeId] = useState<string | null>(null);
@@ -63,6 +64,7 @@ export function CommitteesHome() {
 
         const { data: profile } = await supabase.from("profiles").select("class_id,role").eq("user_id", me).maybeSingle();
         const classId = (profile as any)?.class_id;
+        setActiveClassId(classId ?? null);
         setRole(((profile as any)?.role ?? null) as any);
         if (!classId) {
           setCommittees([]);
@@ -237,6 +239,19 @@ export function CommitteesHome() {
 
   const saveCommitteeEdits = async () => {
     if (!editingCommittee) return;
+    if (editingCommittee.id === "new") {
+      if (!activeClassId) return toast.error("Open a class first");
+      const { data, error } = await supabase
+        .from("committees")
+        .insert({ class_id: activeClassId, name: editingCommittee.name.trim(), description: editingCommittee.description ?? "" } as any)
+        .select("id,name,description,created_at")
+        .single();
+      if (error) return toast.error(error.message || "Could not create committee");
+      setCommittees((prev) => [...prev, data as CommitteeRow]);
+      setEditingCommittee(null);
+      toast.success("Committee created");
+      return;
+    }
     const { error } = await supabase
       .from("committees")
       .update({ name: editingCommittee.name.trim(), description: editingCommittee.description ?? "" } as any)
@@ -269,14 +284,26 @@ export function CommitteesHome() {
         <OrganizationsLayout active="committees">
           <div className="space-y-4">
             <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Search committees..."
-                  className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
+              <div className="flex gap-3">
+                <div className="relative min-w-0 flex-1">
+                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Search committees..."
+                    className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {role === "teacher" && (
+                  <button
+                    type="button"
+                    onClick={() => setEditingCommittee({ id: "new", name: "", description: "", created_at: new Date().toISOString() })}
+                    className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create committee
+                  </button>
+                )}
               </div>
             </div>
             {role === "student" && needsPreferences && !preferencesSubmitted && (
@@ -317,7 +344,7 @@ export function CommitteesHome() {
             {loading ? (
               <div className="text-sm text-gray-500">Loading committees…</div>
             ) : items.length === 0 ? (
-              <div className="text-sm text-gray-500">No committees configured yet.</div>
+              <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No committees yet.</div>
             ) : (
               <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
                 {items.map((c, index) => (

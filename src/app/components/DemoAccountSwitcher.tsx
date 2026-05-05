@@ -33,6 +33,8 @@ export function DemoAccountSwitcher() {
   const [demoActive, setDemoActive] = useState(() => window.localStorage.getItem("gavel:demoActive") === "1");
   const [dashboardReady, setDashboardReady] = useState(false);
   const [burst, setBurst] = useState(false);
+  const [justAppeared, setJustAppeared] = useState(false);
+  const [loadingProgress, setLoadingProgress] = useState(12);
   const [dragHintMounted, setDragHintMounted] = useState(false);
   const [dragHintVisible, setDragHintVisible] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -56,10 +58,11 @@ export function DemoAccountSwitcher() {
       window.localStorage.setItem(storageKey, JSON.stringify(centered));
     }
     setBurst(true);
+    setJustAppeared(true);
     setDragHintMounted(true);
     window.requestAnimationFrame(() => setDragHintVisible(true));
     window.setTimeout(() => setBurst(false), 1000);
-    dragHintTimerRef.current = window.setTimeout(hideDragHint, 5000);
+    window.setTimeout(() => setJustAppeared(false), 450);
   };
 
   useEffect(() => {
@@ -71,7 +74,7 @@ export function DemoAccountSwitcher() {
   useEffect(() => {
     const onDemoOpened = () => {
       setDemoActive(true);
-      if (dashboardReady) playLaunchEffectsIfNeeded();
+      playLaunchEffectsIfNeeded();
     };
     const onDemoEnded = () => {
       setDemoActive(false);
@@ -85,7 +88,8 @@ export function DemoAccountSwitcher() {
       window.removeEventListener("gavel:demo-opened", onDemoOpened);
       window.removeEventListener("gavel:demo-ended", onDemoEnded);
     };
-  }, [dashboardReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     setDemoActive(window.localStorage.getItem("gavel:demoActive") === "1");
@@ -112,10 +116,22 @@ export function DemoAccountSwitcher() {
   }, []);
 
   useEffect(() => {
-    if (!dashboardReady || !demoActive) return;
+    if (!demoActive) return;
     playLaunchEffectsIfNeeded();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dashboardReady, demoActive]);
+  }, [demoActive, user?.id]);
+
+  useEffect(() => {
+    if (!demoActive || dashboardReady) {
+      setLoadingProgress(100);
+      return;
+    }
+    setLoadingProgress(12);
+    const interval = window.setInterval(() => {
+      setLoadingProgress((value) => Math.min(92, value + Math.max(2, Math.round((96 - value) * 0.12))));
+    }, 220);
+    return () => window.clearInterval(interval);
+  }, [dashboardReady, demoActive, user?.id]);
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -125,7 +141,9 @@ export function DemoAccountSwitcher() {
         x: Math.min(window.innerWidth - 96, Math.max(8, drag.baseX + event.clientX - drag.startX)),
         y: Math.min(window.innerHeight - 64, Math.max(8, drag.baseY + event.clientY - drag.startY)),
       };
-      drag.moved = drag.moved || Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4;
+      const moved = Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4;
+      drag.moved = drag.moved || moved;
+      if (moved) hideDragHint();
       setPosition(next);
     };
     const onUp = () => {
@@ -184,11 +202,17 @@ export function DemoAccountSwitcher() {
       className="fixed z-50 select-none"
       style={{ left: position.x, top: position.y }}
       onPointerDown={(event) => {
-        hideDragHint();
         dragRef.current = { startX: event.clientX, startY: event.clientY, baseX: position.x, baseY: position.y, moved: false };
       }}
     >
-      <div className="rounded-full border border-blue-700 bg-blue-600 text-white shadow-lg">
+      <div className={`relative rounded-full border border-blue-700 bg-blue-600 p-1 text-white shadow-lg transition-transform duration-300 ${justAppeared ? "scale-110" : "scale-100"}`}>
+        {demoActive && !dashboardReady && (
+          <div
+            className="pointer-events-none absolute -inset-1 rounded-full"
+            style={{ background: `conic-gradient(#2563eb ${loadingProgress}%, rgba(37,99,235,0.18) ${loadingProgress}%)` }}
+          />
+        )}
+        <div className="relative rounded-full bg-blue-600">
         {burst && (
           <div className="pointer-events-none absolute inset-0 scale-125 animate-pulse">
             {["-left-4 -top-3 h-3 w-3 bg-blue-500", "left-8 -top-6 h-4 w-4 bg-amber-400", "right-0 -top-5 h-3.5 w-3.5 bg-emerald-500", "-right-4 top-7 h-4 w-4 bg-pink-500", "left-2 -bottom-4 h-3 w-3 bg-purple-500", "right-8 -bottom-5 h-3.5 w-3.5 bg-sky-400"].map((classes, index) => (
@@ -211,6 +235,7 @@ export function DemoAccountSwitcher() {
         >
           Demo
         </button>
+        </div>
       </div>
       {open && (
         <div className={`absolute ${menuVerticalClass} ${menuHorizontalClass} w-44 overflow-hidden rounded-2xl border border-gray-200 bg-white p-1 shadow-xl`}>

@@ -48,6 +48,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
   const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [dragOverPosition, setDragOverPosition] = useState<"before" | "after">("before");
   const [dragPointer, setDragPointer] = useState<{ x: number; y: number } | null>(null);
   const [sectionWordLimits, setSectionWordLimits] = useState<Record<string, number>>({});
   const dragStartRef = useRef<{ key: string; startX: number; startY: number; moved: boolean } | null>(null);
@@ -104,7 +105,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
     );
   };
 
-  const moveSectionTo = (fromKey: string, toKey: string) => {
+  const moveSectionTo = (fromKey: string, toKey: string, position: "before" | "after" = "before") => {
     markDirty();
     setSections((prev) => {
       const next = [...prev];
@@ -112,7 +113,8 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
       const to = next.findIndex((section) => section.section_key === toKey);
       if (from < 0 || to < 0 || from === to) return prev;
       const [item] = next.splice(from, 1);
-      next.splice(to, 0, item);
+      const targetIndex = next.findIndex((section) => section.section_key === toKey);
+      next.splice(position === "after" ? targetIndex + 1 : targetIndex, 0, item);
       return next;
     });
   };
@@ -247,17 +249,23 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
       return event.clientX >= rect.left - 48 && event.clientX <= rect.right + 48 && event.clientY >= rect.top - 48 && event.clientY <= rect.bottom + 48;
     });
     const target = document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null;
-    const key = generousTarget?.getAttribute("data-profile-section-key") ?? target?.closest("[data-profile-section-key]")?.getAttribute("data-profile-section-key") ?? null;
-    if (key && key !== drag.key) setDragOverKey(key);
+    const card = generousTarget ?? target?.closest<HTMLElement>("[data-profile-section-key]") ?? null;
+    const key = card?.getAttribute("data-profile-section-key") ?? null;
+    if (key && key !== drag.key) {
+      const rect = card.getBoundingClientRect();
+      setDragOverKey(key);
+      setDragOverPosition(event.clientY > rect.top + rect.height / 2 ? "after" : "before");
+    }
   };
 
   const finishPointerDrag = () => {
     const fromKey = dragStartRef.current?.key ?? draggingKey;
     const toKey = dragOverKey;
-    if (fromKey && toKey && fromKey !== toKey) moveSectionTo(fromKey, toKey);
+    if (fromKey && toKey && fromKey !== toKey) moveSectionTo(fromKey, toKey, dragOverPosition);
     dragStartRef.current = null;
     setDraggingKey(null);
     setDragOverKey(null);
+    setDragOverPosition("before");
     setDragPointer(null);
   };
 
@@ -298,11 +306,13 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">Loading layout...</div>
       ) : (
         <div className="grid grid-cols-2 gap-4">
-          {normalizedSections.map((section, index) => {
+          {normalizedSections.map((section) => {
             const Icon = sectionIcon(section.section_type);
+            const showMoveBefore = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "before";
+            const showMoveAfter = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "after";
             return (
               <div key={section.section_key} className={`${section.width === "full" ? "col-span-2" : ""}`}>
-              {dragOverKey === section.section_key && draggingKey !== section.section_key && (
+              {showMoveBefore && (
                 <div className="mb-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-6 text-sm font-medium text-blue-700">
                   Move here
                 </div>
@@ -369,9 +379,30 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
                   </label>
                 )}
               </div>
+              {showMoveAfter && (
+                <div className="mt-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-6 text-sm font-medium text-blue-700">
+                  Move here
+                </div>
+              )}
               </div>
             );
           })}
+        </div>
+      )}
+      {!loading && (
+        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+          <div className="mb-3 flex items-center gap-2">
+            <Layout className="h-4 w-4 text-blue-600" />
+            <h2 className="text-base font-semibold text-gray-900">Preview</h2>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {normalizedSections.map((section) => (
+              <div key={`preview-${section.section_key}`} className={`${section.width === "full" ? "col-span-2" : ""} rounded-md border border-gray-200 bg-gray-50 p-3`}>
+                <div className="text-sm font-semibold text-gray-900">{section.title || "Untitled section"}</div>
+                <div className="mt-1 text-xs text-gray-500">{typeLabels[section.section_type]}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
       {draggingKey && dragPointer && (

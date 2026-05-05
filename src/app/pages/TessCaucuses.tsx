@@ -391,7 +391,7 @@ export function TessCaucuses() {
           {loading ? (
             <div className="col-span-full text-center py-12 text-gray-500">Loading caucuses...</div>
           ) : sortedCaucuses.length === 0 ? (
-            <div className="col-span-full text-center py-12 text-gray-500">No caucuses yet</div>
+            <div className="col-span-full rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No caucuses yet.</div>
           ) : (
             sortedCaucuses.map((caucus) => (
               <div

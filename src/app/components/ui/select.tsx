@@ -58,6 +58,8 @@ function SelectContent({
   className,
   children,
   position = "popper",
+  onCloseAutoFocus,
+  onPointerDownOutside,
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   return (
@@ -71,6 +73,15 @@ function SelectContent({
           className,
         )}
         position={position}
+        onCloseAutoFocus={(event) => {
+          event.preventDefault();
+          onCloseAutoFocus?.(event);
+        }}
+        onPointerDownOutside={(event) => {
+          const target = event.target as HTMLElement | null;
+          if (target?.closest('[data-slot="select-trigger"]')) event.preventDefault();
+          onPointerDownOutside?.(event);
+        }}
         {...props}
       >
         <SelectScrollUpButton />

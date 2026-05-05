@@ -332,8 +332,8 @@ export function ClassManagePage() {
     ],
     [caucusOptions, committeeOptions, partyOptions],
   );
-  const stickyShadowLeft = tableScroll.atStart ? "" : "shadow-[14px_0_22px_-12px_rgba(15,23,42,0.55)] ring-1 ring-gray-100";
-  const stickyShadowRight = tableScroll.atEnd ? "" : "shadow-[-14px_0_22px_-12px_rgba(15,23,42,0.55)] ring-1 ring-gray-100";
+  const stickyShadowLeft = tableScroll.atStart ? "" : "relative after:absolute after:bottom-0 after:right-0 after:top-0 after:w-4 after:translate-x-full after:bg-gradient-to-r after:from-slate-400/30 after:to-transparent after:content-['']";
+  const stickyShadowRight = tableScroll.atEnd ? "" : "relative before:absolute before:bottom-0 before:left-0 before:top-0 before:w-4 before:-translate-x-full before:bg-gradient-to-l before:from-slate-400/30 before:to-transparent before:content-['']";
 
   const updateTableScroll = (element = scrollRef.current) => {
     if (!element) return;

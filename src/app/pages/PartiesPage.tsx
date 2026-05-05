@@ -429,7 +429,7 @@ export function PartiesPage() {
           {loading ? (
             <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Loading parties...</div>
           ) : approvedParties.length === 0 ? (
-            <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">No parties yet.</div>
+            <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No parties yet.</div>
           ) : (
             <div className="grid gap-5 md:grid-cols-2">
               {approvedParties.map((party) => {

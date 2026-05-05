@@ -400,16 +400,12 @@ export function Navigation() {
                     <Link to="/bills/my" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
                       My Bills
                     </Link>
+                    <Link to="/records" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                      Records
+                    </Link>
                   </div>
                 )}
               </div>
-
-              <Link
-                to="/records"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
-              >
-                Records
-              </Link>
 
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                 <button

@@ -6,7 +6,7 @@ import { switchDemoAccount } from "../utils/demoAccounts";
 
 export function PublicNav({ active }: { active: "home" | "contact" }) {
   const linkClass = (id: "home" | "contact") =>
-    `text-lg font-bold transition-colors ${active === id ? "text-blue-700" : "text-gray-700 hover:text-gray-900"}`;
+    `text-lg font-normal transition-colors ${active === id ? "text-blue-700" : "text-gray-700 hover:text-gray-900"}`;
   return (
     <header className="border-b bg-white/90 backdrop-blur-sm">
       <div className="container relative mx-auto flex items-center gap-8 px-4 py-4">
@@ -26,9 +26,9 @@ export function PublicNav({ active }: { active: "home" | "contact" }) {
                 toast.error(error.message || "Could not open demo");
               }
             }}
-            className="text-lg font-bold text-gray-700 transition-colors hover:text-gray-900"
+            className="text-lg font-normal text-gray-700 transition-colors hover:text-gray-900"
           >
-            Enter Demo
+            Open Demo
           </button>
         </nav>
         <div className="ml-auto flex items-center gap-3 text-sm font-medium">
