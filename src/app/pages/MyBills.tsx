@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { Check, Circle, Clock, Plus, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { fetchMyBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 import { toast } from "sonner";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 type SortKey = "newest" | "oldest" | "number" | "title";
 
@@ -18,6 +19,17 @@ function statusClass(status: string) {
 
 function statusLabel(status: string) {
   return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function FilterSelect({ value, onChange, children }: { value: string; onChange: (value: string) => void; children: ReactNode }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className="h-10 text-sm">
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="z-[140]">{children}</SelectContent>
+    </Select>
+  );
 }
 
 function billTrackerSteps(status: string) {
@@ -118,20 +130,20 @@ export function MyBills() {
               className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
-            <option value="all">All statuses</option>
+          <FilterSelect value={status} onChange={setStatus}>
+            <SelectItem value="all">All statuses</SelectItem>
             {statuses.map((s) => (
-              <option key={s} value={s}>
+              <SelectItem key={s} value={s}>
                 {statusLabel(s)}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-          <select value={sort} onChange={(event) => setSort(event.target.value as SortKey)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
-            <option value="newest">Newest first</option>
-            <option value="oldest">Oldest first</option>
-            <option value="number">Bill number</option>
-            <option value="title">Title</option>
-          </select>
+          </FilterSelect>
+          <FilterSelect value={sort} onChange={(value) => setSort(value as SortKey)}>
+            <SelectItem value="newest">Newest first</SelectItem>
+            <SelectItem value="oldest">Oldest first</SelectItem>
+            <SelectItem value="number">Bill number</SelectItem>
+            <SelectItem value="title">Title</SelectItem>
+          </FilterSelect>
         </div>
 
         <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">

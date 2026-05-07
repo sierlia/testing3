@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { Check, Circle, Clock, ExternalLink, Eye, FileText, Plus, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BillPreviewPanel } from "../components/BillPreviewPanel";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { CompactPager } from "../components/CompactPager";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { fetchBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 import { useAuth } from "../utils/AuthContext";
@@ -59,6 +60,17 @@ function statusClass(status: string) {
   if (status === "passed") return "bg-green-100 text-green-700";
   if (status === "failed") return "bg-red-100 text-red-700";
   return "bg-gray-100 text-gray-700";
+}
+
+function FilterSelect({ value, onChange, children, className = "w-36" }: { value: string; onChange: (value: string) => void; children: ReactNode; className?: string }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className={`h-8 text-xs ${className}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="z-[140]">{children}</SelectContent>
+    </Select>
+  );
 }
 
 function sponsorDescriptor(bill: BillView) {
@@ -279,31 +291,31 @@ export function TessBills() {
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex flex-wrap items-center gap-2">
-              <select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
-                <option value="all">All statuses</option>
-                {statusOptions.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
-              </select>
-              <select value={filters.committee} onChange={(e) => setFilters({ ...filters, committee: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
-                <option value="all">All committees</option>
-                {committeeOptions.map((committee) => <option key={committee} value={committee}>{committee}</option>)}
-              </select>
-              <select value={filters.sponsorId} onChange={(e) => setFilters({ ...filters, sponsorId: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
-                <option value="all">All sponsors</option>
-                {sponsorOptions.map((sponsor) => <option key={sponsor.id} value={sponsor.id}>{sponsor.name}</option>)}
-              </select>
-              <select value={filters.cosponsorId} onChange={(e) => setFilters({ ...filters, cosponsorId: e.target.value })} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
-                <option value="all">All cosponsors</option>
-                {cosponsorOptions.map((cosponsor) => <option key={cosponsor.id} value={cosponsor.id}>{cosponsor.name}</option>)}
-              </select>
-              <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortKey)} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-xs">
-                <option value="number">Sort: Bill number</option>
-                <option value="newest">Sort: Newest</option>
-                <option value="oldest">Sort: Oldest</option>
-                <option value="title">Sort: Title</option>
-                <option value="sponsor">Sort: Sponsor</option>
-                <option value="status">Sort: Status</option>
-                <option value="cosponsors">Sort: Cosponsors</option>
-              </select>
+              <FilterSelect value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })}>
+                <SelectItem value="all">All statuses</SelectItem>
+                {statusOptions.map((status) => <SelectItem key={status} value={status}>{statusLabel(status)}</SelectItem>)}
+              </FilterSelect>
+              <FilterSelect value={filters.committee} onChange={(value) => setFilters({ ...filters, committee: value })} className="w-44">
+                <SelectItem value="all">All committees</SelectItem>
+                {committeeOptions.map((committee) => <SelectItem key={committee} value={committee}>{committee}</SelectItem>)}
+              </FilterSelect>
+              <FilterSelect value={filters.sponsorId} onChange={(value) => setFilters({ ...filters, sponsorId: value })} className="w-40">
+                <SelectItem value="all">All sponsors</SelectItem>
+                {sponsorOptions.map((sponsor) => <SelectItem key={sponsor.id} value={sponsor.id}>{sponsor.name}</SelectItem>)}
+              </FilterSelect>
+              <FilterSelect value={filters.cosponsorId} onChange={(value) => setFilters({ ...filters, cosponsorId: value })} className="w-40">
+                <SelectItem value="all">All cosponsors</SelectItem>
+                {cosponsorOptions.map((cosponsor) => <SelectItem key={cosponsor.id} value={cosponsor.id}>{cosponsor.name}</SelectItem>)}
+              </FilterSelect>
+              <FilterSelect value={sortBy} onChange={(value) => setSortBy(value as SortKey)} className="w-40">
+                <SelectItem value="number">Sort: Bill number</SelectItem>
+                <SelectItem value="newest">Sort: Newest</SelectItem>
+                <SelectItem value="oldest">Sort: Oldest</SelectItem>
+                <SelectItem value="title">Sort: Title</SelectItem>
+                <SelectItem value="sponsor">Sort: Sponsor</SelectItem>
+                <SelectItem value="status">Sort: Status</SelectItem>
+                <SelectItem value="cosponsors">Sort: Cosponsors</SelectItem>
+              </FilterSelect>
               <button onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
               </div>
               <div className="flex rounded-md border border-gray-300 bg-white p-1 shadow-sm">

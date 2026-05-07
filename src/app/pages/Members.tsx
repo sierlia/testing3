@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigation } from "../components/Navigation";
 import { Search } from "lucide-react";
 import { Link } from "react-router";
@@ -6,6 +6,8 @@ import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
+import { InfoTooltip } from "../components/InfoTooltip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 type Member = {
   user_id: string;
@@ -32,6 +34,17 @@ function partyAbbr(party: string | null | undefined) {
   if (normalized.includes("green")) return "G";
   if (normalized.includes("libertarian")) return "L";
   return party?.trim()?.slice(0, 1).toUpperCase() || "I";
+}
+
+function FilterSelect({ value, onChange, children, className = "w-36" }: { value: string; onChange: (value: string) => void; children: ReactNode; className?: string }) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger className={`h-8 text-xs ${className}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent className="z-[140]">{children}</SelectContent>
+    </Select>
+  );
 }
 
 export function Members() {
@@ -159,6 +172,14 @@ export function Members() {
   }, [members, searchQuery, filterParty, filterCommittee, filterCaucus, filterState, sortBy]);
 
   const memberCount = filteredMembers.length;
+  const resetFilters = () => {
+    setSearchQuery("");
+    setFilterParty("all");
+    setFilterCommittee("all");
+    setFilterCaucus("all");
+    setFilterState("all");
+    setSortBy("name");
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -166,7 +187,12 @@ export function Members() {
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Members ({memberCount})</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-bold text-gray-900">Members ({memberCount})</h1>
+            <InfoTooltip label="What are members?">
+              <p>Members represent the class's House of Representatives. They sponsor and cosponsor bills, join organizations, vote, and hold leadership roles.</p>
+            </InfoTooltip>
+          </div>
         </div>
 
         {/* Search and filters */}
@@ -183,59 +209,40 @@ export function Members() {
               />
             </div>
             <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={filterParty}
-              onChange={(e) => setFilterParty(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            >
-              <option value="all">All Parties</option>
+            <FilterSelect value={filterParty} onChange={setFilterParty}>
+              <SelectItem value="all">All Parties</SelectItem>
               {parties.map((p) => (
-                <option key={p} value={p}>
+                <SelectItem key={p} value={p}>
                   {p}
-                </option>
+                </SelectItem>
                 ))}
-            </select>
-            <select
-              value={filterState}
-              onChange={(e) => setFilterState(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            >
-              <option value="all">All States</option>
+            </FilterSelect>
+            <FilterSelect value={filterState} onChange={setFilterState} className="w-32">
+              <SelectItem value="all">All States</SelectItem>
               {states.map((state) => (
-                <option key={state} value={state}>{state}</option>
+                <SelectItem key={state} value={state}>{state}</SelectItem>
               ))}
-            </select>
-            <select
-              value={filterCommittee}
-              onChange={(e) => setFilterCommittee(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            >
-              <option value="all">All Committees</option>
+            </FilterSelect>
+            <FilterSelect value={filterCommittee} onChange={setFilterCommittee} className="w-44">
+              <SelectItem value="all">All Committees</SelectItem>
               {committees.map((committee) => (
-                <option key={committee} value={committee}>{committee}</option>
+                <SelectItem key={committee} value={committee}>{committee}</SelectItem>
               ))}
-            </select>
-            <select
-              value={filterCaucus}
-              onChange={(e) => setFilterCaucus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            >
-              <option value="all">All Caucuses</option>
+            </FilterSelect>
+            <FilterSelect value={filterCaucus} onChange={setFilterCaucus} className="w-40">
+              <SelectItem value="all">All Caucuses</SelectItem>
               {caucuses.map((caucus) => (
-                <option key={caucus} value={caucus}>{caucus}</option>
+                <SelectItem key={caucus} value={caucus}>{caucus}</SelectItem>
               ))}
-            </select>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as SortKey)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-            >
-              <option value="name">Sort by name</option>
-              <option value="party">Sort by party</option>
-              <option value="state">Sort by state</option>
-              <option value="passed">Most passed bills</option>
-              <option value="cosponsors">Most cosponsors</option>
-            </select>
+            </FilterSelect>
+            <FilterSelect value={sortBy} onChange={(value) => setSortBy(value as SortKey)} className="w-40">
+              <SelectItem value="name">Sort by name</SelectItem>
+              <SelectItem value="party">Sort by party</SelectItem>
+              <SelectItem value="state">Sort by state</SelectItem>
+              <SelectItem value="passed">Most passed bills</SelectItem>
+              <SelectItem value="cosponsors">Most cosponsors</SelectItem>
+            </FilterSelect>
+            <button type="button" onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
             </div>
           </div>
         </div>

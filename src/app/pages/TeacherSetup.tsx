@@ -10,7 +10,6 @@ import { defaultPartyColor } from "../components/PartyCreateForm";
 import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { houseCommittees, houseCommitteeSubcommittees } from "../constants/houseCommittees";
-import { InfoTooltip } from "../components/InfoTooltip";
 
 type TabId = "general" | "parties" | "committees" | "bills" | "organizations" | "elections" | "profiles" | "permissions" | "joining";
 
@@ -22,12 +21,7 @@ const subcommitteeLabels = Object.fromEntries(subcommitteeOptions.map((key) => {
   const [committee, subcommittee] = key.split("::");
   return [key, `${committee}: ${subcommittee}`];
 }));
-const partyDetails: Record<string, { text: string; url: string }> = {
-  "Democratic Party": { text: "Traces its roots to Jeffersonian Democratic-Republicans and Jacksonian Democrats; today it is one of the two major U.S. parties.", url: "https://democrats.org" },
-  "Republican Party": { text: "Founded in 1854 by anti-slavery expansion coalitions and became Lincoln's party before becoming today's GOP.", url: "https://gop.com" },
-  "Green Party": { text: "Grew from U.S. Green organizing in the 1980s and 1990s, emphasizing ecology, democracy, social justice, and peace.", url: "https://www.gp.org" },
-  "Libertarian Party": { text: "Founded in 1971 in Colorado around individual liberty, limited government, and free-market principles.", url: "https://www.lp.org" },
-};
+const sortedSubcommitteeOptions = [...subcommitteeOptions].sort((a, b) => subcommitteeLabels[a].localeCompare(subcommitteeLabels[b]));
 
 const tabs: Array<{ id: TabId; label: string; icon: any }> = [
   { id: "general", label: "General", icon: Settings },
@@ -67,6 +61,8 @@ function Toggle({
   disabled = false,
   indent = false,
   variant = "checkbox",
+  compact = false,
+  normalText = false,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
@@ -75,17 +71,19 @@ function Toggle({
   disabled?: boolean;
   indent?: boolean;
   variant?: "switch" | "checkbox";
+  compact?: boolean;
+  normalText?: boolean;
 }) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "hover:bg-gray-50"}`}
+      className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2 ${compact ? "py-1" : "py-1.5"} text-left transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "hover:bg-gray-50"}`}
       aria-pressed={checked}
     >
       <span className={`min-w-0 ${indent ? "pl-10" : "pl-7"}`}>
-        <span className="block text-base font-semibold text-gray-900">{title}</span>
+        <span className={`block text-base ${normalText ? "font-normal" : "font-semibold"} text-gray-900`}>{title}</span>
         {description && <span className="block text-sm font-normal leading-5 text-gray-600">{description}</span>}
       </span>
       {variant === "checkbox" ? (
@@ -208,6 +206,7 @@ function CompactDefaultsDropdown({
   optionDetails,
   capacities,
   onCapacityChange,
+  disabled = false,
 }: {
   title: string;
   selected: string[];
@@ -220,6 +219,7 @@ function CompactDefaultsDropdown({
   optionDetails?: Record<string, ReactNode>;
   capacities?: Record<string, number>;
   onCapacityChange?: (name: string, value: number) => void;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
@@ -237,8 +237,10 @@ function CompactDefaultsDropdown({
     <div ref={ref} className="relative">
       <button
         type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="flex min-h-9 w-full items-center justify-between gap-3 rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm hover:bg-gray-50"
+        onClick={() => {
+          if (!disabled) setOpen((value) => !value);
+        }}
+        className={`flex min-h-9 w-full items-center justify-between gap-3 rounded-md border border-gray-300 bg-white px-3 py-2 text-left text-sm hover:bg-gray-50 ${disabled ? "cursor-not-allowed opacity-45" : ""}`}
       >
         <span className="min-w-0">
           <span className="block truncate font-medium text-gray-900">{title}</span>
@@ -1201,9 +1203,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       { key: "promoteMembers", label: "Promote members", show: options.caucus },
     ];
     return (
-      <div className="grid gap-2">
+      <div className="grid gap-1">
         {rows.filter((row) => row.show !== false).map((row) => (
-          <Toggle key={row.key} variant="checkbox" checked={!!current[row.key]} onChange={(value) => setRoleAction(roleKey, row.key, value)} title={row.label} />
+          <Toggle key={row.key} variant="checkbox" checked={!!current[row.key]} onChange={(value) => setRoleAction(roleKey, row.key, value)} title={row.label} compact normalText />
         ))}
       </div>
     );
@@ -1478,7 +1480,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-4">
           <DisabledBlock disabled={!settings.enableBills}>
-            {settings.billSubmissionMode === "select" && (
+            <DisabledBlock disabled={settings.billSubmissionMode !== "select"} tight>
               <SettingRow
                 indent
                 title="Students allowed to submit bills"
@@ -1534,7 +1536,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
-            )}
+            </DisabledBlock>
             <SettingRow indent title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
               title="Cosponsorship"
@@ -1603,12 +1605,6 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                       title="Default parties"
                       selected={settings.allowedParties.filter((party) => defaultPartyOptions.includes(party))}
                       options={defaultPartyOptions}
-                      optionDetails={Object.fromEntries(defaultPartyOptions.map((party) => [party, partyDetails[party] ? (
-                        <InfoTooltip label={`${party} history`}>
-                          <p>{partyDetails[party].text}</p>
-                          <a href={partyDetails[party].url} target="_blank" rel="noreferrer" className="mt-2 block text-blue-600 underline">Official website</a>
-                        </InfoTooltip>
-                      ) : null]))}
                       onToggle={(party) => setSettings({ allowedParties: settings.allowedParties.includes(party) ? settings.allowedParties.filter((p) => p !== party) : [...settings.allowedParties, party] })}
                       onSelectAll={() => setSettings({ allowedParties: [...defaultPartyOptions] })}
                       onDeselectAll={() => setSettings({ allowedParties: [] })}
@@ -1636,7 +1632,6 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                       title="Default committees"
                       selected={settings.enabledCommittees}
                       options={allCommittees}
-                      subtexts={houseCommitteeSubcommittees}
                       capacities={settings.committeeCapacitiesByName}
                       onCapacityChange={(name, value) => setSettings({ committeeCapacitiesByName: { ...settings.committeeCapacitiesByName, [name]: value } })}
                       onToggle={(committee) => setSettings({ enabledCommittees: settings.enabledCommittees.includes(committee) ? settings.enabledCommittees.filter((c) => c !== committee) : [...settings.enabledCommittees, committee] })}
@@ -1646,26 +1641,25 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
-              {settings.committeeSubcommitteesEnabled && (
-                <SettingRow
-                  title="Default subcommittees"
-                  description="Choose which subcommittees are created under the selected default committees."
-                  wide
-                  control={
-                    <div className="ml-auto w-[32rem] max-w-full">
-                      <CompactDefaultsDropdown
-                        title="Default subcommittees"
-                        selected={settings.enabledSubcommittees}
-                        options={subcommitteeOptions.filter((key) => settings.enabledCommittees.includes(key.split("::")[0]))}
-                        labels={subcommitteeLabels}
-                        onToggle={(subcommittee) => setSettings({ enabledSubcommittees: settings.enabledSubcommittees.includes(subcommittee) ? settings.enabledSubcommittees.filter((item) => item !== subcommittee) : [...settings.enabledSubcommittees, subcommittee] })}
-                        onSelectAll={() => setSettings({ enabledSubcommittees: subcommitteeOptions.filter((key) => settings.enabledCommittees.includes(key.split("::")[0])) })}
-                        onDeselectAll={() => setSettings({ enabledSubcommittees: [] })}
-                      />
-                    </div>
-                  }
-                />
-              )}
+              <SettingRow
+                title="Default subcommittees"
+                description="Choose which subcommittees are created when subcommittees are enabled."
+                wide
+                control={
+                  <div className="ml-auto w-[32rem] max-w-full">
+                    <CompactDefaultsDropdown
+                      title="Default subcommittees"
+                      selected={settings.enabledSubcommittees}
+                      options={sortedSubcommitteeOptions}
+                      labels={subcommitteeLabels}
+                      disabled={!settings.committeeSubcommitteesEnabled}
+                      onToggle={(subcommittee) => setSettings({ enabledSubcommittees: settings.enabledSubcommittees.includes(subcommittee) ? settings.enabledSubcommittees.filter((item) => item !== subcommittee) : [...settings.enabledSubcommittees, subcommittee] })}
+                      onSelectAll={() => setSettings({ enabledSubcommittees: [...sortedSubcommitteeOptions] })}
+                      onDeselectAll={() => setSettings({ enabledSubcommittees: [] })}
+                    />
+                  </div>
+                }
+              />
               <Toggle checked={settings.allowSelfJoinCommittees} onChange={(v) => setSettings({ allowSelfJoinCommittees: v })} title="Allow students to join committees on their own" description="When off, students submit preference rankings." />
               <div className="grid gap-3">
                 <SettingRow title="Assignment mode" description="Choose how students are assigned to committees." control={<SettingSelect value={settings.committeeAssignmentMode} onValueChange={(value) => setSettings({ committeeAssignmentMode: value })}>
@@ -1853,10 +1847,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-4">
           <SettingsGroup title="Students">
-            <Toggle variant="checkbox" checked={settings.studentCanCreateBills} onChange={(v) => setSettings({ studentCanCreateBills: v })} title="Create bills" />
-            <Toggle variant="checkbox" checked={settings.studentCanAnnounce} onChange={(v) => setSettings({ studentCanAnnounce: v })} title="Make announcements in announcement boards" />
-            <Toggle variant="checkbox" checked={settings.studentCanComment} onChange={(v) => setSettings({ studentCanComment: v })} title="Make comments in announcement boards" />
-            <Toggle variant="checkbox" checked={settings.studentCanReact} onChange={(v) => setSettings({ studentCanReact: v })} title="React to announcements and comments in announcement boards" />
+            <Toggle variant="checkbox" checked={settings.studentCanCreateBills} onChange={(v) => setSettings({ studentCanCreateBills: v })} title="Create bills" compact normalText />
+            <Toggle variant="checkbox" checked={settings.studentCanAnnounce} onChange={(v) => setSettings({ studentCanAnnounce: v })} title="Make announcements in announcement boards" compact normalText />
+            <Toggle variant="checkbox" checked={settings.studentCanComment} onChange={(v) => setSettings({ studentCanComment: v })} title="Make comments in announcement boards" compact normalText />
+            <Toggle variant="checkbox" checked={settings.studentCanReact} onChange={(v) => setSettings({ studentCanReact: v })} title="React to announcements and comments in announcement boards" compact normalText />
           </SettingsGroup>
           <SettingsGroup title="Parties" disabled={!settings.enableParties}>
             <SettingRow
@@ -1870,9 +1864,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             />
           </SettingsGroup>
           <SettingsGroup title="Committees" disabled={!settings.enableCommittees}>
-            <Toggle variant="checkbox" checked={settings.committeesCanEditBills} onChange={(v) => setSettings({ committeesCanEditBills: v })} title="Revise referred bills" />
-            <Toggle variant="checkbox" checked={settings.committeesCanVoteBills} onChange={(v) => setSettings({ committeesCanVoteBills: v })} title="Vote on referred bills" />
-            <Toggle variant="checkbox" checked={settings.committeesCanReportBills} onChange={(v) => setSettings({ committeesCanReportBills: v })} title="Committee report" />
+            <Toggle variant="checkbox" checked={settings.committeesCanEditBills} onChange={(v) => setSettings({ committeesCanEditBills: v })} title="Revise referred bills" compact normalText />
+            <Toggle variant="checkbox" checked={settings.committeesCanVoteBills} onChange={(v) => setSettings({ committeesCanVoteBills: v })} title="Vote on referred bills" compact normalText />
+            <Toggle variant="checkbox" checked={settings.committeesCanReportBills} onChange={(v) => setSettings({ committeesCanReportBills: v })} title="Committee report" compact normalText />
           </SettingsGroup>
           <SettingsGroup title="Caucuses" disabled={!settings.enableCaucuses}>
             <SettingRow
@@ -1886,8 +1880,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             />
           </SettingsGroup>
           <SettingsGroup title="Speaker of the House">
-            <Toggle variant="checkbox" checked={settings.speakerCanReferBills} onChange={(v) => setSettings({ speakerCanReferBills: v })} title="Refer bills to committees" />
-            <Toggle variant="checkbox" checked={settings.speakerCanCalendarBills} onChange={(v) => setSettings({ speakerCanCalendarBills: v })} title="Calendar bills" />
+            <Toggle variant="checkbox" checked={settings.speakerCanReferBills} onChange={(v) => setSettings({ speakerCanReferBills: v })} title="Refer bills to committees" compact normalText />
+            <Toggle variant="checkbox" checked={settings.speakerCanCalendarBills} onChange={(v) => setSettings({ speakerCanCalendarBills: v })} title="Calendar bills" compact normalText />
           </SettingsGroup>
           <SettingsGroup title="Majority Whip" disabled={!settings.enableParties}>
             {roleActionControls("majorityWhipActions")}

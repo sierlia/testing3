@@ -20,6 +20,7 @@ export function CompactPager({
   if (totalItems === 0) return null;
   const start = (currentPage - 1) * pageSize + 1;
   const end = Math.min(currentPage * pageSize, totalItems);
+  const clampPage = (page: number) => Math.min(totalPages, Math.max(1, page || 1));
 
   return (
     <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
@@ -28,12 +29,23 @@ export function CompactPager({
         <select value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
           {sizes.map((size) => <option key={size} value={size}>{size} per page</option>)}
         </select>
-        <div className="inline-flex items-center overflow-hidden rounded-md border border-gray-300 bg-white">
-          <button type="button" onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="px-2 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40" aria-label="Previous page">
+        <div className="inline-flex items-center gap-1">
+          <button type="button" onClick={() => onPageChange(Math.max(1, currentPage - 1))} disabled={currentPage === 1} className="rounded p-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-40" aria-label="Previous page">
             <ChevronLeft className="h-4 w-4" />
           </button>
-          <div className="border-x border-gray-300 px-3 py-1.5 text-gray-700">{currentPage} of {totalPages}</div>
-          <button type="button" onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className="px-2 py-1.5 text-gray-700 hover:bg-gray-50 disabled:opacity-40" aria-label="Next page">
+          <label className="flex items-center gap-1 text-gray-700">
+            <input
+              aria-label="Current page"
+              type="number"
+              min={1}
+              max={totalPages}
+              value={currentPage}
+              onChange={(event) => onPageChange(clampPage(Number(event.target.value)))}
+              className="w-8 bg-transparent text-center text-sm outline-none focus:underline"
+            />
+            <span>of {totalPages}</span>
+          </label>
+          <button type="button" onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))} disabled={currentPage === totalPages} className="rounded p-1.5 text-gray-700 hover:bg-gray-100 disabled:opacity-40" aria-label="Next page">
             <ChevronRight className="h-4 w-4" />
           </button>
         </div>

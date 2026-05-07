@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router";
-import { AlertCircle, BookOpen, Check, Circle, Clock, FileText, Search, UserPlus, Users } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router";
+import { AlertCircle, ArrowLeft, BookOpen, Check, Circle, Clock, FileText, Search, UserPlus, Users } from "lucide-react";
 import { generateHTML } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import * as Y from "yjs";
 import { yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { BackButton } from "../components/BackButton";
 import { DeleteHighlight, EditHighlight, LinkMark, TextAlignment, UnderlineMark } from "../components/CollaborativeBillEditor";
 import { fetchBillDetail, toggleCosponsor } from "../services/bills";
 import { supabase } from "../utils/supabase";
@@ -186,6 +185,7 @@ function HorizontalTracker({ steps, onSelectStep }: { steps: TrackerItem[]; onSe
 
 export function BillDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TextTab>("original");
 
   const [loading, setLoading] = useState(true);
@@ -575,13 +575,35 @@ export function BillDetail() {
           ...committeeOptions.filter((committee) => committee.id !== referral.committee_id),
         ]
       : committeeOptions;
+  const handleBack = () => {
+    const lastPath = window.sessionStorage.getItem("gavel:lastPath") ?? "";
+    if (lastPath.startsWith("/floor") || lastPath.startsWith("/calendar")) {
+      navigate(lastPath);
+      return;
+    }
+    try {
+      const referrer = document.referrer ? new URL(document.referrer) : null;
+      const referrerHashPath = referrer?.hash?.replace(/^#/, "") ?? "";
+      const referrerPath = referrerHashPath || referrer?.pathname || "";
+      if (referrer?.origin === window.location.origin && (referrerPath.startsWith("/floor") || referrerPath.startsWith("/calendar"))) {
+        navigate(-1);
+        return;
+      }
+    } catch {
+      // Fall back to the bill list when referrer parsing is unavailable.
+    }
+    navigate("/bills");
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <BackButton className="mb-4" />
+        <button type="button" onClick={handleBack} className="mb-4 inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
+          <ArrowLeft className="h-4 w-4" />
+          Back
+        </button>
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <span className="font-mono text-lg font-bold text-gray-900">{bill.hr_label}</span>

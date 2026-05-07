@@ -7,6 +7,7 @@ import { OrganizationsLayout } from "./OrganizationsLayout";
 import { PartyCreateForm, NewParty, defaultPartyColor } from "../components/PartyCreateForm";
 import { supabase } from "../utils/supabase";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { InfoTooltip } from "../components/InfoTooltip";
 
 type PartyRow = { id: string; name: string; platform: string; color: string; approved: boolean; created_at: string };
 type MemberProfile = { user_id: string; display_name: string | null; party: string | null };
@@ -59,6 +60,24 @@ function displayPartyName(name: string) {
 
 function comparablePartyName(name: string) {
   return displayPartyName(name).toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+const partyDetails: Record<string, { text: string; url: string }> = {
+  "Democratic Party": { text: "Traces its roots to Jeffersonian Democratic-Republicans and Jacksonian Democrats; today it is one of the two major U.S. parties.", url: "https://democrats.org" },
+  "Republican Party": { text: "Founded in 1854 by anti-slavery expansion coalitions and became Lincoln's party before becoming today's GOP.", url: "https://gop.com" },
+  "Green Party": { text: "Grew from U.S. Green organizing in the 1980s and 1990s, emphasizing ecology, democracy, social justice, and peace.", url: "https://www.gp.org" },
+  "Libertarian Party": { text: "Founded in 1971 in Colorado around individual liberty, limited government, and free-market principles.", url: "https://www.lp.org" },
+};
+
+function PartyHistoryTooltip({ name }: { name: string }) {
+  const details = partyDetails[displayPartyName(name)];
+  if (!details) return null;
+  return (
+    <InfoTooltip label={`${displayPartyName(name)} history`}>
+      <p>{details.text}</p>
+      <a href={details.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-blue-600 hover:underline">Official website</a>
+    </InfoTooltip>
+  );
 }
 
 export function PartiesPage() {
@@ -455,7 +474,10 @@ export function PartiesPage() {
                         <div className="flex items-center gap-3">
                           <PartyIcon name={party.name} />
                           <div>
-                            <h3 className="text-lg font-semibold text-gray-900 group-hover:[color:var(--party-color)]">{displayPartyName(party.name)}</h3>
+                            <div className="flex items-center gap-1.5">
+                              <h3 className="text-lg font-semibold text-gray-900 group-hover:[color:var(--party-color)]">{displayPartyName(party.name)}</h3>
+                              <PartyHistoryTooltip name={party.name} />
+                            </div>
                             <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
                               <Users className="h-3.5 w-3.5" />
                               {memberCount(party.name)} members

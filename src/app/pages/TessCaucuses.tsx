@@ -6,6 +6,7 @@ import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 
 interface Caucus {
   id: string;
@@ -355,7 +356,7 @@ export function TessCaucuses() {
         )}
 
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -366,23 +367,26 @@ export function TessCaucuses() {
                 className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <select
-              value={sortBy}
-              onChange={(e) => setSortBy(e.target.value as any)}
-              className="rounded-md border border-gray-300 bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="createdAt">Creation Date</option>
-              <option value="members">Members</option>
-            </select>
-            <button onClick={toggleSortOrder} className="rounded-md border border-gray-300 bg-white p-2 transition-colors hover:bg-gray-50">
-              <ArrowUpDown className="w-4 h-4 text-gray-600" />
-            </button>
             <button
               onClick={() => setShowCreateForm(!showCreateForm)}
-              className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700"
+              className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
             >
               <Plus className="w-4 h-4" />
               Create Caucus
+            </button>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
+              <SelectTrigger className="h-8 w-36 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent className="z-[140]">
+                <SelectItem value="createdAt">Creation Date</SelectItem>
+                <SelectItem value="members">Members</SelectItem>
+              </SelectContent>
+            </Select>
+            <button onClick={toggleSortOrder} className="rounded-md border border-gray-300 bg-white p-1.5 transition-colors hover:bg-gray-50" aria-label="Toggle sort order">
+              <ArrowUpDown className="w-4 h-4 text-gray-600" />
             </button>
           </div>
         </div>

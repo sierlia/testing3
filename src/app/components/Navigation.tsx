@@ -66,6 +66,13 @@ export function Navigation() {
   const classMenuRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const orgCloseTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    const current = `${location.pathname}${location.search}`;
+    const previous = window.sessionStorage.getItem("gavel:currentPath");
+    if (previous && previous !== current) window.sessionStorage.setItem("gavel:lastPath", previous);
+    window.sessionStorage.setItem("gavel:currentPath", current);
+  }, [location.pathname, location.search]);
   const legislationCloseTimerRef = useRef<number | null>(null);
   const floorCloseTimerRef = useRef<number | null>(null);
 

@@ -8,6 +8,7 @@ import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { InfoTooltip } from "../components/InfoTooltip";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
 type PartyRole = "majority_leader" | "majority_whip" | "minority_leader" | "minority_whip" | "leader" | "whip" | "chair" | "vice_chair";
@@ -60,6 +61,24 @@ function PartyIcon({ name }: { name: string }) {
     return <img src="https://commons.wikimedia.org/wiki/Special:FilePath/Republican%20Disc.svg" alt="Republican Party elephant" className="h-8 w-8 rounded-full object-cover" />;
   }
   return <Flag className="h-4 w-4" />;
+}
+
+const partyDetails: Record<string, { text: string; url: string }> = {
+  "Democratic Party": { text: "Traces its roots to Jeffersonian Democratic-Republicans and Jacksonian Democrats; today it is one of the two major U.S. parties.", url: "https://democrats.org" },
+  "Republican Party": { text: "Founded in 1854 by anti-slavery expansion coalitions and became Lincoln's party before becoming today's GOP.", url: "https://gop.com" },
+  "Green Party": { text: "Grew from U.S. Green organizing in the 1980s and 1990s, emphasizing ecology, democracy, social justice, and peace.", url: "https://www.gp.org" },
+  "Libertarian Party": { text: "Founded in 1971 in Colorado around individual liberty, limited government, and free-market principles.", url: "https://www.lp.org" },
+};
+
+function PartyHistoryTooltip({ name }: { name: string }) {
+  const details = partyDetails[displayPartyName(name)];
+  if (!details) return null;
+  return (
+    <InfoTooltip label={`${displayPartyName(name)} history`}>
+      <p>{details.text}</p>
+      <a href={details.url} target="_blank" rel="noreferrer" className="mt-2 inline-block text-blue-600 hover:underline">Official website</a>
+    </InfoTooltip>
+  );
 }
 
 export function PartyDetail() {
@@ -611,6 +630,7 @@ export function PartyDetail() {
                     ) : (
                       <>
                         <h1 className="text-2xl font-bold text-gray-900">{displayPartyName(party.name)}</h1>
+                        <PartyHistoryTooltip name={party.name} />
                         {isTeacher && <button type="button" onClick={() => setEditingName(true)} className="rounded-md p-1 text-[var(--party-color)] hover:bg-gray-100"><Pencil className="h-4 w-4" /></button>}
                       </>
                     )}
