@@ -62,7 +62,7 @@ function Toggle({
   description,
   disabled = false,
   indent = false,
-  variant = "switch",
+  variant = "checkbox",
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
@@ -87,7 +87,7 @@ function Toggle({
       {variant === "checkbox" ? (
         <span
           className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
-            checked ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-transparent"
+            checked ? "border-blue-600 bg-blue-600 text-white" : "border-gray-500 bg-white text-transparent ring-1 ring-gray-200"
           }`}
         >
           <Check className="h-3.5 w-3.5" />
@@ -97,20 +97,6 @@ function Toggle({
           <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`} />
         </span>
       )}
-    </button>
-  );
-}
-
-function SwitchControl({ checked, onChange, disabled = false }: { checked: boolean; onChange: (next: boolean) => void; disabled?: boolean }) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`inline-flex h-5 w-9 flex-shrink-0 items-center align-middle rounded-full transition-colors ${checked ? "bg-blue-600" : "bg-gray-300"} disabled:cursor-not-allowed disabled:opacity-50`}
-      aria-pressed={checked}
-    >
-      <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`} />
     </button>
   );
 }
@@ -135,7 +121,7 @@ function SettingsGroup({
       <div className="flex min-h-6 items-center gap-3">
         <h3 className="shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
         {action && actionInline && <div className="shrink-0 self-center">{action}</div>}
-        {action && !actionGrow && <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />}
+        {(!actionGrow || !action) && <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />}
         {action && !actionInline && <div className={`${actionGrow ? "flex-1" : "shrink-0"} flex items-center justify-end self-center`}>{action}</div>}
       </div>
       <div className={`space-y-2 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
@@ -158,7 +144,7 @@ function SettingRow({
   indent?: boolean;
   sub?: boolean;
 }) {
-  const leftPad = sub ? "pl-20" : indent ? "pl-[2.5rem]" : "pl-7";
+  const leftPad = sub ? "pl-[4.75rem]" : indent ? "pl-[2.5rem]" : "pl-7";
   return (
     <div
       className={`grid cursor-pointer items-center rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-50 ${wide ? "gap-5 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "gap-3 md:grid-cols-[minmax(0,1fr)_240px]"}`}
@@ -182,7 +168,7 @@ function SettingRow({
       }}
     >
       <div className={`relative ${leftPad}`}>
-        {sub && <span aria-hidden="true" className="absolute -top-2 left-12 h-[calc(50%+0.5rem)] w-6 rounded-bl-lg border-b-2 border-l-2 border-dotted border-gray-300" />}
+        {sub && <span aria-hidden="true" className="absolute -top-1 left-7 h-[calc(50%+0.25rem)] w-10 rounded-bl-lg border-b-2 border-l-2 border-dotted border-gray-300" />}
         <div className="text-base font-semibold text-gray-900">{title}</div>
         {description && <div className="text-sm font-normal leading-5 text-gray-600">{description}</div>}
       </div>
@@ -195,9 +181,9 @@ function DisabledBlock({ disabled, children, tight = false }: { disabled: boolea
   return <div className={`${tight ? "space-y-0.5" : "space-y-2"} ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>;
 }
 
-function SettingSelect({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: ReactNode }) {
+function SettingSelect({ value, onValueChange, children, disabled = false }: { value: string; onValueChange: (value: string) => void; children: ReactNode; disabled?: boolean }) {
   return (
-    <Select value={value} onValueChange={onValueChange}>
+    <Select value={value} onValueChange={onValueChange} disabled={disabled}>
       <SelectTrigger className="h-10 w-full">
         <SelectValue />
       </SelectTrigger>
@@ -220,7 +206,7 @@ function PercentInput({ value, onChange }: { value: number; onChange: (value: nu
   };
 
   return (
-    <div className="relative w-14">
+    <div className="relative w-20">
       <input
         type="number"
         min={1}
@@ -250,7 +236,7 @@ function WordLimitInput({ label, value, max, onChange }: { label: string; value:
         onChange={(event) => onChange(Math.min(max, Math.max(1, Number(event.target.value) || 1)))}
         className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <span className="mt-1 block text-sm font-normal leading-5 text-gray-600">Maximum: {max}</span>
+      <span className="mt-1 block text-sm font-normal leading-5 text-gray-600">Limit: {max}</span>
     </label>
   );
 }
@@ -265,6 +251,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const [inviteBusy, setInviteBusy] = useState(false);
   const [authoritySearch, setAuthoritySearch] = useState("");
   const [authorityOpen, setAuthorityOpen] = useState(false);
+  const [billSubmissionSearch, setBillSubmissionSearch] = useState("");
+  const [billSubmissionOpen, setBillSubmissionOpen] = useState(false);
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [teacherClasses, setTeacherClasses] = useState<ClassOption[]>([]);
   const [settingsCode, setSettingsCode] = useState("");
@@ -285,6 +273,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     chairVoteThresholdPct: 50,
     partyLeadershipElectionMode: "elected",
     enableBills: true,
+    billSubmissionMode: "all",
+    billSubmissionStudentIds: [] as string[],
     billAssignmentAuthority: "teacher",
     billAssignmentAuthorityTags: [] as AuthorityTag[],
     allowDrafts: true,
@@ -300,6 +290,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     enableCommittees: true,
     enableCaucuses: true,
     enableOrganizations: true,
+    organizationCreationAllowed: true,
     billAssignmentAuthorityMode: "teacher",
     announcementBoardsEnabled: true,
     announcementCommentsEnabled: true,
@@ -317,6 +308,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     profileDistrictRequired: true,
     profilePartyRequired: true,
     profilesEnabled: true,
+    profileEditingAllowed: true,
     teacherPermissions: "full",
     studentPermissions: "standard",
     leadershipPermissions: "moderate",
@@ -380,11 +372,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         const classId = params.classId ?? (prof as any)?.class_id ?? null;
         setActiveClassId(classId);
         if (!classId) return;
-        const [{ data: cls }, { data: memberships }, { data: ownedClasses }, { data: coTeacherMemberships }] = await Promise.all([
+        const [{ data: cls }, { data: memberships }, { data: membershipRows }, { data: ownedClasses }, { data: coTeacherMemberships }] = await Promise.all([
           supabase.from("classes").select("settings").eq("id", classId).maybeSingle(),
+          supabase.rpc("class_directory", { target_class: classId }),
           supabase
             .from("class_memberships")
-            .select("user_id,email,role,status,profiles(display_name)")
+            .select("user_id,email,role,status")
             .eq("class_id", classId)
             .eq("status", "approved"),
           supabase.from("classes").select("id,name,settings").eq("teacher_id", uid).order("created_at", { ascending: false }),
@@ -395,12 +388,25 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             .eq("role", "teacher")
             .eq("status", "approved"),
         ]);
-        const members = (memberships ?? []).map((row: any) => ({
+        const emailByMemberId = new Map((membershipRows ?? []).map((row: any) => [row.user_id, row.email ?? ""]));
+        const roleByMemberId = new Map((membershipRows ?? []).map((row: any) => [row.user_id, row.role ?? "student"]));
+        const directoryIds = new Set((memberships ?? []).map((row: any) => row.user_id));
+        const members = [
+          ...(memberships ?? []).map((row: any) => ({
           id: row.user_id,
-          email: row.email ?? "",
-          role: row.role ?? "student",
-          name: row.profiles?.display_name ?? row.email ?? "Member",
-        })) as MemberOption[];
+          email: emailByMemberId.get(row.user_id) ?? "",
+          role: row.role ?? roleByMemberId.get(row.user_id) ?? "student",
+          name: row.display_name ?? emailByMemberId.get(row.user_id) ?? "Member",
+          })),
+          ...(membershipRows ?? [])
+            .filter((row: any) => !directoryIds.has(row.user_id))
+            .map((row: any) => ({
+              id: row.user_id,
+              email: row.email ?? "",
+              role: row.role ?? "student",
+              name: row.email ?? "Member",
+            })),
+        ] as MemberOption[];
         setMemberOptions(members);
         const { data: speakerVotes } = await supabase.from("class_speaker_votes").select("candidate_user_id").eq("class_id", classId);
         const speakerVoteCounts = new Map<string, number>();
@@ -418,13 +424,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         for (const row of ownedClasses ?? []) classMap.set((row as any).id, { id: (row as any).id, name: (row as any).name ?? "Class", settings: (row as any).settings ?? {} });
         for (const row of coTeacherClasses ?? []) classMap.set((row as any).id, { id: (row as any).id, name: (row as any).name ?? "Class", settings: (row as any).settings ?? {} });
         setTeacherClasses(Array.from(classMap.values()).filter((item) => item.id !== classId));
-        const teacherTags: AuthorityTag[] = [{ id: "teachers", label: "Teachers", type: "teacher" as const, locked: true }];
         const s = (cls as any)?.settings ?? {};
         const savedAuthorityTags = (s?.bills?.assignmentAuthorityTags ?? []) as AuthorityTag[];
-        const mergedAuthorityTags = [
-          ...teacherTags,
-          ...savedAuthorityTags.filter((tag) => tag.type !== "teacher" && !teacherTags.some((teacher) => teacher.id === tag.id)),
-        ];
+        const mergedAuthorityTags = savedAuthorityTags.filter((tag) => tag.type !== "teacher");
         setSettingsState((prev) => ({
           ...prev,
           allowedParties: s?.parties?.allowed ?? prev.allowedParties,
@@ -440,8 +442,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           enableCommittees: s?.organizations?.enableCommittees ?? prev.enableCommittees,
           enableCaucuses: s?.organizations?.enableCaucuses ?? prev.enableCaucuses,
           enableOrganizations: s?.organizations?.enabled ?? prev.enableOrganizations,
+          organizationCreationAllowed: s?.organizations?.creationAllowed ?? prev.organizationCreationAllowed,
           partyLeadershipElectionMode: s?.parties?.leadershipElectionMode ?? prev.partyLeadershipElectionMode,
           enableBills: s?.bills?.enabled ?? s?.bills?.allowDrafts ?? prev.enableBills,
+          billSubmissionMode: s?.bills?.submissionMode ?? ((s?.bills?.enabled ?? s?.bills?.allowDrafts ?? prev.enableBills) ? prev.billSubmissionMode : "none"),
+          billSubmissionStudentIds: s?.bills?.submissionStudentIds ?? prev.billSubmissionStudentIds,
           billAssignmentAuthority: s?.bills?.assignmentAuthority ?? prev.billAssignmentAuthority,
           billAssignmentAuthorityMode: s?.bills?.assignmentAuthorityMode ?? prev.billAssignmentAuthorityMode,
           billAssignmentAuthorityTags: mergedAuthorityTags,
@@ -465,6 +470,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           houseLeadershipElectionMode: s?.elections?.houseLeadership?.mode ?? prev.houseLeadershipElectionMode,
           organizationElectionMode: s?.elections?.organizations?.mode ?? prev.organizationElectionMode,
           profilesEnabled: s?.profiles?.enabled ?? prev.profilesEnabled,
+          profileEditingAllowed: s?.profiles?.editingAllowed ?? prev.profileEditingAllowed,
           profileDistrictRequired: s?.profiles?.districtRequired ?? prev.profileDistrictRequired,
           profilePartyRequired: s?.profiles?.partyRequired ?? prev.profilePartyRequired,
           teacherPermissions: s?.permissions?.teacher ?? prev.teacherPermissions,
@@ -577,6 +583,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               organizations: {
                 ...(existing?.organizations ?? {}),
                 enabled: settings.enableOrganizations,
+                creationAllowed: settings.organizationCreationAllowed,
                 enableParties: settings.enableParties,
                 enableCommittees: settings.enableCommittees,
                 enableCaucuses: settings.enableCaucuses,
@@ -609,6 +616,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               bills: {
                 ...(existing?.bills ?? {}),
                 enabled: settings.enableBills,
+                submissionMode: settings.billSubmissionMode,
+                submissionStudentIds: settings.billSubmissionStudentIds,
                 assignmentAuthority: settings.billAssignmentAuthority,
                 assignmentAuthorityMode: settings.billAssignmentAuthorityMode,
                 assignmentAuthorityTags: authorityTags,
@@ -638,6 +647,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               profiles: {
                 ...(existing?.profiles ?? {}),
                 enabled: settings.profilesEnabled,
+                editingAllowed: settings.profileEditingAllowed,
                 districtRequired: settings.profileDistrictRequired,
                 partyRequired: settings.profilePartyRequired,
               },
@@ -788,7 +798,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
 
   const speakerAuthorityCandidate: AuthorityTag = {
     id: "speaker-of-the-house",
-    label: `Speaker of the House: ${speakerName === "No speaker selected" ? "none" : speakerName}`,
+    label: `Speaker of the House: ${speakerName === "No speaker selected" ? "None" : speakerName}`,
     type: "role",
   };
   const authorityMatches = (tag: AuthorityTag) => {
@@ -804,10 +814,26 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     .filter(authorityMatches);
   const hasAuthorityCandidates = showSpeakerAuthorityCandidate || studentAuthorityCandidates.length > 0;
 
-  const authorityTags = (settings.billAssignmentAuthorityTags.some((tag) => tag.type === "teacher")
-    ? settings.billAssignmentAuthorityTags
-    : [{ id: "teachers", label: "Teachers", type: "teacher" as const, locked: true }, ...settings.billAssignmentAuthorityTags]
-  ).map((tag) => tag.id === "speaker-of-the-house" && tag.type === "role" ? { ...tag, label: speakerAuthorityCandidate.label } : tag);
+  const authorityTags = settings.billAssignmentAuthorityTags
+    .filter((tag) => tag.type !== "teacher")
+    .map((tag) => tag.id === "speaker-of-the-house" && tag.type === "role" ? { ...tag, label: speakerAuthorityCandidate.label } : tag);
+
+  const studentOptions = memberOptions.filter((member) => member.role === "student");
+  const selectedBillSubmissionStudents = studentOptions.filter((member) => settings.billSubmissionStudentIds.includes(member.id));
+  const billSubmissionCandidates = studentOptions.filter((member) => {
+    const query = billSubmissionSearch.trim().toLowerCase();
+    return !settings.billSubmissionStudentIds.includes(member.id) && (!query || member.name.toLowerCase().includes(query) || member.email.toLowerCase().includes(query));
+  });
+
+  const addBillSubmissionStudent = (studentId: string) => {
+    if (settings.billSubmissionStudentIds.includes(studentId)) return;
+    setSettings({ billSubmissionStudentIds: [...settings.billSubmissionStudentIds, studentId] });
+    setBillSubmissionSearch("");
+  };
+
+  const removeBillSubmissionStudent = (studentId: string) => {
+    setSettings({ billSubmissionStudentIds: settings.billSubmissionStudentIds.filter((id) => id !== studentId) });
+  };
 
   const encodeSettings = () => {
     try {
@@ -860,10 +886,13 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           chairVoteThresholdPct: raw?.committees?.chairVoteThresholdPct ?? settings.chairVoteThresholdPct,
           committeeVotePassThresholdPct: raw?.committees?.votePassThresholdPct ?? settings.committeeVotePassThresholdPct,
           enableOrganizations: raw?.organizations?.enabled ?? settings.enableOrganizations,
+          organizationCreationAllowed: raw?.organizations?.creationAllowed ?? settings.organizationCreationAllowed,
           enableParties: raw?.organizations?.enableParties ?? settings.enableParties,
           enableCommittees: raw?.organizations?.enableCommittees ?? settings.enableCommittees,
           enableCaucuses: raw?.organizations?.enableCaucuses ?? settings.enableCaucuses,
           enableBills: raw?.bills?.enabled ?? raw?.bills?.allowDrafts ?? settings.enableBills,
+          billSubmissionMode: raw?.bills?.submissionMode ?? settings.billSubmissionMode,
+          billSubmissionStudentIds: raw?.bills?.submissionStudentIds ?? settings.billSubmissionStudentIds,
           allowDrafts: raw?.bills?.allowDrafts ?? settings.allowDrafts,
           billTabs: raw?.bills?.tabs ?? settings.billTabs,
           billsVotedAfterCommittee: raw?.bills?.votedAfterCommittee ?? settings.billsVotedAfterCommittee,
@@ -875,6 +904,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           floorVoteThreshold: raw?.floor?.voteThreshold ?? settings.floorVoteThreshold,
           floorVoteThresholdPct: raw?.floor?.voteThresholdPct ?? settings.floorVoteThresholdPct,
           profilesEnabled: raw?.profiles?.enabled ?? settings.profilesEnabled,
+          profileEditingAllowed: raw?.profiles?.editingAllowed ?? settings.profileEditingAllowed,
           profileDistrictRequired: raw?.profiles?.districtRequired ?? settings.profileDistrictRequired,
           profilePartyRequired: raw?.profiles?.partyRequired ?? settings.profilePartyRequired,
           announcementBoardsEnabled: raw?.organizations?.announcementBoards?.enabled ?? settings.announcementBoardsEnabled,
@@ -920,6 +950,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       enableHouseLeadershipElection: true,
       enableOrganizationElections: true,
       profilesEnabled: true,
+      billSubmissionMode: "all",
+      organizationCreationAllowed: true,
+      profileEditingAllowed: true,
       studentCanCreateBills: true,
     };
     const applyPresetState = (patch: Partial<typeof settings>, message: string) => {
@@ -934,7 +967,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     } else if (kind === "blended") {
       applyPresetState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false }, "Hybrid Simulation applied");
     } else {
-      applyPresetState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false, profilesEnabled: false, enableCaucuses: false, enableOrganizationElections: false }, "Essentialist Simulation applied");
+      applyPresetState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false, profilesEnabled: false, profileEditingAllowed: false, enableCaucuses: false, enableOrganizationElections: false }, "Essentialist Simulation applied");
     }
   };
 
@@ -971,6 +1004,63 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       </div>
     );
   };
+
+  const enabledDisabledSelect = (checked: boolean, onChange: (next: boolean) => void, disabled = false) => (
+    <div className="w-44">
+      <SettingSelect disabled={disabled} value={checked ? "enabled" : "disabled"} onValueChange={(value) => onChange(value === "enabled")}>
+        <SelectItem value="enabled">Enabled</SelectItem>
+        <SelectItem value="disabled">Disabled</SelectItem>
+      </SettingSelect>
+    </div>
+  );
+
+  const billSubmissionSelect = (
+    <div className="w-80">
+      <SettingSelect
+        value={settings.enableBills ? settings.billSubmissionMode : "none"}
+        onValueChange={(value) => {
+          if (value === "none") setSettings({ enableBills: true, billSubmissionMode: "none", allowDrafts: false, studentCanCreateBills: false });
+          else setSettings({ enableBills: true, billSubmissionMode: value, allowDrafts: true, studentCanCreateBills: true });
+        }}
+      >
+        <SelectItem value="all">Submission allowed</SelectItem>
+        <SelectItem value="select">Submission allowed for select students</SelectItem>
+        <SelectItem value="none">Submission not allowed</SelectItem>
+      </SettingSelect>
+    </div>
+  );
+
+  const organizationsSelect = (
+    <div className="w-80">
+      <SettingSelect
+        value={!settings.enableOrganizations ? "disabled" : settings.organizationCreationAllowed ? "creation-allowed" : "creation-not-allowed"}
+        onValueChange={(value) => {
+          if (value === "disabled") setSettings({ enableOrganizations: false, enableParties: false, enableCommittees: false, enableCaucuses: false, organizationCreationAllowed: false });
+          else setSettings({ enableOrganizations: true, enableParties: true, enableCommittees: true, enableCaucuses: true, organizationCreationAllowed: value === "creation-allowed" });
+        }}
+      >
+        <SelectItem value="creation-allowed">Enabled, creation allowed</SelectItem>
+        <SelectItem value="creation-not-allowed">Enabled, creation not allowed</SelectItem>
+        <SelectItem value="disabled">Disabled</SelectItem>
+      </SettingSelect>
+    </div>
+  );
+
+  const profilesSelect = (
+    <div className="w-80">
+      <SettingSelect
+        value={!settings.profilesEnabled ? "disabled" : settings.profileEditingAllowed ? "editing-allowed" : "editing-not-allowed"}
+        onValueChange={(value) => {
+          if (value === "disabled") setSettings({ profilesEnabled: false, profileEditingAllowed: false });
+          else setSettings({ profilesEnabled: true, profileEditingAllowed: value === "editing-allowed" });
+        }}
+      >
+        <SelectItem value="editing-allowed">Enabled, editing allowed</SelectItem>
+        <SelectItem value="editing-not-allowed">Enabled, editing not allowed</SelectItem>
+        <SelectItem value="disabled">Disabled</SelectItem>
+      </SettingSelect>
+    </div>
+  );
 
   const section = () => {
     if (activeTab === "general") {
@@ -1133,6 +1223,61 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-4">
           <DisabledBlock disabled={!settings.enableBills}>
+            {settings.billSubmissionMode === "select" && (
+              <SettingRow
+                indent
+                title="Students allowed to submit bills"
+                description="Only selected students can submit bill drafts."
+                wide
+                control={
+                  <div
+                    className="relative ml-auto w-[32rem] max-w-full"
+                    onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setBillSubmissionOpen(false);
+                    }}
+                  >
+                    <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => setBillSubmissionOpen(true)}>
+                      {selectedBillSubmissionStudents.map((student) => (
+                        <button
+                          key={student.id}
+                          type="button"
+                          onClick={() => removeBillSubmissionStudent(student.id)}
+                          className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+                        >
+                          {student.name} x
+                        </button>
+                      ))}
+                      <input
+                        value={billSubmissionSearch}
+                        onChange={(event) => setBillSubmissionSearch(event.target.value)}
+                        onFocus={() => setBillSubmissionOpen(true)}
+                        placeholder="Search students"
+                        className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
+                      />
+                    </div>
+                    {billSubmissionOpen && (
+                      <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
+                        {billSubmissionCandidates.length ? (
+                          billSubmissionCandidates.map((student) => (
+                            <button
+                              key={student.id}
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => addBillSubmissionStudent(student.id)}
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-blue-50"
+                            >
+                              {student.name}
+                            </button>
+                          ))
+                        ) : (
+                          <div className="px-3 py-2 text-sm text-gray-500">No matches</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                }
+              />
+            )}
             <SettingRow indent title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
               title="Cosponsorship"
@@ -1151,7 +1296,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 <Toggle indent checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} disabled={settings.cosponsorshipMode === "never"} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
               </DisabledBlock>
             </SettingsGroup>
-          <SettingsGroup title="Floor" action={<SwitchControl checked={settings.enableFloor} onChange={(v) => setSettings({ enableFloor: v })} disabled={!settings.enableBills} />}>
+          <SettingsGroup title="Floor" action={enabledDisabledSelect(settings.enableFloor, (v) => setSettings({ enableFloor: v }), !settings.enableBills)}>
             <div className="text-sm text-gray-600">Use the floor page for debate queues and final votes.</div>
             <DisabledBlock disabled={!settings.enableFloor}>
               <SettingRow
@@ -1161,8 +1306,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 control={
                   <div className="flex flex-wrap items-center gap-2">
                     <PercentInput value={settings.floorVoteThresholdPct} onChange={(value) => setSettings({ floorVoteThresholdPct: value, floorVoteThreshold: value >= 67 ? "two-thirds" : "custom" })} />
-                    <button type="button" onClick={() => setSettings({ floorVoteThresholdPct: 50, floorVoteThreshold: "simple-majority" })} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">1/2</button>
-                    <button type="button" onClick={() => setSettings({ floorVoteThresholdPct: 67, floorVoteThreshold: "two-thirds" })} className="rounded-md border border-gray-300 px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">2/3</button>
+                    <button type="button" onClick={() => setSettings({ floorVoteThresholdPct: 50, floorVoteThreshold: "simple-majority" })} className={`rounded-md border px-2 py-1.5 text-sm font-medium ${settings.floorVoteThresholdPct === 50 ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>1/2</button>
+                    <button type="button" onClick={() => setSettings({ floorVoteThresholdPct: 67, floorVoteThreshold: "two-thirds" })} className={`rounded-md border px-2 py-1.5 text-sm font-medium ${settings.floorVoteThresholdPct === 67 ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>2/3</button>
                   </div>
                 }
               />
@@ -1189,7 +1334,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               control={<WordLimitInput label="" value={settings.organizationDescriptionWordLimit} max={500} onChange={(value) => setSettings({ organizationDescriptionWordLimit: value })} />}
             />
           </DisabledBlock>
-          <SettingsGroup title="Announcement boards" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.announcementBoardsEnabled} onChange={(v) => setSettings({ announcementBoardsEnabled: v })} disabled={!settings.enableOrganizations} />}>
+          <SettingsGroup title="Announcement boards" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.announcementBoardsEnabled, (v) => setSettings({ announcementBoardsEnabled: v }), !settings.enableOrganizations)}>
             <DisabledBlock disabled={!settings.announcementBoardsEnabled}>
               <SettingRow title="Announcement word limit" description="Maximum words allowed in announcements." control={<WordLimitInput label="" value={settings.announcementWordLimit} max={1000} onChange={(value) => setSettings({ announcementWordLimit: value })} />} />
               <div className="space-y-0.5">
@@ -1201,10 +1346,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               <Toggle checked={settings.announcementEmotesEnabled} onChange={(v) => setSettings({ announcementEmotesEnabled: v })} title="Enable emotes" description="Members can react to announcements and comments." />
             </DisabledBlock>
           </SettingsGroup>
-          <SettingsGroup title="Parties" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.enableParties} onChange={(v) => setSettings({ enableParties: v })} disabled={!settings.enableOrganizations} />}>
+          <SettingsGroup title="Parties" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableParties, (v) => setSettings({ enableParties: v }), !settings.enableOrganizations)}>
             <div className="text-sm text-gray-600">Students can join parties and use party spaces.</div>
           </SettingsGroup>
-          <SettingsGroup title="Committees" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.enableCommittees} onChange={(v) => setSettings({ enableCommittees: v })} disabled={!settings.enableOrganizations} />}>
+          <SettingsGroup title="Committees" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableCommittees, (v) => setSettings({ enableCommittees: v }), !settings.enableOrganizations)}>
             <DisabledBlock disabled={!settings.enableCommittees}>
               <SettingRow
                 title="Bill assignment authority"
@@ -1223,7 +1368,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                           key={`${tag.type}:${tag.id}`}
                           type="button"
                           onClick={() => removeAuthorityTag(tag)}
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${tag.type === "teacher" ? "cursor-default bg-green-100 text-green-800" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                          className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200"
                         >
                           {tag.label}{tag.locked ? "" : " x"}
                         </button>
@@ -1246,10 +1391,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                               onClick={() => addAuthorityTag(speakerAuthorityCandidate)}
                               className="block w-full px-3 py-2 text-left text-sm hover:bg-blue-50"
                             >
-                              #1 {speakerAuthorityCandidate.label}
+                              {speakerAuthorityCandidate.label}
                             </button>
                           )}
-                          {studentAuthorityCandidates.length > 0 && <div className="border-t border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">#2 Students</div>}
                           {studentAuthorityCandidates.map((tag) => (
                         <button
                           key={`${tag.type}:${tag.id}`}
@@ -1281,7 +1425,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               </div>
             </DisabledBlock>
           </SettingsGroup>
-          <SettingsGroup title="Caucuses" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.enableCaucuses} onChange={(v) => setSettings({ enableCaucuses: v })} disabled={!settings.enableOrganizations} />}>
+          <SettingsGroup title="Caucuses" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableCaucuses, (v) => setSettings({ enableCaucuses: v }), !settings.enableOrganizations)}>
             <div className="text-sm text-gray-600">Students can form caucuses and post announcements.</div>
           </SettingsGroup>
         </div>
@@ -1291,10 +1435,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-4">
           <DisabledBlock disabled={!settings.enableElections}>
-            <SettingsGroup title="House leadership election" action={<SwitchControl checked={settings.enableHouseLeadershipElection} onChange={(v) => setSettings({ enableHouseLeadershipElection: v })} disabled={!settings.enableElections} />}>
+            <SettingsGroup title="House leadership election" action={enabledDisabledSelect(settings.enableHouseLeadershipElection, (v) => setSettings({ enableHouseLeadershipElection: v }), !settings.enableElections)}>
               <div className="text-sm text-gray-600">Students can vote for Speaker of the House from the floor page.</div>
             </SettingsGroup>
-            <SettingsGroup title="Organization elections" action={<SwitchControl checked={settings.enableOrganizationElections} onChange={(v) => setSettings({ enableOrganizationElections: v })} disabled={!settings.enableElections} />}>
+            <SettingsGroup title="Organization elections" action={enabledDisabledSelect(settings.enableOrganizationElections, (v) => setSettings({ enableOrganizationElections: v }), !settings.enableElections)}>
               <div className="text-sm text-gray-600">Parties, committees, and caucuses can run their leadership elections.</div>
             </SettingsGroup>
           </DisabledBlock>
@@ -1406,10 +1550,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const description = mode === "setup" ? "Choose the default parties and committees for this class." : "";
   const activeTabLabel = visibleTabs.find((tab) => tab.id === activeTab)?.label;
   const tabHeaderAction = () => {
-    if (activeTab === "bills") return <SwitchControl checked={settings.enableBills} onChange={(v) => setSettings({ enableBills: v })} />;
-    if (activeTab === "organizations") return <SwitchControl checked={settings.enableOrganizations} onChange={(v) => setSettings({ enableOrganizations: v, enableParties: v, enableCommittees: v, enableCaucuses: v })} />;
-    if (activeTab === "elections") return <SwitchControl checked={settings.enableElections} onChange={(v) => setSettings({ enableElections: v })} />;
-    if (activeTab === "profiles") return <SwitchControl checked={settings.profilesEnabled} onChange={(v) => setSettings({ profilesEnabled: v })} />;
+    if (activeTab === "bills") return billSubmissionSelect;
+    if (activeTab === "organizations") return organizationsSelect;
+    if (activeTab === "elections") return enabledDisabledSelect(settings.enableElections, (v) => setSettings({ enableElections: v }));
+    if (activeTab === "profiles") return profilesSelect;
     return null;
   };
   const activeTabAction = tabHeaderAction();
@@ -1443,7 +1587,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-3">
               <h2 className="shrink-0 text-xl font-semibold text-gray-900">{activeTabLabel}</h2>
-              {activeTabAction && <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />}
+              <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />
               {activeTabAction && <div className="flex shrink-0 items-center">{activeTabAction}</div>}
             </div>
             {section()}
