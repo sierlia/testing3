@@ -17,31 +17,51 @@ function currentRoutePath() {
 
 export async function switchDemoAccount(key: DemoAccountKey, options?: { confetti?: boolean; preserveLocation?: boolean }) {
   const currentPath = currentRoutePath();
-  const { data, error } = await supabase.rpc("demo_account_credentials", { account_key: key });
-  if (error) throw error;
-  const credentials = Array.isArray(data) ? data[0] : data;
-  if (!credentials?.email || !credentials?.password) throw new Error("Demo account is not configured.");
+  const launchDemo = Boolean(options?.confetti);
 
   window.localStorage.setItem("gavel:demoActive", "1");
-  if (options?.confetti) {
+  if (launchDemo) {
     window.localStorage.setItem("gavel:demoOpenedAt", String(Date.now()));
     window.localStorage.setItem("gavel:demoConfetti", "1");
     window.localStorage.setItem("gavel:demoCenter", "1");
+    window.localStorage.setItem("gavel:demoLaunchOverlay", "1");
+    window.localStorage.setItem("gavel:demoLaunchLoading", "1");
+    window.dispatchEvent(new CustomEvent("gavel:demo-launch-start"));
   }
-  await supabase.auth.signOut();
-  const { error: signInError } = await supabase.auth.signInWithPassword({
-    email: credentials.email,
-    password: credentials.password,
-  });
-  if (signInError) throw signInError;
 
-  const defaultTarget = credentials.role === "teacher"
-    ? `/teacher/class/${credentials.class_id}`
-    : `/class/${credentials.class_id}/dashboard`;
-  const isPublicRoute = ["/", "/signin", "/signup", "/about"].includes(currentPath);
-  const incompatibleRoleRoute =
-    (credentials.role === "student" && currentPath.startsWith("/teacher/")) ||
-    (credentials.role === "teacher" && currentPath.startsWith("/class/"));
-  const target = options?.preserveLocation && !isPublicRoute && !incompatibleRoleRoute ? currentPath : defaultTarget;
-  window.location.hash = target;
+  try {
+    const { data, error } = await supabase.rpc("demo_account_credentials", { account_key: key });
+    if (error) throw error;
+    const credentials = Array.isArray(data) ? data[0] : data;
+    if (!credentials?.email || !credentials?.password) throw new Error("Demo account is not configured.");
+
+    await supabase.auth.signOut();
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: credentials.email,
+      password: credentials.password,
+    });
+    if (signInError) throw signInError;
+
+    const defaultTarget = credentials.role === "teacher"
+      ? `/teacher/class/${credentials.class_id}`
+      : `/class/${credentials.class_id}/dashboard`;
+    const isPublicRoute = ["/", "/signin", "/signup", "/about"].includes(currentPath);
+    const incompatibleRoleRoute =
+      (credentials.role === "student" && currentPath.startsWith("/teacher/")) ||
+      (credentials.role === "teacher" && currentPath.startsWith("/class/"));
+    const target = options?.preserveLocation && !isPublicRoute && !incompatibleRoleRoute ? currentPath : defaultTarget;
+    window.location.hash = target;
+    window.dispatchEvent(new CustomEvent("gavel:demo-opened"));
+  } catch (error) {
+    if (launchDemo) {
+      window.localStorage.removeItem("gavel:demoActive");
+      window.localStorage.removeItem("gavel:demoOpenedAt");
+      window.localStorage.removeItem("gavel:demoConfetti");
+      window.localStorage.removeItem("gavel:demoCenter");
+      window.localStorage.removeItem("gavel:demoLaunchOverlay");
+      window.localStorage.removeItem("gavel:demoLaunchLoading");
+      window.dispatchEvent(new CustomEvent("gavel:demo-launch-cancel"));
+    }
+    throw error;
+  }
 }

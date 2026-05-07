@@ -5,6 +5,7 @@ import { demoAccounts, DemoAccountKey, switchDemoAccount } from "../utils/demoAc
 import { useAuth } from "../utils/AuthContext";
 
 const storageKey = "gavel:demoSwitcherPosition:v2";
+const buttonSize = { width: 92, height: 52 };
 
 function readPosition() {
   try {
@@ -22,13 +23,28 @@ export function DemoAccountSwitcher() {
   const [busyKey, setBusyKey] = useState<DemoAccountKey | null>(null);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [demoActive, setDemoActive] = useState(() => window.localStorage.getItem("gavel:demoActive") === "1");
+  const [launchOverlayVisible, setLaunchOverlayVisible] = useState(() => window.localStorage.getItem("gavel:demoLaunchOverlay") === "1");
+  const [launchLoading, setLaunchLoading] = useState(() => window.localStorage.getItem("gavel:demoLaunchLoading") === "1");
+  const [launchProgress, setLaunchProgress] = useState(() => window.localStorage.getItem("gavel:demoLaunchLoading") === "1" ? 8 : 100);
   const [burst, setBurst] = useState(false);
   const [justAppeared, setJustAppeared] = useState(false);
   const [dragHintMounted, setDragHintMounted] = useState(false);
   const [dragHintVisible, setDragHintVisible] = useState(false);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const positionRef = useRef<{ x: number; y: number } | null>(null);
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
   const dragHintTimerRef = useRef<number | null>(null);
+  const launchCompletionTimerRef = useRef<number | null>(null);
+
+  const centerButton = () => {
+    const centered = {
+      x: Math.max(8, Math.round(window.innerWidth / 2 - buttonSize.width / 2)),
+      y: Math.max(8, Math.round(window.innerHeight / 2 - buttonSize.height / 2)),
+    };
+    positionRef.current = centered;
+    setPosition(centered);
+    window.localStorage.setItem(storageKey, JSON.stringify(centered));
+  };
 
   const hideDragHint = () => {
     if (dragHintTimerRef.current) window.clearTimeout(dragHintTimerRef.current);
@@ -42,9 +58,7 @@ export function DemoAccountSwitcher() {
     window.localStorage.removeItem("gavel:demoConfetti");
     if (window.localStorage.getItem("gavel:demoCenter") === "1") {
       window.localStorage.removeItem("gavel:demoCenter");
-      const centered = { x: Math.max(16, Math.round(window.innerWidth / 2 - 42)), y: Math.max(16, Math.round(window.innerHeight * 0.58)) };
-      setPosition(centered);
-      window.localStorage.setItem(storageKey, JSON.stringify(centered));
+      centerButton();
     }
     setBurst(true);
     setJustAppeared(true);
@@ -56,35 +70,115 @@ export function DemoAccountSwitcher() {
 
   useEffect(() => {
     const saved = readPosition();
-    if (saved) setPosition(saved);
-    else setPosition({ x: Math.max(16, window.innerWidth - 96), y: Math.max(16, window.innerHeight - 76) });
+    if (window.localStorage.getItem("gavel:demoCenter") === "1" || window.localStorage.getItem("gavel:demoLaunchOverlay") === "1") {
+      centerButton();
+      return;
+    }
+    const initial = saved ?? { x: Math.max(16, window.innerWidth - 96), y: Math.max(16, window.innerHeight - 76) };
+    positionRef.current = initial;
+    setPosition(initial);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
+    const startLaunch = () => {
+      setDemoActive(true);
+      setOpen(false);
+      setBurst(false);
+      setJustAppeared(false);
+      setDragHintMounted(false);
+      setDragHintVisible(false);
+      setLaunchOverlayVisible(true);
+      setLaunchLoading(true);
+      setLaunchProgress(8);
+      centerButton();
+    };
+    const cancelLaunch = () => {
+      setDemoActive(false);
+      setOpen(false);
+      setLaunchOverlayVisible(false);
+      setLaunchLoading(false);
+      setLaunchProgress(100);
+      setBurst(false);
+      setJustAppeared(false);
+      setDragHintMounted(false);
+      setDragHintVisible(false);
+    };
+    const completeLaunch = () => {
+      if (window.localStorage.getItem("gavel:demoActive") !== "1") return;
+      if (window.localStorage.getItem("gavel:demoLaunchLoading") !== "1" && window.localStorage.getItem("gavel:demoConfetti") !== "1") return;
+      if (launchCompletionTimerRef.current) window.clearTimeout(launchCompletionTimerRef.current);
+      setDemoActive(true);
+      setOpen(false);
+      setLaunchOverlayVisible(window.localStorage.getItem("gavel:demoLaunchOverlay") === "1");
+      setLaunchProgress(100);
+      launchCompletionTimerRef.current = window.setTimeout(() => {
+        window.localStorage.removeItem("gavel:demoLaunchLoading");
+        setLaunchLoading(false);
+        playLaunchEffectsIfNeeded();
+      }, 240);
+    };
     const onDemoOpened = () => {
       setDemoActive(true);
-      playLaunchEffectsIfNeeded();
+      if (window.localStorage.getItem("gavel:demoLaunchLoading") !== "1") playLaunchEffectsIfNeeded();
     };
     const onDemoEnded = () => {
       setDemoActive(false);
       setOpen(false);
+      setLaunchOverlayVisible(false);
+      setLaunchLoading(false);
+      setLaunchProgress(100);
+      window.localStorage.removeItem("gavel:demoLaunchOverlay");
+      window.localStorage.removeItem("gavel:demoLaunchLoading");
     };
+    window.addEventListener("gavel:demo-launch-start", startLaunch);
+    window.addEventListener("gavel:demo-launch-cancel", cancelLaunch);
     window.addEventListener("gavel:demo-opened", onDemoOpened);
     window.addEventListener("gavel:demo-ended", onDemoEnded);
+    window.addEventListener("gavel:dashboard-ready", completeLaunch);
     const openedAt = Number(window.localStorage.getItem("gavel:demoOpenedAt") ?? 0);
     if (Date.now() - openedAt < 2000) onDemoOpened();
+    if (window.localStorage.getItem("gavel:demoLaunchLoading") === "1") {
+      const fallback = window.setTimeout(completeLaunch, 8000);
+      return () => {
+        window.clearTimeout(fallback);
+        window.removeEventListener("gavel:demo-launch-start", startLaunch);
+        window.removeEventListener("gavel:demo-launch-cancel", cancelLaunch);
+        window.removeEventListener("gavel:demo-opened", onDemoOpened);
+        window.removeEventListener("gavel:demo-ended", onDemoEnded);
+        window.removeEventListener("gavel:dashboard-ready", completeLaunch);
+        if (launchCompletionTimerRef.current) window.clearTimeout(launchCompletionTimerRef.current);
+      };
+    }
     return () => {
+      window.removeEventListener("gavel:demo-launch-start", startLaunch);
+      window.removeEventListener("gavel:demo-launch-cancel", cancelLaunch);
       window.removeEventListener("gavel:demo-opened", onDemoOpened);
       window.removeEventListener("gavel:demo-ended", onDemoEnded);
+      window.removeEventListener("gavel:dashboard-ready", completeLaunch);
+      if (launchCompletionTimerRef.current) window.clearTimeout(launchCompletionTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!demoActive) return;
+    if (launchLoading) return;
     playLaunchEffectsIfNeeded();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demoActive, user?.id]);
+  }, [demoActive, user?.id, launchLoading]);
+
+  useEffect(() => {
+    if (!launchLoading) return;
+    const timer = window.setInterval(() => {
+      setLaunchProgress((value) => {
+        if (value < 70) return Math.min(70, value + 7);
+        if (value < 90) return Math.min(90, value + 2);
+        return Math.min(96, value + 0.5);
+      });
+    }, 180);
+    return () => window.clearInterval(timer);
+  }, [launchLoading]);
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -96,11 +190,18 @@ export function DemoAccountSwitcher() {
       };
       const moved = Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4;
       drag.moved = drag.moved || moved;
-      if (moved) hideDragHint();
+      if (moved) {
+        hideDragHint();
+        if (launchOverlayVisible && !launchLoading) {
+          setLaunchOverlayVisible(false);
+          window.localStorage.removeItem("gavel:demoLaunchOverlay");
+        }
+      }
+      positionRef.current = next;
       setPosition(next);
     };
     const onUp = () => {
-      const current = position;
+      const current = positionRef.current;
       if (current) window.localStorage.setItem(storageKey, JSON.stringify(current));
       window.setTimeout(() => {
         dragRef.current = null;
@@ -112,7 +213,7 @@ export function DemoAccountSwitcher() {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
     };
-  }, [position]);
+  }, [launchLoading, launchOverlayVisible]);
 
   useEffect(() => {
     if (!open) return;
@@ -144,21 +245,29 @@ export function DemoAccountSwitcher() {
   };
 
   if (!position) return null;
-  if (!user || !demoActive) return null;
+  if (!demoActive || (!user && !launchOverlayVisible && !launchLoading)) return null;
   const menuVerticalClass = position.y > window.innerHeight - 300 ? "bottom-full mb-2" : "top-full mt-2";
   const menuHorizontalClass = position.x > window.innerWidth - 240 ? "right-0" : "left-0";
-  const activeKey = (user.email?.split("@")[0] ?? "") as DemoAccountKey;
+  const activeKey = (user?.email?.split("@")[0] ?? "") as DemoAccountKey;
 
   return (
+    <>
+    {launchOverlayVisible && <div className="fixed inset-0 z-[60] bg-gray-950/45 backdrop-blur-[1px]" aria-hidden="true" />}
     <div
       ref={rootRef}
-      className="fixed z-50 select-none"
+      className={`fixed select-none touch-none ${launchOverlayVisible ? "z-[70]" : "z-50"}`}
       style={{ left: position.x, top: position.y }}
       onPointerDown={(event) => {
+        if (launchLoading) return;
         dragRef.current = { startX: event.clientX, startY: event.clientY, baseX: position.x, baseY: position.y, moved: false };
       }}
     >
       <div className={`relative rounded-full border border-blue-700 bg-blue-600 p-1 text-white shadow-lg transition-transform duration-300 ${justAppeared ? "scale-110" : "scale-100"}`}>
+        {launchLoading && (
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[calc(100%+18px)] w-[calc(100%+34px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border border-white/80 bg-white/80 shadow-lg" aria-hidden="true">
+            <div className="h-full rounded-full bg-blue-500/25 transition-[width] duration-200 ease-out" style={{ width: `${launchProgress}%` }} />
+          </div>
+        )}
         <div className="relative rounded-full bg-blue-600">
         {burst && (
           <div className="pointer-events-none absolute inset-0 scale-125 animate-pulse">
@@ -174,11 +283,13 @@ export function DemoAccountSwitcher() {
         )}
         <button
           type="button"
+          disabled={launchLoading}
           onClick={() => {
             if (dragRef.current?.moved) return;
+            if (launchLoading) return;
             setOpen((value) => !value);
           }}
-          className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+          className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-default disabled:hover:bg-blue-600"
         >
           <User className="h-4 w-4" />
           Demo
@@ -213,5 +324,6 @@ export function DemoAccountSwitcher() {
         </div>
       )}
     </div>
+    </>
   );
 }

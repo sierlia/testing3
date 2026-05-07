@@ -275,15 +275,113 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
 
   const usedSingleTypes = new Set(sections.filter((section) => section.section_type !== "long_response").map((section) => section.section_type));
 
+  const sampleLongResponse = (section: ProfileSection) => {
+    if (section.section_key === "key_issues") return ["Clean water access", "Reliable public transit", "Student data privacy"];
+    if (section.section_key === "constituency_description") return "District 7 includes dense neighborhoods, waterfront industry, and several public colleges. Residents are focused on housing affordability, infrastructure, and job training.";
+    return "I represent a district where civic participation is practical, local, and deeply connected to everyday services. My priorities are transparent government, strong schools, and responsible budgeting.";
+  };
+
+  const renderPreviewSection = (section: ProfileSection) => {
+    const span = section.width === "full" || section.section_type === "organizations" ? "md:col-span-2" : "";
+    if (section.section_type === "legislation_written") {
+      return (
+        <section key={`preview-${section.section_key}`} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${span}`}>
+          <div className="mb-4 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">{section.title || "Untitled section"}</h2>
+            </div>
+            <span className="text-sm font-medium text-blue-600">All</span>
+          </div>
+          <div className="space-y-3">
+            {[
+              ["H.R. 12", "Civic Records Modernization Act", "Reported"],
+              ["H.R. 18", "Community Transit Access Act", "Draft"],
+            ].map(([label, title, status]) => (
+              <div key={label} className="rounded-md bg-gray-50 p-3">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="font-mono text-sm font-semibold text-gray-900">{label}</span>
+                  <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-700">{status}</span>
+                </div>
+                <p className="text-sm text-gray-700">{title}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+    if (section.section_type === "organizations") {
+      return (
+        <section key={`preview-${section.section_key}`} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm md:col-span-2">
+          <div className="mb-4 flex items-center gap-2">
+            <Users className="h-5 w-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">{section.title || "Untitled section"}</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+            <div>
+              <div className="mb-2 text-sm font-medium text-gray-900">Committees</div>
+              <ul className="space-y-1 text-sm text-blue-600">
+                <li>Education Committee</li>
+                <li>Budget & Appropriations Committee</li>
+              </ul>
+            </div>
+            <div>
+              <div className="mb-2 text-sm font-medium text-gray-900">Caucuses</div>
+              <ul className="space-y-1 text-sm text-blue-600">
+                <li>Student Privacy Caucus</li>
+                <li>Infrastructure Working Group</li>
+              </ul>
+            </div>
+          </div>
+        </section>
+      );
+    }
+    if (section.section_type === "dear_colleague_letters") {
+      return (
+        <section key={`preview-${section.section_key}`} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${span}`}>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">{section.title || "Untitled section"}</h2>
+            </div>
+            <span className="text-sm font-medium text-blue-600">All</span>
+          </div>
+          <div className="space-y-2">
+            {["Seeking cosponsors for transit access", "Markup priorities for H.R. 12"].map((subject) => (
+              <div key={subject} className="rounded-md bg-gray-50 p-3 text-sm">
+                <div className="font-semibold text-gray-900">{subject}</div>
+                <div className="mt-1 text-xs text-gray-500">{new Date().toLocaleDateString()}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
+    const sample = sampleLongResponse(section);
+    return (
+      <section key={`preview-${section.section_key}`} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${span}`}>
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-gray-900">{section.title || "Untitled section"}</h2>
+          <div className="text-xs italic text-gray-500">{new Date().toLocaleDateString()}</div>
+        </div>
+        {Array.isArray(sample) ? (
+          <ul className="space-y-2">
+            {sample.map((issue) => (
+              <li key={issue} className="flex items-start text-gray-700">
+                <span className="mr-2">&bull;</span>
+                <span>{issue}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-gray-700">{sample}</p>
+        )}
+      </section>
+    );
+  };
+
   const content = (
     <main className={embedded ? "space-y-5" : "mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8"}>
-      <div className="mb-5 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">Edit Profile Layout</h1>
-        <p className="mt-1 text-sm text-gray-600">
-          Rename, reorder, add, resize, or remove profile sections for student profiles in this class.
-        </p>
-      </div>
-
       <div className="mb-5 inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
         {(["editor", "preview"] as const).map((view) => (
           <button key={view} type="button" onClick={() => setActiveView(view)} className={`rounded px-3 py-1.5 text-sm font-medium capitalize ${activeView === view ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
@@ -405,19 +503,8 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
           })}
         </div>
       ) : (
-        <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-          <div className="mb-3 flex items-center gap-2">
-            <Layout className="h-4 w-4 text-blue-600" />
-            <h2 className="text-base font-semibold text-gray-900">Preview</h2>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {normalizedSections.map((section) => (
-              <div key={`preview-${section.section_key}`} className={`${section.width === "full" ? "col-span-2" : ""} rounded-md border border-gray-200 bg-gray-50 p-3`}>
-                <div className="text-sm font-semibold text-gray-900">{section.title || "Untitled section"}</div>
-                <div className="mt-1 text-xs text-gray-500">{typeLabels[section.section_type]}</div>
-              </div>
-            ))}
-          </div>
+        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {normalizedSections.map(renderPreviewSection)}
         </div>
       )}
       {draggingKey && dragPointer && (

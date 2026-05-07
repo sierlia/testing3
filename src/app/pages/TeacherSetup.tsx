@@ -91,7 +91,7 @@ function SwitchControl({ checked, onChange, disabled = false }: { checked: boole
 function SettingsGroup({ title, children, disabled = false, action }: { title: string; children: ReactNode; disabled?: boolean; action?: ReactNode }) {
   return (
     <section className="space-y-4 border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-2">
         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
         {action && <div className="shrink-0">{action}</div>}
       </div>
@@ -100,9 +100,9 @@ function SettingsGroup({ title, children, disabled = false, action }: { title: s
   );
 }
 
-function SettingRow({ title, description, control }: { title: string; description?: string; control: ReactNode }) {
+function SettingRow({ title, description, control, wide = false }: { title: string; description?: string; control: ReactNode; wide?: boolean }) {
   return (
-    <div className="grid items-center gap-3 md:grid-cols-[minmax(0,1fr)_240px]">
+    <div className={`grid items-center gap-3 ${wide ? "md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)_240px]"}`}>
       <div>
         <div className="text-base font-semibold text-gray-900">{title}</div>
         {description && <div className="text-sm text-gray-600">{description}</div>}
@@ -169,10 +169,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
   const [authoritySearch, setAuthoritySearch] = useState("");
+  const [authorityOpen, setAuthorityOpen] = useState(false);
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [teacherClasses, setTeacherClasses] = useState<ClassOption[]>([]);
   const [settingsCode, setSettingsCode] = useState("");
   const [selectedCopyClassId, setSelectedCopyClassId] = useState("");
+  const [speakerName, setSpeakerName] = useState("No speaker selected");
   const [settings, setSettingsState] = useState({
     allowedParties: ["Democratic Party", "Republican Party"],
     allowStudentCreatedParties: false,
@@ -184,6 +186,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     chairElectionMode: "elected",
     chairVoteThresholdPct: 50,
     partyLeadershipElectionMode: "elected",
+    enableBills: true,
     billAssignmentAuthority: "teacher",
     billAssignmentAuthorityTags: [] as AuthorityTag[],
     allowDrafts: true,
@@ -205,6 +208,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     announcementEmotesEnabled: true,
     enableHouseLeadershipElection: true,
     enableOrganizationElections: true,
+    enableElections: true,
     houseLeadershipElectionMode: "student-vote",
     organizationElectionMode: "student-vote",
     calendarAutoPublish: true,
@@ -298,6 +302,14 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           name: row.profiles?.display_name ?? row.email ?? "Member",
         })) as MemberOption[];
         setMemberOptions(members);
+        const { data: speakerVotes } = await supabase.from("class_speaker_votes").select("candidate_user_id").eq("class_id", classId);
+        const speakerVoteCounts = new Map<string, number>();
+        for (const vote of speakerVotes ?? []) {
+          const candidateId = (vote as any).candidate_user_id as string | null;
+          if (candidateId) speakerVoteCounts.set(candidateId, (speakerVoteCounts.get(candidateId) ?? 0) + 1);
+        }
+        const [speakerId] = [...speakerVoteCounts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0] ?? [];
+        setSpeakerName(members.find((member) => member.id === speakerId)?.name ?? "No speaker selected");
         const coTeacherClassIds = [...new Set((coTeacherMemberships ?? []).map((row: any) => row.class_id).filter(Boolean))];
         const { data: coTeacherClasses } = coTeacherClassIds.length
           ? await supabase.from("classes").select("id,name,settings").in("id", coTeacherClassIds)
@@ -329,6 +341,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           enableCaucuses: s?.organizations?.enableCaucuses ?? prev.enableCaucuses,
           enableOrganizations: s?.organizations?.enabled ?? prev.enableOrganizations,
           partyLeadershipElectionMode: s?.parties?.leadershipElectionMode ?? prev.partyLeadershipElectionMode,
+          enableBills: s?.bills?.enabled ?? s?.bills?.allowDrafts ?? prev.enableBills,
           billAssignmentAuthority: s?.bills?.assignmentAuthority ?? prev.billAssignmentAuthority,
           billAssignmentAuthorityMode: s?.bills?.assignmentAuthorityMode ?? prev.billAssignmentAuthorityMode,
           billAssignmentAuthorityTags: mergedAuthorityTags,
@@ -348,6 +361,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           showVoteResultsLive: s?.floor?.showVoteResultsLive ?? prev.showVoteResultsLive,
           enableHouseLeadershipElection: s?.elections?.houseLeadership?.enabled ?? prev.enableHouseLeadershipElection,
           enableOrganizationElections: s?.elections?.organizations?.enabled ?? prev.enableOrganizationElections,
+          enableElections: s?.elections?.enabled ?? Boolean((s?.elections?.houseLeadership?.enabled ?? prev.enableHouseLeadershipElection) || (s?.elections?.organizations?.enabled ?? prev.enableOrganizationElections)),
           houseLeadershipElectionMode: s?.elections?.houseLeadership?.mode ?? prev.houseLeadershipElectionMode,
           organizationElectionMode: s?.elections?.organizations?.mode ?? prev.organizationElectionMode,
           profilesEnabled: s?.profiles?.enabled ?? prev.profilesEnabled,
@@ -488,9 +502,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               },
               bills: {
                 ...(existing?.bills ?? {}),
+                enabled: settings.enableBills,
                 assignmentAuthority: settings.billAssignmentAuthority,
                 assignmentAuthorityMode: settings.billAssignmentAuthorityMode,
-                assignmentAuthorityTags: settings.billAssignmentAuthorityTags,
+                assignmentAuthorityTags: authorityTags,
                 allowDrafts: settings.allowDrafts,
                 tabs: settings.billTabs,
                 committeeVoteRequired: settings.committeeVoteRequired,
@@ -510,6 +525,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               },
               elections: {
                 ...(existing?.elections ?? {}),
+                enabled: settings.enableElections,
                 houseLeadership: { ...(existing?.elections?.houseLeadership ?? {}), enabled: settings.enableHouseLeadershipElection, mode: settings.houseLeadershipElectionMode },
                 organizations: { ...(existing?.elections?.organizations ?? {}), enabled: settings.enableOrganizationElections, mode: settings.organizationElectionMode },
               },
@@ -659,19 +675,24 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   };
 
   const removeAuthorityTag = (tag: AuthorityTag) => {
-    if (tag.locked) return;
+    if (tag.locked || tag.type === "teacher") return;
     setSettings({ billAssignmentAuthorityTags: settings.billAssignmentAuthorityTags.filter((item) => !(item.id === tag.id && item.type === tag.type)) });
   };
 
   const authorityCandidates = [
-    { id: "speaker-of-the-house", label: "Speaker of the House", type: "role" as const },
-    ...memberOptions.map((member) => ({ id: member.id, label: member.name, type: "member" as const })),
+    { id: "speaker-of-the-house", label: `Speaker of the House: ${speakerName}`, type: "role" as const },
+    ...memberOptions.filter((member) => member.role === "student").map((member) => ({ id: member.id, label: member.name, type: "member" as const })),
   ].filter((tag) => {
     const query = authoritySearch.trim().toLowerCase();
     const matches = !query || tag.label.toLowerCase().includes(query);
     const unused = !settings.billAssignmentAuthorityTags.some((item) => item.id === tag.id && item.type === tag.type);
     return matches && unused;
   });
+
+  const authorityTags = (settings.billAssignmentAuthorityTags.some((tag) => tag.type === "teacher")
+    ? settings.billAssignmentAuthorityTags
+    : [{ id: "teachers", label: "Teachers", type: "teacher" as const, locked: true }, ...settings.billAssignmentAuthorityTags]
+  ).map((tag) => tag.id === "speaker-of-the-house" && tag.type === "role" ? { ...tag, label: `Speaker of the House: ${speakerName}` } : tag);
 
   const encodeSettings = () => {
     try {
@@ -725,6 +746,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           enableParties: raw?.organizations?.enableParties ?? settings.enableParties,
           enableCommittees: raw?.organizations?.enableCommittees ?? settings.enableCommittees,
           enableCaucuses: raw?.organizations?.enableCaucuses ?? settings.enableCaucuses,
+          enableBills: raw?.bills?.enabled ?? raw?.bills?.allowDrafts ?? settings.enableBills,
           allowDrafts: raw?.bills?.allowDrafts ?? settings.allowDrafts,
           billTabs: raw?.bills?.tabs ?? settings.billTabs,
           billsVotedAfterCommittee: raw?.bills?.votedAfterCommittee ?? settings.billsVotedAfterCommittee,
@@ -741,6 +763,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           announcementBoardsEnabled: raw?.organizations?.announcementBoards?.enabled ?? settings.announcementBoardsEnabled,
           announcementCommentsEnabled: raw?.organizations?.announcementBoards?.comments ?? settings.announcementCommentsEnabled,
           announcementEmotesEnabled: raw?.organizations?.announcementBoards?.emotes ?? settings.announcementEmotesEnabled,
+          enableElections: raw?.elections?.enabled ?? settings.enableElections,
           enableHouseLeadershipElection: raw?.elections?.houseLeadership?.enabled ?? settings.enableHouseLeadershipElection,
           enableOrganizationElections: raw?.elections?.organizations?.enabled ?? settings.enableOrganizationElections,
           studentCanCreateBills: raw?.permissions?.students?.createBills ?? settings.studentCanCreateBills,
@@ -769,21 +792,25 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const applyQuickSetup = (kind: "all-online" | "blended" | "core") => {
     if (!window.confirm("Are you sure? This action is irreversible.")) return;
     const common = {
+      enableBills: true,
       allowDrafts: true,
       enableFloor: true,
       enableOrganizations: true,
       enableParties: true,
       enableCommittees: true,
       enableCaucuses: true,
+      enableElections: true,
+      enableHouseLeadershipElection: true,
+      enableOrganizationElections: true,
       profilesEnabled: true,
       studentCanCreateBills: true,
     };
     if (kind === "all-online") {
-      applySettingsState({ ...common, announcementBoardsEnabled: true, announcementCommentsEnabled: true, announcementEmotesEnabled: true }, "Full Online Simulation applied");
+      applySettingsState({ ...common, announcementBoardsEnabled: true, announcementCommentsEnabled: true, announcementEmotesEnabled: true }, "Fully Digital Simulation applied");
     } else if (kind === "blended") {
-      applySettingsState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false }, "Blended Classroom Simulation applied");
+      applySettingsState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false }, "Hybrid Simulation applied");
     } else {
-      applySettingsState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false, profilesEnabled: false }, "Core Simulation applied");
+      applySettingsState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false, profilesEnabled: false, enableCaucuses: false, enableOrganizationElections: false }, "Essentialist Simulation applied");
     }
   };
 
@@ -817,25 +844,25 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       const quickSetups = [
         {
           id: "all-online" as const,
-          name: "Full Online Simulation",
-          description: "Keeps bills, profiles, letters, elections, and announcement boards active for courses that centralize participation and grading online.",
+          name: "Fully Digital Simulation",
+          description: "Enable all features - optimal for digital courses or centralizing participation online.",
         },
         {
           id: "blended" as const,
-          name: "Blended Classroom Simulation",
-          description: "Keeps core digital workflows active while disabling message boards to leave discussion primarily in class.",
+          name: "Hybrid Simulation",
+          description: "Disable message boards to facilitate in-person discussion.",
         },
         {
           id: "core" as const,
-          name: "Core Legislative Simulation",
-          description: "Disables message boards, profiles, and lower-priority communication tools for a lean bill and organization workflow.",
+          name: "Essentialist Simulation",
+          description: "Disable message boards, profiles, and non-essential tools to optimize for time or complexity constraints.",
         },
       ];
       return (
         <div className="space-y-6">
-          <SettingsGroup title="Settings code">
+          <div className="space-y-5">
             <SettingRow
-              title="Enter settings code"
+              title="Import settings from save code"
               description="Paste a code to apply a saved settings combination."
               control={
                 <div className="flex gap-2">
@@ -845,7 +872,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               }
             />
             <SettingRow
-              title="Copy settings code"
+              title="Copy settings save code"
               description="Generate a code from the current settings on this page."
               control={
                 <button type="button" onClick={copySettingsCode} className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
@@ -854,11 +881,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 </button>
               }
             />
-          </SettingsGroup>
-
-          <SettingsGroup title="Use another class">
             <SettingRow
-              title="Copy settings from class"
+              title="Duplicate settings from another class"
               description="Select another class where you are a teacher."
               control={
                 <div className="flex gap-2">
@@ -870,7 +894,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 </div>
               }
             />
-          </SettingsGroup>
+          </div>
 
           <SettingsGroup title="Quick setup">
             <div className="grid gap-3 md:grid-cols-3">
@@ -935,24 +959,25 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "bills") {
       return (
         <div className="space-y-6">
-          <DisabledBlock disabled={!settings.allowDrafts}>
+          <DisabledBlock disabled={!settings.enableBills}>
             <SettingRow title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
-          </DisabledBlock>
-          <SettingsGroup
-            title="Cosponsorship"
-            action={
-              <div className="w-64">
+            <SettingsGroup
+              title="Cosponsorship"
+              action={<SwitchControl checked={settings.cosponsorshipMode !== "never"} onChange={(v) => setSettings({ cosponsorshipMode: v ? "always" : "never", cosponsorAfterCommitteeReport: false })} disabled={!settings.enableBills} />}
+              disabled={!settings.enableBills}
+            >
+              <DisabledBlock disabled={settings.cosponsorshipMode === "never"}>
+                <div className="max-w-xl">
                 <SettingSelect value={settings.cosponsorshipMode} onValueChange={(value) => setSettings({ cosponsorshipMode: value, cosponsorAfterCommitteeReport: false })}>
                 <SelectItem value="always">Always allowed</SelectItem>
                 <SelectItem value="before_report">Allowed before the bill is reported from all committees</SelectItem>
                 <SelectItem value="never">Never allowed</SelectItem>
                 </SettingSelect>
-              </div>
-            }
-          >
-            <Toggle checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} disabled={settings.cosponsorshipMode === "never"} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
-          </SettingsGroup>
-          <SettingsGroup title="Floor" action={<SwitchControl checked={settings.enableFloor} onChange={(v) => setSettings({ enableFloor: v })} />}>
+                </div>
+                <Toggle checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} disabled={settings.cosponsorshipMode === "never"} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
+              </DisabledBlock>
+            </SettingsGroup>
+          <SettingsGroup title="Floor" action={<SwitchControl checked={settings.enableFloor} onChange={(v) => setSettings({ enableFloor: v })} disabled={!settings.enableBills} />}>
             <div className="text-sm text-gray-600">Use the floor page for debate queues and final votes.</div>
             <DisabledBlock disabled={!settings.enableFloor}>
               <Toggle checked={settings.floorResultsBinding} onChange={(v) => setSettings({ floorResultsBinding: v })} title="Floor vote results determine outcome" description="Passed or failed status is applied when floor votes are posted." />
@@ -969,6 +994,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               />
             </DisabledBlock>
           </SettingsGroup>
+          </DisabledBlock>
         </div>
       );
     }
@@ -1001,28 +1027,46 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               <SettingRow
                 title="Bill assignment authority"
                 description="Choose who can assign or refer bills to committees."
+                wide
                 control={
-                  <div className="min-w-0">
+                  <div
+                    className="min-w-0"
+                    onBlur={(event) => {
+                      if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAuthorityOpen(false);
+                    }}
+                  >
                     <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500">
-                      {(settings.billAssignmentAuthorityTags.length ? settings.billAssignmentAuthorityTags : [{ id: "teachers", label: "Teachers", type: "teacher" as const, locked: true }]).map((tag) => (
+                      {authorityTags.map((tag) => (
                         <button
                           key={`${tag.type}:${tag.id}`}
                           type="button"
                           onClick={() => removeAuthorityTag(tag)}
-                          className={`rounded-full px-3 py-1 text-xs font-semibold ${tag.locked ? "cursor-default bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                          className={`rounded-full px-3 py-1 text-xs font-semibold ${tag.type === "teacher" ? "cursor-default bg-green-100 text-green-800" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
                         >
                           {tag.label}{tag.locked ? "" : " x"}
                         </button>
                       ))}
-                      <input value={authoritySearch} onChange={(event) => setAuthoritySearch(event.target.value)} placeholder="Add Speaker or a person..." className="min-w-[10rem] flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none" />
+                      <input
+                        value={authoritySearch}
+                        onChange={(event) => setAuthoritySearch(event.target.value)}
+                        onFocus={() => setAuthorityOpen(true)}
+                        placeholder="Search people with bill assignment authority..."
+                        className="min-w-[20rem] flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
+                      />
                     </div>
-                    <div className="mt-2 max-h-44 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
+                    {authorityOpen && <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
                       {authorityCandidates.length ? authorityCandidates.map((tag) => (
-                        <button key={`${tag.type}:${tag.id}`} type="button" onClick={() => addAuthorityTag(tag)} className="block w-full px-3 py-2 text-left text-sm hover:bg-blue-50">
+                        <button
+                          key={`${tag.type}:${tag.id}`}
+                          type="button"
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={() => addAuthorityTag(tag)}
+                          className="block w-full px-3 py-2 text-left text-sm hover:bg-blue-50"
+                        >
                           {tag.label}
                         </button>
                       )) : <div className="px-3 py-2 text-sm text-gray-500">No matches</div>}
-                    </div>
+                    </div>}
                   </div>
                 }
               />
@@ -1041,12 +1085,14 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "elections") {
       return (
         <div className="space-y-6">
-          <SettingsGroup title="House leadership election" action={<SwitchControl checked={settings.enableHouseLeadershipElection} onChange={(v) => setSettings({ enableHouseLeadershipElection: v })} />}>
-            <div className="text-sm text-gray-600">Students can vote for Speaker of the House from the floor page.</div>
-          </SettingsGroup>
-          <SettingsGroup title="Organization elections" action={<SwitchControl checked={settings.enableOrganizationElections} onChange={(v) => setSettings({ enableOrganizationElections: v })} />}>
-            <div className="text-sm text-gray-600">Parties, committees, and caucuses can run their leadership elections.</div>
-          </SettingsGroup>
+          <DisabledBlock disabled={!settings.enableElections}>
+            <SettingsGroup title="House leadership election" action={<SwitchControl checked={settings.enableHouseLeadershipElection} onChange={(v) => setSettings({ enableHouseLeadershipElection: v })} disabled={!settings.enableElections} />}>
+              <div className="text-sm text-gray-600">Students can vote for Speaker of the House from the floor page.</div>
+            </SettingsGroup>
+            <SettingsGroup title="Organization elections" action={<SwitchControl checked={settings.enableOrganizationElections} onChange={(v) => setSettings({ enableOrganizationElections: v })} disabled={!settings.enableElections} />}>
+              <div className="text-sm text-gray-600">Parties, committees, and caucuses can run their leadership elections.</div>
+            </SettingsGroup>
+          </DisabledBlock>
         </div>
       );
     }
@@ -1160,8 +1206,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const description = mode === "setup" ? "Choose the default parties and committees for this class." : "Configure class-wide simulation rules and defaults.";
   const activeTabLabel = visibleTabs.find((tab) => tab.id === activeTab)?.label;
   const tabHeaderAction = () => {
-    if (activeTab === "bills") return <SwitchControl checked={settings.allowDrafts} onChange={(v) => setSettings({ allowDrafts: v })} />;
+    if (activeTab === "bills") return <SwitchControl checked={settings.enableBills} onChange={(v) => setSettings({ enableBills: v })} />;
     if (activeTab === "organizations") return <SwitchControl checked={settings.enableOrganizations} onChange={(v) => setSettings({ enableOrganizations: v, enableParties: v, enableCommittees: v, enableCaucuses: v })} />;
+    if (activeTab === "elections") return <SwitchControl checked={settings.enableElections} onChange={(v) => setSettings({ enableElections: v })} />;
     if (activeTab === "profiles") return <SwitchControl checked={settings.profilesEnabled} onChange={(v) => setSettings({ profilesEnabled: v })} />;
     return null;
   };
@@ -1193,7 +1240,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center justify-between gap-3">
+            <div className="mb-5 flex items-center gap-2">
               <h2 className="text-xl font-semibold text-gray-900">{activeTabLabel}</h2>
               {tabHeaderAction()}
             </div>
