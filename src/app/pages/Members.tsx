@@ -14,7 +14,14 @@ type Member = {
   constituency_name: string | null;
   avatar_url: string | null;
   role: "teacher" | "student";
+  committees: string[];
+  caucuses: string[];
+  passedBills: number;
+  failedBills: number;
+  cosponsors: number;
 };
+
+type SortKey = "name" | "party" | "passed" | "failed" | "cosponsors";
 
 function partyAbbr(party: string | null | undefined) {
   const normalized = String(party ?? "").toLowerCase();
@@ -29,6 +36,9 @@ function partyAbbr(party: string | null | undefined) {
 export function Members() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterParty, setFilterParty] = useState("all");
+  const [filterCommittee, setFilterCommittee] = useState("all");
+  const [filterCaucus, setFilterCaucus] = useState("all");
+  const [sortBy, setSortBy] = useState<SortKey>("name");
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
 
@@ -49,7 +59,42 @@ export function Members() {
 
         const { data, error } = await supabase.rpc("class_directory", { target_class: classId } as any);
         if (error) throw error;
-        setMembers((data ?? []) as any);
+        const userIds = ((data ?? []) as any[]).map((member) => member.user_id);
+        const [{ data: committeeRows }, { data: caucusRows }, { data: billRows }, { data: cosponsorRows }] = await Promise.all([
+          supabase.from("committee_members").select("user_id,committees(name,class_id)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
+          supabase.from("caucus_members").select("user_id,caucuses(title,class_id)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
+          supabase.from("bills").select("author_user_id,status").eq("class_id", classId),
+          supabase.from("bill_cosponsors").select("user_id").eq("class_id", classId),
+        ]);
+        const committeesByUser = new Map<string, string[]>();
+        for (const row of committeeRows ?? []) {
+          if ((row as any).committees?.class_id !== classId) continue;
+          const name = (row as any).committees?.name;
+          if (name) committeesByUser.set((row as any).user_id, [...(committeesByUser.get((row as any).user_id) ?? []), name]);
+        }
+        const caucusesByUser = new Map<string, string[]>();
+        for (const row of caucusRows ?? []) {
+          if ((row as any).caucuses?.class_id !== classId) continue;
+          const title = (row as any).caucuses?.title;
+          if (title) caucusesByUser.set((row as any).user_id, [...(caucusesByUser.get((row as any).user_id) ?? []), title]);
+        }
+        const passedByUser = new Map<string, number>();
+        const failedByUser = new Map<string, number>();
+        for (const bill of billRows ?? []) {
+          const author = (bill as any).author_user_id;
+          if ((bill as any).status === "passed") passedByUser.set(author, (passedByUser.get(author) ?? 0) + 1);
+          if ((bill as any).status === "failed") failedByUser.set(author, (failedByUser.get(author) ?? 0) + 1);
+        }
+        const cosponsorsByUser = new Map<string, number>();
+        for (const row of cosponsorRows ?? []) cosponsorsByUser.set((row as any).user_id, (cosponsorsByUser.get((row as any).user_id) ?? 0) + 1);
+        setMembers(((data ?? []) as any[]).map((member) => ({
+          ...member,
+          committees: committeesByUser.get(member.user_id) ?? [],
+          caucuses: caucusesByUser.get(member.user_id) ?? [],
+          passedBills: passedByUser.get(member.user_id) ?? 0,
+          failedBills: failedByUser.get(member.user_id) ?? 0,
+          cosponsors: cosponsorsByUser.get(member.user_id) ?? 0,
+        })));
       } catch (e: any) {
         toast.error(e.message || "Could not load members");
       } finally {
@@ -65,14 +110,28 @@ export function Members() {
     return Array.from(set).sort();
   }, [members]);
 
+  const committees = useMemo(() => Array.from(new Set(members.flatMap((member) => member.committees))).sort(), [members]);
+  const caucuses = useMemo(() => Array.from(new Set(members.flatMap((member) => member.caucuses))).sort(), [members]);
+
   const filteredMembers = useMemo(() => {
     return members.filter((member) => {
       const name = member.display_name ?? "";
       const matchesSearch = name.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesParty = member.role === "teacher" ? filterParty === "all" : filterParty === "all" || (member.party ?? "N/A") === filterParty;
-      return matchesSearch && matchesParty;
+      const matchesCommittee = filterCommittee === "all" || member.committees.includes(filterCommittee);
+      const matchesCaucus = filterCaucus === "all" || member.caucuses.includes(filterCaucus);
+      return matchesSearch && matchesParty && matchesCommittee && matchesCaucus;
+    }).sort((a, b) => {
+      if (sortBy === "passed") return b.passedBills - a.passedBills || (a.display_name ?? "").localeCompare(b.display_name ?? "");
+      if (sortBy === "failed") return b.failedBills - a.failedBills || (a.display_name ?? "").localeCompare(b.display_name ?? "");
+      if (sortBy === "cosponsors") return b.cosponsors - a.cosponsors || (a.display_name ?? "").localeCompare(b.display_name ?? "");
+      if (sortBy === "party") return (a.party ?? "").localeCompare(b.party ?? "") || (a.display_name ?? "").localeCompare(b.display_name ?? "");
+      if (a.role !== b.role) return a.role === "teacher" ? -1 : 1;
+      return (a.display_name ?? "").localeCompare(b.display_name ?? "");
     });
-  }, [members, searchQuery, filterParty]);
+  }, [members, searchQuery, filterParty, filterCommittee, filterCaucus, sortBy]);
+
+  const memberCount = filteredMembers.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -82,14 +141,14 @@ export function Members() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Members</h1>
           <p className="text-gray-600">
-            Directory of all simulation participants
+            {memberCount} member{memberCount === 1 ? "" : "s"} in the directory
           </p>
         </div>
 
         {/* Search and filters */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-          <div className="flex items-center gap-4">
-            <div className="flex-1 relative">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative min-w-[14rem] flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -110,6 +169,37 @@ export function Members() {
                   {p}
                 </option>
               ))}
+            </select>
+            <select
+              value={filterCommittee}
+              onChange={(e) => setFilterCommittee(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            >
+              <option value="all">All Committees</option>
+              {committees.map((committee) => (
+                <option key={committee} value={committee}>{committee}</option>
+              ))}
+            </select>
+            <select
+              value={filterCaucus}
+              onChange={(e) => setFilterCaucus(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            >
+              <option value="all">All Caucuses</option>
+              {caucuses.map((caucus) => (
+                <option key={caucus} value={caucus}>{caucus}</option>
+              ))}
+            </select>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortKey)}
+              className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+            >
+              <option value="name">Sort by name</option>
+              <option value="party">Sort by party</option>
+              <option value="passed">Most passed bills</option>
+              <option value="failed">Most failed bills</option>
+              <option value="cosponsors">Most cosponsors</option>
             </select>
           </div>
         </div>
@@ -141,6 +231,22 @@ export function Members() {
                   )}
                 </div>
               </div>
+              {member.role !== "teacher" && (
+                <div className="grid grid-cols-3 gap-2 border-t border-gray-100 pt-4 text-center text-sm">
+                  <div>
+                    <div className="font-semibold text-gray-900">{member.passedBills}</div>
+                    <div className="text-xs text-gray-500">Passed</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">{member.failedBills}</div>
+                    <div className="text-xs text-gray-500">Failed</div>
+                  </div>
+                  <div>
+                    <div className="font-semibold text-gray-900">{member.cosponsors}</div>
+                    <div className="text-xs text-gray-500">Cosponsors</div>
+                  </div>
+                </div>
+              )}
             </Link>
           ))}
         </div>

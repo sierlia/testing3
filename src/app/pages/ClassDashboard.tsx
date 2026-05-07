@@ -344,7 +344,7 @@ export function ClassDashboard() {
     if (stepId === "setup") {
       return (
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <Button onClick={() => navigate("/teacher/setup")} variant="outline" className="h-11 w-full justify-center px-5 text-base"><Settings className="mr-2 h-5 w-5" />Open setup</Button>
+          <Button onClick={() => navigate(`/teacher/class/${classId}/settings`)} variant="outline" className="h-11 w-full justify-center px-5 text-base"><Settings className="mr-2 h-5 w-5" />Open settings</Button>
           <Button onClick={() => void enableClass()} disabled={workflowBusy} className="h-11 w-full justify-center px-5 text-base"><Unlock className="mr-2 h-5 w-5" />Enable class</Button>
         </div>
       );

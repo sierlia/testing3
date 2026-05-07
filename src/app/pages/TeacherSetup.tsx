@@ -1,6 +1,6 @@
-import { type ReactNode, useEffect, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { Check, CheckSquare, Copy, FileText, Mail, Save, Settings, ShieldCheck, UserCog, Users, Vote } from "lucide-react";
+import { Check, CheckSquare, Copy, FileText, Mail, Save, Search, Settings, ShieldCheck, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
@@ -36,7 +36,6 @@ const tabs: Array<{ id: TabId; label: string; icon: any }> = [
   { id: "joining", label: "Joins and Invites", icon: Mail },
 ];
 
-const setupTabIds: TabId[] = ["parties", "committees"];
 const settingsTabIds: TabId[] = ["general", "bills", "organizations", "elections", "profiles", "permissions", "joining"];
 
 type AuthorityTag = { id: string; label: string; type: "teacher" | "role" | "member"; locked?: boolean };
@@ -117,14 +116,14 @@ function SettingsGroup({
   actionInline?: boolean;
 }) {
   return (
-    <section className="space-y-2 pb-3 last:pb-0">
+    <section className="space-y-3 pb-5 last:pb-0">
       <div className="flex min-h-6 items-center gap-3">
         <h3 className="shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
         {action && actionInline && <div className="shrink-0 self-center">{action}</div>}
         {(!actionGrow || !action) && <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />}
         {action && !actionInline && <div className={`${actionGrow ? "flex-1" : "shrink-0"} flex items-center justify-end self-center`}>{action}</div>}
       </div>
-      <div className={`space-y-2 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
+      <div className={`space-y-3 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
     </section>
   );
 }
@@ -244,7 +243,7 @@ function WordLimitInput({ label, value, max, onChange }: { label: string; value:
 function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const params = useParams();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabId>(mode === "setup" ? "parties" : "general");
+  const [activeTab, setActiveTab] = useState<TabId>("general");
   const [activeClassId, setActiveClassId] = useState<string | null>(params.classId ?? null);
   const [hasChanges, setHasChanges] = useState(false);
   const [inviteEmail, setInviteEmail] = useState("");
@@ -261,6 +260,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const [selectedQuickSetup, setSelectedQuickSetup] = useState<"all-online" | "blended" | "core" | null>(null);
   const [quickSetupModified, setQuickSetupModified] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const authoritySearchRef = useRef<HTMLDivElement | null>(null);
+  const billSubmissionSearchRef = useRef<HTMLDivElement | null>(null);
   const [settings, setSettingsState] = useState({
     allowedParties: ["Democratic Party", "Republican Party"],
     allowStudentCreatedParties: false,
@@ -541,6 +542,16 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     return () => window.removeEventListener("gavel:profile-layout-dirty", markDirty);
   }, [selectedQuickSetup]);
 
+  useEffect(() => {
+    const closeSearches = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (authorityOpen && target && !authoritySearchRef.current?.contains(target)) setAuthorityOpen(false);
+      if (billSubmissionOpen && target && !billSubmissionSearchRef.current?.contains(target)) setBillSubmissionOpen(false);
+    };
+    document.addEventListener("pointerdown", closeSearches);
+    return () => document.removeEventListener("pointerdown", closeSearches);
+  }, [authorityOpen, billSubmissionOpen]);
+
   const syncPartiesAndCommittees = async (classId: string) => {
     if (settings.allowedParties.length) {
       await supabase.from("parties").upsert(
@@ -605,10 +616,17 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               },
               parties: {
                 ...(existing?.parties ?? {}),
+                allowed: settings.allowedParties,
+                allowStudentCreated: settings.allowStudentCreatedParties,
+                requireApproval: settings.requirePartyApproval,
+                autoApprove: settings.autoApproveParties,
                 leadershipElectionMode: settings.partyLeadershipElectionMode,
               },
               committees: {
                 ...(existing?.committees ?? {}),
+                enabled: settings.enabledCommittees,
+                assignmentMode: settings.allowSelfJoinCommittees ? "self-join" : settings.committeeAssignmentMode,
+                allowSelfJoin: settings.allowSelfJoinCommittees,
                 chairElectionMode: settings.chairElectionMode,
                 chairVoteThresholdPct: settings.chairVoteThresholdPct,
                 votePassThresholdPct: Math.min(100, Math.max(1, Number(settings.committeeVotePassThresholdPct) || 50)),
@@ -753,7 +771,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       };
       const { error } = await supabase.from("classes").update({ settings: nextSettings }).eq("id", activeClassId);
       if (error) throw error;
-      if (mode === "setup") await syncPartiesAndCommittees(activeClassId);
+      await syncPartiesAndCommittees(activeClassId);
       window.dispatchEvent(new CustomEvent("gavel:save-profile-layout"));
       toast.success("Settings saved");
       setHasChanges(false);
@@ -1231,12 +1249,14 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 wide
                 control={
                   <div
+                    ref={billSubmissionSearchRef}
                     className="relative ml-auto w-[32rem] max-w-full"
                     onBlur={(event) => {
                       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setBillSubmissionOpen(false);
                     }}
                   >
                     <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => setBillSubmissionOpen(true)}>
+                      <Search className="h-4 w-4 shrink-0 text-gray-400" />
                       {selectedBillSubmissionStudents.map((student) => (
                         <button
                           key={student.id}
@@ -1334,35 +1354,58 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               control={<WordLimitInput label="" value={settings.organizationDescriptionWordLimit} max={500} onChange={(value) => setSettings({ organizationDescriptionWordLimit: value })} />}
             />
           </DisabledBlock>
-          <SettingsGroup title="Announcement boards" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.announcementBoardsEnabled, (v) => setSettings({ announcementBoardsEnabled: v }), !settings.enableOrganizations)}>
-            <DisabledBlock disabled={!settings.announcementBoardsEnabled}>
-              <SettingRow title="Announcement word limit" description="Maximum words allowed in announcements." control={<WordLimitInput label="" value={settings.announcementWordLimit} max={1000} onChange={(value) => setSettings({ announcementWordLimit: value })} />} />
-              <div className="space-y-0.5">
-                <Toggle checked={settings.announcementCommentsEnabled} onChange={(v) => setSettings({ announcementCommentsEnabled: v })} title="Enable comments" description="Members can comment on announcement boards." />
-                <DisabledBlock disabled={!settings.announcementCommentsEnabled} tight>
-                  <SettingRow sub title="Comment word limit" description="Maximum words allowed in announcement comments." control={<WordLimitInput label="" value={settings.commentWordLimit} max={500} onChange={(value) => setSettings({ commentWordLimit: value })} />} />
-                </DisabledBlock>
-              </div>
-              <Toggle checked={settings.announcementEmotesEnabled} onChange={(v) => setSettings({ announcementEmotesEnabled: v })} title="Enable emotes" description="Members can react to announcements and comments." />
-            </DisabledBlock>
-          </SettingsGroup>
           <SettingsGroup title="Parties" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableParties, (v) => setSettings({ enableParties: v }), !settings.enableOrganizations)}>
-            <div className="text-sm text-gray-600">Students can join parties and use party spaces.</div>
+            <DisabledBlock disabled={!settings.enableParties}>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {allParties.map((party) => (
+                  <Toggle key={party} checked={settings.allowedParties.includes(party)} onChange={() => setSettings({ allowedParties: settings.allowedParties.includes(party) ? settings.allowedParties.filter((p) => p !== party) : [...settings.allowedParties, party] })} title={party} description="Create and approve this party for the class." />
+                ))}
+              </div>
+              <Toggle checked={settings.allowStudentCreatedParties} onChange={(v) => setSettings({ allowStudentCreatedParties: v })} title="Allow student-created parties" description="Students can propose custom parties from the organizations area." />
+              <Toggle checked={settings.requirePartyApproval} onChange={(v) => setSettings({ requirePartyApproval: v })} title="Require approval for new parties" description="Student-created parties stay pending until approved." />
+              <SettingRow title="Party leadership" description="Choose how party leaders are selected." control={<SettingSelect value={settings.partyLeadershipElectionMode} onValueChange={(value) => setSettings({ partyLeadershipElectionMode: value })}>
+                <SelectItem value="elected">Members elect leadership</SelectItem>
+                <SelectItem value="teacher-assigned">Teacher assigns leadership</SelectItem>
+              </SettingSelect>} />
+            </DisabledBlock>
           </SettingsGroup>
           <SettingsGroup title="Committees" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableCommittees, (v) => setSettings({ enableCommittees: v }), !settings.enableOrganizations)}>
             <DisabledBlock disabled={!settings.enableCommittees}>
+              <div className="flex items-center justify-end gap-3">
+                <button onClick={() => setSettings({ enabledCommittees: [...allCommittees] })} className="text-sm font-medium text-blue-600">Select all</button>
+                <button onClick={() => setSettings({ enabledCommittees: [] })} className="text-sm font-medium text-blue-600">Deselect all</button>
+              </div>
+              <div className="grid gap-2">
+                {allCommittees.map((committee) => (
+                  <Toggle key={committee} checked={settings.enabledCommittees.includes(committee)} onChange={() => setSettings({ enabledCommittees: settings.enabledCommittees.includes(committee) ? settings.enabledCommittees.filter((c) => c !== committee) : [...settings.enabledCommittees, committee] })} title={committee} description="Enable this committee for bill referrals and membership." />
+                ))}
+              </div>
+              <Toggle checked={settings.allowSelfJoinCommittees} onChange={(v) => setSettings({ allowSelfJoinCommittees: v })} title="Allow students to join committees on their own" description="When off, students submit preference rankings." />
+              <div className="grid gap-3">
+                <SettingRow title="Assignment mode" description="Choose how students are assigned to committees." control={<SettingSelect value={settings.committeeAssignmentMode} onValueChange={(value) => setSettings({ committeeAssignmentMode: value })}>
+                    <SelectItem value="preference">Preference assigned</SelectItem>
+                    <SelectItem value="random">Random</SelectItem>
+                    <SelectItem value="self-join">Self join</SelectItem>
+                  </SettingSelect>} />
+                <SettingRow title="Chair selection" description="Choose how committee chairs are selected." control={<SettingSelect value={settings.chairElectionMode} onValueChange={(value) => setSettings({ chairElectionMode: value })}>
+                    <SelectItem value="elected">Committee vote</SelectItem>
+                    <SelectItem value="teacher-assigned">Teacher assigned</SelectItem>
+                  </SettingSelect>} />
+              </div>
               <SettingRow
                 title="Bill assignment authority"
                 description="Choose who can assign or refer bills to committees."
                 wide
                 control={
                   <div
+                    ref={authoritySearchRef}
                     className="relative min-w-0"
                     onBlur={(event) => {
                       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAuthorityOpen(false);
                     }}
                   >
                     <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => setAuthorityOpen(true)}>
+                      <Search className="h-4 w-4 shrink-0 text-gray-400" />
                       {authorityTags.map((tag) => (
                         <button
                           key={`${tag.type}:${tag.id}`}
@@ -1427,6 +1470,18 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </SettingsGroup>
           <SettingsGroup title="Caucuses" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableCaucuses, (v) => setSettings({ enableCaucuses: v }), !settings.enableOrganizations)}>
             <div className="text-sm text-gray-600">Students can form caucuses and post announcements.</div>
+          </SettingsGroup>
+          <SettingsGroup title="Announcement boards" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.announcementBoardsEnabled, (v) => setSettings({ announcementBoardsEnabled: v }), !settings.enableOrganizations)}>
+            <DisabledBlock disabled={!settings.announcementBoardsEnabled}>
+              <SettingRow title="Announcement word limit" description="Maximum words allowed in announcements." control={<WordLimitInput label="" value={settings.announcementWordLimit} max={1000} onChange={(value) => setSettings({ announcementWordLimit: value })} />} />
+              <div className="space-y-0.5">
+                <Toggle checked={settings.announcementCommentsEnabled} onChange={(v) => setSettings({ announcementCommentsEnabled: v })} title="Enable comments" description="Members can comment on announcement boards." />
+                <DisabledBlock disabled={!settings.announcementCommentsEnabled} tight>
+                  <SettingRow sub title="Comment word limit" description="Maximum words allowed in announcement comments." control={<WordLimitInput label="" value={settings.commentWordLimit} max={500} onChange={(value) => setSettings({ commentWordLimit: value })} />} />
+                </DisabledBlock>
+              </div>
+              <Toggle checked={settings.announcementEmotesEnabled} onChange={(v) => setSettings({ announcementEmotesEnabled: v })} title="Enable emotes" description="Members can react to announcements and comments." />
+            </DisabledBlock>
           </SettingsGroup>
         </div>
       );
@@ -1545,9 +1600,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     return null;
   };
 
-  const visibleTabs = tabs.filter((tab) => (mode === "setup" ? setupTabIds.includes(tab.id) : settingsTabIds.includes(tab.id)));
-  const heading = mode === "setup" ? "Set Up Class" : "Simulation Settings";
-  const description = mode === "setup" ? "Choose the default parties and committees for this class." : "";
+  const visibleTabs = tabs.filter((tab) => settingsTabIds.includes(tab.id));
+  const heading = "Simulation Settings";
+  const description = "";
   const activeTabLabel = visibleTabs.find((tab) => tab.id === activeTab)?.label;
   const tabHeaderAction = () => {
     if (activeTab === "bills") return billSubmissionSelect;
@@ -1609,7 +1664,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
 }
 
 export function TeacherSetup() {
-  return <TeacherSettingsPage mode="setup" />;
+  return <TeacherSettingsPage mode="settings" />;
 }
 
 export function SimulationSettings() {

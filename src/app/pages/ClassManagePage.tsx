@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Activity, ArrowDown, ArrowUp, Check, Copy, Download, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, Check, Copy, Download, FileUp, GripVertical, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -99,10 +99,12 @@ export function ClassManagePage() {
   const [exportIncludeSummary, setExportIncludeSummary] = useState(false);
   const [rosterSettingsOpen, setRosterSettingsOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
+  const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
   const [classSettings, setClassSettings] = useState<Record<string, any>>({});
   const [rosterPreferences, setRosterPreferences] = useState<RosterPreferences>(defaultRosterPreferences);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
+  const rosterImportRef = useRef<HTMLInputElement | null>(null);
 
   const normalizeRosterPreferences = (raw: any): RosterPreferences => {
     const customColumns = Array.isArray(raw?.customColumns)
@@ -127,10 +129,10 @@ export function ClassManagePage() {
     setClassSettings(nextSettings);
     const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
     if (error) {
-      toast.error(error.message || "Could not save roster settings");
+      toast.error(error.message || "Could not save roster");
       return;
     }
-    if (!options.silent) toast.success("Roster settings saved");
+    if (!options.silent) toast.success("Roster saved");
   };
 
   const loadClassData = async () => {
@@ -487,8 +489,8 @@ export function ClassManagePage() {
     );
   };
 
-  const addCustomColumn = async () => {
-    const label = newColumnName.trim();
+  const addCustomColumn = async (fallbackLabel?: string) => {
+    const label = newColumnName.trim() || fallbackLabel?.trim();
     if (!label) return toast.error("Enter a column name");
     const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `custom-${Date.now()}`;
     await saveRosterPreferences({
@@ -515,6 +517,17 @@ export function ClassManagePage() {
     await saveRosterPreferences({ ...rosterPreferences, customColumns: nextColumns });
   };
 
+  const reorderCustomColumn = async (sourceId: string, targetId: string) => {
+    if (sourceId === targetId) return;
+    const nextColumns = [...rosterPreferences.customColumns];
+    const from = nextColumns.findIndex((column) => column.id === sourceId);
+    const to = nextColumns.findIndex((column) => column.id === targetId);
+    if (from < 0 || to < 0) return;
+    const [column] = nextColumns.splice(from, 1);
+    nextColumns.splice(to, 0, column);
+    await saveRosterPreferences({ ...rosterPreferences, customColumns: nextColumns }, { silent: true });
+  };
+
   const deleteCustomColumn = async (columnId: string) => {
     const nextValues = Object.fromEntries(
       Object.entries(rosterPreferences.customValues).map(([memberId, values]) => {
@@ -538,6 +551,80 @@ export function ClassManagePage() {
     };
     await saveRosterPreferences(nextRoster);
     setRosterSettingsOpen(false);
+  };
+
+  const parseSpreadsheetText = (text: string) => {
+    const delimiter = text.includes("\t") ? "\t" : ",";
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cell = "";
+    let quoted = false;
+    for (let index = 0; index < text.length; index += 1) {
+      const char = text[index];
+      const next = text[index + 1];
+      if (char === '"' && quoted && next === '"') {
+        cell += '"';
+        index += 1;
+      } else if (char === '"') {
+        quoted = !quoted;
+      } else if (char === delimiter && !quoted) {
+        row.push(cell.trim());
+        cell = "";
+      } else if ((char === "\n" || char === "\r") && !quoted) {
+        if (char === "\r" && next === "\n") index += 1;
+        row.push(cell.trim());
+        if (row.some(Boolean)) rows.push(row);
+        row = [];
+        cell = "";
+      } else {
+        cell += char;
+      }
+    }
+    row.push(cell.trim());
+    if (row.some(Boolean)) rows.push(row);
+    return rows;
+  };
+
+  const importCustomColumnsFromFile = async (file: File) => {
+    const rows = parseSpreadsheetText(await file.text());
+    const [headers, ...dataRows] = rows;
+    if (!headers?.length) return toast.error("Could not find spreadsheet headers");
+    const normalizedHeaders = headers.map((header) => header.trim());
+    const standardHeaders = new Set(["name", "email", "role", "positions", "party", "constituency", "sponsored", "passed", "failed", "cosponsored", "letters", "committees", "caucuses"]);
+    const customHeaderIndexes = normalizedHeaders
+      .map((header, index) => ({ header, index }))
+      .filter(({ header }) => header && !standardHeaders.has(header.toLowerCase()));
+    if (!customHeaderIndexes.length) return toast.error("No custom columns found to import");
+
+    const nameIndex = normalizedHeaders.findIndex((header) => header.toLowerCase() === "name");
+    const emailIndex = normalizedHeaders.findIndex((header) => header.toLowerCase() === "email");
+    const existingByLabel = new Map(rosterPreferences.customColumns.map((column) => [column.label.toLowerCase(), column]));
+    const importedColumns = customHeaderIndexes.map(({ header }) => existingByLabel.get(header.toLowerCase()) ?? {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `custom-${Date.now()}-${header}`,
+      label: header,
+    });
+    const memberByEmail = new Map(students.map((student) => [student.email.toLowerCase(), student]));
+    const memberByName = new Map(students.map((student) => [displayPersonName(student.name).toLowerCase(), student]));
+    const nextValues = { ...rosterPreferences.customValues };
+    for (const row of dataRows) {
+      const matched = emailIndex >= 0 ? memberByEmail.get((row[emailIndex] ?? "").toLowerCase()) : undefined;
+      const member = matched ?? (nameIndex >= 0 ? memberByName.get((row[nameIndex] ?? "").toLowerCase()) : undefined);
+      if (!member) continue;
+      nextValues[member.id] = { ...(nextValues[member.id] ?? {}) };
+      customHeaderIndexes.forEach(({ index }, columnIndex) => {
+        const value = row[index] ?? "";
+        if (value) nextValues[member.id][importedColumns[columnIndex].id] = value;
+      });
+    }
+    await saveRosterPreferences({
+      ...rosterPreferences,
+      customColumns: [
+        ...rosterPreferences.customColumns,
+        ...importedColumns.filter((column) => !rosterPreferences.customColumns.some((existing) => existing.id === column.id)),
+      ],
+      customValues: nextValues,
+    });
+    toast.success("Spreadsheet imported");
   };
 
   const headerFor = (key: string) => {
@@ -839,9 +926,8 @@ export function ClassManagePage() {
                         <SelectItem value="letters">Sort letters</SelectItem>
                       </SelectContent>
                     </Select>
-                    <button type="button" onClick={() => setRosterSettingsOpen(true)} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <button type="button" onClick={() => setRosterSettingsOpen(true)} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50" aria-label="Settings">
                       <Settings className="h-4 w-4" />
-                      Roster settings
                     </button>
                     <button type="button" onClick={() => setExportDialogOpen(true)} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <Download className="h-4 w-4" />
@@ -900,15 +986,96 @@ export function ClassManagePage() {
       )}
       {rosterSettingsOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl">
+          <div className="w-full max-w-4xl overflow-hidden rounded-lg bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Roster settings</h2>
-                <p className="mt-1 text-sm text-gray-600">Add custom roster columns and choose the default row order.</p>
+              <div className="flex items-center gap-3">
+                <Settings className="h-5 w-5 text-blue-600" />
+                <p className="text-sm text-gray-600">Customize columns, row order, and imported roster data.</p>
               </div>
               <button type="button" onClick={() => setRosterSettingsOpen(false)} className="rounded-md px-2 py-1 text-sm font-medium text-gray-500 hover:bg-gray-100">Close</button>
             </div>
             <div className="max-h-[70vh] space-y-6 overflow-y-auto p-5">
+              <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">Preview</div>
+                    <div className="text-sm text-gray-600">Drag custom columns to reorder the roster.</div>
+                  </div>
+                  <button type="button" onClick={() => rosterImportRef.current?.click()} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                    <FileUp className="h-4 w-4" />
+                    Import spreadsheet
+                  </button>
+                  <input
+                    ref={rosterImportRef}
+                    type="file"
+                    accept=".csv,.tsv,.txt"
+                    className="hidden"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      event.currentTarget.value = "";
+                      if (file) void importCustomColumnsFromFile(file);
+                    }}
+                  />
+                </div>
+                <div className="overflow-x-auto rounded-md border border-gray-200 bg-white">
+                  <div
+                    className="grid border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500"
+                    style={{
+                      minWidth: `${640 + rosterPreferences.customColumns.length * 160}px`,
+                      gridTemplateColumns: `180px 180px ${rosterPreferences.customColumns.map(() => "160px").join(" ")} 160px 100px 120px 80px`,
+                    }}
+                  >
+                    {["Name", "Email", ...rosterPreferences.customColumns.map((column) => column.label), "Party", "Passed", "Cosponsors"].map((label, index) => (
+                      <div
+                        key={`${label}-${index}`}
+                        draggable={index >= 2 && index < 2 + rosterPreferences.customColumns.length}
+                        onDragStart={() => {
+                          const column = rosterPreferences.customColumns[index - 2];
+                          if (column) setDraggingColumnId(column.id);
+                        }}
+                        onDragOver={(event) => {
+                          if (index >= 2 && index < 2 + rosterPreferences.customColumns.length) event.preventDefault();
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          const column = rosterPreferences.customColumns[index - 2];
+                          if (draggingColumnId && column) void reorderCustomColumn(draggingColumnId, column.id);
+                          setDraggingColumnId(null);
+                        }}
+                        onDragEnd={() => setDraggingColumnId(null)}
+                        className={`flex min-h-10 items-center gap-2 border-r border-gray-200 px-3 ${index >= 2 && index < 2 + rosterPreferences.customColumns.length ? "cursor-grab bg-white" : ""}`}
+                      >
+                        {index >= 2 && index < 2 + rosterPreferences.customColumns.length && <GripVertical className="h-4 w-4 text-gray-400" />}
+                        <span className="truncate">{label}</span>
+                      </div>
+                    ))}
+                    <button type="button" onClick={() => void addCustomColumn("New column")} className="flex min-h-10 items-center justify-center text-blue-600 hover:bg-blue-50" aria-label="Add column">
+                      <Plus className="h-4 w-4" />
+                    </button>
+                  </div>
+                  {students.filter((student) => student.status === "approved").slice(0, 3).map((student) => (
+                    <div
+                      key={student.id}
+                      className="grid border-b border-gray-100 text-sm last:border-b-0"
+                      style={{
+                        minWidth: `${640 + rosterPreferences.customColumns.length * 160}px`,
+                        gridTemplateColumns: `180px 180px ${rosterPreferences.customColumns.map(() => "160px").join(" ")} 160px 100px 120px 80px`,
+                      }}
+                    >
+                      <div className="truncate border-r border-gray-100 px-3 py-2 font-medium text-gray-900">{displayPersonName(student.name)}</div>
+                      <div className="truncate border-r border-gray-100 px-3 py-2 text-gray-600">{student.email}</div>
+                      {rosterPreferences.customColumns.map((column) => (
+                        <div key={column.id} className="truncate border-r border-gray-100 px-3 py-2 text-gray-600">{customColumnValue(student.id, column.id) || "-"}</div>
+                      ))}
+                      <div className="truncate border-r border-gray-100 px-3 py-2 text-gray-600">{student.party}</div>
+                      <div className="border-r border-gray-100 px-3 py-2 text-gray-600">{student.passed.length}</div>
+                      <div className="border-r border-gray-100 px-3 py-2 text-gray-600">{student.cosponsored.length}</div>
+                      <div />
+                    </div>
+                  ))}
+                </div>
+              </section>
+
               <section className="grid gap-3 md:grid-cols-[190px_1fr] md:items-center">
                 <div>
                   <div className="text-sm font-semibold text-gray-900">Default row order</div>
@@ -981,7 +1148,7 @@ export function ClassManagePage() {
             </div>
             <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
               <button type="button" onClick={() => setRosterSettingsOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
-              <Button type="button" onClick={() => void saveRosterSettings()}>Save roster settings</Button>
+              <Button type="button" onClick={() => void saveRosterSettings()}>Save</Button>
             </div>
           </div>
         </div>
@@ -992,7 +1159,6 @@ export function ClassManagePage() {
             <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">Export roster</h2>
-                <p className="mt-1 text-sm text-gray-600">Choose columns and spreadsheet formatting before downloading.</p>
               </div>
               <button type="button" onClick={() => setExportDialogOpen(false)} className="rounded-md px-2 py-1 text-sm font-medium text-gray-500 hover:bg-gray-100">Close</button>
             </div>
@@ -1001,7 +1167,6 @@ export function ClassManagePage() {
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <div className="text-sm font-semibold text-gray-900">Columns</div>
-                    <div className="text-sm text-gray-600">Only Name is selected by default.</div>
                   </div>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => setExportColumns(exportColumnOptions.map((column) => column.key))} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Select all</button>
@@ -1026,7 +1191,7 @@ export function ClassManagePage() {
               <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <div>
                   <div className="text-sm font-semibold text-gray-900">Excel formatting</div>
-                  <div className="text-sm text-gray-600">Controls how Excel or Sheets reads the file.</div>
+                  <div className="text-sm text-gray-600">Control what is exported.</div>
                 </div>
                 <label className="block text-sm font-medium text-gray-700">
                   File type
