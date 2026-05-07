@@ -50,6 +50,7 @@ export function TeacherCommitteeAssignments() {
         const settings = (classRow as any)?.settings ?? {};
         setClassSettings(settings);
         const savedCapacities = settings?.committees?.capacities ?? {};
+        const savedCapacitiesByName = settings?.committees?.capacitiesByName ?? {};
         setAssignmentsPerStudent(Math.max(1, Number(settings?.committees?.assignmentsPerStudent ?? 1) || 1));
 
         const { data: committeeRows, error: cErr } = await supabase
@@ -71,7 +72,7 @@ export function TeacherCommitteeAssignments() {
         const numCommittees = Math.max(1, (committeeRows ?? []).length);
         const baseCap = Math.ceil(numStudents / numCommittees);
 
-        const nextCommittees = (committeeRows ?? []).map((c: any) => ({ id: c.id, name: c.name, capacity: Math.max(1, Number(savedCapacities[c.id] ?? baseCap) || baseCap) }));
+        const nextCommittees = (committeeRows ?? []).map((c: any) => ({ id: c.id, name: c.name, capacity: Math.max(1, Number(savedCapacities[c.id] ?? savedCapacitiesByName[c.name] ?? baseCap) || baseCap) }));
         setCommittees(nextCommittees);
         setGlobalCapacity(baseCap);
 
@@ -188,11 +189,13 @@ export function TeacherCommitteeAssignments() {
   const saveCapacitySettings = async (nextCommittees = committees, nextAssignmentsPerStudent = assignmentsPerStudent) => {
     if (!classId) return;
     const capacities = Object.fromEntries(nextCommittees.map((committee) => [committee.id, committee.capacity]));
+    const capacitiesByName = Object.fromEntries(nextCommittees.map((committee) => [committee.name, committee.capacity]));
     const nextSettings = {
       ...classSettings,
       committees: {
         ...(classSettings.committees ?? {}),
         capacities,
+        capacitiesByName,
         assignmentsPerStudent: nextAssignmentsPerStudent,
       },
     };

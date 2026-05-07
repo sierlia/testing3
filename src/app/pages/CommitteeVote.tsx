@@ -8,6 +8,7 @@ import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, updateCom
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
 import { closeCommitteeVote, finalizeCommitteeVote, submitCommitteeReport } from "../services/bills";
+import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 
 type BillRow = {
   id: string;
@@ -475,6 +476,9 @@ export function CommitteeVote() {
         </div>
         <div className="mb-6">
           <CommitteeTabs committeeId={committeeId} active="vote" />
+        </div>
+        <div className="mb-6">
+          <SubcommitteeRolesPanel committeeId={committeeId} compact />
         </div>
 
         {loading ? (

@@ -11,6 +11,7 @@ import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "../components/CommitteeTabs";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type Subcommittee = { id: string; committee_id: string; class_id: string; name: string; description: string | null; created_at: string };
@@ -91,6 +92,7 @@ export function CommitteeDashboard() {
   const [joining, setJoining] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [allowSelfJoin, setAllowSelfJoin] = useState(false);
+  const [committeeCapacity, setCommitteeCapacity] = useState(0);
   const [subcommittees, setSubcommittees] = useState<Subcommittee[]>([]);
   const [newSubcommitteeName, setNewSubcommitteeName] = useState("");
 
@@ -187,6 +189,7 @@ export function CommitteeDashboard() {
           const { data: cls } = await supabase.from("classes").select("settings").eq("id", (c as any).class_id).maybeSingle();
           const settings = (cls as any)?.settings ?? {};
           nextAllowSelfJoin = !!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join";
+          setCommitteeCapacity(Number(settings?.committees?.capacities?.[committeeId] ?? settings?.committees?.capacitiesByName?.[(c as any).name] ?? 0));
         }
         setAllowSelfJoin(nextAllowSelfJoin);
         const { data: subRows } = await supabase
@@ -798,6 +801,10 @@ export function CommitteeDashboard() {
   const join = async () => {
     if (!meId) return;
     if (!allowSelfJoin) return;
+    if (committeeCapacity > 0 && members.length >= committeeCapacity) {
+      toast.error("This committee is full");
+      return;
+    }
     setJoining(true);
     try {
       const { error } = await supabase
@@ -991,11 +998,11 @@ export function CommitteeDashboard() {
             {!myRole && allowSelfJoin && viewerRole === "student" && (
               <button
                 onClick={() => void join()}
-                disabled={joining}
+                disabled={joining || (committeeCapacity > 0 && members.length >= committeeCapacity)}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors disabled:opacity-50 bg-blue-600 text-white hover:bg-blue-700"
               >
                 <UserPlus className="w-4 h-4" />
-                {joining ? "Joining" : "Join"}
+                {committeeCapacity > 0 && members.length >= committeeCapacity ? "Full" : joining ? "Joining" : "Join"}
               </button>
             )}
           </div>
@@ -1006,13 +1013,23 @@ export function CommitteeDashboard() {
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="space-y-6">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-lg font-semibold text-gray-900">About</h2>
-                {(isLeader || isTeacher) && !editingAbout && (
-                  <button onClick={() => setEditingAbout(true)} className="text-blue-600 hover:text-blue-700 transition-colors">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                )}
+              <div className="mb-3 flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-gray-900">About</h2>
+                  {subcommittees.length ? (
+                    <div className="mt-1 max-w-xl text-xs text-gray-500 sm:hidden">{subcommittees.map((item) => item.name).join(", ")}</div>
+                  ) : null}
+                </div>
+                <div className="flex items-start gap-3">
+                  {subcommittees.length ? (
+                    <div className="hidden max-w-sm text-right text-xs leading-5 text-gray-500 sm:block">{subcommittees.map((item) => item.name).join(", ")}</div>
+                  ) : null}
+                  {(isLeader || isTeacher) && !editingAbout && (
+                    <button onClick={() => setEditingAbout(true)} className="text-blue-600 hover:text-blue-700 transition-colors">
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
               </div>
               {editingAbout ? (
                 <div className="space-y-3">
@@ -1037,14 +1054,8 @@ export function CommitteeDashboard() {
               ) : (
                 <p className="text-gray-700 whitespace-pre-line">{committee.description || "No description yet."}</p>
               )}
-            </div>
-
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-gray-900">Subcommittees</h2>
-              </div>
               {(isLeader || isTeacher) && (
-                <div className="mb-3 flex gap-2">
+                <div className="mt-4 flex gap-2 border-t border-gray-100 pt-4">
                   <input
                     value={newSubcommitteeName}
                     onChange={(event) => setNewSubcommitteeName(event.target.value)}
@@ -1060,22 +1071,15 @@ export function CommitteeDashboard() {
                   </button>
                 </div>
               )}
-              {subcommittees.length ? (
-                <div className="grid gap-2 sm:grid-cols-2">
+              {(isLeader || isTeacher) && subcommittees.length ? (
+                <div className="mt-2 flex flex-wrap gap-1">
                   {subcommittees.map((subcommittee) => (
-                    <div key={subcommittee.id} className="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
-                      <span className="font-medium text-gray-800">{subcommittee.name}</span>
-                      {(isLeader || isTeacher) && (
-                        <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} className="rounded-md p-1 text-gray-500 hover:bg-red-50 hover:text-red-600" aria-label="Delete subcommittee">
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
+                    <button key={subcommittee.id} type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 hover:bg-red-50 hover:text-red-600">
+                      {subcommittee.name} x
+                    </button>
                   ))}
                 </div>
-              ) : (
-                <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">No subcommittees yet.</div>
-              )}
+              ) : null}
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -1205,10 +1209,12 @@ export function CommitteeDashboard() {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <SubcommitteeRolesPanel committeeId={committeeId} compact />
+            <div className="mt-6">
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Members</h2>
-              <span className="text-sm text-gray-500">{members.length} member{members.length === 1 ? "" : "s"}</span>
+              <span className="text-sm text-gray-500">{committeeCapacity > 0 ? `${members.length}/${committeeCapacity}` : members.length} member{members.length === 1 ? "" : "s"}</span>
             </div>
             <div className="flex gap-2 mb-4">
               <input
@@ -1287,6 +1293,7 @@ export function CommitteeDashboard() {
                 </div>
               ))}
               {visibleMembers.length === 0 && <div className="text-sm text-gray-500">No members found.</div>}
+            </div>
             </div>
           </div>
         </div>

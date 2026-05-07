@@ -8,9 +8,11 @@ import { OrganizationsLayout } from "./OrganizationsLayout";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type CommitteeRow = { id: string; name: string; description: string | null; created_at: string };
+type SubcommitteeRow = { id: string; committee_id: string; name: string };
 type CommitteesCache = {
   committees: CommitteeRow[];
   memberCounts: Record<string, number>;
+  subcommitteesByCommitteeId: Record<string, string[]>;
   leadershipNames: Record<string, { chair?: string; ranking?: string }>;
   role: "teacher" | "student" | null;
   settings: any;
@@ -28,6 +30,7 @@ export function CommitteesHome() {
   const [loading, setLoading] = useState(true);
   const [committees, setCommittees] = useState<CommitteeRow[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
+  const [subcommitteesByCommitteeId, setSubcommitteesByCommitteeId] = useState<Record<string, string[]>>({});
   const [memberNames, setMemberNames] = useState<Record<string, string[]>>({});
   const [leadershipNames, setLeadershipNames] = useState<Record<string, { chair?: string; ranking?: string }>>({});
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
@@ -47,6 +50,7 @@ export function CommitteesHome() {
     if (committeesHomeCache) {
       setCommittees(committeesHomeCache.committees);
       setMemberCounts(committeesHomeCache.memberCounts);
+      setSubcommitteesByCommitteeId(committeesHomeCache.subcommitteesByCommitteeId);
       setLeadershipNames(committeesHomeCache.leadershipNames);
       setRole(committeesHomeCache.role);
       setSettings(committeesHomeCache.settings);
@@ -118,6 +122,14 @@ export function CommitteesHome() {
         }
 
         const ids = finalRows.map((r) => r.id);
+        const { data: subRows } = ids.length
+          ? await supabase.from("subcommittees").select("id,committee_id,name").in("committee_id", ids)
+          : ({ data: [] } as any);
+        const subsByCommittee: Record<string, string[]> = {};
+        for (const row of (subRows ?? []) as SubcommitteeRow[]) {
+          subsByCommittee[row.committee_id] = [...(subsByCommittee[row.committee_id] ?? []), row.name];
+        }
+        setSubcommitteesByCommitteeId(subsByCommittee);
         const { data: memRows } = await supabase
           .from("committee_members")
           .select("committee_id,user_id,role")
@@ -150,6 +162,7 @@ export function CommitteesHome() {
         committeesHomeCache = {
           committees: finalRows as any,
           memberCounts: counts,
+          subcommitteesByCommitteeId: subsByCommittee,
           leadershipNames: leaders,
           role: ((profile as any)?.role ?? null) as any,
           settings: s,
@@ -171,12 +184,18 @@ export function CommitteesHome() {
     const query = searchQuery.toLowerCase().trim();
     return committees
       .filter((committee) => !query || committee.name.toLowerCase().includes(query) || (committee.description ?? "").toLowerCase().includes(query) || (memberNames[committee.id] ?? []).some((name) => name.toLowerCase().includes(query)))
-      .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0, leadership: leadershipNames[c.id] ?? {} }));
-  }, [committees, leadershipNames, memberCounts, memberNames, searchQuery]);
+      .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0, capacity: Number(settings?.committees?.capacities?.[c.id] ?? settings?.committees?.capacitiesByName?.[c.name] ?? 0), subcommittees: subcommitteesByCommitteeId[c.id] ?? [], leadership: leadershipNames[c.id] ?? {} }));
+  }, [committees, leadershipNames, memberCounts, memberNames, searchQuery, settings, subcommitteesByCommitteeId]);
   const canSelfJoin = role === "student" && (!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
 
   const joinCommittee = async (committeeId: string) => {
     if (!meId || joinedCommitteeIds.has(committeeId)) return;
+    const committee = committees.find((item) => item.id === committeeId);
+    const capacity = Number(settings?.committees?.capacities?.[committeeId] ?? (committee ? settings?.committees?.capacitiesByName?.[committee.name] : 0) ?? 0);
+    if (capacity > 0 && (memberCounts[committeeId] ?? 0) >= capacity) {
+      toast.error("This committee is full");
+      return;
+    }
     setJoiningCommitteeId(committeeId);
     try {
       const { error } = await supabase
@@ -373,13 +392,19 @@ export function CommitteesHome() {
                       {c.description ? <div className="text-sm text-gray-600 mt-1 line-clamp-2">{c.description}</div> : null}
                       <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
                         <Users className="w-3.5 h-3.5" />
-                        {c.memberCount} members
+                        {c.capacity > 0 ? `${c.memberCount}/${c.capacity} members` : `${c.memberCount} members`}
                       </div>
                       <div className="mt-2 grid gap-1 text-xs text-gray-600 sm:grid-cols-2">
                         <div><span className="font-semibold text-gray-700">Chair:</span> {c.leadership.chair ?? "None"}</div>
                         <div><span className="font-semibold text-gray-700">Ranking:</span> {c.leadership.ranking ?? "None"}</div>
                       </div>
                     </div>
+                    {c.subcommittees.length ? (
+                      <div className="hidden w-72 shrink-0 border-l border-gray-200 pl-4 text-xs text-gray-500 lg:block">
+                        <div className="mb-1 font-semibold text-gray-700">Subcommittees</div>
+                        <div className="line-clamp-5">{c.subcommittees.join(", ")}</div>
+                      </div>
+                    ) : null}
                     <div className="flex items-center gap-2 shrink-0">
                       {canSelfJoin && (
                         <button
@@ -388,7 +413,7 @@ export function CommitteesHome() {
                             if (joinedCommitteeIds.has(c.id)) void leaveCommittee(c.id);
                             else void joinCommittee(c.id);
                           }}
-                          disabled={joiningCommitteeId === c.id || leavingCommitteeId === c.id}
+                          disabled={joiningCommitteeId === c.id || leavingCommitteeId === c.id || (!joinedCommitteeIds.has(c.id) && c.capacity > 0 && c.memberCount >= c.capacity)}
                           className={`inline-flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-60 ${
                             joinedCommitteeIds.has(c.id)
                               ? "border border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
@@ -396,7 +421,7 @@ export function CommitteesHome() {
                           }`}
                         >
                           {joinedCommitteeIds.has(c.id) ? <LogOut className="w-4 h-4" /> : <UserPlus className="w-4 h-4" />}
-                          {joinedCommitteeIds.has(c.id) ? (leavingCommitteeId === c.id ? "Leaving" : "Leave") : joiningCommitteeId === c.id ? "Joining" : "Join"}
+                          {joinedCommitteeIds.has(c.id) ? (leavingCommitteeId === c.id ? "Leaving" : "Leave") : c.capacity > 0 && c.memberCount >= c.capacity ? "Full" : joiningCommitteeId === c.id ? "Joining" : "Join"}
                         </button>
                       )}
                       {role === "teacher" && (

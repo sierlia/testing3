@@ -9,6 +9,7 @@ import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { postCommitteeProgress, proposeBillForCommitteeVote } from "../services/bills";
+import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 
 type BillRow = {
   id: string;
@@ -18,6 +19,7 @@ type BillRow = {
   author_user_id: string;
   status: string;
 };
+type Subcommittee = { id: string; name: string };
 
 const workspaceCache = new Map<
   string,
@@ -25,7 +27,7 @@ const workspaceCache = new Map<
     classId: string | null;
     committeeName: string;
     myCommitteeRole: string | null;
-    bills: Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string }>;
+    bills: Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string; subcommitteeId: string | null; subcommitteeName: string | null }>;
     selectedBillId: string | null;
   }
 >();
@@ -39,7 +41,10 @@ export function CommitteeWorkspace() {
   const [myCommitteeRole, setMyCommitteeRole] = useState<string | null>(null);
   const [committeeName, setCommitteeName] = useState<string>(() => window.localStorage.getItem(committeeNameStorageKey(committeeId)) || "Committee");
 
-  const [bills, setBills] = useState<Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string }>>([]);
+  const [bills, setBills] = useState<Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string; subcommitteeId: string | null; subcommitteeName: string | null }>>([]);
+  const [subcommittees, setSubcommittees] = useState<Subcommittee[]>([]);
+  const [mySubcommitteeIds, setMySubcommitteeIds] = useState<Set<string>>(new Set());
+  const [isTeacher, setIsTeacher] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [seenBillIds, setSeenBillIds] = useState<Set<string>>(() => new Set());
   const [textView, setTextView] = useState<"edited" | "clean" | "original">("edited");
@@ -83,15 +88,26 @@ export function CommitteeWorkspace() {
         }
         if (!cid) return;
 
-        const { data: myMembership } = await supabase
+        const [{ data: myMembership }, { data: profile }, { data: subRows }] = await Promise.all([
+          supabase
           .from("committee_members")
           .select("role")
           .eq("committee_id", committeeId)
-          .eq("user_id", uid)
-          .maybeSingle();
+            .eq("user_id", uid)
+            .maybeSingle(),
+          supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle(),
+          supabase.from("subcommittees").select("id,name").eq("committee_id", committeeId).order("created_at", { ascending: true }),
+        ]);
         setMyCommitteeRole((myMembership as any)?.role ?? null);
+        setIsTeacher((profile as any)?.role === "teacher");
+        setSubcommittees((subRows ?? []) as Subcommittee[]);
+        const subIds = (subRows ?? []).map((row: any) => row.id);
+        const { data: mySubRows } = subIds.length
+          ? await supabase.from("subcommittee_members").select("subcommittee_id").in("subcommittee_id", subIds).eq("user_id", uid)
+          : ({ data: [] } as any);
+        setMySubcommitteeIds(new Set((mySubRows ?? []).map((row: any) => row.subcommittee_id)));
 
-        const { data: refs, error: rErr } = await supabase.from("bill_referrals").select("bill_id").eq("committee_id", committeeId);
+        const { data: refs, error: rErr } = await supabase.from("bill_referrals").select("bill_id,subcommittee_id,subcommittees(name)").eq("committee_id", committeeId);
         if (rErr) throw rErr;
         const billIds = (refs ?? []).map((r: any) => r.bill_id);
         if (!billIds.length) {
@@ -114,6 +130,7 @@ export function CommitteeWorkspace() {
           .select("user_id,display_name")
           .in("user_id", sponsorIds.length ? sponsorIds : ["00000000-0000-0000-0000-000000000000"]);
         const sponsorMap = new Map((sponsors ?? []).map((s: any) => [s.user_id, s.display_name]));
+        const refMap = new Map((refs ?? []).map((ref: any) => [ref.bill_id, ref]));
 
         const mapped = (billRows as any[]).map((b: BillRow) => ({
           id: b.id,
@@ -122,6 +139,8 @@ export function CommitteeWorkspace() {
           sponsor: sponsorMap.get(b.author_user_id) ?? "Member",
           legislativeHtml: b.legislative_text,
           status: b.status,
+          subcommitteeId: refMap.get(b.id)?.subcommittee_id ?? null,
+          subcommitteeName: refMap.get(b.id)?.subcommittees?.name ?? null,
         }));
         setBills(mapped);
         const nextSelectedBillId = selectedBillId && mapped.some((bill) => bill.id === selectedBillId) ? selectedBillId : mapped[0]?.id ?? null;
@@ -189,11 +208,33 @@ export function CommitteeWorkspace() {
   }, [committeeId, selectedBillId]);
 
   const selectBill = (billId: string) => {
+    const bill = bills.find((item) => item.id === billId);
+    if (bill?.subcommitteeId && !mySubcommitteeIds.has(bill.subcommitteeId) && !isTeacher) return;
     setSelectedBillId(billId);
     const cached = workspaceCache.get(committeeId);
     if (cached) workspaceCache.set(committeeId, { ...cached, selectedBillId: billId });
     markCommitteeSeenIds(committeeId, "review", [billId]);
     setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
+  };
+
+  const canOpenBill = (bill: typeof bills[number]) => !bill.subcommitteeId || mySubcommitteeIds.has(bill.subcommitteeId) || isTeacher;
+  const canReferSubcommittee = isTeacher || ["chair", "co_chair", "ranking_member"].includes(String(myCommitteeRole ?? ""));
+
+  const updateReferralSubcommittee = async (billId: string, subcommitteeId: string | null) => {
+    try {
+      const { error } = await supabase
+        .from("bill_referrals")
+        .update({ subcommittee_id: subcommitteeId } as any)
+        .eq("bill_id", billId)
+        .eq("committee_id", committeeId);
+      if (error) throw error;
+      const subcommitteeName = subcommittees.find((item) => item.id === subcommitteeId)?.name ?? null;
+      setBills((prev) => prev.map((bill) => (bill.id === billId ? { ...bill, subcommitteeId, subcommitteeName } : bill)));
+      if (subcommitteeId && selectedBillId === billId && !mySubcommitteeIds.has(subcommitteeId) && !isTeacher) setSelectedBillId(null);
+      toast.success(subcommitteeId ? "Bill referred to subcommittee" : "Bill reported back to committee");
+    } catch (error: any) {
+      toast.error(error.message || "Could not update referral");
+    }
   };
 
   const proposeSelectedBillForVote = async () => {
@@ -340,6 +381,9 @@ export function CommitteeWorkspace() {
         <div className="mb-6">
           <CommitteeTabs committeeId={committeeId} active="review" />
         </div>
+        <div className="mb-6">
+          <SubcommitteeRolesPanel committeeId={committeeId} compact />
+        </div>
 
         {loading ? (
           <div className="text-sm text-gray-600">Loading…</div>
@@ -362,11 +406,16 @@ export function CommitteeWorkspace() {
                 <div className="text-xs text-gray-500">{bills.length} total</div>
               </div>
               <div className="max-h-[70vh] overflow-y-auto">
-                {bills.map((b) => (
+                {bills.map((b) => {
+                  const accessible = canOpenBill(b);
+                  return (
                   <button
                     key={b.id}
                     onClick={() => selectBill(b.id)}
-                    className={`w-full text-left p-4 border-b border-gray-100 hover:bg-gray-50 ${
+                    disabled={!accessible}
+                    className={`w-full text-left p-4 border-b border-gray-100 ${
+                      accessible ? "hover:bg-gray-50" : "cursor-not-allowed bg-gray-50 opacity-60"
+                    } ${
                       selectedBillId === b.id ? "bg-blue-50" : ""
                     }`}
                   >
@@ -376,10 +425,12 @@ export function CommitteeWorkspace() {
                         <div className="font-mono text-sm font-semibold text-gray-900">{b.number}</div>
                         <div className="text-sm text-gray-700 line-clamp-2">{b.title}</div>
                     <div className="text-xs text-gray-500 mt-1">Sponsor: {b.sponsor}</div>
+                    {b.subcommitteeName && <div className="mt-2 rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">Under {b.subcommitteeName}</div>}
                       </div>
                     </div>
                   </button>
-                ))}
+                  );
+                })}
               </div>
             </div>
             ) : (
@@ -402,6 +453,7 @@ export function CommitteeWorkspace() {
                         <div className="font-mono text-sm font-semibold text-gray-900">{selected.number}</div>
                         <div className="text-xl font-bold text-gray-900 mt-1">{selected.title}</div>
                         <div className="text-sm text-gray-600 mt-1">Sponsor: {selected.sponsor}</div>
+                        {selected.subcommitteeName && <div className="mt-2 text-xs text-gray-500">Subcommittee: {selected.subcommitteeName}</div>}
                       </div>
                       <div className="sticky top-0 z-20 flex flex-col items-end gap-2 rounded-md bg-white/95 p-1 backdrop-blur">
                         {activeEditors.length > 0 && (
@@ -429,6 +481,27 @@ export function CommitteeWorkspace() {
                         )}
 
                         <div className="flex flex-wrap justify-end gap-2">
+                          {canReferSubcommittee && subcommittees.length ? (
+                            <select
+                              value={selected.subcommitteeId ?? ""}
+                              onChange={(event) => void updateReferralSubcommittee(selected.id, event.target.value || null)}
+                              className="rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700"
+                            >
+                              <option value="">Main committee</option>
+                              {subcommittees.map((subcommittee) => (
+                                <option key={subcommittee.id} value={subcommittee.id}>{subcommittee.name}</option>
+                              ))}
+                            </select>
+                          ) : null}
+                          {selected.subcommitteeId && (mySubcommitteeIds.has(selected.subcommitteeId) || isTeacher) ? (
+                            <button
+                              type="button"
+                              onClick={() => void updateReferralSubcommittee(selected.id, null)}
+                              className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                            >
+                              Report back
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => void postSelectedBillProgress()}

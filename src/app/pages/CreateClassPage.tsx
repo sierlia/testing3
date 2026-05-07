@@ -9,6 +9,7 @@ import { WandSparkles } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 import { Navigation } from '../components/Navigation';
+import { houseCommittees, houseCommitteeSubcommittees } from '../constants/houseCommittees';
 
 function generateClassCode() {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -44,13 +45,7 @@ export function CreateClassPage() {
       await ensureClassesTableExists();
 
       const defaultParties = ['Democratic Party', 'Republican Party'];
-      const defaultCommittees = [
-        'Education Committee',
-        'Environment & Energy Committee',
-        'Healthcare Committee',
-        'Judiciary Committee',
-        'Agriculture Committee',
-      ];
+      const defaultCommittees = houseCommittees.slice(0, 5);
       const settings = {
         description: formData.description,
         parties: {
@@ -91,13 +86,22 @@ export function CreateClassPage() {
 
       // Seed committees and parties from settings so they appear on Organizations pages
       if (defaultCommittees.length > 0) {
-        await supabase.from('committees').insert(
+        const { data: createdCommittees } = await supabase.from('committees').insert(
           defaultCommittees.map((name) => ({
             class_id: createdClass.id,
             name,
             description: '',
           })),
+        ).select('id,name');
+        const subcommitteeRows = (createdCommittees ?? []).flatMap((committee: any) =>
+          (houseCommitteeSubcommittees[committee.name] ?? []).map((name) => ({
+            committee_id: committee.id,
+            class_id: createdClass.id,
+            name,
+            description: '',
+          })),
         );
+        if (subcommitteeRows.length) await supabase.from('subcommittees').insert(subcommitteeRows as any);
       }
 
       if (defaultParties.length > 0) {

@@ -8,6 +8,7 @@ import { DefaultAvatar } from "../components/DefaultAvatar";
 import { CommitteeTabs } from "../components/CommitteeTabs";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
+import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 
 type Member = {
   user_id: string;
@@ -363,6 +364,7 @@ export function CommitteeLeadership() {
               )}
             </div>
             <CommitteeTabs committeeId={committeeId} active="election" />
+            <SubcommitteeRolesPanel committeeId={committeeId} compact allowMemberRoleSelection />
 
             {electionPanel("chair", "Chair Election", chairCandidates)}
             {majorityParty && electionPanel("ranking_member", "Ranking Member Election", rankingCandidates)}
