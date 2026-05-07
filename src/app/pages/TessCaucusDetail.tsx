@@ -10,6 +10,7 @@ import { ThreadedComments, ThreadComment } from "../components/ThreadedComments"
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -921,6 +922,8 @@ export function TessCaucusDetail() {
             </button>
           ))}
         </div>
+
+        <OrganizationLettersInbox organizationType="caucus" organizationId={caucusId} organizationName={caucus.title} memberIds={members.map((member) => member.user_id)} />
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="space-y-6">

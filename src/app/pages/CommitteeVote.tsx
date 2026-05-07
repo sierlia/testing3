@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router";
 import { CheckCircle2, ExternalLink, FileText, Maximize2, Move, Pencil, Save, Send, Sparkles, X, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { BackButton } from "../components/BackButton";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
@@ -470,7 +469,6 @@ export function CommitteeVote() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <BackButton className="mb-4" />
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName}</h1>
         </div>

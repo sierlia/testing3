@@ -335,7 +335,6 @@ export function TessBills() {
 
         <div className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-3" : ""}`}>
           <div className={rowMode === "preview" ? "lg:col-span-2" : ""}>
-            {!loading && filteredBills.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={filteredBills.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               {loading ? (
                 <div className="py-12 text-center text-gray-500">Loading bills...</div>
@@ -393,6 +392,7 @@ export function TessBills() {
                 </div>
               )}
             </div>
+            {!loading && filteredBills.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={filteredBills.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
           </div>
 
           {rowMode === "preview" && (

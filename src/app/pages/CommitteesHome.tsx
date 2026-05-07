@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
-import { CompactPager } from "../components/CompactPager";
 
 type CommitteeRow = { id: string; name: string; description: string | null; created_at: string };
 type SubcommitteeRow = { id: string; committee_id: string; name: string };
@@ -46,8 +45,6 @@ export function CommitteesHome() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [editingCommittee, setEditingCommittee] = useState<CommitteeRow | null>(null);
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     if (committeesHomeCache) {
@@ -189,12 +186,6 @@ export function CommitteesHome() {
       .filter((committee) => !query || committee.name.toLowerCase().includes(query) || (committee.description ?? "").toLowerCase().includes(query) || (memberNames[committee.id] ?? []).some((name) => name.toLowerCase().includes(query)))
       .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0, capacity: Number(settings?.committees?.capacities?.[c.id] ?? settings?.committees?.capacitiesByName?.[c.name] ?? 0), subcommittees: subcommitteesByCommitteeId[c.id] ?? [], leadership: leadershipNames[c.id] ?? {} }));
   }, [committees, leadershipNames, memberCounts, memberNames, searchQuery, settings, subcommitteesByCommitteeId]);
-  useEffect(() => {
-    setPage(1);
-  }, [pageSize, searchQuery]);
-  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
-  const currentPage = Math.min(page, totalPages);
-  const pageItems = items.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const canSelfJoin = role === "student" && (!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
 
   const joinCommittee = async (committeeId: string) => {
@@ -384,10 +375,8 @@ export function CommitteesHome() {
             ) : items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No committees yet.</div>
             ) : (
-              <>
-              <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={items.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />
               <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-                {pageItems.map((c, index) => (
+                {items.map((c, index) => (
                   <div
                     key={c.id}
                     role="button"
@@ -396,7 +385,7 @@ export function CommitteesHome() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") navigate(`/committees/${c.id}`);
                     }}
-                    className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < pageItems.length - 1 ? "border-b border-gray-200" : ""}`}
+                    className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""}`}
                   >
                     <div className="min-w-0">
                       <div className="font-semibold text-gray-900 truncate">{c.name}</div>
@@ -465,7 +454,6 @@ export function CommitteesHome() {
                   </div>
                 ))}
               </div>
-              </>
             )}
           </div>
         </OrganizationsLayout>

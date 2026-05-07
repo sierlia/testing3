@@ -9,6 +9,7 @@ import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { InfoTooltip } from "../components/InfoTooltip";
+import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
 type PartyRole = "majority_leader" | "majority_whip" | "minority_leader" | "minority_whip" | "leader" | "whip" | "chair" | "vice_chair";
@@ -897,6 +898,8 @@ export function PartyDetail() {
                 </div>
                 )}
               </div>
+
+              <OrganizationLettersInbox organizationType="party" organizationId={party.id} organizationName={displayPartyName(party.name)} memberIds={members.map((member) => member.user_id)} />
 
               <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center gap-2">

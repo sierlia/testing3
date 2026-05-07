@@ -75,8 +75,19 @@ export function CreateDearColleagueLetter() {
         const replyRecipientId = searchParams.get("to");
         if (!didPrefillReplyRef.current && replyRecipientId) {
           didPrefillReplyRef.current = true;
-          const match = classMembers.find((p) => p.user_id === replyRecipientId);
-          if (match) {
+          const toType = searchParams.get("toType") as RecipientType | null;
+          if (toType === "party") {
+            const match = ((par ?? []) as any[]).find((party) => party.id === replyRecipientId);
+            if (match) setRecipients([{ type: "party", id: match.id, name: displayPartyName(match.name) }]);
+          } else if (toType === "committee") {
+            const match = ((com ?? []) as any[]).find((committee) => committee.id === replyRecipientId);
+            if (match) setRecipients([{ type: "committee", id: match.id, name: match.name }]);
+          } else if (toType === "caucus") {
+            const match = ((cau ?? []) as any[]).find((caucus) => caucus.id === replyRecipientId);
+            if (match) setRecipients([{ type: "caucus", id: match.id, name: match.title ?? match.name }]);
+          } else {
+            const match = classMembers.find((p) => p.user_id === replyRecipientId);
+            if (match) {
             setRecipients([
               {
                 type: "individual",
@@ -86,6 +97,7 @@ export function CreateDearColleagueLetter() {
                 image: match.avatar_url,
               },
             ]);
+            }
           }
           const replySubject = searchParams.get("subject") || "";
           if (replySubject) setSubject(replySubject.toLowerCase().startsWith("re:") ? replySubject : `Re: ${replySubject}`);

@@ -3,7 +3,6 @@ import { Link, useParams } from "react-router";
 import { ChevronLeft, ChevronRight, FileText, Pencil, Send, Sparkles, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { BackButton } from "../components/BackButton";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -107,8 +106,13 @@ export function CommitteeWorkspace() {
           : ({ data: [] } as any);
         setMySubcommitteeIds(new Set((mySubRows ?? []).map((row: any) => row.subcommittee_id)));
 
-        const { data: refs, error: rErr } = await supabase.from("bill_referrals").select("bill_id,subcommittee_id,subcommittees(name)").eq("committee_id", committeeId);
+        const { data: refs, error: rErr } = await supabase.from("bill_referrals").select("bill_id,subcommittee_id").eq("committee_id", committeeId);
         if (rErr) throw rErr;
+        const referredSubcommitteeIds = [...new Set((refs ?? []).map((r: any) => r.subcommittee_id).filter(Boolean))];
+        const { data: referredSubcommittees } = referredSubcommitteeIds.length
+          ? await supabase.from("subcommittees").select("id,name").in("id", referredSubcommitteeIds)
+          : ({ data: [] } as any);
+        const referredSubcommitteeNameById = new Map((referredSubcommittees ?? []).map((row: any) => [row.id, row.name]));
         const billIds = (refs ?? []).map((r: any) => r.bill_id);
         if (!billIds.length) {
           setBills([]);
@@ -140,7 +144,7 @@ export function CommitteeWorkspace() {
           legislativeHtml: b.legislative_text,
           status: b.status,
           subcommitteeId: refMap.get(b.id)?.subcommittee_id ?? null,
-          subcommitteeName: refMap.get(b.id)?.subcommittees?.name ?? null,
+          subcommitteeName: refMap.get(b.id)?.subcommittee_id ? referredSubcommitteeNameById.get(refMap.get(b.id)?.subcommittee_id) ?? null : null,
         }));
         setBills(mapped);
         const nextSelectedBillId = selectedBillId && mapped.some((bill) => bill.id === selectedBillId) ? selectedBillId : mapped[0]?.id ?? null;
@@ -374,7 +378,6 @@ export function CommitteeWorkspace() {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <BackButton className="mb-4" />
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName}</h1>
         </div>

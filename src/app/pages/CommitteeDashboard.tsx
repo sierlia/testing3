@@ -12,6 +12,7 @@ import { formatConstituency } from "../utils/constituency";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "../components/CommitteeTabs";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
+import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type Subcommittee = { id: string; committee_id: string; class_id: string; name: string; description: string | null; created_at: string };
@@ -1207,6 +1208,8 @@ export function CommitteeDashboard() {
               </div>
             </div>
           </div>
+
+          <OrganizationLettersInbox organizationType="committee" organizationId={committeeId} organizationName={committee?.name ?? "committee"} memberIds={members.map((member) => member.user_id)} />
 
           <div className="self-start bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <SubcommitteeRolesPanel committeeId={committeeId} compact />

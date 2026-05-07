@@ -400,7 +400,6 @@ export function TessCaucuses() {
           </div>
         </div>
 
-        {!loading && sortedCaucuses.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={sortedCaucuses.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {loading ? (
             <div className="col-span-full text-center py-12 text-gray-500">Loading caucuses...</div>
@@ -429,7 +428,7 @@ export function TessCaucuses() {
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-2">{caucus.description}</p>
                   </div>
-                  {role === "student" && (
+                  {role !== "teacher" && (
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
@@ -497,6 +496,7 @@ export function TessCaucuses() {
             ))
           )}
         </div>
+        {!loading && sortedCaucuses.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={sortedCaucuses.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
         </OrganizationsLayout>
       </main>
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
