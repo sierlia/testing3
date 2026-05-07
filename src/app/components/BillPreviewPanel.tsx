@@ -61,11 +61,11 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       {/* Header */}
-      <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white">
+      <div className="bg-gray-50 p-4 text-gray-900 border-b border-gray-200">
         <div className="flex items-center justify-between mb-2">
           <span className="font-mono text-sm font-semibold">{bill.number}</span>
           <Link to={`/bills/${bill.id}`}>
-            <button className="p-1 hover:bg-white/20 rounded transition-colors">
+            <button className="p-1 hover:bg-gray-100 rounded transition-colors">
               <ExternalLink className="w-4 h-4" />
             </button>
           </Link>

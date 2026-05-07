@@ -274,10 +274,10 @@ export function DemoAccountSwitcher() {
         dragRef.current = { startX: event.clientX, startY: event.clientY, baseX: position.x, baseY: position.y, moved: false };
       }}
     >
-      <div className={`relative rounded-full border border-blue-700 bg-blue-600 p-1 text-white shadow-lg transition-transform duration-300 ${justAppeared ? "scale-110" : "scale-100"}`}>
+      <div className={`relative rounded-full bg-blue-600 p-1 text-white shadow-lg transition-transform duration-300 ${justAppeared ? "scale-110" : "scale-100"}`}>
         {launchLoading && (
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[calc(100%+18px)] w-[calc(100%+34px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border border-white/80 bg-white/80 shadow-lg" aria-hidden="true">
-            <div className="h-full rounded-full bg-blue-500/25 transition-[width] duration-200 ease-out" style={{ width: `${launchProgress}%` }} />
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-[calc(100%+18px)] w-[calc(100%+34px)] -translate-x-1/2 -translate-y-1/2 overflow-hidden rounded-full border border-gray-200 bg-gray-100 shadow-lg" aria-hidden="true">
+            <div className="h-full rounded-full bg-gray-300 transition-[width] duration-200 ease-out" style={{ width: `${launchProgress}%` }} />
           </div>
         )}
         <div className="relative rounded-full bg-blue-600">
@@ -301,7 +301,7 @@ export function DemoAccountSwitcher() {
             if (launchLoading) return;
             setOpen((value) => !value);
           }}
-          className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-default disabled:hover:bg-blue-600"
+          className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white outline-none hover:bg-blue-700 focus:outline-none focus-visible:outline-none disabled:cursor-default disabled:hover:bg-blue-600"
         >
           <User className="h-4 w-4" />
           Demo
