@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import { FileText, GripVertical, Layout, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users } from "lucide-react";
+import { AlignLeft, FileText, GripVertical, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -37,7 +37,7 @@ function sectionIcon(type: SectionType) {
   if (type === "legislation_written") return FileText;
   if (type === "organizations") return Users;
   if (type === "dear_colleague_letters") return Mail;
-  return Layout;
+  return AlignLeft;
 }
 
 export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }) {
@@ -425,9 +425,9 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
             const showMoveBefore = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "before" && beforeWouldChange;
             const showMoveAfter = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "after" && afterWouldChange;
             return (
-              <div key={section.section_key} className={`${section.width === "full" ? "col-span-2" : ""}`}>
+              <div key={section.section_key} className={`relative ${section.width === "full" ? "col-span-2" : ""}`}>
               {showMoveBefore && (
-                <div className="mb-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-6 text-sm font-medium text-blue-700">
+                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex -translate-y-1/2 items-center justify-center rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/90 py-3 text-sm font-medium text-blue-700 shadow-sm">
                   Move here
                 </div>
               )}
@@ -474,7 +474,6 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
                     </button>
                   </div>
                 </div>
-                <div className="text-xs font-medium uppercase tracking-wide text-gray-500">{typeLabels[section.section_type]}</div>
                 {section.section_type === "long_response" && (
                   <label className="mt-3 block text-xs font-semibold text-gray-600">
                     Max words
@@ -494,7 +493,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
                 )}
               </div>
               {showMoveAfter && (
-                <div className="mt-3 rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-6 text-sm font-medium text-blue-700">
+                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex translate-y-1/2 items-center justify-center rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/90 py-3 text-sm font-medium text-blue-700 shadow-sm">
                   Move here
                 </div>
               )}

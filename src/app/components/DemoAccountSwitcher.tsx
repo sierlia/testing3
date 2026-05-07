@@ -27,7 +27,6 @@ export function DemoAccountSwitcher() {
   const [launchOverlayFading, setLaunchOverlayFading] = useState(false);
   const [launchLoading, setLaunchLoading] = useState(() => window.localStorage.getItem("gavel:demoLaunchLoading") === "1");
   const [launchProgress, setLaunchProgress] = useState(() => Number(window.localStorage.getItem("gavel:demoLaunchProgress") ?? (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" ? 5 : 100)));
-  const [launchProgressTarget, setLaunchProgressTarget] = useState(() => Number(window.localStorage.getItem("gavel:demoLaunchProgress") ?? (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" ? 5 : 100)));
   const [burst, setBurst] = useState(false);
   const [justAppeared, setJustAppeared] = useState(false);
   const [dragHintMounted, setDragHintMounted] = useState(false);
@@ -108,7 +107,6 @@ export function DemoAccountSwitcher() {
       setLaunchOverlayFading(false);
       setLaunchLoading(true);
       setLaunchProgress(5);
-      setLaunchProgressTarget(5);
       centerButton();
     };
     const cancelLaunch = () => {
@@ -120,7 +118,6 @@ export function DemoAccountSwitcher() {
       setLaunchOverlayFading(false);
       setLaunchLoading(false);
       setLaunchProgress(100);
-      setLaunchProgressTarget(100);
       setBurst(false);
       setJustAppeared(false);
       setDragHintMounted(false);
@@ -134,7 +131,6 @@ export function DemoAccountSwitcher() {
       setOpen(false);
       setLaunchOverlayVisible(window.localStorage.getItem("gavel:demoLaunchOverlay") === "1");
       setLaunchOverlayFading(false);
-      setLaunchProgressTarget(100);
       setLaunchProgress(100);
       launchCompletionTimerRef.current = window.setTimeout(() => {
         window.localStorage.removeItem("gavel:demoLaunchLoading");
@@ -143,16 +139,20 @@ export function DemoAccountSwitcher() {
         launchCompletionTimerRef.current = window.setTimeout(() => {
           playLaunchEffectsIfNeeded();
         }, 40);
-      }, 520);
+      }, 240);
     };
     const onLaunchProgress = (event: Event) => {
       const next = Number((event as CustomEvent<{ progress?: number }>).detail?.progress ?? 0);
       if (!Number.isFinite(next)) return;
-      setLaunchProgressTarget((current) => Math.max(current, Math.min(96, next)));
+      setLaunchProgress((current) => Math.max(current, Math.min(96, next)));
     };
     const onDemoOpened = () => {
       setDemoActive(true);
-      if (window.localStorage.getItem("gavel:demoLaunchLoading") !== "1") playLaunchEffectsIfNeeded();
+      if (window.localStorage.getItem("gavel:demoLaunchLoading") === "1") {
+        window.requestAnimationFrame(() => window.requestAnimationFrame(completeLaunch));
+        return;
+      }
+      playLaunchEffectsIfNeeded();
     };
     const onDemoEnded = () => {
       setDemoActive(false);
@@ -161,7 +161,6 @@ export function DemoAccountSwitcher() {
       setLaunchOverlayFading(false);
       setLaunchLoading(false);
       setLaunchProgress(100);
-      setLaunchProgressTarget(100);
       window.localStorage.removeItem("gavel:demoLaunchOverlay");
       window.localStorage.removeItem("gavel:demoLaunchLoading");
       window.localStorage.removeItem("gavel:demoLaunchProgress");
@@ -193,18 +192,6 @@ export function DemoAccountSwitcher() {
     playLaunchEffectsIfNeeded();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [demoActive, user?.id, launchLoading]);
-
-  useEffect(() => {
-    if (!launchLoading) return;
-    const timer = window.setInterval(() => {
-      setLaunchProgress((value) => {
-        if (value >= launchProgressTarget) return value;
-        const distance = launchProgressTarget - value;
-        return Math.min(launchProgressTarget, value + Math.max(0.35, distance * 0.12));
-      });
-    }, 120);
-    return () => window.clearInterval(timer);
-  }, [launchLoading, launchProgressTarget]);
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {

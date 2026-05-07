@@ -88,7 +88,7 @@ function SwitchControl({ checked, onChange, disabled = false }: { checked: boole
       className={`inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${checked ? "bg-blue-600" : "bg-gray-300"} disabled:cursor-not-allowed disabled:opacity-50`}
       aria-pressed={checked}
     >
-      <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
+      <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`} />
     </button>
   );
 }
@@ -96,7 +96,7 @@ function SwitchControl({ checked, onChange, disabled = false }: { checked: boole
 function SettingsGroup({ title, children, disabled = false, action }: { title: string; children: ReactNode; disabled?: boolean; action?: ReactNode }) {
   return (
     <section className="space-y-4 border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
-      <div className="flex min-h-6 items-center justify-between gap-3">
+      <div className="flex min-h-6 items-center gap-2">
         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
         {action && <div className="shrink-0">{action}</div>}
       </div>
@@ -107,7 +107,23 @@ function SettingsGroup({ title, children, disabled = false, action }: { title: s
 
 function SettingRow({ title, description, control, wide = false, indent = false }: { title: string; description?: string; control: ReactNode; wide?: boolean; indent?: boolean }) {
   return (
-    <div className={`grid items-center gap-3 ${wide ? "md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)_240px]"}`}>
+    <div
+      className={`grid cursor-pointer items-center gap-3 rounded-lg p-2 transition-colors hover:bg-gray-50 ${wide ? "md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)_240px]"}`}
+      onMouseDown={(event) => {
+        const target = event.target as HTMLElement;
+        if (target.closest("input,textarea,button,select,[role='combobox']")) return;
+        const input = event.currentTarget.querySelector<HTMLInputElement | HTMLTextAreaElement>("input:not([disabled]),textarea:not([disabled])");
+        if (input) {
+          input.focus();
+          return;
+        }
+        const combobox = event.currentTarget.querySelector<HTMLElement>("[role='combobox']:not([aria-disabled='true'])");
+        if (combobox) {
+          combobox.focus();
+          combobox.click();
+        }
+      }}
+    >
       <div className={indent ? "pl-5" : ""}>
         <div className="text-base font-semibold text-gray-900">{title}</div>
         {description && <div className="text-sm text-gray-600">{description}</div>}
@@ -910,7 +926,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                     key={item.id}
                     type="button"
                     onClick={() => requestQuickSetup(item.id, item.name)}
-                    className={`min-h-40 rounded-lg border p-4 text-left shadow-sm transition ${selected ? item.selectedClasses : item.classes}`}
+                    className={`min-h-40 rounded-lg border-2 p-4 text-left shadow-sm transition ${selected ? item.selectedClasses : item.classes}`}
                   >
                     <span className="block text-base font-semibold text-gray-950">{item.name}</span>
                     <span className="mt-2 block text-sm leading-6 text-gray-700">{item.description}</span>
@@ -1088,7 +1104,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </SettingsGroup>
           <SettingsGroup title="Committees" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.enableCommittees} onChange={(v) => setSettings({ enableCommittees: v })} disabled={!settings.enableOrganizations} />}>
             <DisabledBlock disabled={!settings.enableCommittees}>
-              <SettingRow indent title="Committee report word limit" description="Maximum words allowed in submitted committee reports." control={<WordLimitInput label="" value={settings.committeeReportWordLimit} max={2000} onChange={(value) => setSettings({ committeeReportWordLimit: value })} />} />
+              <Toggle indent checked={settings.committeesCanReportBills} onChange={(v) => setSettings({ committeesCanReportBills: v })} title="Committee report" description="Committees can submit reports when reviewing bills." />
+              <DisabledBlock disabled={!settings.committeesCanReportBills}>
+                <SettingRow indent title="Committee report word limit" description="Maximum words allowed in submitted committee reports." control={<WordLimitInput label="" value={settings.committeeReportWordLimit} max={2000} onChange={(value) => setSettings({ committeeReportWordLimit: value })} />} />
+              </DisabledBlock>
               <SettingRow
                 title="Bill assignment authority"
                 description="Choose who can assign or refer bills to committees."
@@ -1164,13 +1183,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "profiles") {
       return (
-        <div className="space-y-6">
-          <DisabledBlock disabled={!settings.profilesEnabled}>
-            <SettingRow indent title="Profile long response word limit" control={<WordLimitInput label="" value={settings.profileLongResponseWordLimit} max={2000} onChange={(value) => setSettings({ profileLongResponseWordLimit: value })} />} />
-          </DisabledBlock>
-          <SettingsGroup title="Profile layout editor" disabled={!settings.profilesEnabled}>
-            <ProfileLayoutEditor embedded />
-          </SettingsGroup>
+        <div className={`${settings.profilesEnabled ? "" : "pointer-events-none opacity-45"}`}>
+          <ProfileLayoutEditor embedded />
         </div>
       );
     }
@@ -1285,7 +1299,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-2">
-            <Settings className="h-7 w-7 text-blue-600" />
+            <Settings className="h-7 w-7 self-center text-blue-600" />
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{heading}</h1>
               {description && <p className="mt-1 text-gray-600">{description}</p>}
@@ -1296,7 +1310,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         {loading ? <div className="mb-4 text-sm text-gray-600">Loading settings...</div> : null}
 
         <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-          <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
+          <div className="min-h-[320px] self-start rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
             {visibleTabs.map(({ id, label, icon: Icon }) => (
               <button key={id} onClick={() => setActiveTab(id)} className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${activeTab === id ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"}`}>
                 <Icon className="h-4 w-4" />
