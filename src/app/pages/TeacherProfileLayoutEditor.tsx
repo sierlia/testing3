@@ -416,90 +416,115 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">Loading layout...</div>
       ) : activeView === "editor" ? (
         <div className="grid grid-cols-2 gap-4">
-          {normalizedSections.map((section) => {
-            const Icon = sectionIcon(section.section_type);
-            const sourceIndex = dragStartRef.current?.index ?? -1;
-            const targetIndex = normalizedSections.findIndex((row) => row.section_key === section.section_key);
-            const beforeWouldChange = targetIndex !== sourceIndex + 1;
-            const afterWouldChange = targetIndex !== sourceIndex - 1;
-            const showMoveBefore = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "before" && beforeWouldChange;
-            const showMoveAfter = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "after" && afterWouldChange;
-            return (
-              <div key={section.section_key} className={`relative ${section.width === "full" ? "col-span-2" : ""}`}>
-              {showMoveBefore && (
-                <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex -translate-y-1/2 items-center justify-center rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/90 py-3 text-sm font-medium text-blue-700 shadow-sm">
-                  Move here
-                </div>
-              )}
-              <div
-                data-profile-section-key={section.section_key}
-                className={`rounded-lg border bg-white p-4 shadow-sm transition ${draggingKey === section.section_key ? "border-blue-300 opacity-50" : "border-gray-200"}`}
-              >
-                <div className="mb-3 flex items-start justify-between gap-3">
-                  <div className="flex min-w-0 flex-1 items-center gap-2">
-                    <button
-                      type="button"
-                      onPointerDown={(event) => onPointerStart(event, section.section_key)}
-                      onPointerMove={onPointerMove}
-                      onPointerUp={finishPointerDrag}
-                      onPointerCancel={finishPointerDrag}
-                      className="touch-none rounded p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700"
-                      aria-label={`Move ${section.title}`}
-                    >
-                      <GripVertical className="h-4 w-4 cursor-grab" />
-                    </button>
-                    <Icon className="h-4 w-4 text-blue-600" />
-                    {section.section_type === "long_response" ? (
-                      <input
-                        value={section.title}
-                        onChange={(event) => updateSection(section.section_key, { title: event.target.value })}
-                        className="min-w-0 flex-1 border-b border-gray-300 bg-transparent text-base font-semibold text-gray-900 outline-none focus:border-blue-500"
-                      />
-                    ) : (
-                      <div className="min-w-0 flex-1 text-base font-semibold text-gray-900">{section.title}</div>
+          {(() => {
+            const sourceIndex = dragStartRef.current?.index ?? normalizedSections.findIndex((row) => row.section_key === draggingKey);
+            const hoverIndex = normalizedSections.findIndex((row) => row.section_key === dragOverKey);
+            const placeholderIndex =
+              draggingKey && dragOverKey && hoverIndex >= 0 && dragOverKey !== draggingKey
+                ? dragOverPosition === "after"
+                  ? hoverIndex + 1
+                  : hoverIndex
+                : null;
+
+            const draggedWidth = normalizedSections.find((row) => row.section_key === draggingKey)?.width ?? "full";
+            const placeholderSpan = draggedWidth === "full" ? "col-span-2" : "";
+
+            const items: JSX.Element[] = [];
+            normalizedSections.forEach((section, index) => {
+              if (placeholderIndex !== null && index === placeholderIndex) {
+                const noChange =
+                  (dragOverPosition === "before" && hoverIndex === sourceIndex + 1) || (dragOverPosition === "after" && hoverIndex === sourceIndex - 1);
+                if (!noChange) {
+                  items.push(
+                    <div key="profile-move-placeholder" className={`${placeholderSpan}`}>
+                      <div className="rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-4 text-center text-sm font-medium text-blue-700">
+                        Move here
+                      </div>
+                    </div>,
+                  );
+                }
+              }
+
+              const Icon = sectionIcon(section.section_type);
+              items.push(
+                <div key={section.section_key} className={`${section.width === "full" ? "col-span-2" : ""}`}>
+                  <div
+                    data-profile-section-key={section.section_key}
+                    className={`rounded-lg border bg-gray-50 p-4 shadow-sm transition ${draggingKey === section.section_key ? "border-blue-300 opacity-50" : "border-gray-200"}`}
+                  >
+                    <div className="mb-3 flex items-start justify-between gap-3">
+                      <div className="flex min-w-0 flex-1 items-center gap-2">
+                        <button
+                          type="button"
+                          onPointerDown={(event) => onPointerStart(event, section.section_key)}
+                          onPointerMove={onPointerMove}
+                          onPointerUp={finishPointerDrag}
+                          onPointerCancel={finishPointerDrag}
+                          className="touch-none rounded p-1 text-gray-400 hover:bg-white/60 hover:text-gray-700"
+                          aria-label={`Move ${section.title}`}
+                        >
+                          <GripVertical className="h-4 w-4 cursor-grab" />
+                        </button>
+                        <Icon className="h-4 w-4 text-blue-600" />
+                        {section.section_type === "long_response" ? (
+                          <input
+                            value={section.title}
+                            onChange={(event) => updateSection(section.section_key, { title: event.target.value })}
+                            className="min-w-0 flex-1 border-b border-gray-300 bg-transparent text-base font-semibold text-gray-900 outline-none focus:border-blue-500"
+                          />
+                        ) : (
+                          <div className="min-w-0 flex-1 text-base font-semibold text-gray-900">{section.title}</div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          type="button"
+                          onClick={() => updateSection(section.section_key, { width: section.width === "full" ? "half" : "full" })}
+                          disabled={section.section_type === "organizations"}
+                          className="rounded p-1 text-gray-400 hover:bg-white/60 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
+                          aria-label={section.width === "full" ? "Make half width" : "Make full width"}
+                        >
+                          {section.width === "full" ? <PanelLeft className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                        </button>
+                        <button type="button" onClick={() => void requestDelete(section)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete section">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                    {section.section_type === "long_response" && (
+                      <label className="mt-3 block text-xs font-semibold text-gray-600">
+                        Max words
+                        <input
+                          type="number"
+                          min={1}
+                          max={2000}
+                          value={sectionWordLimits[section.section_key] ?? 1000}
+                          onChange={(event) => {
+                            markDirty();
+                            const value = Math.min(2000, Math.max(1, Number(event.target.value) || 1000));
+                            setSectionWordLimits((current) => ({ ...current, [section.section_key]: value }));
+                          }}
+                          className="mt-1 block w-24 rounded-md border border-gray-300 bg-white px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </label>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <button
-                      type="button"
-                      onClick={() => updateSection(section.section_key, { width: section.width === "full" ? "half" : "full" })}
-                      disabled={section.section_type === "organizations"}
-                      className="rounded p-1 text-gray-400 hover:bg-gray-50 hover:text-gray-700 disabled:cursor-not-allowed disabled:opacity-40"
-                      aria-label={section.width === "full" ? "Make half width" : "Make full width"}
-                    >
-                      {section.width === "full" ? <PanelLeft className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-                    </button>
-                    <button type="button" onClick={() => void requestDelete(section)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete section">
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+                </div>,
+              );
+            });
+
+            if (placeholderIndex !== null && placeholderIndex === normalizedSections.length) {
+              items.push(
+                <div key="profile-move-placeholder-end" className={`${placeholderSpan}`}>
+                  <div className="rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/70 p-4 text-center text-sm font-medium text-blue-700">
+                    Move here
                   </div>
-                </div>
-                {section.section_type === "long_response" && (
-                  <label className="mt-3 block text-xs font-semibold text-gray-600">
-                    Max words
-                    <input
-                      type="number"
-                      min={1}
-                      max={2000}
-                      value={sectionWordLimits[section.section_key] ?? 1000}
-                      onChange={(event) => {
-                        markDirty();
-                        const value = Math.min(2000, Math.max(1, Number(event.target.value) || 1000));
-                        setSectionWordLimits((current) => ({ ...current, [section.section_key]: value }));
-                      }}
-                      className="mt-1 block w-24 rounded-md border border-gray-300 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </label>
-                )}
-              </div>
-              {showMoveAfter && (
-                <div className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex translate-y-1/2 items-center justify-center rounded-lg border-2 border-dashed border-blue-300 bg-blue-50/90 py-3 text-sm font-medium text-blue-700 shadow-sm">
-                  Move here
-                </div>
-              )}
-              </div>
-            );
-          })}
+                </div>,
+              );
+            }
+
+            return items;
+          })()}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
