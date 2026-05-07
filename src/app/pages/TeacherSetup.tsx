@@ -61,19 +61,19 @@ function Toggle({ checked, onChange, title, description, disabled = false, inden
       type="button"
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`flex w-full items-center gap-2 rounded-lg p-2 text-left transition-colors ${indent ? "pl-7" : ""} ${disabled ? "cursor-not-allowed opacity-50" : "hover:bg-gray-50"}`}
+      className={`grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-lg px-2 py-1.5 text-left transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "hover:bg-gray-50"}`}
       aria-pressed={checked}
     >
+      <span className={`min-w-0 ${indent ? "pl-10" : "pl-7"}`}>
+        <span className="block text-base font-semibold text-gray-900">{title}</span>
+        {description && <span className="block text-sm leading-5 text-gray-600">{description}</span>}
+      </span>
       <span
         className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
           checked ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-transparent"
         }`}
       >
         <Check className="h-3.5 w-3.5" />
-      </span>
-      <span className="min-w-0">
-        <span className="block text-base font-semibold text-gray-900">{title}</span>
-        {description && <span className="block text-sm leading-6 text-gray-600">{description}</span>}
       </span>
     </button>
   );
@@ -107,13 +107,13 @@ function SettingsGroup({
   actionGrow?: boolean;
 }) {
   return (
-    <section className="space-y-3 border-b border-gray-300 pb-5 last:border-b-0 last:pb-0">
+    <section className="space-y-2 pb-3 last:pb-0">
       <div className="flex min-h-6 items-center gap-3">
         <h3 className="shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
         {action && !actionGrow && <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />}
         {action && <div className={`${actionGrow ? "flex-1" : "shrink-0"} flex items-center justify-end self-center`}>{action}</div>}
       </div>
-      <div className={`space-y-3 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
+      <div className={`space-y-2 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
     </section>
   );
 }
@@ -136,7 +136,7 @@ function SettingRow({
   const leftPad = sub ? "pl-[3.5rem]" : indent ? "pl-[2.5rem]" : "pl-7";
   return (
     <div
-      className={`grid cursor-pointer items-center rounded-lg p-2 transition-colors hover:bg-gray-50 ${wide ? "gap-5 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "gap-3 md:grid-cols-[minmax(0,1fr)_240px]"}`}
+      className={`grid cursor-pointer items-center rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-50 ${wide ? "gap-5 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "gap-3 md:grid-cols-[minmax(0,1fr)_240px]"}`}
       onClick={(event) => {
         const target = event.target as HTMLElement;
         if (target.closest("input,textarea,button,select,[role='combobox']")) return;
@@ -157,9 +157,9 @@ function SettingRow({
       }}
     >
       <div className={`relative ${leftPad}`}>
-        {sub && <span aria-hidden="true" className="absolute -top-4 left-6 h-[calc(50%+1rem)] w-5 rounded-bl-lg border-b-2 border-l-2 border-dotted border-gray-300" />}
+        {sub && <span aria-hidden="true" className="absolute -top-2 left-6 h-[calc(50%+0.5rem)] w-5 rounded-bl-lg border-b-2 border-l-2 border-dotted border-gray-300" />}
         <div className="text-base font-semibold text-gray-900">{title}</div>
-        {description && <div className="text-sm leading-6 text-gray-600">{description}</div>}
+        {description && <div className="text-sm leading-5 text-gray-600">{description}</div>}
       </div>
       <div className="md:justify-self-end">{control}</div>
     </div>
@@ -167,7 +167,7 @@ function SettingRow({
 }
 
 function DisabledBlock({ disabled, children, tight = false }: { disabled: boolean; children: ReactNode; tight?: boolean }) {
-  return <div className={`${tight ? "space-y-1.5" : "space-y-3"} ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>;
+  return <div className={`${tight ? "space-y-0.5" : "space-y-2"} ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>;
 }
 
 function SettingSelect({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: ReactNode }) {
@@ -209,7 +209,7 @@ function WordLimitInput({ label, value, max, onChange }: { label: string; value:
         onChange={(event) => onChange(Math.min(max, Math.max(1, Number(event.target.value) || 1)))}
         className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <span className="mt-1 block text-xs text-gray-500">max: {max.toLocaleString()} words</span>
+      <span className="mt-1 block text-xs text-gray-500">Maximum Allowed: {max} words</span>
     </label>
   );
 }
@@ -927,32 +927,32 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           name: "Fully Digital Simulation",
           description: "Enable all features - optimal for digital courses or centralizing participation online.",
           classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
-          selectedClasses: "border-gray-900 bg-gray-50 ring-1 ring-gray-200",
-          tagClasses: "bg-gray-900 text-white",
+          selectedClasses: "border-blue-500 bg-blue-50 ring-1 ring-blue-100",
+          tagClasses: "bg-blue-600 text-white",
         },
         {
           id: "blended" as const,
           name: "Hybrid Simulation",
           description: "Disable message boards to facilitate in-person discussion.",
           classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
-          selectedClasses: "border-gray-900 bg-gray-50 ring-1 ring-gray-200",
-          tagClasses: "bg-gray-900 text-white",
+          selectedClasses: "border-blue-500 bg-blue-50 ring-1 ring-blue-100",
+          tagClasses: "bg-blue-600 text-white",
         },
         {
           id: "core" as const,
           name: "Essentialist Simulation",
           description: "Disable message boards, profiles, and non-essential tools to optimize for time or complexity constraints.",
           classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
-          selectedClasses: "border-gray-900 bg-gray-50 ring-1 ring-gray-200",
-          tagClasses: "bg-gray-900 text-white",
+          selectedClasses: "border-blue-500 bg-blue-50 ring-1 ring-blue-100",
+          tagClasses: "bg-blue-600 text-white",
         },
       ];
       const currentSettingsCode = encodeSettings();
       const settingsCodePreview = currentSettingsCode ? `${currentSettingsCode.slice(0, 18)}...` : "Unavailable";
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <SettingsGroup title="Quick setup">
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-2 md:grid-cols-3">
               {quickSetups.map((item) => {
                 const selected = selectedQuickSetup === item.id;
                 return (
@@ -979,6 +979,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <SettingsGroup title="Import settings">
             <SettingRow
               title="Copy configuration code"
+              description="Copy the current settings as a reusable configuration code."
               wide
               control={
                 <button type="button" onClick={copySettingsCode} className="ml-auto flex min-w-0 w-[32rem] max-w-full items-center gap-2 rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5 text-left hover:bg-gray-100">
@@ -990,10 +991,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 </button>
               }
             />
-            <div className="space-y-3">
+            <div className="space-y-2">
               <div className="pl-7 text-xs font-bold uppercase tracking-wide text-gray-500">Import from</div>
               <SettingRow
                 title="Configuration code"
+                description="Paste a settings configuration code to apply it to this class."
                 wide
                 control={
                   <div className="ml-auto flex w-[32rem] max-w-full gap-2">
@@ -1004,6 +1006,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               />
               <SettingRow
                 title="Existing class"
+                description="Duplicate settings from another class where you are a teacher."
                 wide
                 control={
                   <div className="ml-auto w-[32rem] max-w-full">
@@ -1028,7 +1031,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "parties") {
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <div>
             <label className="mb-3 block text-base font-semibold text-gray-900">Allowed Parties</label>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1048,7 +1051,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "committees") {
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <div className="flex items-center justify-end gap-3">
             <button onClick={() => setSettings({ enabledCommittees: [...allCommittees] })} className="text-sm font-medium text-blue-600">Select all</button>
             <button onClick={() => setSettings({ enabledCommittees: [] })} className="text-sm font-medium text-blue-600">Deselect all</button>
@@ -1075,7 +1078,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "bills") {
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <DisabledBlock disabled={!settings.enableBills}>
             <SettingRow indent title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
@@ -1119,7 +1122,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "organizations") {
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <DisabledBlock disabled={!settings.enableOrganizations}>
             <SettingRow
               indent
@@ -1131,7 +1134,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <SettingsGroup title="Announcement boards" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.announcementBoardsEnabled} onChange={(v) => setSettings({ announcementBoardsEnabled: v })} disabled={!settings.enableOrganizations} />}>
             <DisabledBlock disabled={!settings.announcementBoardsEnabled}>
               <SettingRow title="Announcement word limit" description="Maximum words allowed in announcements." control={<WordLimitInput label="" value={settings.announcementWordLimit} max={1000} onChange={(value) => setSettings({ announcementWordLimit: value })} />} />
-              <div className="space-y-2">
+              <div className="space-y-0.5">
                 <Toggle checked={settings.announcementCommentsEnabled} onChange={(v) => setSettings({ announcementCommentsEnabled: v })} title="Enable comments" description="Members can comment on announcement boards." />
                 <DisabledBlock disabled={!settings.announcementCommentsEnabled} tight>
                   <SettingRow sub title="Comment word limit" description="Maximum words allowed in announcement comments." control={<WordLimitInput label="" value={settings.commentWordLimit} max={500} onChange={(value) => setSettings({ commentWordLimit: value })} />} />
@@ -1191,13 +1194,13 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
-              <div className="space-y-2">
+              <div className="space-y-0.5">
                 <Toggle checked={settings.committeesCanReportBills} onChange={(v) => setSettings({ committeesCanReportBills: v })} title="Committee report" description="Committees can submit reports when reviewing bills." />
                 <DisabledBlock disabled={!settings.committeesCanReportBills} tight>
                   <SettingRow sub title="Committee report word limit" description="Maximum words allowed in submitted committee reports." control={<WordLimitInput label="" value={settings.committeeReportWordLimit} max={2000} onChange={(value) => setSettings({ committeeReportWordLimit: value })} />} />
                 </DisabledBlock>
               </div>
-              <div className="space-y-2">
+              <div className="space-y-0.5">
                 <Toggle checked={settings.billsVotedAfterCommittee} onChange={(v) => setSettings({ billsVotedAfterCommittee: v, committeeVoteRequired: v })} title="Committee voting" description="Bills are voted on after committee review." />
                 <DisabledBlock disabled={!settings.billsVotedAfterCommittee} tight>
                   <SettingRow sub title="Committee vote pass threshold" description="Percentage of votes needed to report a bill." control={<PercentInput value={settings.committeeVotePassThresholdPct} onChange={(value) => setSettings({ committeeVotePassThresholdPct: value })} />} />
@@ -1213,7 +1216,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "elections") {
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <DisabledBlock disabled={!settings.enableElections}>
             <SettingsGroup title="House leadership election" action={<SwitchControl checked={settings.enableHouseLeadershipElection} onChange={(v) => setSettings({ enableHouseLeadershipElection: v })} disabled={!settings.enableElections} />}>
               <div className="text-sm text-gray-600">Students can vote for Speaker of the House from the floor page.</div>
@@ -1234,7 +1237,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "permissions") {
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <SettingsGroup title="Students">
             <Toggle checked={settings.studentCanCreateBills} onChange={(v) => setSettings({ studentCanCreateBills: v })} title="Create bills" />
             <Toggle checked={settings.studentCanAnnounce} onChange={(v) => setSettings({ studentCanAnnounce: v })} title="Make announcements in announcement boards" />
@@ -1301,7 +1304,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "joining") {
       return (
-        <div className="space-y-5">
+        <div className="space-y-4">
           <SettingsGroup title="Joining">
             <Toggle checked={settings.requireJoinApproval} onChange={(v) => setSettings({ requireJoinApproval: v })} title="Members must be approved before entering class" description="New members appear in the pending roster until approved." />
           </SettingsGroup>
