@@ -119,7 +119,7 @@ export function CreateClassPage() {
       }
 
       toast.success(`Class created. Join code: ${formData.classCode}`);
-      navigate('/teacher/dashboard');
+      navigate('/classes');
     } catch (error: any) {
       toast.error(error.message || 'Failed to create class');
     } finally {
@@ -141,7 +141,7 @@ export function CreateClassPage() {
             Simulation options are configured after creation from the teacher setup dashboard.
           </div>
 
-          <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => navigate('/teacher/dashboard')} className="flex-1">Cancel</Button><Button type="submit" disabled={loading || !canSubmit} className="flex-1">{loading ? 'Creating...' : 'Create Class'}</Button></div>
+          <div className="flex gap-3"><Button type="button" variant="outline" onClick={() => navigate('/classes')} className="flex-1">Cancel</Button><Button type="submit" disabled={loading || !canSubmit} className="flex-1">{loading ? 'Creating...' : 'Create Class'}</Button></div>
         </form>
       </CardContent></Card></div></main>
     </div>

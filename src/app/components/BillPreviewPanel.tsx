@@ -1,5 +1,6 @@
 import { ExternalLink, User, Building2, Calendar } from "lucide-react";
 import { Link } from "react-router";
+import { profilePath } from "../utils/profileRoute";
 
 interface Bill {
   id: string;
@@ -93,7 +94,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
             <User className="w-4 h-4" />
             <span className="font-medium">Sponsor:</span>
             {bill.sponsorId ? (
-              <Link to={`/profile/${bill.sponsorId}`} className={`${bill.sponsorRole === "teacher" ? "text-green-700" : "text-blue-600"} hover:underline`}>
+              <Link to={profilePath(bill.sponsorId)} className={`${bill.sponsorRole === "teacher" ? "text-green-700" : "text-blue-600"} hover:underline`}>
                 {bill.sponsor}
               </Link>
             ) : (

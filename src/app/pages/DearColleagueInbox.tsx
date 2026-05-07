@@ -7,6 +7,7 @@ import { BackButton } from "../components/BackButton";
 import { DefaultAvatar } from "../components/DefaultAvatar";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
+import { profilePath } from "../utils/profileRoute";
 
 type Mailbox = "inbox" | "sent";
 
@@ -287,7 +288,7 @@ export function DearColleagueInbox() {
               {selected ? (
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex items-start gap-4 mb-6 pb-6 border-b border-gray-200">
-                    <Link to={`/profile/${selected.from_user_id}`}>
+                    <Link to={profilePath(selected.from_user_id)}>
                       {selected.from_avatar ? (
                         <img src={selected.from_avatar} alt={selected.from_name} className="w-12 h-12 rounded-full object-cover hover:ring-2 hover:ring-blue-500 transition-all" />
                       ) : (
@@ -295,7 +296,7 @@ export function DearColleagueInbox() {
                       )}
                     </Link>
                     <div className="flex-1">
-                      <Link to={`/profile/${selected.from_user_id}`} className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors">
+                      <Link to={profilePath(selected.from_user_id)} className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors">
                         {selected.from_name}
                       </Link>
                       {selected.mailbox === "inbox" ? (

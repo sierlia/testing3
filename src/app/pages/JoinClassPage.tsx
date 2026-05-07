@@ -33,7 +33,7 @@ export function JoinClassPage() {
       }
 
       toast.success(`Joined ${row.joined_class_name}`);
-      navigate(`/class/${row.joined_class_id}/dashboard`);
+      navigate('/dashboard');
     } catch (error: any) {
       if (error.message === "CLASS_NOT_OPEN") toast.error("This class is not open for students to join yet.");
       else toast.error(error.message || 'Could not join class');

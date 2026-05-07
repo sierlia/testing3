@@ -4,6 +4,7 @@ import { Calendar, Check, Copy, Mail, User } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
 import { supabase } from "../utils/supabase";
+import { profilePath } from "../utils/profileRoute";
 
 export function LetterView() {
   const { id } = useParams();
@@ -73,7 +74,7 @@ export function LetterView() {
                   <User className="mt-0.5 h-4 w-4 text-gray-400" />
                   <div>
                     <p className="text-xs text-gray-600">From</p>
-                    <Link to={`/profile/${letter.sender_user_id}`} className="font-medium text-blue-600 hover:underline">{sender?.display_name ?? "Member"}</Link>
+                    <Link to={profilePath(letter.sender_user_id)} className="font-medium text-blue-600 hover:underline">{sender?.display_name ?? "Member"}</Link>
                     <p className="text-xs text-gray-600">{sender?.party ?? ""}</p>
                   </div>
                 </div>

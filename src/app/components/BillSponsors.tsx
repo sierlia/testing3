@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Users, UserPlus, Star } from "lucide-react";
 import { Link } from "react-router";
 import { formatConstituency } from "../utils/constituency";
+import { profilePath } from "../utils/profileRoute";
 
 interface Sponsor {
   id: string;
@@ -74,7 +75,7 @@ export function BillSponsors({ sponsor, cosponsors, isUserCosponsor, currentUser
         <div className="flex items-center justify-between">
           <div>
             <h3 className="font-semibold text-gray-900">
-              <Link to={`/profile/${sponsor.id}`} className="text-blue-600 hover:underline">
+              <Link to={profilePath(sponsor.id)} className="text-blue-600 hover:underline">
                 {sponsor.name}
               </Link>
             </h3>
@@ -96,7 +97,7 @@ export function BillSponsors({ sponsor, cosponsors, isUserCosponsor, currentUser
             {cosponsors.map(cosponsor => (
               <div key={cosponsor.id} className="p-3 bg-gray-50 rounded-md border border-gray-200">
                 <h4 className="font-medium text-gray-900">
-                  <Link to={`/profile/${cosponsor.id}`} className="text-blue-600 hover:underline">
+                  <Link to={profilePath(cosponsor.id)} className="text-blue-600 hover:underline">
                     {cosponsor.name}
                   </Link>
                 </h4>

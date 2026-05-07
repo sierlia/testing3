@@ -11,6 +11,7 @@ import { BillRecord } from "../types/domain";
 import { useAuth } from "../utils/AuthContext";
 import { formatConstituency } from "../utils/constituency";
 import { displayPersonName } from "../utils/displayName";
+import { profilePath } from "../utils/profileRoute";
 
 type RowMode = "preview" | "open";
 type SortKey = "number" | "newest" | "oldest" | "title" | "sponsor" | "status" | "cosponsors";
@@ -368,7 +369,7 @@ export function TessBills() {
                           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-gray-600">
                             <span>Sponsor:</span>
                             <Link
-                              to={`/profile/${bill.sponsorId}`}
+                              to={profilePath(bill.sponsorId)}
                               onClick={(event) => event.stopPropagation()}
                               className={`font-medium hover:underline ${bill.sponsorRole === "teacher" ? "text-green-700" : "text-blue-600"}`}
                             >

@@ -8,6 +8,7 @@ import { OrganizationsLayout } from "./OrganizationsLayout";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { CompactPager } from "../components/CompactPager";
+import { profilePath } from "../utils/profileRoute";
 
 interface Caucus {
   id: string;
@@ -474,7 +475,7 @@ export function TessCaucuses() {
                   <div className="flex items-center justify-between gap-3">
                     <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="w-4 h-4" /> Chair</span>
                     {caucus.chairId ? (
-                      <Link to={`/profile/${caucus.chairId}`} onClick={(event) => event.stopPropagation()} className="truncate text-blue-600 hover:underline">
+                      <Link to={profilePath(caucus.chairId)} onClick={(event) => event.stopPropagation()} className="truncate text-blue-600 hover:underline">
                         {caucus.chair.name}
                       </Link>
                     ) : (
@@ -484,7 +485,7 @@ export function TessCaucuses() {
                   <div className="flex items-center justify-between gap-3">
                     <span className="flex items-center gap-2 font-medium text-gray-700"><Vote className="w-4 h-4" /> Co-Chair</span>
                     {caucus.coChairId ? (
-                      <Link to={`/profile/${caucus.coChairId}`} onClick={(event) => event.stopPropagation()} className="truncate text-blue-600 hover:underline">
+                      <Link to={profilePath(caucus.coChairId)} onClick={(event) => event.stopPropagation()} className="truncate text-blue-600 hover:underline">
                         {caucus.coChair.name}
                       </Link>
                     ) : (

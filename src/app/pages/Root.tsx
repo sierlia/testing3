@@ -11,11 +11,7 @@ export function Root() {
     if (!loading && user) {
       // Redirect authenticated users to their respective dashboard
       const role = user.user_metadata?.role;
-      if (role === 'teacher') {
-        navigate('/teacher/dashboard');
-      } else {
-        navigate('/dashboard');
-      }
+      navigate(role === 'teacher' ? '/classes' : '/dashboard');
     }
   }, [user, loading, navigate]);
 

@@ -34,11 +34,7 @@ export function SignInPage() {
         toast.success('Successfully signed in!');
         
         // Redirect based on role
-        if (role === 'teacher') {
-          navigate('/teacher/dashboard');
-        } else {
-          navigate('/dashboard');
-        }
+        navigate(role === 'teacher' ? '/classes' : '/dashboard');
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to sign in');

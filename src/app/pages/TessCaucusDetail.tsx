@@ -11,6 +11,7 @@ import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
+import { profilePath } from "../utils/profileRoute";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -836,7 +837,7 @@ export function TessCaucusDetail() {
               <p className="text-sm text-gray-600">
                 Chair:{" "}
                 {chairMember?.user_id ? (
-                  <Link to={`/profile/${chairMember.user_id}`} className="text-blue-600 hover:underline">
+                  <Link to={profilePath(chairMember.user_id)} className="text-blue-600 hover:underline">
                     {chairMember.profile?.display_name ?? "Member"}
                   </Link>
                 ) : (
@@ -844,7 +845,7 @@ export function TessCaucusDetail() {
                 )}{" "}
                 • Co-Chair:{" "}
                 {coChairMember?.user_id ? (
-                  <Link to={`/profile/${coChairMember.user_id}`} className="text-blue-600 hover:underline">
+                  <Link to={profilePath(coChairMember.user_id)} className="text-blue-600 hover:underline">
                     {coChairMember.profile?.display_name ?? "Member"}
                   </Link>
                 ) : (
@@ -976,7 +977,7 @@ export function TessCaucusDetail() {
                         {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
-                          <Link to={`/profile/${a.author_user_id}`} className={authorLinkClass(a.author)}>
+                          <Link to={profilePath(a.author_user_id)} className={authorLinkClass(a.author)}>
                             {displayAuthorName(a.author)}
                           </Link>{" "}
                           • {new Date(a.created_at).toLocaleString()}
@@ -999,7 +1000,7 @@ export function TessCaucusDetail() {
                         {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
                         <div className="text-xs text-gray-500 mt-2">
-                          <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={authorLinkClass(selectedAnnouncement.author)}>
+                          <Link to={profilePath(selectedAnnouncement.author_user_id)} className={authorLinkClass(selectedAnnouncement.author)}>
                             {displayAuthorName(selectedAnnouncement.author)}
                           </Link>{" "}
                           • {new Date(selectedAnnouncement.created_at).toLocaleString()}
@@ -1106,7 +1107,7 @@ export function TessCaucusDetail() {
                   {visibleMembers.map((m) => (
                     <div key={`election:${m.user_id}`} className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
                       <div className="min-w-0">
-                        <Link to={`/profile/${m.user_id}`} className={`truncate text-sm font-medium ${m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}`}>
+                        <Link to={profilePath(m.user_id)} className={`truncate text-sm font-medium ${m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}`}>
                           {m.profile?.display_name ?? "Member"}
                         </Link>
                         <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.profile?.party)}-{formatConstituency(m.profile?.constituency_name) || "N/A"}</div>
@@ -1160,7 +1161,7 @@ export function TessCaucusDetail() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        <Link to={`/profile/${m.user_id}`} className={m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
+                        <Link to={profilePath(m.user_id)} className={m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
                           {m.profile?.display_name ?? "Member"}
                         </Link>
                       </div>

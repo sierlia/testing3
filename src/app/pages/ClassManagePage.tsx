@@ -10,6 +10,7 @@ import { Card, CardContent, CardHeader } from "../components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { displayPersonName } from "../utils/displayName";
 import { supabase } from "../utils/supabase";
+import { profilePath } from "../utils/profileRoute";
 
 interface RosterMember {
   id: string;
@@ -704,7 +705,7 @@ export function ClassManagePage() {
         />
       );
     }
-    if (key === "name") return <Link to={`/profile/${member.id}`} className="text-blue-600 hover:underline">{displayPersonName(member.name)}</Link>;
+    if (key === "name") return <Link to={profilePath(member.id)} className="text-blue-600 hover:underline">{displayPersonName(member.name)}</Link>;
     if (key === "email") return member.email;
     if (key === "role") return <span className="capitalize">{member.role}</span>;
     if (key === "positions") return member.position;
@@ -714,7 +715,7 @@ export function ClassManagePage() {
     if (key === "passed") return linkedCountList(member.passed);
     if (key === "failed") return linkedCountList(member.failed);
     if (key === "cosponsored") return linkList(member.cosponsored, "/bills");
-    if (key === "letters") return <Link to={`/dear-colleague/inbox?author=${encodeURIComponent(member.name)}`} className="text-blue-600 hover:underline">{member.letters}</Link>;
+    if (key === "letters") return <Link to={`/inbox?author=${encodeURIComponent(member.name)}`} className="text-blue-600 hover:underline">{member.letters}</Link>;
     if (key === "committees") return linkList(member.committees, "/committees");
     if (key === "caucuses") return linkList(member.caucuses, "/caucuses");
     return String((member as any)[key] ?? "");
@@ -840,7 +841,7 @@ export function ClassManagePage() {
             {rows.map((student) => (
               <tr key={student.id}>
                 <td className="px-4 py-3">
-                  <Link to={`/profile/${student.id}`} className="font-medium text-blue-600 hover:underline">{displayPersonName(student.name)}</Link>
+                  <Link to={profilePath(student.id)} className="font-medium text-blue-600 hover:underline">{displayPersonName(student.name)}</Link>
                   <div className="mt-1 flex flex-wrap gap-1">
                     {student.status === "pending" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Join request</span>}
                     {student.status === "invited" && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Invitation sent</span>}
@@ -876,7 +877,7 @@ export function ClassManagePage() {
       </div>
     );
   }
-  if (!classDetails) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Button onClick={() => navigate("/teacher/dashboard")}>Back</Button></div>;
+  if (!classDetails) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Button onClick={() => navigate("/classes")}>Back</Button></div>;
 
   return (
     <div className="min-h-screen bg-gray-50">

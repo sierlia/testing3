@@ -146,7 +146,7 @@ function TeacherSignUp({ onBack }: { onBack: () => void }) {
       }
 
       toast.success('Account created successfully!');
-      navigate('/teacher/dashboard');
+      navigate('/classes');
     } catch (error: any) {
       console.error('Signup error:', error);
       toast.error(error.message || 'Failed to create account');

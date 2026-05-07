@@ -64,7 +64,7 @@ export function SettingsClasses() {
       .from("profiles")
       .upsert({ user_id: uid, class_id: id, role: desiredRole, display_name: auth.user?.user_metadata?.name ?? null } as any);
     if (error) toast.error(error.message);
-    navigate(`/class/${id}/dashboard`);
+    navigate("/dashboard");
   };
 
   const joinClass = async (event: FormEvent) => {

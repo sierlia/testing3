@@ -8,6 +8,7 @@ import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { profilePath } from "../utils/profileRoute";
 
 type Member = {
   user_id: string;
@@ -254,7 +255,7 @@ export function Members() {
           {filteredMembers.map((member) => (
             <Link
               key={member.user_id}
-              to={`/profile/${member.user_id}`}
+              to={profilePath(member.user_id)}
               className={`rounded-lg border p-6 shadow-sm transition-shadow hover:shadow-md ${
                 member.role === "teacher" ? "border-green-200 bg-green-50 hover:bg-green-100" : "border-gray-200 bg-white"
               }`}

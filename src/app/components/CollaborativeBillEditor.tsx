@@ -223,6 +223,54 @@ function hasDeletedContent(doc: any, from: number, to: number) {
   return hasContent;
 }
 
+function sameMarkAttrs(a: any, b: any) {
+  return (
+    String(a?.authorId ?? "") === String(b?.authorId ?? "") &&
+    String(a?.authorName ?? "") === String(b?.authorName ?? "") &&
+    String(a?.color ?? "") === String(b?.color ?? "")
+  );
+}
+
+function findMarkedTextRange(doc: any, pos: number, markType: any) {
+  let clickedMark: any = null;
+  doc.nodesBetween(Math.max(0, pos - 1), Math.min(doc.content.size, pos + 1), (node: any) => {
+    const mark = node.marks?.find((item: any) => item.type === markType);
+    if (mark) {
+      clickedMark = mark;
+      return false;
+    }
+    return true;
+  });
+  if (!clickedMark) return null;
+
+  const ranges: Array<{ from: number; to: number }> = [];
+  doc.descendants((node: any, nodePos: number) => {
+    if (!node.isText || !node.text) return true;
+    const mark = node.marks?.find((item: any) => item.type === markType && sameMarkAttrs(item.attrs, clickedMark.attrs));
+    if (!mark) return true;
+    ranges.push({ from: nodePos, to: nodePos + node.nodeSize });
+    return true;
+  });
+
+  const index = ranges.findIndex((range) => pos >= range.from - 1 && pos <= range.to + 1);
+  if (index < 0) return null;
+
+  let from = ranges[index].from;
+  let to = ranges[index].to;
+  for (let i = index - 1; i >= 0 && ranges[i].to >= from - 4; i -= 1) from = ranges[i].from;
+  for (let i = index + 1; i < ranges.length && ranges[i].from <= to + 4; i += 1) to = ranges[i].to;
+  return { from, to, color: clickedMark.attrs?.color || "#2563eb" };
+}
+
+function domSelectionDirection(): "backward" | "forward" | null {
+  const selection = window.getSelection();
+  if (!selection || selection.rangeCount === 0 || selection.isCollapsed) return null;
+  const range = document.createRange();
+  range.setStart(selection.anchorNode!, selection.anchorOffset);
+  range.setEnd(selection.focusNode!, selection.focusOffset);
+  return range.collapsed ? "backward" : "forward";
+}
+
 function setBlockAlignment(editor: Editor, alignment: "left" | "center" | "right") {
   const { state, view } = editor;
   const { from, to } = state.selection;
@@ -353,12 +401,14 @@ function createEditAttributionExtension({
 
             for (const deletion of [...deletions].sort((a, b) => b.at - a.at)) {
               const from = Math.max(0, Math.min(deletion.at, tr.doc.content.size));
-              tr.replaceRange(from, from, deletion.slice);
-              const to = from + deletion.slice.size;
-              tr.removeMark(from, to, editMarkType);
-              tr.addMark(from, to, deleteMark);
+              const matchingInsert = ranges.find((range) => range.from === from);
+              const insertAt = deletion.direction === "backward" && matchingInsert ? Math.min(matchingInsert.to, tr.doc.content.size) : from;
+              tr.replaceRange(insertAt, insertAt, deletion.slice);
+              const to = insertAt + deletion.slice.size;
+              tr.removeMark(insertAt, to, editMarkType);
+              tr.addMark(insertAt, to, deleteMark);
               if (deletions.length === 1) {
-                tr.setSelection(TextSelection.create(tr.doc, deletion.direction === "forward" ? to : from));
+                tr.setSelection(TextSelection.create(tr.doc, deletion.direction === "backward" && matchingInsert ? from : to));
               }
             }
 
@@ -481,11 +531,12 @@ export function CollaborativeBillEditor({
   const didInitRef = useRef(false);
   const suppressAttributionRef = useRef(false);
   const deleteDirectionRef = useRef<"backward" | "forward" | null>(null);
+  const selectionDirectionRef = useRef<"backward" | "forward" | null>(null);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
   const hydratedFromSnapshotRef = useRef(false);
   const [collabStatus, setCollabStatus] = useState<"connecting" | "live" | "fallback">("connecting");
-  const [restoreMenu, setRestoreMenu] = useState<{ x: number; y: number; pos: number; color: string } | null>(null);
+  const [restoreMenu, setRestoreMenu] = useState<{ x: number; y: number; from: number; to: number; color: string } | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -579,7 +630,7 @@ export function CollaborativeBillEditor({
           createEditAttributionExtension({
             getAuthor: () => localUser,
             shouldSuppress: () => suppressAttributionRef.current,
-            getDeleteDirection: () => deleteDirectionRef.current,
+            getDeleteDirection: () => deleteDirectionRef.current ?? selectionDirectionRef.current,
             trackDeletes,
           }),
           Collaboration.configure({ document: ydocRef.current }),
@@ -591,6 +642,16 @@ export function CollaborativeBillEditor({
         editorProps: {
           attributes: {
             class: "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
+          },
+          handleDOMEvents: {
+            mouseup: () => {
+              selectionDirectionRef.current = domSelectionDirection();
+              return false;
+            },
+            keyup: () => {
+              selectionDirectionRef.current = domSelectionDirection();
+              return false;
+            },
           },
           handleKeyDown: (_view, event) => {
             if (event.key === "Backspace") deleteDirectionRef.current = "backward";
@@ -627,13 +688,23 @@ export function CollaborativeBillEditor({
             createEditAttributionExtension({
               getAuthor: () => localUser,
               shouldSuppress: () => suppressAttributionRef.current,
-              getDeleteDirection: () => deleteDirectionRef.current,
+              getDeleteDirection: () => deleteDirectionRef.current ?? selectionDirectionRef.current,
               trackDeletes,
             }),
           ],
           editorProps: {
             attributes: {
               class: "prose max-w-none focus:outline-none min-h-[420px] p-4 rounded-md border border-gray-200 bg-white",
+            },
+            handleDOMEvents: {
+              mouseup: () => {
+                selectionDirectionRef.current = domSelectionDirection();
+                return false;
+              },
+              keyup: () => {
+                selectionDirectionRef.current = domSelectionDirection();
+                return false;
+              },
             },
             handleKeyDown: (_view, event) => {
               if (event.key === "Backspace") deleteDirectionRef.current = "backward";
@@ -711,25 +782,25 @@ export function CollaborativeBillEditor({
 
     const pos = editor.view.posAtCoords({ left: event.clientX, top: event.clientY })?.pos;
     if (typeof pos !== "number") return;
+    const range = findMarkedTextRange(editor.state.doc, pos, editor.state.schema.marks.deleteHighlight);
+    if (!range) return;
     event.preventDefault();
     setRestoreMenu({
       x: event.clientX,
       y: event.clientY,
-      pos,
-      color: deleted.getAttribute("data-delete-color") || "#2563eb",
+      from: range.from,
+      to: range.to,
+      color: range.color || deleted.getAttribute("data-delete-color") || "#2563eb",
     });
   };
 
   const restoreDeletedText = () => {
     if (!editor || !restoreMenu) return;
-    editor
-      .chain()
-      .focus()
-      .setMeta("restoreDeleteHighlight", true)
-      .setTextSelection(restoreMenu.pos)
-      .extendMarkRange("deleteHighlight")
-      .unsetMark("deleteHighlight")
-      .run();
+    const tr = editor.state.tr.removeMark(restoreMenu.from, restoreMenu.to, editor.state.schema.marks.deleteHighlight);
+    tr.setMeta("restoreDeleteHighlight", true);
+    tr.setSelection(TextSelection.create(tr.doc, restoreMenu.to));
+    editor.view.dispatch(tr.scrollIntoView());
+    editor.view.focus();
     setRestoreMenu(null);
   };
 
@@ -746,7 +817,7 @@ export function CollaborativeBillEditor({
   }
 
   return (
-    <div className={displayMode === "clean" ? "committee-clean-view" : ""} onClick={showRestoreMenu} onContextMenu={showRestoreMenu}>
+    <div className={displayMode === "clean" ? "committee-clean-view" : ""} onMouseDown={showRestoreMenu} onContextMenu={showRestoreMenu}>
       {collabStatus !== "live" && (
         <div className="mb-2 text-xs px-2 py-1 rounded border border-amber-200 bg-amber-50 text-amber-800">
           {collabStatus === "connecting" ? "Connecting collaboration..." : "Collaboration offline (local edits only)"}
@@ -758,6 +829,7 @@ export function CollaborativeBillEditor({
         <div
           className="fixed z-50 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
           style={{ left: restoreMenu.x, top: restoreMenu.y, ["--restore-color" as any]: restoreMenu.color }}
+          onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => event.stopPropagation()}
         >
           <button

@@ -110,7 +110,7 @@ export function TeacherDashboard() {
 
   const openClass = async (classId: string) => {
     await setActiveClass(classId);
-    navigate(`/teacher/class/${classId}`);
+    navigate("/dashboard");
   };
 
   const updateInvitation = async (classId: string, accepted: boolean) => {

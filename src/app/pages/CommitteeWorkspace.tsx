@@ -9,6 +9,8 @@ import { DefaultAvatar } from "../components/DefaultAvatar";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { postCommitteeProgress, proposeBillForCommitteeVote } from "../services/bills";
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
+import { formatConstituency } from "../utils/constituency";
+import { profilePath } from "../utils/profileRoute";
 
 type BillRow = {
   id: string;
@@ -19,6 +21,7 @@ type BillRow = {
   status: string;
 };
 type Subcommittee = { id: string; name: string };
+type WorkspaceBill = { id: string; number: string; title: string; sponsor: string; sponsorId: string; sponsorParty: string | null; sponsorConstituency: string | null; legislativeHtml: string; status: string; subcommitteeId: string | null; subcommitteeName: string | null };
 
 const workspaceCache = new Map<
   string,
@@ -26,10 +29,24 @@ const workspaceCache = new Map<
     classId: string | null;
     committeeName: string;
     myCommitteeRole: string | null;
-    bills: Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string; subcommitteeId: string | null; subcommitteeName: string | null }>;
+    bills: WorkspaceBill[];
     selectedBillId: string | null;
   }
 >();
+
+function partyAbbr(party: string | null | undefined) {
+  const normalized = String(party ?? "").toLowerCase();
+  if (normalized.includes("democrat")) return "D";
+  if (normalized.includes("republican")) return "R";
+  if (normalized.includes("independent")) return "I";
+  if (normalized.includes("green")) return "G";
+  if (normalized.includes("libertarian")) return "L";
+  return party?.trim()?.slice(0, 1).toUpperCase() || "I";
+}
+
+function sponsorDescriptor(bill: Pick<WorkspaceBill, "sponsorParty" | "sponsorConstituency">) {
+  return `(Rep.-${partyAbbr(bill.sponsorParty)}-${formatConstituency(bill.sponsorConstituency) || "N/A"})`;
+}
 
 export function CommitteeWorkspace() {
   const { id } = useParams();
@@ -40,7 +57,7 @@ export function CommitteeWorkspace() {
   const [myCommitteeRole, setMyCommitteeRole] = useState<string | null>(null);
   const [committeeName, setCommitteeName] = useState<string>(() => window.localStorage.getItem(committeeNameStorageKey(committeeId)) || "Committee");
 
-  const [bills, setBills] = useState<Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string; subcommitteeId: string | null; subcommitteeName: string | null }>>([]);
+  const [bills, setBills] = useState<WorkspaceBill[]>([]);
   const [subcommittees, setSubcommittees] = useState<Subcommittee[]>([]);
   const [subcommitteeReferralsAvailable, setSubcommitteeReferralsAvailable] = useState(true);
   const [mySubcommitteeIds, setMySubcommitteeIds] = useState<Set<string>>(new Set());
@@ -140,21 +157,27 @@ export function CommitteeWorkspace() {
         const sponsorIds = Array.from(new Set((billRows ?? []).map((b: any) => b.author_user_id)));
         const { data: sponsors } = await supabase
           .from("profiles")
-          .select("user_id,display_name")
+          .select("user_id,display_name,party,constituency_name")
           .in("user_id", sponsorIds.length ? sponsorIds : ["00000000-0000-0000-0000-000000000000"]);
-        const sponsorMap = new Map((sponsors ?? []).map((s: any) => [s.user_id, s.display_name]));
+        const sponsorMap = new Map((sponsors ?? []).map((s: any) => [s.user_id, s]));
         const refMap = new Map((refs ?? []).map((ref: any) => [ref.bill_id, ref]));
 
-        const mapped = (billRows as any[]).map((b: BillRow) => ({
+        const mapped = (billRows as any[]).map((b: BillRow) => {
+          const sponsor = sponsorMap.get(b.author_user_id) as any;
+          return ({
           id: b.id,
           number: `H.R. ${b.bill_number ?? ""}`.trim(),
           title: b.title,
-          sponsor: sponsorMap.get(b.author_user_id) ?? "Member",
+          sponsor: sponsor?.display_name ?? "Member",
+          sponsorId: b.author_user_id,
+          sponsorParty: sponsor?.party ?? null,
+          sponsorConstituency: sponsor?.constituency_name ?? null,
           legislativeHtml: b.legislative_text,
           status: b.status,
           subcommitteeId: refMap.get(b.id)?.subcommittee_id ?? null,
           subcommitteeName: refMap.get(b.id)?.subcommittee_id ? referredSubcommitteeNameById.get(refMap.get(b.id)?.subcommittee_id) ?? null : null,
-        }));
+          });
+        });
         setBills(mapped);
         const nextSelectedBillId = selectedBillId && mapped.some((bill) => bill.id === selectedBillId) ? selectedBillId : mapped[0]?.id ?? null;
         setSelectedBillId(nextSelectedBillId);
@@ -434,9 +457,31 @@ export function CommitteeWorkspace() {
                     <div className="flex items-start gap-2">
                       {!seenBillIds.has(b.id) && <span className="mt-1.5 h-2 w-2 flex-shrink-0 rounded-full bg-blue-600" aria-label="New bill" />}
                       <div className="min-w-0 flex-1">
-                        <div className="font-mono text-sm font-semibold text-gray-900">{b.number}</div>
-                        <div className="text-sm text-gray-700 line-clamp-2">{b.title}</div>
-                    <div className="text-xs text-gray-500 mt-1">Sponsor: {b.sponsor}</div>
+                        <Link
+                          to={`/bills/${b.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                          className="font-mono text-sm font-semibold text-blue-700 hover:underline"
+                        >
+                          {b.number}
+                        </Link>
+                        <Link
+                          to={`/bills/${b.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(event) => event.stopPropagation()}
+                          className="block text-sm text-gray-700 line-clamp-2 hover:text-blue-700 hover:underline"
+                        >
+                          {b.title}
+                        </Link>
+                    <div className="text-xs text-gray-500 mt-1">
+                      Sponsor:{" "}
+                      <Link to={profilePath(b.sponsorId)} onClick={(event) => event.stopPropagation()} className="text-blue-600 hover:underline">
+                        {b.sponsor}
+                      </Link>{" "}
+                      {sponsorDescriptor(b)}
+                    </div>
                     {b.subcommitteeName && <div className="mt-2 rounded bg-gray-100 px-2 py-1 text-xs text-gray-600">Under {b.subcommitteeName}</div>}
                       </div>
                     </div>
@@ -462,9 +507,11 @@ export function CommitteeWorkspace() {
                   <div className="p-5 border-b border-gray-200">
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div>
-                        <div className="font-mono text-sm font-semibold text-gray-900">{selected.number}</div>
-                        <div className="text-xl font-bold text-gray-900 mt-1">{selected.title}</div>
-                        <div className="text-sm text-gray-600 mt-1">Sponsor: {selected.sponsor}</div>
+                        <Link to={`/bills/${selected.id}`} target="_blank" rel="noopener noreferrer" className="font-mono text-sm font-semibold text-blue-700 hover:underline">{selected.number}</Link>
+                        <Link to={`/bills/${selected.id}`} target="_blank" rel="noopener noreferrer" className="block text-xl font-bold text-gray-900 mt-1 hover:text-blue-700 hover:underline">{selected.title}</Link>
+                        <div className="text-sm text-gray-600 mt-1">
+                          Sponsor: <Link to={profilePath(selected.sponsorId)} className="text-blue-600 hover:underline">{selected.sponsor}</Link> {sponsorDescriptor(selected)}
+                        </div>
                         {selected.subcommitteeName && <div className="mt-2 text-xs text-gray-500">Subcommittee: {selected.subcommitteeName}</div>}
                       </div>
                       <div className="sticky top-0 z-20 flex flex-col items-end gap-2 rounded-md bg-white/95 p-1 backdrop-blur">
@@ -473,7 +520,7 @@ export function CommitteeWorkspace() {
                             {activeEditors.map((u) => (
                               <Link
                                 key={u.id}
-                                to={`/profile/${u.id}`}
+                                to={profilePath(u.id)}
                                 className="presence-avatar"
                                 data-tooltip={u.name}
                                 style={{ ["--presence-color" as any]: u.color }}

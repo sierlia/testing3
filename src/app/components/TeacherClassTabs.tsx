@@ -3,7 +3,7 @@ import { Link } from "react-router";
 export function TeacherClassTabs({ classId, active }: { classId: string | null | undefined; active: "dashboard" | "roster" | "settings" }) {
   if (!classId) return null;
   const tabs = [
-    { id: "dashboard", label: "Dashboard", href: `/teacher/class/${classId}` },
+    { id: "dashboard", label: "Dashboard", href: "/dashboard" },
     { id: "roster", label: "Roster", href: `/teacher/class/${classId}/manage` },
     { id: "settings", label: "Settings", href: `/teacher/class/${classId}/settings` },
   ] as const;

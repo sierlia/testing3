@@ -10,6 +10,7 @@ import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
+import { profilePath } from "../utils/profileRoute";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
 type PartyRole = "majority_leader" | "majority_whip" | "minority_leader" | "minority_whip" | "leader" | "whip" | "chair" | "vice_chair";
@@ -718,7 +719,7 @@ export function PartyDetail() {
                             {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                             <div className="line-clamp-2 text-sm font-medium text-gray-900">{a.body}</div>
                             <div className="mt-1 text-xs text-gray-500">
-                              <Link to={`/profile/${a.author_user_id}`} className={partyAuthorLinkClass(a.author)}>{displayAuthorName(a.author)}</Link> • {new Date(a.created_at).toLocaleDateString()}
+                              <Link to={profilePath(a.author_user_id)} className={partyAuthorLinkClass(a.author)}>{displayAuthorName(a.author)}</Link> • {new Date(a.created_at).toLocaleDateString()}
                             </div>
                           </button>
                         ))
@@ -741,7 +742,7 @@ export function PartyDetail() {
                               <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
                             )}
                             <div className="mt-2 text-xs text-gray-500">
-                              <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={partyAuthorLinkClass(selectedAnnouncement.author)}>{displayAuthorName(selectedAnnouncement.author)}</Link> • {new Date(selectedAnnouncement.created_at).toLocaleString()}
+                              <Link to={profilePath(selectedAnnouncement.author_user_id)} className={partyAuthorLinkClass(selectedAnnouncement.author)}>{displayAuthorName(selectedAnnouncement.author)}</Link> • {new Date(selectedAnnouncement.created_at).toLocaleString()}
                             </div>
                             {(isTeacher || selectedAnnouncement.author_user_id === meId) && (
                               <div className="mt-3 flex justify-end gap-2">
@@ -769,7 +770,7 @@ export function PartyDetail() {
                             {(comments[selectedAnnouncement.id] ?? []).map((comment) => (
                               <div key={comment.id} className="rounded-md border border-gray-200 p-3 text-sm">
                                 <div className="flex items-center justify-between gap-3">
-                                  <Link to={`/profile/${comment.author_user_id}`} className={`font-medium ${partyAuthorLinkClass(comment.author)}`}>{displayAuthorName(comment.author)}</Link>
+                                  <Link to={profilePath(comment.author_user_id)} className={`font-medium ${partyAuthorLinkClass(comment.author)}`}>{displayAuthorName(comment.author)}</Link>
                                   {isTeacher && (
                                     <button type="button" onClick={() => void deleteComment(comment.id)} className="rounded p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete comment">
                                       <Trash2 className="h-3.5 w-3.5" />
@@ -921,7 +922,7 @@ export function PartyDetail() {
                         {m.role === "teacher" && <GraduationCap className="absolute right-2 top-2 h-4 w-4 text-green-600" />}
                         {m.avatar_url ? <img src={m.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
                         <div className="min-w-0 flex-1">
-                          <Link to={`/profile/${m.user_id}`} className={`truncate text-sm font-medium hover:underline ${roleLabel ? "text-purple-700" : m.role === "teacher" ? "text-green-700" : "text-[var(--party-color)]"}`}>{m.display_name ?? "Member"}</Link>
+                          <Link to={profilePath(m.user_id)} className={`truncate text-sm font-medium hover:underline ${roleLabel ? "text-purple-700" : m.role === "teacher" ? "text-green-700" : "text-[var(--party-color)]"}`}>{m.display_name ?? "Member"}</Link>
                           {m.role !== "teacher" && <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.party)}-{formatConstituency(m.constituency_name) || "N/A"}</div>}
                           {roleLabel && <div className="mt-1 inline-flex rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">{roleLabel}</div>}
                         </div>

@@ -18,8 +18,9 @@ type Profile = {
   constituency_name: string | null;
 };
 
-export function ClassSimulationDashboard() {
-  const { classId } = useParams();
+export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?: string | null } = {}) {
+  const { classId: routeClassId } = useParams();
+  const classId = classIdOverride ?? routeClassId;
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [meId, setMeId] = useState<string | null>(null);

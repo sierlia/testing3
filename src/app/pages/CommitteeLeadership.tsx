@@ -8,6 +8,7 @@ import { CommitteeTabs } from "../components/CommitteeTabs";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
+import { profilePath } from "../utils/profileRoute";
 
 type Member = {
   user_id: string;
@@ -312,7 +313,7 @@ export function CommitteeLeadership() {
             <div className="flex min-w-0 items-center gap-3">
               {member.profile?.avatar_url ? <img src={member.profile.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
               <div className="min-w-0">
-                <Link to={`/profile/${member.user_id}`} className="truncate text-sm font-medium text-blue-600 hover:underline">{member.profile?.display_name ?? "Member"}</Link>
+                <Link to={profilePath(member.user_id)} className="truncate text-sm font-medium text-blue-600 hover:underline">{member.profile?.display_name ?? "Member"}</Link>
                 <div className="text-xs text-gray-500">{memberDescriptor(member)}</div>
                 {hasOptedOut(position, member.user_id) && <div className="text-xs text-gray-500">Opted out</div>}
               </div>

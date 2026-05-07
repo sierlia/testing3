@@ -10,7 +10,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
   const path = location.pathname;
   const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const tabs = [
-    { label: "Notifications", to: "/settings/notifications" },
+    { label: "Notifications", to: "/notifications" },
     ...(!isTeacher ? [{ label: "Classes", to: "/settings/classes" }] : []),
   ];
 
@@ -28,7 +28,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex gap-6">
             {tabs.map((tab) => {
-              const active = path === tab.to;
+              const active = path === tab.to || (tab.to === "/notifications" && path === "/settings/notifications");
               return (
                 <Link
                   key={tab.to}

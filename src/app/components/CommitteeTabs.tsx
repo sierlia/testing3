@@ -100,11 +100,12 @@ export function committeeNameStorageKey(committeeId: string) {
 export function CommitteeTabs({ committeeId, active }: { committeeId: string; active: TabId }) {
   const [countData, setCountData] = useState<CountData>(() => readCachedCountData(committeeId));
   const [seenVersion, setSeenVersion] = useState(0);
-  const [access, setAccess] = useState({ isMember: false, isTeacher: false, loaded: false });
+  const [access, setAccess] = useState(() => membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, loaded: false });
 
   useEffect(() => {
     let cancelled = false;
     setCountData(readCachedCountData(committeeId));
+    setAccess(membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, loaded: false });
     const load = async () => {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;

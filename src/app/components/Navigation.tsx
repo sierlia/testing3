@@ -5,6 +5,7 @@ import { NotificationBadge } from "./NotificationBadge";
 import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "./DefaultAvatar";
+import { profilePath } from "../utils/profileRoute";
 
 type TeacherClass = { id: string; name: string };
 
@@ -196,7 +197,7 @@ export function Navigation() {
       return;
     }
     if (current === "/teacher/dashboard") {
-      navigate(`/teacher/class/${classId}`);
+      navigate("/dashboard");
       return;
     }
     navigate(0);
@@ -345,10 +346,10 @@ export function Navigation() {
   const dashboardLink =
     user?.user_metadata?.role === "teacher"
       ? activeClassId
-        ? `/teacher/class/${activeClassId}`
-        : "/teacher/dashboard"
+        ? "/dashboard"
+        : "/classes"
       : activeClassId
-        ? `/class/${activeClassId}/dashboard`
+        ? "/dashboard"
         : "/settings/classes";
 
   return (
@@ -483,7 +484,7 @@ export function Navigation() {
 
           <div className="flex items-center gap-4">
             <NotificationBadge />
-            <Link to="/dear-colleague/inbox" className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors" title="Dear Colleague Inbox">
+            <Link to="/inbox" className="relative p-2 text-gray-600 hover:text-gray-900 transition-colors" title="Dear Colleague Inbox">
               <Mail className="w-6 h-6" />
               {unreadLetters > 0 && (
                 <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-600 text-white text-xs font-bold rounded-full flex items-center justify-center">
@@ -538,7 +539,7 @@ export function Navigation() {
                         Add class
                       </Link>
                       <Link
-                        to="/teacher/dashboard"
+                        to="/classes"
                         className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                         onClick={() => setClassMenuOpen(false)}
                       >
@@ -571,7 +572,7 @@ export function Navigation() {
                     <p className="text-xs text-gray-500">{user?.email}</p>
                   </div>
                   <Link
-                    to={`/profile/${user?.id}`}
+                    to={profilePath(user?.id)}
                     className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     onClick={() => setUserMenuOpen(false)}
                   >
@@ -579,7 +580,7 @@ export function Navigation() {
                     View Profile
                   </Link>
                   <Link
-                    to="/settings/notifications"
+                    to="/notifications"
                     className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     onClick={() => setUserMenuOpen(false)}
                   >

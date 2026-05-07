@@ -13,6 +13,7 @@ import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "..
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
+import { profilePath } from "../utils/profileRoute";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type Subcommittee = { id: string; committee_id: string; class_id: string; name: string; description: string | null; created_at: string };
@@ -1128,7 +1129,7 @@ export function CommitteeDashboard() {
                         {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
-                          <Link to={`/profile/${a.author_user_id}`} className={authorLinkClass(a.author)}>
+                          <Link to={profilePath(a.author_user_id)} className={authorLinkClass(a.author)}>
                             {displayAuthorName(a.author)}
                           </Link>{" "}
                           • {new Date(a.created_at).toLocaleString()}
@@ -1151,7 +1152,7 @@ export function CommitteeDashboard() {
                         {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
                         <div className="text-xs text-gray-500 mt-2">
-                          <Link to={`/profile/${selectedAnnouncement.author_user_id}`} className={authorLinkClass(selectedAnnouncement.author)}>
+                          <Link to={profilePath(selectedAnnouncement.author_user_id)} className={authorLinkClass(selectedAnnouncement.author)}>
                             {displayAuthorName(selectedAnnouncement.author)}
                           </Link>{" "}
                           • {new Date(selectedAnnouncement.created_at).toLocaleString()}
@@ -1247,7 +1248,7 @@ export function CommitteeDashboard() {
                   )}
                     <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
-                      <Link to={`/profile/${m.user_id}`} className={m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
+                      <Link to={profilePath(m.user_id)} className={m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
                         {m.profile?.display_name ?? "Member"}
                       </Link>
                     </div>

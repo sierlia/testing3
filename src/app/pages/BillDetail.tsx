@@ -12,6 +12,7 @@ import { fetchBillDetail, toggleCosponsor } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
 import { displayPersonName } from "../utils/displayName";
+import { profilePath } from "../utils/profileRoute";
 
 type TextTab = "revised" | "original" | "supporting";
 type TrackerStatus = "completed" | "current" | "upcoming";
@@ -619,7 +620,7 @@ export function BillDetail() {
           <div className="grid gap-2 text-sm text-gray-700">
             <div>
               <span className="font-semibold text-gray-900">Sponsor:</span>{" "}
-              <Link to={`/profile/${sponsor?.user_id ?? bill.author_user_id}`} className={`font-medium hover:underline ${sponsor?.role === "teacher" ? "text-green-700" : "text-blue-600"}`}>
+              <Link to={profilePath(sponsor?.user_id ?? bill.author_user_id)} className={`font-medium hover:underline ${sponsor?.role === "teacher" ? "text-green-700" : "text-blue-600"}`}>
                 {sponsorName}
               </Link>
               {sponsor?.role !== "teacher" && <span className="text-gray-500"> ({sponsor?.party ?? "Independent"}{sponsorDistrict ? `-${sponsorDistrict}` : ""})</span>}
@@ -750,7 +751,7 @@ export function BillDetail() {
                 ) : (
                   visibleCosponsors.map((cosponsor) => (
                     <div key={cosponsor.user_id} className="rounded-md border border-gray-200 bg-gray-50 p-3">
-                      <Link to={`/profile/${cosponsor.user_id}`} className={`font-medium hover:underline ${cosponsor.role === "teacher" ? "text-green-700" : "text-blue-600"}`}>
+                      <Link to={profilePath(cosponsor.user_id)} className={`font-medium hover:underline ${cosponsor.role === "teacher" ? "text-green-700" : "text-blue-600"}`}>
                         {displayPersonName(cosponsor.display_name ?? "Unknown")}
                       </Link>
                       {cosponsor.role !== "teacher" && <div className="text-xs text-gray-600">{cosponsor.party ?? "Independent"}{cosponsor.constituency_name ? ` - ${formatConstituency(cosponsor.constituency_name)}` : ""}</div>}

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Reply, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { ReactionEmoji, ReactionsBar, ReactionsSummary } from "./ReactionsBar";
 import { DefaultAvatar } from "./DefaultAvatar";
+import { profilePath } from "../utils/profileRoute";
 
 export type ProfileLite = {
   user_id: string;
@@ -98,7 +99,7 @@ export function ThreadedComments({
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm">
                 <Link
-                  to={`/profile/${comment.author_user_id}`}
+                  to={profilePath(comment.author_user_id)}
                   className={`font-semibold hover:underline ${
                     comment.author?.organization_role && comment.author.organization_role !== "member"
                       ? "text-purple-700"

@@ -51,9 +51,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     if (signInError) throw signInError;
     if (launchDemo) setDemoLaunchProgress(65);
 
-    const defaultTarget = credentials.role === "teacher"
-      ? `/teacher/class/${credentials.class_id}`
-      : `/class/${credentials.class_id}/dashboard`;
+    const defaultTarget = "/dashboard";
     const isPublicRoute = ["/", "/signin", "/signup", "/about"].includes(currentPath);
     const incompatibleRoleRoute =
       (credentials.role === "student" && currentPath.startsWith("/teacher/")) ||

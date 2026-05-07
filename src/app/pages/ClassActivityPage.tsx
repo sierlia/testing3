@@ -4,6 +4,7 @@ import { AlertCircle, ArrowDown, ArrowUp, BookOpen, FileText, MessageSquare, Sea
 import { Navigation } from "../components/Navigation";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "../components/ui/select";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
+import { profilePath } from "../utils/profileRoute";
 
 type SortDirection = "desc" | "asc";
 
@@ -154,16 +155,16 @@ export function ClassActivityPage() {
                   key={activity.id}
                   role="button"
                   tabIndex={0}
-                  onClick={() => navigate(activity.targetUrl || `/profile/${activity.studentId}`)}
+                  onClick={() => navigate(activity.targetUrl || profilePath(activity.studentId))}
                   onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") navigate(activity.targetUrl || `/profile/${activity.studentId}`);
+                    if (event.key === "Enter" || event.key === " ") navigate(activity.targetUrl || profilePath(activity.studentId));
                   }}
                   className="flex cursor-pointer items-start gap-3 p-4 hover:bg-gray-50"
                 >
                   <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50">{activityIcon(activity.type)}</div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm text-gray-900">
-                      <Link to={`/profile/${activity.studentId}`} onClick={(event) => event.stopPropagation()} className={`font-semibold hover:underline ${activity.studentRole === "teacher" ? "text-green-700" : "text-gray-900 hover:text-blue-600"}`}>{activity.studentName}</Link>{" "}
+                      <Link to={profilePath(activity.studentId)} onClick={(event) => event.stopPropagation()} className={`font-semibold hover:underline ${activity.studentRole === "teacher" ? "text-green-700" : "text-gray-900 hover:text-blue-600"}`}>{activity.studentName}</Link>{" "}
                       <ActivityActionLink activity={activity} />
                     </p>
                     <div className="mt-1 flex flex-wrap gap-2 text-xs text-gray-500">

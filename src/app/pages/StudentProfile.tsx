@@ -30,6 +30,7 @@ import { formatConstituencyFull, normalizeConstituencyId } from "../utils/consti
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
 import { displayPersonName, nameInputPlaceholder } from "../utils/displayName";
+import { userIdFromMemberCode } from "../utils/profileRoute";
 
 type EditingSection = string | null;
 
@@ -127,7 +128,7 @@ export function StudentProfile() {
       const currentUserId = auth.user?.id ?? null;
       setAuthUserId(currentUserId);
 
-      const uid = id === "me" || !id ? currentUserId : id;
+      const uid = id === "me" || !id ? currentUserId : userIdFromMemberCode(id);
       if (!uid) return;
 
       const { data: p } = await supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle();

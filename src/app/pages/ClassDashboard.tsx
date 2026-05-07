@@ -29,6 +29,7 @@ import { fetchCalendaredBillsForCurrentClass } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
+import { profilePath } from "../utils/profileRoute";
 
 interface CalendarEvent {
   id: string;
@@ -45,8 +46,9 @@ const workflowSteps = [
   { id: "legislation", label: "Refer and calendar bills", description: "Route bills through committee referral and floor scheduling." },
 ];
 
-export function ClassDashboard() {
-  const { classId } = useParams();
+export function ClassDashboard({ classIdOverride }: { classIdOverride?: string | null } = {}) {
+  const { classId: routeClassId } = useParams();
+  const classId = classIdOverride ?? routeClassId;
   const navigate = useNavigate();
   const [className, setClassName] = useState("");
   const [classNameDraft, setClassNameDraft] = useState("");
@@ -649,16 +651,16 @@ export function ClassDashboard() {
                       key={activity.id}
                       role="button"
                       tabIndex={0}
-                      onClick={() => navigate(activity.targetUrl || `/profile/${activity.studentId}`)}
+                      onClick={() => navigate(activity.targetUrl || profilePath(activity.studentId))}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") navigate(activity.targetUrl || `/profile/${activity.studentId}`);
+                        if (event.key === "Enter" || event.key === " ") navigate(activity.targetUrl || profilePath(activity.studentId));
                       }}
                       className="flex cursor-pointer items-start gap-3 p-4 transition-colors hover:bg-gray-50"
                     >
                       <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-gray-200 bg-gray-50">{getActivityIcon(activity.type)}</div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm text-gray-900">
-                          <Link to={`/profile/${activity.studentId}`} onClick={(event) => event.stopPropagation()} className={`font-semibold hover:underline ${activity.studentRole === "teacher" ? "text-green-700" : "text-gray-900 hover:text-blue-600"}`}>{activity.studentName}</Link>{" "}
+                          <Link to={profilePath(activity.studentId)} onClick={(event) => event.stopPropagation()} className={`font-semibold hover:underline ${activity.studentRole === "teacher" ? "text-green-700" : "text-gray-900 hover:text-blue-600"}`}>{activity.studentName}</Link>{" "}
                           <span className="font-medium text-gray-900">{activity.action}</span>
                         </p>
                         <p className="mt-0.5 text-xs text-gray-500">{formatTimestamp(activity.timestamp)}</p>

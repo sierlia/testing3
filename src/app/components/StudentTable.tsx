@@ -9,6 +9,7 @@ import {
   Eye,
 } from "lucide-react";
 import { Link } from "react-router";
+import { profilePath } from "../utils/profileRoute";
 
 interface Student {
   id: string;
@@ -190,7 +191,7 @@ export function StudentTable({
                   <div className="flex items-center gap-2">
                     <User className="w-4 h-4 text-gray-400" />
                     <Link
-                      to={`/profile/${student.id}`}
+                      to={profilePath(student.id)}
                       className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
                     >
                       {student.name}

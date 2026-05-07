@@ -76,6 +76,10 @@ export const router = createHashRouter([
     Component: AboutPage,
   },
   {
+    path: "/classes",
+    Component: TeacherDashboard,
+  },
+  {
     path: "/teacher/dashboard",
     Component: TeacherDashboard,
   },
@@ -110,6 +114,10 @@ export const router = createHashRouter([
   {
     path: "/members",
     Component: Members,
+  },
+  {
+    path: "/members/:id",
+    Component: StudentProfile,
   },
   {
     path: "/records",
@@ -257,6 +265,10 @@ export const router = createHashRouter([
   },
   {
     path: "/dear-colleague/inbox",
+    Component: DearColleagueInbox,
+  },
+  {
+    path: "/inbox",
     Component: DearColleagueInbox,
   },
   {

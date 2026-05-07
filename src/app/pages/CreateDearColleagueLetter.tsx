@@ -210,7 +210,7 @@ export function CreateDearColleagueLetter() {
       if (rErr) throw rErr;
 
       toast.success("Letter sent");
-      navigate("/dear-colleague/inbox");
+      navigate("/inbox");
     } catch (e: any) {
       toast.error(e.message || "Could not send letter");
     }
