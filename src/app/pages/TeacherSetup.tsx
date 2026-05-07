@@ -107,12 +107,13 @@ function SettingsGroup({
   actionGrow?: boolean;
 }) {
   return (
-    <section className="space-y-4 border-b border-gray-300 pb-6 last:border-b-0 last:pb-0">
+    <section className="space-y-3 border-b border-gray-300 pb-5 last:border-b-0 last:pb-0">
       <div className="flex min-h-6 items-center gap-3">
-        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
-        {action && <div className={`${actionGrow ? "flex-1" : "shrink-0"} self-center`}>{action}</div>}
+        <h3 className="shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
+        {action && !actionGrow && <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />}
+        {action && <div className={`${actionGrow ? "flex-1" : "shrink-0"} flex items-center justify-end self-center`}>{action}</div>}
       </div>
-      <div className={`space-y-4 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
+      <div className={`space-y-3 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
     </section>
   );
 }
@@ -132,10 +133,10 @@ function SettingRow({
   indent?: boolean;
   sub?: boolean;
 }) {
-  const leftPad = sub ? "pl-[3.25rem]" : indent ? "pl-[2.5rem]" : "pl-7";
+  const leftPad = sub ? "pl-[3.5rem]" : indent ? "pl-[2.5rem]" : "pl-7";
   return (
     <div
-      className={`grid cursor-pointer items-center rounded-lg p-2 transition-colors hover:bg-gray-50 ${wide ? "gap-6 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "gap-3 md:grid-cols-[minmax(0,1fr)_240px]"}`}
+      className={`grid cursor-pointer items-center rounded-lg p-2 transition-colors hover:bg-gray-50 ${wide ? "gap-5 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "gap-3 md:grid-cols-[minmax(0,1fr)_240px]"}`}
       onClick={(event) => {
         const target = event.target as HTMLElement;
         if (target.closest("input,textarea,button,select,[role='combobox']")) return;
@@ -156,7 +157,7 @@ function SettingRow({
       }}
     >
       <div className={`relative ${leftPad}`}>
-        {sub && <span aria-hidden="true" className="absolute left-6 top-2 h-6 w-4 rounded-bl-lg border-b-2 border-l-2 border-gray-200" />}
+        {sub && <span aria-hidden="true" className="absolute -top-4 left-6 h-[calc(50%+1rem)] w-5 rounded-bl-lg border-b-2 border-l-2 border-dotted border-gray-300" />}
         <div className="text-base font-semibold text-gray-900">{title}</div>
         {description && <div className="text-sm leading-6 text-gray-600">{description}</div>}
       </div>
@@ -166,7 +167,7 @@ function SettingRow({
 }
 
 function DisabledBlock({ disabled, children, tight = false }: { disabled: boolean; children: ReactNode; tight?: boolean }) {
-  return <div className={`${tight ? "space-y-2" : "space-y-4"} ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>;
+  return <div className={`${tight ? "space-y-1.5" : "space-y-3"} ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>;
 }
 
 function SettingSelect({ value, onValueChange, children }: { value: string; onValueChange: (value: string) => void; children: ReactNode }) {
@@ -925,31 +926,31 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           id: "all-online" as const,
           name: "Fully Digital Simulation",
           description: "Enable all features - optimal for digital courses or centralizing participation online.",
-          classes: "border-emerald-200 bg-white hover:border-emerald-400 hover:bg-emerald-50",
-          selectedClasses: "border-emerald-400 bg-emerald-50 ring-1 ring-emerald-100",
-          tagClasses: "bg-emerald-600 text-white",
+          classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
+          selectedClasses: "border-gray-900 bg-gray-50 ring-1 ring-gray-200",
+          tagClasses: "bg-gray-900 text-white",
         },
         {
           id: "blended" as const,
           name: "Hybrid Simulation",
           description: "Disable message boards to facilitate in-person discussion.",
-          classes: "border-sky-200 bg-white hover:border-sky-400 hover:bg-sky-50",
-          selectedClasses: "border-sky-400 bg-sky-50 ring-1 ring-sky-100",
-          tagClasses: "bg-sky-600 text-white",
+          classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
+          selectedClasses: "border-gray-900 bg-gray-50 ring-1 ring-gray-200",
+          tagClasses: "bg-gray-900 text-white",
         },
         {
           id: "core" as const,
           name: "Essentialist Simulation",
           description: "Disable message boards, profiles, and non-essential tools to optimize for time or complexity constraints.",
-          classes: "border-amber-200 bg-white hover:border-amber-400 hover:bg-amber-50",
-          selectedClasses: "border-amber-400 bg-amber-50 ring-1 ring-amber-100",
-          tagClasses: "bg-amber-600 text-white",
+          classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
+          selectedClasses: "border-gray-900 bg-gray-50 ring-1 ring-gray-200",
+          tagClasses: "bg-gray-900 text-white",
         },
       ];
       const currentSettingsCode = encodeSettings();
       const settingsCodePreview = currentSettingsCode ? `${currentSettingsCode.slice(0, 18)}...` : "Unavailable";
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <SettingsGroup title="Quick setup">
             <div className="grid gap-3 md:grid-cols-3">
               {quickSetups.map((item) => {
@@ -959,12 +960,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                     key={item.id}
                     type="button"
                     onClick={() => requestQuickSetup(item.id, item.name)}
-                    className={`min-h-40 rounded-lg border-2 p-4 text-left shadow-sm transition ${selected ? item.selectedClasses : item.classes}`}
+                    className={`flex min-h-40 flex-col rounded-lg border-2 p-4 text-left transition ${selected ? item.selectedClasses : item.classes}`}
                   >
                     <span className="block min-h-12 text-base font-semibold leading-6 text-gray-950">{item.name}</span>
-                    <span className="mt-2 block text-sm leading-6 text-gray-700">{item.description}</span>
+                    <span className="mt-1 block text-sm leading-6 text-gray-600">{item.description}</span>
                     {selected && (
-                      <span className="mt-4 flex flex-wrap gap-2">
+                      <span className="mt-auto flex flex-wrap gap-2 pt-4">
                         <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.tagClasses}`}>Selected</span>
                         {quickSetupModified && <span className="inline-flex rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-gray-700">with modifications</span>}
                       </span>
@@ -1027,7 +1028,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "parties") {
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <div>
             <label className="mb-3 block text-base font-semibold text-gray-900">Allowed Parties</label>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -1047,7 +1048,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "committees") {
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <div className="flex items-center justify-end gap-3">
             <button onClick={() => setSettings({ enabledCommittees: [...allCommittees] })} className="text-sm font-medium text-blue-600">Select all</button>
             <button onClick={() => setSettings({ enabledCommittees: [] })} className="text-sm font-medium text-blue-600">Deselect all</button>
@@ -1058,7 +1059,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             ))}
           </div>
           <Toggle checked={settings.allowSelfJoinCommittees} onChange={(v) => setSettings({ allowSelfJoinCommittees: v })} title="Allow students to join committees on their own" description="When off, students submit preference rankings." />
-          <div className="grid gap-4">
+          <div className="grid gap-3">
             <SettingRow title="Assignment mode" control={<SettingSelect value={settings.committeeAssignmentMode} onValueChange={(value) => setSettings({ committeeAssignmentMode: value })}>
                 <SelectItem value="preference">Preference assigned</SelectItem>
                 <SelectItem value="random">Random</SelectItem>
@@ -1074,7 +1075,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "bills") {
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <DisabledBlock disabled={!settings.enableBills}>
             <SettingRow indent title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
@@ -1118,7 +1119,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "organizations") {
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <DisabledBlock disabled={!settings.enableOrganizations}>
             <SettingRow
               indent
@@ -1212,7 +1213,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "elections") {
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <DisabledBlock disabled={!settings.enableElections}>
             <SettingsGroup title="House leadership election" action={<SwitchControl checked={settings.enableHouseLeadershipElection} onChange={(v) => setSettings({ enableHouseLeadershipElection: v })} disabled={!settings.enableElections} />}>
               <div className="text-sm text-gray-600">Students can vote for Speaker of the House from the floor page.</div>
@@ -1233,7 +1234,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "permissions") {
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <SettingsGroup title="Students">
             <Toggle checked={settings.studentCanCreateBills} onChange={(v) => setSettings({ studentCanCreateBills: v })} title="Create bills" />
             <Toggle checked={settings.studentCanAnnounce} onChange={(v) => setSettings({ studentCanAnnounce: v })} title="Make announcements in announcement boards" />
@@ -1300,7 +1301,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "joining") {
       return (
-        <div className="space-y-6">
+        <div className="space-y-5">
           <SettingsGroup title="Joining">
             <Toggle checked={settings.requireJoinApproval} onChange={(v) => setSettings({ requireJoinApproval: v })} title="Members must be approved before entering class" description="New members appear in the pending roster until approved." />
           </SettingsGroup>
@@ -1335,12 +1336,13 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "profiles") return <SwitchControl checked={settings.profilesEnabled} onChange={(v) => setSettings({ profilesEnabled: v })} />;
     return null;
   };
+  const activeTabAction = tabHeaderAction();
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24">
       <Navigation />
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+        <div className="mb-7 flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-2">
             <Settings className="h-7 w-7 self-center text-blue-600" />
             <div>
@@ -1352,7 +1354,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         </div>
         {loading ? <div className="mb-4 text-sm text-gray-600">Loading settings...</div> : null}
 
-        <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
+        <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
           <div className="min-h-[320px] self-start rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
             {visibleTabs.map(({ id, label, icon: Icon }) => (
               <button key={id} onClick={() => setActiveTab(id)} className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm font-medium ${activeTab === id ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"}`}>
@@ -1362,10 +1364,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             ))}
           </div>
 
-          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-3">
-              <h2 className="text-xl font-semibold text-gray-900">{activeTabLabel}</h2>
-              {tabHeaderAction()}
+          <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            <div className="mb-4 flex items-center gap-3">
+              <h2 className="shrink-0 text-xl font-semibold text-gray-900">{activeTabLabel}</h2>
+              {activeTabAction && <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />}
+              {activeTabAction && <div className="flex shrink-0 items-center">{activeTabAction}</div>}
             </div>
             {section()}
           </div>
