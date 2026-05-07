@@ -7,7 +7,7 @@ import { OrganizationsLayout } from "./OrganizationsLayout";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 
-type LobbyistGroup = { id: string; class_id: string; name: string; description: string; join_mode: "free_join" | "teacher_assigned"; created_at: string; memberCount: number };
+type LobbyistGroup = { id: string; class_id: string; name: string; description: string; join_mode: "free_join" | "teacher_assigned"; starting_amount: number; created_at: string; memberCount: number };
 
 export function LobbyistGroups() {
   const navigate = useNavigate();
@@ -30,7 +30,7 @@ export function LobbyistGroups() {
     const { data: cls } = await supabase.from("classes").select("settings").eq("id", activeClassId).maybeSingle();
     setSettings((cls as any)?.settings ?? {});
     const [{ data: rows }, { data: members }] = await Promise.all([
-      supabase.from("lobbyist_groups").select("id,class_id,name,description,join_mode,created_at").eq("class_id", activeClassId).order("created_at", { ascending: true }),
+      supabase.from("lobbyist_groups").select("id,class_id,name,description,join_mode,starting_amount,created_at").eq("class_id", activeClassId).order("created_at", { ascending: true }),
       supabase.from("lobbyist_group_members").select("group_id"),
     ]);
     const counts: Record<string, number> = {};
@@ -55,6 +55,7 @@ export function LobbyistGroups() {
       name: draft.name.trim(),
       description: draft.description.trim(),
       join_mode: settings?.lobbyists?.joinMode ?? "free_join",
+      starting_amount: Math.max(0, Number(settings?.lobbyists?.startingAmount ?? 1000) || 0),
       created_by: uid ?? null,
     } as any);
     if (error) return toast.error(error.message || "Could not create lobbyist group");
@@ -109,6 +110,8 @@ export function LobbyistGroups() {
                       <div className="mt-2 flex items-center gap-2 text-xs text-gray-500">
                         <Users className="h-3.5 w-3.5" />
                         {group.memberCount} members
+                        <span className="text-gray-300">|</span>
+                        ${Number(group.starting_amount ?? 0).toLocaleString()} starting funds
                       </div>
                     </div>
                   </div>

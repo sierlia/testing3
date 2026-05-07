@@ -526,10 +526,10 @@ export function Navigation() {
               )}
             </Link>
             {money.enabled && (
-              <div className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2.5 py-1.5 text-sm font-semibold text-green-700" title="Money balance">
+              <Link to={user?.id ? `/records?type=campaign_contribution&user=${user.id}` : "/records?type=campaign_contribution"} className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2.5 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-100" title="Campaign contributions">
                 <DollarSign className="h-4 w-4" />
                 {money.balance.toLocaleString()}
-              </div>
+              </Link>
             )}
             {user?.user_metadata?.role === "teacher" && (
               <div className="relative" ref={classMenuRef}>

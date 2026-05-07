@@ -58,7 +58,7 @@ import { CommitteeReportPage } from "./pages/CommitteeReportPage";
 import { ClassSimulationDashboard } from "./pages/ClassSimulationDashboard";
 import { ClassActivityPage } from "./pages/ClassActivityPage";
 import { HelpPage } from "./pages/HelpPage";
-import { RecordsPage } from "./pages/RecordsPage";
+import { NewsletterDetailPage, RecordsPage } from "./pages/RecordsPage";
 import { AboutPage } from "./pages/AboutPage";
 
 export const router = createHashRouter([
@@ -125,6 +125,10 @@ export const router = createHashRouter([
   {
     path: "/records",
     Component: RecordsPage,
+  },
+  {
+    path: "/newsletters/:id",
+    Component: NewsletterDetailPage,
   },
   {
     path: "/class/:classId/dashboard",

@@ -11,7 +11,7 @@ import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { houseCommittees, houseCommitteeSubcommittees } from "../constants/houseCommittees";
 
-type TabId = "general" | "parties" | "committees" | "bills" | "organizations" | "elections" | "profiles" | "permissions" | "joining";
+type TabId = "quick" | "general" | "parties" | "committees" | "bills" | "organizations" | "elections" | "profiles" | "permissions" | "joining";
 
 const allParties = ["Democratic Party", "Republican Party", "Green Party", "Libertarian Party", "Independent Party"];
 const defaultPartyOptions = allParties.filter((party) => party !== "Independent Party");
@@ -24,6 +24,7 @@ const subcommitteeLabels = Object.fromEntries(subcommitteeOptions.map((key) => {
 const sortedSubcommitteeOptions = [...subcommitteeOptions].sort((a, b) => subcommitteeLabels[a].localeCompare(subcommitteeLabels[b]));
 
 const tabs: Array<{ id: TabId; label: string; icon: any }> = [
+  { id: "quick", label: "Quick Setup", icon: Check },
   { id: "general", label: "General", icon: Settings },
   { id: "parties", label: "Parties", icon: Users },
   { id: "committees", label: "Committees", icon: CheckSquare },
@@ -35,7 +36,7 @@ const tabs: Array<{ id: TabId; label: string; icon: any }> = [
   { id: "joining", label: "Joins and Invites", icon: Mail },
 ];
 
-const settingsTabIds: TabId[] = ["general", "bills", "organizations", "elections", "profiles", "permissions", "joining"];
+const settingsTabIds: TabId[] = ["quick", "general", "bills", "organizations", "elections", "profiles", "permissions", "joining"];
 
 type AuthorityTag = { id: string; label: string; type: "teacher" | "role" | "member"; locked?: boolean };
 type MemberOption = { id: string; name: string; email: string; role: string };
@@ -481,6 +482,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     committeeDashboardAccessPrice: 100,
     committeeReviewAccessPrice: 250,
     lobbyistJoinMode: "free_join",
+    lobbyistStartingAmount: 1000,
     billComposerFormat: "editor",
     committeeRevisedTextFormat: "editor",
     committeeReportFormat: "editor",
@@ -668,6 +670,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           committeeDashboardAccessPrice: s?.money?.committeeDashboardAccessPrice ?? prev.committeeDashboardAccessPrice,
           committeeReviewAccessPrice: s?.money?.committeeReviewAccessPrice ?? prev.committeeReviewAccessPrice,
           lobbyistJoinMode: s?.lobbyists?.joinMode ?? prev.lobbyistJoinMode,
+          lobbyistStartingAmount: s?.lobbyists?.startingAmount ?? prev.lobbyistStartingAmount,
           billComposerFormat: s?.editorFormats?.billComposer ?? prev.billComposerFormat,
           committeeRevisedTextFormat: s?.editorFormats?.committeeRevisedText ?? prev.committeeRevisedTextFormat,
           committeeReportFormat: s?.editorFormats?.committeeReport ?? prev.committeeReportFormat,
@@ -951,6 +954,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 ...(existing?.lobbyists ?? {}),
                 enabled: settings.enableLobbyists,
                 joinMode: settings.lobbyistJoinMode,
+                startingAmount: Math.max(0, Number(settings.lobbyistStartingAmount) || 0),
               },
               editorFormats: {
                 ...(existing?.editorFormats ?? {}),
@@ -1333,7 +1337,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   );
 
   const section = () => {
-    if (activeTab === "general") {
+    if (activeTab === "quick") {
       const quickSetups = [
         {
           id: "all-online" as const,
@@ -1423,50 +1427,6 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             )}
           </SettingsGroup>
 
-          <SettingsGroup title="Records">
-            <SettingRow
-              title="Record types"
-              description="These teacher-controlled options appear when adding records and filtering Records."
-              wide
-              control={
-                <input
-                  value={settings.recordTypes.join(", ")}
-                  onChange={(event) => setSettings({ recordTypes: event.target.value.split(",").map((type) => type.trim()).filter(Boolean) })}
-                  placeholder="record, resolution, statement"
-                  className="ml-auto w-[32rem] max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              }
-            />
-          </SettingsGroup>
-
-          <SettingsGroup title="Editor and PDF upload modes">
-            <SettingRow title="Bill composer" description="Choose whether students write bills in the site editor or upload a PDF." control={<SettingSelect value={settings.billComposerFormat} onValueChange={(value) => setSettings({ billComposerFormat: value })}>
-              <SelectItem value="editor">Use site editor</SelectItem>
-              <SelectItem value="pdf">Upload PDF</SelectItem>
-            </SettingSelect>} />
-            <SettingRow title="Committee revised text" description="Choose whether committee revisions use the collaborative editor or a PDF upload." control={<SettingSelect value={settings.committeeRevisedTextFormat} onValueChange={(value) => setSettings({ committeeRevisedTextFormat: value })}>
-              <SelectItem value="editor">Use site editor</SelectItem>
-              <SelectItem value="pdf">Upload PDF</SelectItem>
-            </SettingSelect>} />
-            <SettingRow title="Committee report" description="Choose whether committee reports use the site editor or a PDF upload." control={<SettingSelect value={settings.committeeReportFormat} onValueChange={(value) => setSettings({ committeeReportFormat: value })}>
-              <SelectItem value="editor">Use site editor</SelectItem>
-              <SelectItem value="pdf">Upload PDF</SelectItem>
-            </SettingSelect>} />
-            <SettingRow title="Profile" description="Choose whether profile content uses profile fields or a PDF upload." control={<SettingSelect value={settings.profileContentFormat} onValueChange={(value) => setSettings({ profileContentFormat: value })}>
-              <SelectItem value="editor">Use site editor</SelectItem>
-              <SelectItem value="pdf">Upload PDF</SelectItem>
-            </SettingSelect>} />
-          </SettingsGroup>
-
-          <SettingsGroup title="Money">
-            <Toggle checked={settings.moneyEnabled} onChange={(value) => setSettings({ moneyEnabled: value })} title="Enable money system" description="Show member balances and allow lobbyist contributions when enabled." />
-            <DisabledBlock disabled={!settings.moneyEnabled} tight>
-              <SettingRow indent title="Starting balance" description="Amount each member starts with." control={<WordLimitInput label="" value={settings.startingMoney} max={100000} onChange={(value) => setSettings({ startingMoney: value })} />} />
-              <SettingRow indent title="Committee dashboard access price" description="Amount lobbyists pay to see a committee dashboard." control={<WordLimitInput label="" value={settings.committeeDashboardAccessPrice} max={100000} onChange={(value) => setSettings({ committeeDashboardAccessPrice: value })} />} />
-              <SettingRow indent title="Committee review access price" description="Amount lobbyists pay to view committee review without editing." control={<WordLimitInput label="" value={settings.committeeReviewAccessPrice} max={100000} onChange={(value) => setSettings({ committeeReviewAccessPrice: value })} />} />
-            </DisabledBlock>
-          </SettingsGroup>
-
           <SettingsGroup title="Import settings">
             <SettingRow
               title="Copy configuration code"
@@ -1516,6 +1476,53 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 }
               />
             </div>
+          </SettingsGroup>
+        </div>
+      );
+    }
+    if (activeTab === "general") {
+      return (
+        <div className="space-y-4">
+          <SettingsGroup title="Records">
+            <SettingRow
+              title="Record types"
+              description="These teacher-controlled options appear when adding records and filtering Records."
+              wide
+              control={
+                <input
+                  value={settings.recordTypes.join(", ")}
+                  onChange={(event) => setSettings({ recordTypes: event.target.value.split(",").map((type) => type.trim()).filter(Boolean) })}
+                  placeholder="record, resolution, statement"
+                  className="ml-auto w-[32rem] max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              }
+            />
+          </SettingsGroup>
+          <SettingsGroup title="Editor and PDF upload modes">
+            <SettingRow title="Bill composer" description="Choose whether students write bills in the site editor or upload a PDF." control={<SettingSelect value={settings.billComposerFormat} onValueChange={(value) => setSettings({ billComposerFormat: value })}>
+              <SelectItem value="editor">Use site editor</SelectItem>
+              <SelectItem value="pdf">Upload PDF</SelectItem>
+            </SettingSelect>} />
+            <SettingRow title="Committee revised text" description="Choose whether committee revisions use the collaborative editor or a PDF upload." control={<SettingSelect value={settings.committeeRevisedTextFormat} onValueChange={(value) => setSettings({ committeeRevisedTextFormat: value })}>
+              <SelectItem value="editor">Use site editor</SelectItem>
+              <SelectItem value="pdf">Upload PDF</SelectItem>
+            </SettingSelect>} />
+            <SettingRow title="Committee report" description="Choose whether committee reports use the site editor or a PDF upload." control={<SettingSelect value={settings.committeeReportFormat} onValueChange={(value) => setSettings({ committeeReportFormat: value })}>
+              <SelectItem value="editor">Use site editor</SelectItem>
+              <SelectItem value="pdf">Upload PDF</SelectItem>
+            </SettingSelect>} />
+            <SettingRow title="Profile" description="Choose whether profile content uses profile fields or a PDF upload." control={<SettingSelect value={settings.profileContentFormat} onValueChange={(value) => setSettings({ profileContentFormat: value })}>
+              <SelectItem value="editor">Use site editor</SelectItem>
+              <SelectItem value="pdf">Upload PDF</SelectItem>
+            </SettingSelect>} />
+          </SettingsGroup>
+          <SettingsGroup title="Money">
+            <Toggle checked={settings.moneyEnabled} onChange={(value) => setSettings({ moneyEnabled: value })} title="Enable money system" description="Show member balances and allow lobbyist contributions when enabled." />
+            <DisabledBlock disabled={!settings.moneyEnabled} tight>
+              <SettingRow indent title="Starting balance" description="Amount each member starts with." control={<WordLimitInput label="" value={settings.startingMoney} max={100000} onChange={(value) => setSettings({ startingMoney: value })} />} />
+              <SettingRow indent title="Committee dashboard access price" description="Amount lobbyists pay to see a committee dashboard." control={<WordLimitInput label="" value={settings.committeeDashboardAccessPrice} max={100000} onChange={(value) => setSettings({ committeeDashboardAccessPrice: value })} />} />
+              <SettingRow indent title="Committee review access price" description="Amount lobbyists pay to view committee review without editing." control={<WordLimitInput label="" value={settings.committeeReviewAccessPrice} max={100000} onChange={(value) => setSettings({ committeeReviewAccessPrice: value })} />} />
+            </DisabledBlock>
           </SettingsGroup>
         </div>
       );
@@ -1860,6 +1867,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 <SelectItem value="free_join">Free join</SelectItem>
                 <SelectItem value="teacher_assigned">Teacher assigns</SelectItem>
               </SettingSelect>} />
+              <SettingRow title="Starting money" description="Amount of money each lobbyist group starts with." control={<WordLimitInput label="" value={settings.lobbyistStartingAmount} max={1000000} onChange={(value) => setSettings({ lobbyistStartingAmount: value })} />} />
               <div className="text-sm text-gray-600">Lobbyist group members cannot join parties, committees, or caucuses while they are in a lobbyist group.</div>
             </DisabledBlock>
           </SettingsGroup>

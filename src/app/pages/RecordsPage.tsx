@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { DollarSign, Download, ExternalLink, Eye, FileText, Mail, Newspaper, Plus, Search, Vote, X } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { InfoTooltip } from "../components/InfoTooltip";
@@ -10,11 +10,11 @@ import { getCurrentUser } from "../utils/currentUser";
 import { useAuth } from "../utils/AuthContext";
 
 type VoteChoice = "yea" | "nay" | "present" | "not_voted";
-type BaseRecordType = "letter" | "report" | "vote" | "newsletter";
+type BaseRecordType = "letter" | "report" | "vote" | "newsletter" | "campaign_contribution";
 type RowMode = "preview" | "open";
 type SortKey = "newest" | "oldest" | "title" | "type";
 type VoteList = Record<VoteChoice, Array<{ userId: string; name: string }>>;
-type NewsletterRow = { label: string; detail?: string };
+type NewsletterRow = { label: string; detail?: string; href?: string; sponsor?: string };
 
 type RecordItem = {
   id: string;
@@ -43,7 +43,7 @@ function FilterSelect({ value, onChange, children, className = "w-40" }: { value
 }
 
 const emptyVotes = (): VoteList => ({ yea: [], nay: [], present: [], not_voted: [] });
-const builtInTypes: BaseRecordType[] = ["letter", "report", "vote", "newsletter"];
+const builtInTypes: BaseRecordType[] = ["letter", "report", "vote", "newsletter", "campaign_contribution"];
 
 function typeLabel(type: string) {
   return type.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
@@ -53,12 +53,28 @@ function recordIcon(type: string) {
   if (type === "letter") return Mail;
   if (type === "vote") return Vote;
   if (type === "newsletter") return Newspaper;
+  if (type === "campaign_contribution") return DollarSign;
   return FileText;
 }
 
 function statusRank(status: string) {
   const ranks: Record<string, number> = { draft: 0, submitted: 1, in_committee: 2, committee_vote: 3, reported: 4, calendared: 5, floor: 6, passed: 7, failed: 7 };
   return ranks[status] ?? 0;
+}
+
+function statusLabel(status: string) {
+  const labels: Record<string, string> = {
+    draft: "Draft",
+    submitted: "Submitted",
+    in_committee: "In committee",
+    committee_vote: "Committee vote",
+    reported: "Reported",
+    calendared: "Calendared",
+    floor: "Floor",
+    passed: "Passed",
+    failed: "Failed",
+  };
+  return labels[status] ?? typeLabel(status);
 }
 
 function pdfEscape(value: string) {
@@ -227,7 +243,9 @@ function NewsletterSection({ title, rows }: { title: string; rows?: NewsletterRo
         <ol className="space-y-1">
           {rows.map((row, index) => (
             <li key={`${title}-${index}`} className="rounded bg-gray-50 px-3 py-2 text-gray-700">
-              {index + 1}. {row.label} <span className="text-gray-500">{row.detail}</span>
+              {index + 1}. {row.href ? <Link to={row.href} className="font-medium text-blue-600 hover:underline">{row.label}</Link> : row.label}
+              {row.sponsor ? <span className="text-gray-500"> sponsored by {row.sponsor}</span> : null}
+              {row.detail ? <span className="text-gray-500"> {row.detail}</span> : null}
             </li>
           ))}
         </ol>
@@ -279,7 +297,7 @@ export function RecordsPage() {
     const customTypes = (((cls as any)?.settings?.records?.types ?? ["record"]) as string[]).filter(Boolean);
     setRecordTypes(customTypes.length ? customTypes : ["record"]);
 
-    const [{ data: customRecords }, { data: letters }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, { data: lobbyistMemberships }, directory] = await Promise.all([
+    const [{ data: customRecords }, { data: letters }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, { data: lobbyistMemberships }, { data: contributions }, directory] = await Promise.all([
       supabase.from("custom_records").select("id,type,title,body,created_by,generated,metadata,created_at,updated_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase.from("dear_colleague_letters").select("id,sender_user_id,subject,body,created_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase
@@ -299,6 +317,7 @@ export function RecordsPage() {
       supabase.from("bill_floor_sessions").select("id,bill_id,results_posted_at,closed_at,posted_result,bills(id,hr_label,title)").eq("class_id", activeClassId).not("results_posted_at", "is", null),
       supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", activeClassId),
       supabase.from("lobbyist_group_members").select("group_id,lobbyist_groups(id,name)").eq("user_id", uid),
+      supabase.from("lobbyist_contributions").select("id,group_id,from_user_id,recipient_type,recipient_id,amount,note,created_at,lobbyist_groups(name)").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase.rpc("class_directory", { target_class: activeClassId } as any),
     ]);
     setMyLobbyistGroups(((lobbyistMemberships ?? []) as any[]).map((row) => row.lobbyist_groups).filter(Boolean));
@@ -336,12 +355,28 @@ export function RecordsPage() {
         title: record.title,
         subtitle: record.generated ? "Generated record" : "Teacher-created record",
         date: record.created_at,
-        href: `/records?record=${record.id}`,
+        href: record.type === "newsletter" ? `/newsletters/${record.id}` : `/records?record=${record.id}`,
         body: record.body,
         authorId: record.created_by,
         metadata: record.metadata,
         generated: record.generated,
       })),
+      ...((contributions ?? []) as any[]).map((contribution) => {
+        const recipientName = contribution.recipient_type === "member" ? peopleById.get(contribution.recipient_id) ?? "Member" : typeLabel(contribution.recipient_type);
+        const sourceName = contribution.lobbyist_groups?.name ?? peopleById.get(contribution.from_user_id) ?? "Lobbyist";
+        return {
+          id: `contribution:${contribution.id}`,
+          type: "campaign_contribution",
+          title: `${sourceName} contributed $${Number(contribution.amount ?? 0).toLocaleString()}`,
+          subtitle: `To ${recipientName}`,
+          date: contribution.created_at,
+          href: `/records?type=campaign_contribution&record=${contribution.id}`,
+          body: contribution.note || "Campaign contribution recorded.",
+          authorId: contribution.from_user_id,
+          voteUserIds: [contribution.from_user_id, contribution.recipient_type === "member" ? contribution.recipient_id : ""].filter(Boolean),
+          metadata: { contribution },
+        };
+      }),
       ...(letters ?? []).map((letter: any) => ({
         id: `letter:${letter.id}`,
         type: "letter",
@@ -391,7 +426,7 @@ export function RecordsPage() {
     ];
     setRecords(nextRecords);
     const requestedRecordId = searchParams.get("record");
-    setSelectedRecord((prev) => nextRecords.find((record) => record.id === `custom:${requestedRecordId}`) ?? prev ?? nextRecords[0] ?? null);
+    setSelectedRecord((prev) => nextRecords.find((record) => record.id === `custom:${requestedRecordId}` || record.id === `contribution:${requestedRecordId}`) ?? prev ?? nextRecords[0] ?? null);
     setLoading(false);
   };
 
@@ -498,7 +533,7 @@ export function RecordsPage() {
     const since = (last as any)?.created_at ?? "1970-01-01T00:00:00.000Z";
     const [{ data: cosponsors }, { data: bills }, { data: reports }, { data: votes }, { data: meetings }, { data: referrals }, { data: adBids }] = await Promise.all([
       supabase.from("bill_cosponsors").select("bill_id,created_at,bills(id,hr_label,title)").eq("class_id", classId).gt("created_at", since),
-      supabase.from("bill_display").select("id,hr_label,title,status,created_at").eq("class_id", classId).gte("created_at", since),
+      supabase.from("bill_display").select("id,hr_label,title,status,created_at,author_user_id").eq("class_id", classId).gte("created_at", since),
       supabase
         .from("committee_bill_docs")
         .select("bill_id,committee_id,committee_report_submitted_at,bills(id,hr_label,title),committees(id,name)")
@@ -518,16 +553,22 @@ export function RecordsPage() {
     const cosponsorLeaders = [...cosponsorCounts.values()]
       .sort((a, b) => b.count - a.count)
       .slice(0, 10)
-      .map((row) => ({ label: `${row.bill?.hr_label ?? "Bill"} - ${row.bill?.title ?? ""}`, detail: `+${row.count} cosponsor${row.count === 1 ? "" : "s"}` }));
+      .map((row) => ({ label: `${row.bill?.hr_label ?? "Bill"} - ${row.bill?.title ?? ""}`, href: `/bills/${row.bill?.id}`, detail: `+${row.count} cosponsor${row.count === 1 ? "" : "s"}` }));
+    const authorIds = [...new Set(((bills ?? []) as any[]).map((bill) => bill.author_user_id).filter(Boolean))];
+    const { data: authorProfiles } = authorIds.length
+      ? await supabase.from("profiles").select("user_id,display_name").in("user_id", authorIds)
+      : ({ data: [] } as any);
+    const authorNameById = new Map((authorProfiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
     const fastestMoving = ((bills ?? []) as any[])
       .sort((a, b) => statusRank(b.status) - statusRank(a.status))
       .slice(0, 10)
-      .map((bill) => ({ label: `${bill.hr_label ?? "Bill"} - ${bill.title ?? ""}`, detail: `${statusRank(bill.status)} stage point${statusRank(bill.status) === 1 ? "" : "s"}` }));
+      .map((bill) => ({ label: `${bill.hr_label ?? "Bill"} - ${bill.title ?? ""}`, href: `/bills/${bill.id}`, sponsor: authorNameById.get(bill.author_user_id) ?? "Member", detail: `moved from Introduced to ${statusLabel(bill.status)}` }));
     const reportedBills = ((reports ?? []) as any[]).map((report) => {
       const rows = ((votes ?? []) as any[]).filter((vote) => vote.bill_id === report.bill_id && vote.committee_id === report.committee_id);
       const counts = { yea: rows.filter((row) => row.vote === "yea").length, nay: rows.filter((row) => row.vote === "nay").length, present: rows.filter((row) => row.vote === "present").length };
       return {
         label: `${report.bills?.hr_label ?? "Bill"} - ${report.bills?.title ?? ""}`,
+        href: `/bills/${report.bill_id}`,
         detail: `${report.committees?.name ?? "Committee"}; ${counts.yea} yea, ${counts.nay} nay, ${counts.present} present`,
       };
     });
@@ -537,6 +578,7 @@ export function RecordsPage() {
     }));
     const referralRows = ((referrals ?? []) as any[]).map((referral) => ({
       label: `${referral.bills?.hr_label ?? "Bill"} - ${referral.bills?.title ?? ""}`,
+      href: `/bills/${referral.bill_id}`,
       detail: `referred to ${referral.committees?.name ?? "committee"}`,
     }));
     const bidUserIds = [...new Set(((adBids ?? []) as any[]).map((bid) => bid.bidder_user_id).filter(Boolean))];
@@ -765,6 +807,81 @@ export function RecordsPage() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+export function NewsletterDetailPage() {
+  const { id } = useParams();
+  const [loading, setLoading] = useState(true);
+  const [record, setRecord] = useState<RecordItem | null>(null);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!id) return;
+      setLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("custom_records")
+          .select("id,type,title,body,created_by,generated,metadata,created_at")
+          .eq("id", id)
+          .eq("type", "newsletter")
+          .maybeSingle();
+        if (error) throw error;
+        setRecord(data ? {
+          id: `custom:${(data as any).id}`,
+          type: (data as any).type,
+          title: (data as any).title,
+          subtitle: "Generated newsletter",
+          date: (data as any).created_at,
+          href: `/newsletters/${(data as any).id}`,
+          body: (data as any).body,
+          authorId: (data as any).created_by,
+          metadata: (data as any).metadata,
+          generated: (data as any).generated,
+        } : null);
+      } finally {
+        setLoading(false);
+      }
+    };
+    void load();
+  }, [id]);
+
+  const newsletter = record?.metadata?.newsletter;
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <Navigation />
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
+        {loading ? (
+          <div className="text-sm text-gray-600">Loading newsletter...</div>
+        ) : !record || !newsletter ? (
+          <div className="rounded-lg border border-gray-200 bg-white p-10 text-center text-gray-600 shadow-sm">Newsletter not found.</div>
+        ) : (
+          <article className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div className="bg-blue-600 px-6 py-5 text-white">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="inline-flex items-center gap-2 text-sm font-semibold"><Newspaper className="h-4 w-4" />Newsletter</div>
+                  <h1 className="mt-2 text-2xl font-bold">{record.title}</h1>
+                  <div className="mt-1 text-sm text-blue-100">{new Date(record.date).toLocaleString()}</div>
+                </div>
+                <button type="button" onClick={() => downloadNewsletterPdf(record)} className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">
+                  <Download className="h-4 w-4" />
+                  Download PDF
+                </button>
+              </div>
+            </div>
+            <div className="space-y-6 p-6 text-sm">
+              <NewsletterSection title="Referrals" rows={newsletter.referrals} />
+              <NewsletterSection title="Committee Meetings" rows={newsletter.meetings} />
+              <NewsletterSection title="Committee Reports and Votes" rows={newsletter.reportedBills} />
+              <NewsletterSection title="Top Cosponsor Gains" rows={newsletter.cosponsorLeaders} />
+              <NewsletterSection title="Fastest-Moving Bills" rows={newsletter.fastestMoving} />
+              <NewsletterSection title="Advertisement Bids" rows={newsletter.adBids} />
+            </div>
+          </article>
+        )}
+      </main>
     </div>
   );
 }

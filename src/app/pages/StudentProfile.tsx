@@ -6,6 +6,7 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronUp,
+  DollarSign,
   FileText,
   Flag,
   Mail,
@@ -121,6 +122,8 @@ export function StudentProfile() {
   const [profileSections, setProfileSections] = useState<ProfileSectionRow[]>(defaultProfileSections);
   const [profileSectionWordLimits, setProfileSectionWordLimits] = useState<Record<string, number>>({});
   const [profileWordLimit, setProfileWordLimit] = useState(1000);
+  const [moneyEnabled, setMoneyEnabled] = useState(false);
+  const [campaignFunds, setCampaignFunds] = useState(0);
 
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
   const [editingContent, setEditingContent] = useState<string>("");
@@ -187,8 +190,11 @@ export function StudentProfile() {
       setUpdatedAt(pr.updated_at || pr.created_at || new Date().toISOString());
         if (pr.class_id) {
           const { data: cls } = await supabase.from("classes").select("settings").eq("id", pr.class_id).maybeSingle();
+          setMoneyEnabled(Boolean((cls as any)?.settings?.money?.enabled));
           setProfileWordLimit(Math.min(2000, Math.max(1, Number((cls as any)?.settings?.wordLimits?.profileLongResponse ?? 1000))));
           setProfileSectionWordLimits(((cls as any)?.settings?.profileSectionWordLimits ?? {}) as Record<string, number>);
+          const { data: contributions } = await supabase.from("lobbyist_contributions").select("amount").eq("class_id", pr.class_id).eq("recipient_type", "member").eq("recipient_id", uid);
+          setCampaignFunds((contributions ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0));
       }
 
       let authoredQuery = supabase
@@ -859,6 +865,12 @@ export function StudentProfile() {
                         </a>
                       ) : null}
                     </div>
+                    {moneyEnabled && (
+                      <Link to={`/records?type=campaign_contribution&user=${profile.user_id}`} className="mt-2 inline-flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100">
+                        <DollarSign className="h-4 w-4" />
+                        Campaign ${campaignFunds.toLocaleString()} All
+                      </Link>
+                    )}
                   </div>
                 )}
               </div>

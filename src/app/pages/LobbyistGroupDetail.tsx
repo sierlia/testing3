@@ -27,7 +27,7 @@ export function LobbyistGroupDetail() {
   const load = async () => {
     const uid = (await getCurrentUser())?.id ?? null;
     setMeId(uid);
-    const { data: g } = await supabase.from("lobbyist_groups").select("id,class_id,name,description,join_mode").eq("id", groupId).maybeSingle();
+    const { data: g } = await supabase.from("lobbyist_groups").select("id,class_id,name,description,join_mode,starting_amount").eq("id", groupId).maybeSingle();
     setGroup(g as any);
     if (!g) return;
     const [{ data: memberRows }, { data: profile }, { data: spending }, directory] = await Promise.all([
@@ -140,7 +140,11 @@ export function LobbyistGroupDetail() {
               <DollarSign className="h-5 w-5 text-green-600" />
               <h2 className="text-lg font-semibold text-gray-900">Spending</h2>
             </div>
-            <div className="rounded-md bg-green-50 p-3 text-sm font-semibold text-green-800">Total contributed: ${total.toLocaleString()}</div>
+            <div className="grid gap-2">
+              <div className="rounded-md bg-green-50 p-3 text-sm font-semibold text-green-800">Starting funds: ${Number(group.starting_amount ?? 0).toLocaleString()}</div>
+              <div className="rounded-md bg-gray-50 p-3 text-sm font-semibold text-gray-800">Remaining: ${Math.max(0, Number(group.starting_amount ?? 0) - total).toLocaleString()}</div>
+              <div className="rounded-md bg-blue-50 p-3 text-sm font-semibold text-blue-800">Total contributed: ${total.toLocaleString()}</div>
+            </div>
             <div className="mt-4 space-y-2">
               {byRecipient.length ? byRecipient.map(([recipient, amount]) => (
                 <div key={recipient} className="rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700">

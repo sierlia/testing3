@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigation } from "../components/Navigation";
-import { Search } from "lucide-react";
+import { DollarSign, Search } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -23,9 +23,10 @@ type Member = {
   passedBills: number;
   failedBills: number;
   cosponsors: number;
+  campaignFunds: number;
 };
 
-type SortKey = "name" | "party" | "state" | "passed" | "cosponsors";
+type SortKey = "name" | "party" | "state" | "passed" | "cosponsors" | "campaign";
 
 function partyAbbr(party: string | null | undefined) {
   const normalized = String(party ?? "").toLowerCase();
@@ -57,6 +58,7 @@ export function Members() {
   const [sortBy, setSortBy] = useState<SortKey>("name");
   const [loading, setLoading] = useState(true);
   const [members, setMembers] = useState<Member[]>([]);
+  const [moneyEnabled, setMoneyEnabled] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -73,15 +75,20 @@ export function Members() {
           return;
         }
 
-        const { data, error } = await supabase.rpc("class_directory", { target_class: classId } as any);
+        const [{ data, error }, { data: cls }] = await Promise.all([
+          supabase.rpc("class_directory", { target_class: classId } as any),
+          supabase.from("classes").select("settings").eq("id", classId).maybeSingle(),
+        ]);
         if (error) throw error;
+        setMoneyEnabled(Boolean((cls as any)?.settings?.money?.enabled));
         const userIds = ((data ?? []) as any[]).map((member) => member.user_id);
-        const [{ data: committeeRows }, { data: caucusRows }, { data: billRows }, { data: cosponsorRows }, { data: partyRows }] = await Promise.all([
+        const [{ data: committeeRows }, { data: caucusRows }, { data: billRows }, { data: cosponsorRows }, { data: partyRows }, { data: contributionRows }] = await Promise.all([
           supabase.from("committee_members").select("user_id,committees(name,class_id)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
           supabase.from("caucus_members").select("user_id,caucuses(title,class_id)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
           supabase.from("bills").select("author_user_id,status").eq("class_id", classId),
           supabase.from("bill_cosponsors").select("user_id").eq("class_id", classId),
           supabase.from("parties").select("id,name").eq("class_id", classId),
+          supabase.from("lobbyist_contributions").select("recipient_id,amount").eq("class_id", classId).eq("recipient_type", "member"),
         ]);
         const partyNameById = new Map((partyRows ?? []).map((party: any) => [party.id, party.name]));
         const partyIds = Array.from(partyNameById.keys());
@@ -120,6 +127,8 @@ export function Members() {
         }
         const cosponsorsByUser = new Map<string, number>();
         for (const row of cosponsorRows ?? []) cosponsorsByUser.set((row as any).user_id, (cosponsorsByUser.get((row as any).user_id) ?? 0) + 1);
+        const campaignByUser = new Map<string, number>();
+        for (const row of contributionRows ?? []) campaignByUser.set((row as any).recipient_id, (campaignByUser.get((row as any).recipient_id) ?? 0) + Number((row as any).amount ?? 0));
         setMembers(((data ?? []) as any[]).map((member) => ({
           ...member,
           committees: committeesByUser.get(member.user_id) ?? [],
@@ -128,6 +137,7 @@ export function Members() {
           passedBills: passedByUser.get(member.user_id) ?? 0,
           failedBills: failedByUser.get(member.user_id) ?? 0,
           cosponsors: cosponsorsByUser.get(member.user_id) ?? 0,
+          campaignFunds: campaignByUser.get(member.user_id) ?? 0,
         })));
       } catch (e: any) {
         toast.error(e.message || "Could not load members");
@@ -165,6 +175,7 @@ export function Members() {
     }).sort((a, b) => {
       if (sortBy === "passed") return b.passedBills - a.passedBills || (a.display_name ?? "").localeCompare(b.display_name ?? "");
       if (sortBy === "cosponsors") return b.cosponsors - a.cosponsors || (a.display_name ?? "").localeCompare(b.display_name ?? "");
+      if (sortBy === "campaign") return b.campaignFunds - a.campaignFunds || (a.display_name ?? "").localeCompare(b.display_name ?? "");
       if (sortBy === "state") return stateFor(a).localeCompare(stateFor(b)) || (a.display_name ?? "").localeCompare(b.display_name ?? "");
       if (sortBy === "party") return (a.party ?? "").localeCompare(b.party ?? "") || (a.display_name ?? "").localeCompare(b.display_name ?? "");
       if (a.role !== b.role) return a.role === "teacher" ? -1 : 1;
@@ -244,6 +255,7 @@ export function Members() {
               <SelectItem value="state">Sort by state</SelectItem>
               <SelectItem value="passed">Most passed bills</SelectItem>
               <SelectItem value="cosponsors">Most cosponsors</SelectItem>
+              {moneyEnabled && <SelectItem value="campaign">Campaign funds</SelectItem>}
             </FilterSelect>
             <button type="button" onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
             </div>
@@ -280,10 +292,25 @@ export function Members() {
                       {member.leadershipRoles.join("; ")}
                     </div>
                   )}
+                  {moneyEnabled && member.role !== "teacher" && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        window.location.hash = `/records?type=campaign_contribution&user=${member.user_id}`;
+                      }}
+                      className="mt-2 inline-flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-100"
+                    >
+                      <DollarSign className="h-3 w-3" />
+                      {member.campaignFunds.toLocaleString()}
+                    </span>
+                  )}
                 </div>
               </div>
               {member.role !== "teacher" && (
-                <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-4 text-center text-sm">
+                <div className={`grid gap-2 border-t border-gray-100 pt-4 text-center text-sm ${moneyEnabled ? "grid-cols-3" : "grid-cols-2"}`}>
                   <div>
                     <div className="font-semibold text-gray-900">{member.passedBills}</div>
                     <div className="text-xs text-gray-500">Passed</div>
@@ -292,6 +319,12 @@ export function Members() {
                     <div className="font-semibold text-gray-900">{member.cosponsors}</div>
                     <div className="text-xs text-gray-500">Cosponsors</div>
                   </div>
+                  {moneyEnabled && (
+                    <div>
+                      <div className="font-semibold text-gray-900">${member.campaignFunds.toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">Campaign</div>
+                    </div>
+                  )}
                 </div>
               )}
             </Link>

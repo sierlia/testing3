@@ -291,7 +291,7 @@ export function DemoAccountSwitcher() {
         )}
         {dragHintMounted && (
           <div className={`absolute left-1/2 top-full mt-2 -translate-x-1/2 whitespace-nowrap px-3 py-1.5 text-sm font-semibold text-blue-700 transition-all duration-300 ${dragHintVisible ? "translate-y-0 opacity-100" : "-translate-y-3 opacity-0"}`}>
-            Click me!
+            Drag me!
           </div>
         )}
         <button
