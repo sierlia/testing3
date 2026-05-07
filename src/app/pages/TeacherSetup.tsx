@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { useParams } from "react-router";
-import { CheckSquare, Copy, FileText, Mail, Save, Settings, ShieldCheck, UserCog, Users, Vote } from "lucide-react";
+import { Check, CheckSquare, Copy, FileText, Mail, Save, Settings, ShieldCheck, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { supabase } from "../utils/supabase";
 import { defaultPartyColor } from "../components/PartyCreateForm";
 import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type TabId = "general" | "parties" | "committees" | "bills" | "organizations" | "elections" | "profiles" | "permissions" | "joining";
 
@@ -56,21 +57,25 @@ const defaultRoleActions: RoleActions = {
 
 function Toggle({ checked, onChange, title, description, disabled = false }: { checked: boolean; onChange: (next: boolean) => void; title: string; description?: string; disabled?: boolean }) {
   return (
-    <label className={`grid items-start gap-3 rounded-lg p-2 transition-colors md:grid-cols-[minmax(0,1fr)_auto] ${disabled ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-gray-50"}`}>
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={`flex w-full items-start gap-3 rounded-lg p-2 text-left transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "hover:bg-gray-50"}`}
+      aria-pressed={checked}
+    >
+      <span
+        className={`mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
+          checked ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-transparent"
+        }`}
+      >
+        <Check className="h-3.5 w-3.5" />
+      </span>
       <span className="min-w-0">
         <span className="block text-base font-semibold text-gray-900">{title}</span>
         {description && <span className="block text-sm text-gray-600">{description}</span>}
       </span>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => onChange(!checked)}
-        className={`mt-0.5 inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors md:justify-self-end ${checked ? "bg-blue-600" : "bg-gray-300"} disabled:cursor-not-allowed`}
-        aria-pressed={checked}
-      >
-        <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[22px]" : "translate-x-0.5"}`} />
-      </button>
-    </label>
+    </button>
   );
 }
 
@@ -80,10 +85,10 @@ function SwitchControl({ checked, onChange, disabled = false }: { checked: boole
       type="button"
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${checked ? "bg-blue-600" : "bg-gray-300"} disabled:cursor-not-allowed disabled:opacity-50`}
+      className={`inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${checked ? "bg-blue-600" : "bg-gray-300"} disabled:cursor-not-allowed disabled:opacity-50`}
       aria-pressed={checked}
     >
-      <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[22px]" : "translate-x-0.5"}`} />
+      <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-4" : "translate-x-0.5"}`} />
     </button>
   );
 }
@@ -175,6 +180,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const [settingsCode, setSettingsCode] = useState("");
   const [selectedCopyClassId, setSelectedCopyClassId] = useState("");
   const [speakerName, setSpeakerName] = useState("No speaker selected");
+  const [selectedQuickSetup, setSelectedQuickSetup] = useState<"all-online" | "blended" | "core" | null>(null);
+  const [quickSetupModified, setQuickSetupModified] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [settings, setSettingsState] = useState({
     allowedParties: ["Democratic Party", "Republican Party"],
     allowStudentCreatedParties: false,
@@ -266,6 +274,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
 
   const setSettings = (patch: Partial<typeof settings>) => {
     setSettingsState((prev) => ({ ...prev, ...patch }));
+    if (selectedQuickSetup) setQuickSetupModified(true);
     setHasChanges(true);
   };
 
@@ -414,6 +423,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           announcementWordLimit: s?.wordLimits?.announcement ?? prev.announcementWordLimit,
           commentWordLimit: s?.wordLimits?.comment ?? prev.commentWordLimit,
         }));
+        setSelectedQuickSetup(null);
+        setQuickSetupModified(false);
       } catch (e: any) {
         toast.error(e.message || "Could not load settings");
       } finally {
@@ -424,10 +435,13 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   }, [params.classId]);
 
   useEffect(() => {
-    const markDirty = () => setHasChanges(true);
+    const markDirty = () => {
+      if (selectedQuickSetup) setQuickSetupModified(true);
+      setHasChanges(true);
+    };
     window.addEventListener("gavel:profile-layout-dirty", markDirty);
     return () => window.removeEventListener("gavel:profile-layout-dirty", markDirty);
-  }, []);
+  }, [selectedQuickSetup]);
 
   const syncPartiesAndCommittees = async (classId: string) => {
     if (settings.allowedParties.length) {
@@ -704,6 +718,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
 
   const applySettingsState = (next: Partial<typeof settings>, message = "Settings applied") => {
     setSettingsState((prev) => ({ ...prev, ...next }));
+    if (selectedQuickSetup) setQuickSetupModified(true);
     setHasChanges(true);
     toast.success(message);
   };
@@ -790,7 +805,6 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   };
 
   const applyQuickSetup = (kind: "all-online" | "blended" | "core") => {
-    if (!window.confirm("Are you sure? This action is irreversible.")) return;
     const common = {
       enableBills: true,
       allowDrafts: true,
@@ -805,13 +819,29 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       profilesEnabled: true,
       studentCanCreateBills: true,
     };
+    const applyPresetState = (patch: Partial<typeof settings>, message: string) => {
+      setSettingsState((prev) => ({ ...prev, ...patch }));
+      setSelectedQuickSetup(kind);
+      setQuickSetupModified(false);
+      setHasChanges(true);
+      toast.success(message);
+    };
     if (kind === "all-online") {
-      applySettingsState({ ...common, announcementBoardsEnabled: true, announcementCommentsEnabled: true, announcementEmotesEnabled: true }, "Fully Digital Simulation applied");
+      applyPresetState({ ...common, announcementBoardsEnabled: true, announcementCommentsEnabled: true, announcementEmotesEnabled: true }, "Fully Digital Simulation applied");
     } else if (kind === "blended") {
-      applySettingsState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false }, "Hybrid Simulation applied");
+      applyPresetState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false }, "Hybrid Simulation applied");
     } else {
-      applySettingsState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false, profilesEnabled: false, enableCaucuses: false, enableOrganizationElections: false }, "Essentialist Simulation applied");
+      applyPresetState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false, profilesEnabled: false, enableCaucuses: false, enableOrganizationElections: false }, "Essentialist Simulation applied");
     }
+  };
+
+  const requestQuickSetup = (kind: "all-online" | "blended" | "core", name: string) => {
+    setConfirmDialog({
+      title: `Apply ${name}?`,
+      message: "This will replace the current settings on this page with the selected quick setup. You can still review the changes before saving.",
+      confirmLabel: "Apply setup",
+      onConfirm: () => applyQuickSetup(kind),
+    });
   };
 
   const setRoleAction = (roleKey: keyof typeof settings, action: RoleActionKey, checked: boolean) => {
@@ -846,23 +876,59 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           id: "all-online" as const,
           name: "Fully Digital Simulation",
           description: "Enable all features - optimal for digital courses or centralizing participation online.",
+          classes: "border-emerald-200 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100",
+          selectedClasses: "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-200",
+          tagClasses: "bg-emerald-600 text-white",
         },
         {
           id: "blended" as const,
           name: "Hybrid Simulation",
           description: "Disable message boards to facilitate in-person discussion.",
+          classes: "border-sky-200 bg-sky-50 hover:border-sky-300 hover:bg-sky-100",
+          selectedClasses: "border-sky-500 bg-sky-100 ring-2 ring-sky-200",
+          tagClasses: "bg-sky-600 text-white",
         },
         {
           id: "core" as const,
           name: "Essentialist Simulation",
           description: "Disable message boards, profiles, and non-essential tools to optimize for time or complexity constraints.",
+          classes: "border-amber-200 bg-amber-50 hover:border-amber-300 hover:bg-amber-100",
+          selectedClasses: "border-amber-500 bg-amber-100 ring-2 ring-amber-200",
+          tagClasses: "bg-amber-600 text-white",
         },
       ];
+      const currentSettingsCode = encodeSettings();
+      const settingsCodePreview = currentSettingsCode ? `${currentSettingsCode.slice(0, 18)}...` : "Unavailable";
       return (
         <div className="space-y-6">
-          <div className="space-y-5">
+          <SettingsGroup title="Quick setup">
+            <div className="grid gap-3 md:grid-cols-3">
+              {quickSetups.map((item) => {
+                const selected = selectedQuickSetup === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => requestQuickSetup(item.id, item.name)}
+                    className={`min-h-40 rounded-lg border p-4 text-left shadow-sm transition ${selected ? item.selectedClasses : item.classes}`}
+                  >
+                    <span className="block text-base font-semibold text-gray-950">{item.name}</span>
+                    <span className="mt-2 block text-sm leading-6 text-gray-700">{item.description}</span>
+                    {selected && (
+                      <span className="mt-4 flex flex-wrap gap-2">
+                        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${item.tagClasses}`}>Selected</span>
+                        {quickSetupModified && <span className="inline-flex rounded-full bg-white/90 px-2.5 py-1 text-xs font-semibold text-gray-700">with modifications</span>}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </SettingsGroup>
+
+          <SettingsGroup title="Import settings">
             <SettingRow
-              title="Import settings from save code"
+              title="Import from settings configuration code"
               description="Paste a code to apply a saved settings combination."
               control={
                 <div className="flex gap-2">
@@ -872,13 +938,16 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               }
             />
             <SettingRow
-              title="Copy settings save code"
+              title="Copy settings configuration code"
               description="Generate a code from the current settings on this page."
               control={
-                <button type="button" onClick={copySettingsCode} className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                  <Copy className="h-4 w-4" />
-                  Copy code
-                </button>
+                <div className="flex min-w-0 items-center gap-2 rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5">
+                  <code className="min-w-0 flex-1 truncate text-xs font-semibold text-gray-700">{settingsCodePreview}</code>
+                  <button type="button" onClick={copySettingsCode} className="inline-flex items-center gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-100">
+                    <Copy className="h-4 w-4" />
+                    Copy
+                  </button>
+                </div>
               }
             />
             <SettingRow
@@ -894,17 +963,6 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 </div>
               }
             />
-          </div>
-
-          <SettingsGroup title="Quick setup">
-            <div className="grid gap-3 md:grid-cols-3">
-              {quickSetups.map((item) => (
-                <button key={item.id} type="button" onClick={() => applyQuickSetup(item.id)} className="rounded-lg border border-gray-200 bg-white p-4 text-left shadow-sm hover:border-blue-300 hover:bg-blue-50">
-                  <span className="block text-base font-semibold text-gray-900">{item.name}</span>
-                  <span className="mt-2 block text-sm text-gray-600">{item.description}</span>
-                </button>
-              ))}
-            </div>
           </SettingsGroup>
         </div>
       );
@@ -963,17 +1021,18 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <SettingRow title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
               title="Cosponsorship"
-              action={<SwitchControl checked={settings.cosponsorshipMode !== "never"} onChange={(v) => setSettings({ cosponsorshipMode: v ? "always" : "never", cosponsorAfterCommitteeReport: false })} disabled={!settings.enableBills} />}
+              action={
+                <div className="w-80">
+                  <SettingSelect value={settings.cosponsorshipMode} onValueChange={(value) => setSettings({ cosponsorshipMode: value, cosponsorAfterCommitteeReport: false })}>
+                    <SelectItem value="always">Always allowed</SelectItem>
+                    <SelectItem value="before_report">Only before bill is reported from all committees</SelectItem>
+                    <SelectItem value="never">Never allowed</SelectItem>
+                  </SettingSelect>
+                </div>
+              }
               disabled={!settings.enableBills}
             >
               <DisabledBlock disabled={settings.cosponsorshipMode === "never"}>
-                <div className="max-w-xl">
-                <SettingSelect value={settings.cosponsorshipMode} onValueChange={(value) => setSettings({ cosponsorshipMode: value, cosponsorAfterCommitteeReport: false })}>
-                <SelectItem value="always">Always allowed</SelectItem>
-                <SelectItem value="before_report">Allowed before the bill is reported from all committees</SelectItem>
-                <SelectItem value="never">Never allowed</SelectItem>
-                </SettingSelect>
-                </div>
                 <Toggle checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} disabled={settings.cosponsorshipMode === "never"} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
               </DisabledBlock>
             </SettingsGroup>
@@ -1011,11 +1070,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <SettingsGroup title="Announcement boards" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.announcementBoardsEnabled} onChange={(v) => setSettings({ announcementBoardsEnabled: v })} disabled={!settings.enableOrganizations} />}>
             <DisabledBlock disabled={!settings.announcementBoardsEnabled}>
               <SettingRow title="Announcement word limit" description="Maximum words allowed in announcements." control={<WordLimitInput label="" value={settings.announcementWordLimit} max={1000} onChange={(value) => setSettings({ announcementWordLimit: value })} />} />
-              <SettingRow title="Enable comments" description="Members can comment on announcement boards." control={<SwitchControl checked={settings.announcementCommentsEnabled} onChange={(v) => setSettings({ announcementCommentsEnabled: v })} />} />
+              <Toggle checked={settings.announcementCommentsEnabled} onChange={(v) => setSettings({ announcementCommentsEnabled: v })} title="Enable comments" description="Members can comment on announcement boards." />
               <DisabledBlock disabled={!settings.announcementCommentsEnabled}>
                 <SettingRow title="Comment word limit" description="Maximum words allowed in announcement comments." control={<WordLimitInput label="" value={settings.commentWordLimit} max={500} onChange={(value) => setSettings({ commentWordLimit: value })} />} />
               </DisabledBlock>
-              <SettingRow title="Enable emotes" description="Members can react to announcements and comments." control={<SwitchControl checked={settings.announcementEmotesEnabled} onChange={(v) => setSettings({ announcementEmotesEnabled: v })} />} />
+              <Toggle checked={settings.announcementEmotesEnabled} onChange={(v) => setSettings({ announcementEmotesEnabled: v })} title="Enable emotes" description="Members can react to announcements and comments." />
             </DisabledBlock>
           </SettingsGroup>
           <SettingsGroup title="Parties" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.enableParties} onChange={(v) => setSettings({ enableParties: v })} disabled={!settings.enableOrganizations} />}>
@@ -1070,7 +1129,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
-              <SettingRow title="Committee voting" description="Bills are voted on after committee review." control={<SwitchControl checked={settings.billsVotedAfterCommittee} onChange={(v) => setSettings({ billsVotedAfterCommittee: v, committeeVoteRequired: v })} />} />
+              <Toggle checked={settings.billsVotedAfterCommittee} onChange={(v) => setSettings({ billsVotedAfterCommittee: v, committeeVoteRequired: v })} title="Committee voting" description="Bills are voted on after committee review." />
               <DisabledBlock disabled={!settings.billsVotedAfterCommittee}>
                 <SettingRow title="Committee vote pass threshold" description="Percentage of votes needed to report a bill." control={<PercentInput value={settings.committeeVotePassThresholdPct} onChange={(value) => setSettings({ committeeVotePassThresholdPct: value })} />} />
               </DisabledBlock>
@@ -1203,7 +1262,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
 
   const visibleTabs = tabs.filter((tab) => (mode === "setup" ? setupTabIds.includes(tab.id) : settingsTabIds.includes(tab.id)));
   const heading = mode === "setup" ? "Set Up Class" : "Simulation Settings";
-  const description = mode === "setup" ? "Choose the default parties and committees for this class." : "Configure class-wide simulation rules and defaults.";
+  const description = mode === "setup" ? "Choose the default parties and committees for this class." : "";
   const activeTabLabel = visibleTabs.find((tab) => tab.id === activeTab)?.label;
   const tabHeaderAction = () => {
     if (activeTab === "bills") return <SwitchControl checked={settings.enableBills} onChange={(v) => setSettings({ enableBills: v })} />;
@@ -1222,7 +1281,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <Settings className="h-7 w-7 text-blue-600" />
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{heading}</h1>
-              <p className="mt-1 text-gray-600">{description}</p>
+              {description && <p className="mt-1 text-gray-600">{description}</p>}
             </div>
           </div>
           {mode === "settings" && <TeacherClassTabs classId={activeClassId} active="settings" />}
@@ -1257,6 +1316,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </button>
         </div>
       </div>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }
