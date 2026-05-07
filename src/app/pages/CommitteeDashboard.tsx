@@ -54,8 +54,9 @@ function leadershipLabel(role: MembershipRole) {
 }
 
 function authorLinkClass(author: ProfileLite | null | undefined) {
+  if (author?.role === "teacher") return "text-green-700 hover:underline";
   if (author?.organization_role && author.organization_role !== "member") return "text-purple-700 hover:underline";
-  return author?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline";
+  return "text-blue-600 hover:underline";
 }
 
 const dashboardCache = new Map<
@@ -1024,7 +1025,7 @@ export function CommitteeDashboard() {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">About</h2>
                 </div>
-                <div className="flex max-w-md flex-1 items-start justify-end gap-2">
+                <div className="flex max-w-md flex-1 items-start justify-end gap-2 border-l border-gray-200 pl-4">
                   {(isLeader || isTeacher) && !editingAbout && (
                     <button onClick={() => setEditingAbout(true)} className="mt-1 text-blue-600 hover:text-blue-700 transition-colors">
                       <Pencil className="w-4 h-4" />
@@ -1032,7 +1033,13 @@ export function CommitteeDashboard() {
                   )}
                   <div className="min-w-0 flex-1 text-right">
                     {subcommittees.length ? (
-                      <div className="mb-2 text-xs leading-5 text-gray-500">{subcommittees.map((item) => item.name).join(", ")}</div>
+                      <div className="mb-2 flex flex-wrap justify-end gap-1">
+                        {subcommittees.map((subcommittee) => (
+                          <button key={subcommittee.id} type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 enabled:hover:bg-red-50 enabled:hover:text-red-600 disabled:cursor-default">
+                            {subcommittee.name}{(isLeader || isTeacher) ? " x" : ""}
+                          </button>
+                        ))}
+                      </div>
                     ) : null}
                     {(isLeader || isTeacher) && (
                       <div className="ml-auto flex max-w-xs gap-1.5">
@@ -1076,15 +1083,6 @@ export function CommitteeDashboard() {
               ) : (
                 <p className="text-gray-700 whitespace-pre-line">{committee.description || "No description yet."}</p>
               )}
-              {(isLeader || isTeacher) && subcommittees.length ? (
-                <div className="mt-2 flex flex-wrap gap-1">
-                  {subcommittees.map((subcommittee) => (
-                    <button key={subcommittee.id} type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 hover:bg-red-50 hover:text-red-600">
-                      {subcommittee.name} x
-                    </button>
-                  ))}
-                </div>
-              ) : null}
             </div>
 
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
@@ -1238,7 +1236,6 @@ export function CommitteeDashboard() {
             <div className="space-y-3">
               {visibleMembers.map((m) => (
                 <div key={m.user_id} className="relative flex items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
-                  {m.profile?.role === "teacher" && <GraduationCap className="absolute right-2 top-2 h-4 w-4 text-green-600" />}
                   {m.profile?.avatar_url ? (
                     <img src={m.profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
                   ) : (
@@ -1246,7 +1243,7 @@ export function CommitteeDashboard() {
                   )}
                     <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
-                      <Link to={profilePath(m.user_id)} className={m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
+                      <Link to={profilePath(m.user_id)} className={m.profile?.role === "teacher" ? "text-green-700 hover:underline" : m.role !== "member" ? "text-purple-700 hover:underline" : "text-blue-600 hover:underline"}>
                         {m.profile?.display_name ?? "Member"}
                       </Link>
                     </div>

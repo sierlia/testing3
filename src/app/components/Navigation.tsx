@@ -76,6 +76,16 @@ export function Navigation() {
   }, [location.pathname, location.search]);
   const legislationCloseTimerRef = useRef<number | null>(null);
   const floorCloseTimerRef = useRef<number | null>(null);
+  const isActivePath = (paths: string[]) =>
+    paths.some((path) => location.pathname === path || location.pathname.startsWith(`${path}/`));
+  const navItemClass = (active: boolean) =>
+    `px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+      active ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:text-gray-900 hover:bg-gray-50"
+    }`;
+  const navButtonClass = (active: boolean) =>
+    `flex items-center gap-1 ${navItemClass(active)}`;
+  const dropdownItemClass = (active: boolean) =>
+    `block px-4 py-2 text-sm ${active ? "bg-blue-50 text-blue-700" : "text-gray-700 hover:bg-gray-50"}`;
 
   const handleSignOut = async () => {
     await signOut();
@@ -394,7 +404,7 @@ export function Navigation() {
               <div className="relative" onMouseEnter={openLegislation} onMouseLeave={closeLegislationSoon}>
                 <button
                   onClick={() => navigate("/bills")}
-                  className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                  className={navButtonClass(isActivePath(["/bills"]))}
                 >
                   Legislation
                   <ChevronDown className={`w-4 h-4 transition-transform ${legislationOpen ? "rotate-180" : ""}`} />
@@ -402,10 +412,10 @@ export function Navigation() {
 
                 {legislationOpen && (
                   <div className="absolute top-full left-0 mt-0 w-44 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openLegislation} onMouseLeave={closeLegislationSoon}>
-                    <Link to="/bills" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <Link to="/bills" className={dropdownItemClass(location.pathname === "/bills")}>
                       All Bills
                     </Link>
-                    <Link to="/bills/my" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <Link to="/bills/my" className={dropdownItemClass(isActivePath(["/bills/my"]))}>
                       My Bills
                     </Link>
                   </div>
@@ -414,7 +424,7 @@ export function Navigation() {
 
               <Link
                 to="/records"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                className={navItemClass(isActivePath(["/records"]))}
               >
                 Records
               </Link>
@@ -422,7 +432,7 @@ export function Navigation() {
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                 <button
                   onClick={() => navigate("/parties")}
-                  className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/committee"]))}
                 >
                   Organizations
                   <ChevronDown
@@ -434,19 +444,19 @@ export function Navigation() {
                   <div className="absolute top-full left-0 mt-0 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                     <Link
                       to="/parties"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      className={dropdownItemClass(isActivePath(["/parties"]))}
                     >
                       Parties
                     </Link>
                     <Link
                       to="/committees"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      className={dropdownItemClass(isActivePath(["/committees", "/committee"]))}
                     >
                       Committees
                     </Link>
                     <Link
                       to="/caucuses"
-                      className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      className={dropdownItemClass(isActivePath(["/caucuses"]))}
                     >
                       Caucuses
                     </Link>
@@ -456,24 +466,24 @@ export function Navigation() {
 
               <Link
                 to="/members"
-                className="px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                className={navItemClass(isActivePath(["/members"]))}
               >
                 Members
               </Link>
               <div className="relative" onMouseEnter={openFloor} onMouseLeave={closeFloorSoon}>
                 <button
                   onClick={() => navigate("/floor")}
-                  className="flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 transition-colors"
+                  className={navButtonClass(isActivePath(["/floor", "/calendar"]))}
                 >
                   Floor
                   <ChevronDown className={`w-4 h-4 transition-transform ${floorOpen ? "rotate-180" : ""}`} />
                 </button>
                 {floorOpen && (
                   <div className="absolute top-full left-0 mt-0 w-40 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openFloor} onMouseLeave={closeFloorSoon}>
-                    <Link to="/floor" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <Link to="/floor" className={dropdownItemClass(isActivePath(["/floor"]))}>
                       Live
                     </Link>
-                    <Link to="/calendar" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                    <Link to="/calendar" className={dropdownItemClass(isActivePath(["/calendar"]))}>
                       Calendar
                     </Link>
                   </div>

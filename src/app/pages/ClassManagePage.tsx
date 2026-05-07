@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Activity, ArrowDown, ArrowUp, Check, Copy, Download, FileUp, GripVertical, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, Check, Copy, Download, Eye, EyeOff, FileUp, GripVertical, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { displayPersonName } from "../utils/displayName";
 import { supabase } from "../utils/supabase";
 import { profilePath } from "../utils/profileRoute";
+import { getCurrentUser } from "../utils/currentUser";
 
 interface RosterMember {
   id: string;
@@ -107,6 +108,7 @@ export function ClassManagePage() {
   const [rosterSettingsOpen, setRosterSettingsOpen] = useState(false);
   const [newColumnName, setNewColumnName] = useState("");
   const [draggingColumnId, setDraggingColumnId] = useState<string | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<{ key: string; position: "before" | "after" } | null>(null);
   const [classSettings, setClassSettings] = useState<Record<string, any>>({});
   const [rosterPreferences, setRosterPreferences] = useState<RosterPreferences>(defaultRosterPreferences);
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -148,7 +150,7 @@ export function ClassManagePage() {
     if (!classId) return;
     setLoading(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await getCurrentUser();
       setCurrentUserId(user?.id ?? null);
       if (user) {
         await supabase.from("profiles").upsert({
@@ -533,14 +535,15 @@ export function ClassManagePage() {
     }));
   };
 
-  const reorderRosterColumn = async (sourceKey: string, targetKey: string) => {
+  const reorderRosterColumn = async (sourceKey: string, targetKey: string, position: "before" | "after" = "before") => {
     if (sourceKey === targetKey) return;
     const keys = orderedRosterColumns.map((column) => column.key);
     const from = keys.indexOf(sourceKey);
     const to = keys.indexOf(targetKey);
     if (from < 0 || to < 0) return;
     const [key] = keys.splice(from, 1);
-    keys.splice(to, 0, key);
+    const targetIndex = keys.indexOf(targetKey);
+    keys.splice(position === "after" ? targetIndex + 1 : targetIndex, 0, key);
     setRosterPreferences((current) => ({ ...current, columnOrder: keys }));
   };
 
@@ -1084,19 +1087,29 @@ export function ClassManagePage() {
                       key={column.key}
                       draggable
                       onDragStart={() => setDraggingColumnId(column.key)}
-                      onDragOver={(event) => event.preventDefault()}
+                      onDragOver={(event) => {
+                        event.preventDefault();
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        setDragOverColumn({ key: column.key, position: event.clientX > rect.left + rect.width / 2 ? "after" : "before" });
+                      }}
                       onDrop={(event) => {
                         event.preventDefault();
-                        if (draggingColumnId) void reorderRosterColumn(draggingColumnId, column.key);
+                        if (draggingColumnId) void reorderRosterColumn(draggingColumnId, column.key, dragOverColumn?.position ?? "before");
                         setDraggingColumnId(null);
+                        setDragOverColumn(null);
                       }}
-                      onDragEnd={() => setDraggingColumnId(null)}
-                      className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+                      onDragEnd={() => {
+                        setDraggingColumnId(null);
+                        setDragOverColumn(null);
+                      }}
+                      className="relative flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
                     >
+                      {dragOverColumn?.key === column.key && dragOverColumn.position === "before" && <span className="absolute -left-1 top-1 bottom-1 w-1 rounded-full bg-blue-500" />}
+                      {dragOverColumn?.key === column.key && dragOverColumn.position === "after" && <span className="absolute -right-1 top-1 bottom-1 w-1 rounded-full bg-blue-500" />}
                       <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-gray-400" />
                       <span className="min-w-0 flex-1 truncate">{column.label}</span>
-                      <button type="button" onClick={() => toggleRosterColumnHidden(column.key)} className={`rounded px-2 py-1 text-xs font-medium ${rosterPreferences.hiddenColumns.includes(column.key) ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-700"}`}>
-                        {rosterPreferences.hiddenColumns.includes(column.key) ? "Hidden" : "Shown"}
+                      <button type="button" onClick={() => toggleRosterColumnHidden(column.key)} className={`rounded p-1.5 ${rosterPreferences.hiddenColumns.includes(column.key) ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-700"}`} aria-label={rosterPreferences.hiddenColumns.includes(column.key) ? "Show column" : "Hide column"} title={rosterPreferences.hiddenColumns.includes(column.key) ? "Hidden" : "Shown"}>
+                        {rosterPreferences.hiddenColumns.includes(column.key) ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                       </button>
                       {column.key.startsWith("custom:") && (
                         <button type="button" onClick={() => void deleteCustomColumn(column.key.slice("custom:".length))} className="rounded p-1 text-red-500 hover:bg-red-50" aria-label="Delete column">

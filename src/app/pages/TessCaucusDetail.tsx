@@ -12,6 +12,7 @@ import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
 import { profilePath } from "../utils/profileRoute";
+import { getCurrentUser } from "../utils/currentUser";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -51,8 +52,9 @@ function displayAuthorName(author: ProfileLite | null | undefined, fallback = "U
 }
 
 function authorLinkClass(author: ProfileLite | null | undefined) {
+  if (author?.role === "teacher") return "text-green-700 hover:underline";
   if (author?.organization_role && author.organization_role !== "member") return "text-purple-700 hover:underline";
-  return author?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline";
+  return "text-blue-600 hover:underline";
 }
 
 function partyAbbr(party: string | null | undefined) {
@@ -158,8 +160,7 @@ export function TessCaucusDetail() {
     const load = async () => {
       setLoading(true);
       try {
-        const { data: auth } = await supabase.auth.getUser();
-        const me = auth.user?.id ?? null;
+        const me = (await getCurrentUser())?.id ?? null;
         setMeId(me);
         if (me) {
           const { data: mp } = await supabase
@@ -462,6 +463,16 @@ export function TessCaucusDetail() {
     };
   }, [caucusId]);
 
+  useEffect(() => {
+    if (!memberMenuOpen) return;
+    const closeMenu = (event: PointerEvent) => {
+      if ((event.target as HTMLElement | null)?.closest("[data-caucus-member-menu]")) return;
+      setMemberMenuOpen(null);
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, [memberMenuOpen]);
+
   const joinLeave = async () => {
     if (!meId) return;
     if (myRole) {
@@ -549,6 +560,31 @@ export function TessCaucusDetail() {
       message: `Set ${member.profile?.display_name ?? "this member"} to ${leadershipLabel(role)} for ${caucus?.title ?? "this caucus"}?${currentChair ? ` ${currentChair.profile?.display_name ?? "The current chair"} will be moved back to Member.` : ""}`,
       confirmLabel: "Change role",
       onConfirm: () => setMemberRole(member.user_id, role),
+    });
+  };
+
+  const removeMember = async (userId: string) => {
+    if (!isTeacher) return;
+    try {
+      const { error } = await supabase.from("caucus_members").delete().eq("caucus_id", caucusId).eq("user_id", userId);
+      if (error) throw error;
+      setMembers((prev) => prev.filter((member) => member.user_id !== userId));
+      if (userId === meId) setMyRole(null);
+      setMemberMenuOpen(null);
+      toast.success("Member removed");
+    } catch (e: any) {
+      toast.error(e.message || "Could not remove member");
+    }
+  };
+
+  const requestRemoveMember = (member: { user_id: string; role: MembershipRole; profile: ProfileLite | null }) => {
+    if (!isTeacher) return;
+    setConfirmDialog({
+      title: "Remove member?",
+      message: `Remove ${member.profile?.display_name ?? "this member"} from ${caucus?.title ?? "this caucus"}?`,
+      confirmLabel: "Remove",
+      danger: true,
+      onConfirm: () => removeMember(member.user_id),
     });
   };
 
@@ -1107,7 +1143,7 @@ export function TessCaucusDetail() {
                   {visibleMembers.map((m) => (
                     <div key={`election:${m.user_id}`} className="flex items-center justify-between gap-3 rounded-md border border-gray-200 p-3">
                       <div className="min-w-0">
-                        <Link to={profilePath(m.user_id)} className={`truncate text-sm font-medium ${m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}`}>
+                        <Link to={profilePath(m.user_id)} className={`truncate text-sm font-medium ${m.profile?.role === "teacher" ? "text-green-700 hover:underline" : m.role !== "member" ? "text-purple-700 hover:underline" : "text-blue-600 hover:underline"}`}>
                           {m.profile?.display_name ?? "Member"}
                         </Link>
                         <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.profile?.party)}-{formatConstituency(m.profile?.constituency_name) || "N/A"}</div>
@@ -1153,7 +1189,6 @@ export function TessCaucusDetail() {
               {visibleMembers
                 .map((m) => (
                   <div key={m.user_id} className="relative flex items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
-                    {m.profile?.role === "teacher" && <GraduationCap className="absolute right-2 top-2 h-4 w-4 text-green-600" />}
                     {m.profile?.avatar_url ? (
                       <img src={m.profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
                     ) : (
@@ -1161,7 +1196,7 @@ export function TessCaucusDetail() {
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">
-                        <Link to={profilePath(m.user_id)} className={m.role !== "member" ? "text-purple-700 hover:underline" : m.profile?.role === "teacher" ? "text-green-700 hover:underline" : "text-blue-600 hover:underline"}>
+                        <Link to={profilePath(m.user_id)} className={m.profile?.role === "teacher" ? "text-green-700 hover:underline" : m.role !== "member" ? "text-purple-700 hover:underline" : "text-blue-600 hover:underline"}>
                           {m.profile?.display_name ?? "Member"}
                         </Link>
                       </div>
@@ -1172,7 +1207,7 @@ export function TessCaucusDetail() {
                     </div>
                     <div className="flex items-center gap-2">
                       {isTeacher ? (
-                        <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                        <div className="relative" data-caucus-member-menu onPointerDown={(event) => event.stopPropagation()}>
                           <button
                             type="button"
                             onClick={() => setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id))}
@@ -1195,6 +1230,18 @@ export function TessCaucusDetail() {
                                   {m.role === role && <span className="text-xs">Current</span>}
                                 </button>
                               ))}
+                              <div className="my-1 border-t border-gray-100" />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMemberMenuOpen(null);
+                                  requestRemoveMember(m);
+                                }}
+                                className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Remove
+                              </button>
                             </div>
                           )}
                         </div>

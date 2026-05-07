@@ -13,6 +13,7 @@ import {
   Pencil,
   Save,
   Users,
+  Vote,
   X,
 } from "lucide-react";
 import { Navigation } from "../components/Navigation";
@@ -56,7 +57,7 @@ type ProfileRow = {
   class_id?: string | null;
 };
 
-type ProfileSectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters";
+type ProfileSectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters" | "votes_cast";
 type ProfileSectionRow = {
   id?: string;
   section_key: string;
@@ -64,6 +65,15 @@ type ProfileSectionRow = {
   section_type: ProfileSectionType;
   width: "full" | "half";
   position: number;
+};
+type VoteCast = {
+  id: string;
+  vote: string;
+  date: string;
+  label: string;
+  title: string;
+  context: string;
+  href: string;
 };
 
 const defaultProfileSections: ProfileSectionRow[] = [
@@ -73,6 +83,7 @@ const defaultProfileSections: ProfileSectionRow[] = [
   { section_key: "legislation_written", title: "Legislation Written", section_type: "legislation_written", width: "half", position: 3 },
   { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "full", position: 4 },
   { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", position: 5 },
+  { section_key: "votes_cast", title: "Votes Cast", section_type: "votes_cast", width: "half", position: 6 },
 ];
 
 const PROFILE_COLLAPSE_WORDS = 150;
@@ -87,6 +98,15 @@ function truncateWords(text: string, maxWords: number) {
   return `${words.slice(0, maxWords).join(" ")}...`;
 }
 
+function mergeProfileSections(rows: ProfileSectionRow[]) {
+  if (!rows.length) return defaultProfileSections;
+  const byKey = new Set(rows.map((row) => row.section_key));
+  const missing = defaultProfileSections
+    .filter((section) => !byKey.has(section.section_key))
+    .map((section, index) => ({ ...section, position: rows.length + index }));
+  return [...rows, ...missing].map((section, index) => ({ ...section, position: index }));
+}
+
 export function StudentProfile() {
   const { id } = useParams();
   const [authUserId, setAuthUserId] = useState<string | null>(null);
@@ -94,6 +114,7 @@ export function StudentProfile() {
   const [billsAuthored, setBillsAuthored] = useState<any[]>([]);
   const [billsCosponsored, setBillsCosponsored] = useState<any[]>([]);
   const [lettersAuthored, setLettersAuthored] = useState<any[]>([]);
+  const [votesCast, setVotesCast] = useState<VoteCast[]>([]);
   const [updatedAt, setUpdatedAt] = useState<string>("");
   const [orgs, setOrgs] = useState<{ committees: Array<{ id: string; name: string }>; caucuses: Array<{ id: string; name: string }> }>({ committees: [], caucuses: [] });
   const [profileSections, setProfileSections] = useState<ProfileSectionRow[]>(defaultProfileSections);
@@ -224,7 +245,7 @@ export function StudentProfile() {
           ...section,
           width: section.section_type === "organizations" ? "full" : section.width,
         }));
-        setProfileSections(rows.length ? rows : defaultProfileSections);
+        setProfileSections(mergeProfileSections(rows));
       } else {
         setUnavailableConstituencies([]);
         setProfileSections(defaultProfileSections);
@@ -247,6 +268,44 @@ export function StudentProfile() {
       if (pr.class_id) lettersQuery = lettersQuery.eq("class_id", pr.class_id);
       const { data: letters } = await lettersQuery.order("created_at", { ascending: false }).limit(5);
       setLettersAuthored(letters ?? []);
+
+      let committeeVotesQuery = supabase
+        .from("bill_committee_votes")
+        .select("bill_id,committee_id,vote,created_at,bills(id,hr_label,title),committees(id,name)")
+        .eq("user_id", uid);
+      let floorVotesQuery = supabase
+        .from("bill_floor_votes")
+        .select("session_id,bill_id,vote,created_at,bills(id,hr_label,title)")
+        .eq("user_id", uid);
+      if (pr.class_id) {
+        committeeVotesQuery = committeeVotesQuery.eq("class_id", pr.class_id);
+        floorVotesQuery = floorVotesQuery.eq("class_id", pr.class_id);
+      }
+      const [{ data: committeeVotes }, { data: floorVotes }] = await Promise.all([
+        committeeVotesQuery.order("created_at", { ascending: false }).limit(8),
+        floorVotesQuery.order("created_at", { ascending: false }).limit(8),
+      ]);
+      const mappedVotes: VoteCast[] = [
+        ...((committeeVotes ?? []) as any[]).map((row) => ({
+          id: `committee:${row.committee_id}:${row.bill_id}`,
+          vote: row.vote,
+          date: row.created_at,
+          label: row.bills?.hr_label ?? "Bill",
+          title: row.bills?.title ?? "",
+          context: row.committees?.name ? `${row.committees.name} vote` : "Committee vote",
+          href: `/bills/${row.bill_id}`,
+        })),
+        ...((floorVotes ?? []) as any[]).map((row) => ({
+          id: `floor:${row.session_id}`,
+          vote: row.vote,
+          date: row.created_at,
+          label: row.bills?.hr_label ?? "Bill",
+          title: row.bills?.title ?? "",
+          context: "Floor vote",
+          href: `/bills/${row.bill_id}`,
+        })),
+      ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5);
+      setVotesCast(mappedVotes);
     })();
   }, [id]);
 
@@ -262,7 +321,7 @@ export function StudentProfile() {
         ...section,
         width: section.section_type === "organizations" ? "full" : section.width,
       }));
-      setProfileSections(rows.length ? rows : defaultProfileSections);
+      setProfileSections(mergeProfileSections(rows));
     })();
   }, [profile?.class_id]);
 
@@ -387,8 +446,7 @@ export function StudentProfile() {
     let partyName: string | null = null;
     let savedPartyId = partyDraftId;
     if (partyDraftId === "custom" && newPartyDraft?.name.trim()) {
-      const { data: auth } = await supabase.auth.getUser();
-      const me = auth.user?.id;
+      const me = (await getCurrentUser())?.id;
       if (!me || !profile.class_id) return;
       const { data: cls } = await supabase.from("classes").select("settings").eq("id", profile.class_id).maybeSingle();
       const requireApproval = !!(cls as any)?.settings?.parties?.requireApproval;
@@ -666,10 +724,42 @@ export function StudentProfile() {
     </section>
   );
 
+  const renderVotesCastSection = (section: ProfileSectionRow) => (
+    <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Vote className="h-5 w-5 text-blue-600" />
+          <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+        </div>
+        <Link to={`/records?type=vote&user=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+          All <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+      <div className="space-y-2">
+        {votesCast.length ? (
+          votesCast.map((vote) => (
+            <Link key={vote.id} to={vote.href} className="block rounded-md bg-gray-50 p-3 text-sm hover:bg-gray-100">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate font-semibold text-gray-900">{vote.label} - {vote.title}</div>
+                  <div className="mt-1 text-xs text-gray-500">{vote.context} - {new Date(vote.date).toLocaleDateString()}</div>
+                </div>
+                <span className="shrink-0 rounded bg-blue-100 px-2 py-1 text-xs font-semibold uppercase text-blue-700">{vote.vote}</span>
+              </div>
+            </Link>
+          ))
+        ) : (
+          <p className="text-sm text-gray-500">No votes cast yet</p>
+        )}
+      </div>
+    </section>
+  );
+
   const renderProfileSection = (section: ProfileSectionRow) => {
     if (section.section_type === "legislation_written") return renderLegislationSection(section);
     if (section.section_type === "organizations") return renderOrganizationsSection(section);
     if (section.section_type === "dear_colleague_letters") return renderLettersSection(section);
+    if (section.section_type === "votes_cast") return renderVotesCastSection(section);
     return renderLongResponseSection(section);
   };
 

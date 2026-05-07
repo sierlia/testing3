@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import { AlignLeft, FileText, GripVertical, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users } from "lucide-react";
+import { AlignLeft, FileText, GripVertical, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { supabase } from "../utils/supabase";
+import { getCurrentUser } from "../utils/currentUser";
 
-type SectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters";
+type SectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters" | "votes_cast";
 type ProfileSection = {
   id?: string;
   class_id: string;
@@ -24,6 +25,7 @@ const defaultSections: Array<Omit<ProfileSection, "class_id">> = [
   { section_key: "legislation_written", title: "Legislation Written", section_type: "legislation_written", width: "half", is_editable: false, position: 3 },
   { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "full", is_editable: false, position: 4 },
   { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", is_editable: false, position: 5 },
+  { section_key: "votes_cast", title: "Votes Cast", section_type: "votes_cast", width: "half", is_editable: false, position: 6 },
 ];
 
 const typeLabels: Record<SectionType, string> = {
@@ -31,13 +33,24 @@ const typeLabels: Record<SectionType, string> = {
   legislation_written: "Legislation written",
   organizations: "Organizations",
   dear_colleague_letters: "Dear Colleague letters",
+  votes_cast: "Votes cast",
 };
 
 function sectionIcon(type: SectionType) {
   if (type === "legislation_written") return FileText;
   if (type === "organizations") return Users;
   if (type === "dear_colleague_letters") return Mail;
+  if (type === "votes_cast") return Vote;
   return AlignLeft;
+}
+
+function mergeDefaultSections(rows: ProfileSection[], classId: string) {
+  if (!rows.length) return defaultSections.map((section) => ({ ...section, class_id: classId }));
+  const byKey = new Set(rows.map((row) => row.section_key));
+  const missing = defaultSections
+    .filter((section) => !byKey.has(section.section_key))
+    .map((section, index) => ({ ...section, class_id: classId, position: rows.length + index }));
+  return [...rows, ...missing].map((section, index) => ({ ...section, position: index }));
 }
 
 export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }) {
@@ -61,8 +74,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   const load = async () => {
     setLoading(true);
     try {
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth.user?.id;
+      const uid = (await getCurrentUser())?.id;
       if (!uid) return;
       const { data: profile } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
       const activeClass = (profile as any)?.class_id ?? null;
@@ -77,7 +89,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
       const { data: cls } = await supabase.from("classes").select("settings").eq("id", activeClass).maybeSingle();
       setSectionWordLimits(((cls as any)?.settings?.profileSectionWordLimits ?? {}) as Record<string, number>);
       const rows = (data ?? []) as ProfileSection[];
-      setSections(rows.length ? rows : defaultSections.map((section) => ({ ...section, class_id: activeClass })));
+      setSections(mergeDefaultSections(rows, activeClass));
     } catch (e: any) {
       toast.error(e.message || "Could not load profile layout");
     } finally {
@@ -357,6 +369,33 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         </section>
       );
     }
+    if (section.section_type === "votes_cast") {
+      return (
+        <section key={`preview-${section.section_key}`} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${span}`}>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Vote className="h-5 w-5 text-blue-600" />
+              <h2 className="text-lg font-semibold text-gray-900">{section.title || "Untitled section"}</h2>
+            </div>
+            <span className="text-sm font-medium text-blue-600">All</span>
+          </div>
+          <div className="space-y-2">
+            {[
+              ["H.R. 12", "yea", "Floor vote"],
+              ["H.R. 18", "present", "Education Committee vote"],
+            ].map(([label, vote, context]) => (
+              <div key={`${label}-${context}`} className="rounded-md bg-gray-50 p-3 text-sm">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-semibold text-gray-900">{label}</span>
+                  <span className="rounded bg-blue-100 px-2 py-1 text-xs font-semibold uppercase text-blue-700">{vote}</span>
+                </div>
+                <div className="mt-1 text-xs text-gray-500">{context}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
     const sample = sampleLongResponse(section);
     return (
       <section key={`preview-${section.section_key}`} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${span}`}>
@@ -392,7 +431,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
 
       {activeView === "editor" && <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          {(["long_response", "legislation_written", "organizations", "dear_colleague_letters"] as SectionType[]).map((type) => {
+          {(["long_response", "legislation_written", "organizations", "dear_colleague_letters", "votes_cast"] as SectionType[]).map((type) => {
             const Icon = sectionIcon(type);
             const disabled = type !== "long_response" && usedSingleTypes.has(type);
             return (
