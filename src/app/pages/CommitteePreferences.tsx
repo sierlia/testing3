@@ -21,6 +21,7 @@ export function CommitteePreferences() {
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(true);
   const [classId, setClassId] = useState<string | null>(null);
+  const [assignmentMode, setAssignmentMode] = useState("preference");
 
   const moveCommittee = (dragIndex: number, hoverIndex: number) => {
     const draggedCommittee = rankedCommittees[dragIndex];
@@ -43,8 +44,14 @@ export function CommitteePreferences() {
         if (!cid) return;
 
         const { data: cls } = await supabase.from("classes").select("settings").eq("id", cid).maybeSingle();
+        const mode = (cls as any)?.settings?.committees?.assignmentMode ?? "preference";
+        setAssignmentMode(mode);
+        if (mode === "random") {
+          setRankedCommittees([]);
+          return;
+        }
         const enabledNames = ((cls as any)?.settings?.committees?.enabled ?? []) as string[];
-        const { data: committees } = await supabase.from("committees").select("id,name,description,created_at").order("created_at", { ascending: true });
+        const { data: committees } = await supabase.from("committees").select("id,name,description,created_at").eq("class_id", cid).order("created_at", { ascending: true });
         const eligible = (committees ?? []).filter((c: any) => enabledNames.length === 0 || enabledNames.includes(c.name));
 
         const { data: existingSub } = await supabase
@@ -133,6 +140,12 @@ export function CommitteePreferences() {
           )}
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            {assignmentMode === "random" ? (
+              <div className="rounded-md border border-gray-200 bg-gray-50 p-6 text-center text-sm text-gray-600">
+                Your teacher has selected random committee assignments, so there is no committee preference survey for this class.
+              </div>
+            ) : (
+              <>
             <div className="flex items-center gap-2 mb-4 text-sm text-gray-600">
               <GripVertical className="w-4 h-4" />
               <span>Drag to reorder your preferences</span>
@@ -150,20 +163,22 @@ export function CommitteePreferences() {
                 />
               ))}
             </div>
+              </>
+            )}
           </div>
 
-          <div className="flex items-center justify-between">
+          {assignmentMode !== "random" && <div className="flex items-center justify-between">
             <p className="text-sm text-gray-500">
               {rankedCommittees.length} eligible committees
             </p>
             <button
               onClick={handleSubmit}
-              disabled={submitted || loading || rankedCommittees.length === 0}
+              disabled={submitted || loading || rankedCommittees.length === 0 || assignmentMode === "random"}
               className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
               {submitted ? "Submitted" : "Submit Preferences"}
             </button>
-          </div>
+          </div>}
         </main>
       </div>
     </DndProvider>

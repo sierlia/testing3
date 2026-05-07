@@ -51,7 +51,8 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   const [dragOverPosition, setDragOverPosition] = useState<"before" | "after">("before");
   const [dragPointer, setDragPointer] = useState<{ x: number; y: number } | null>(null);
   const [sectionWordLimits, setSectionWordLimits] = useState<Record<string, number>>({});
-  const dragStartRef = useRef<{ key: string; startX: number; startY: number; moved: boolean } | null>(null);
+  const [activeView, setActiveView] = useState<"editor" | "preview">("editor");
+  const dragStartRef = useRef<{ key: string; startX: number; startY: number; moved: boolean; index: number } | null>(null);
 
   const markDirty = () => {
     if (embedded) window.dispatchEvent(new CustomEvent("gavel:profile-layout-dirty"));
@@ -233,7 +234,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
 
   const onPointerStart = (event: PointerEvent<HTMLButtonElement>, sectionKey: string) => {
     event.currentTarget.setPointerCapture(event.pointerId);
-    dragStartRef.current = { key: sectionKey, startX: event.clientX, startY: event.clientY, moved: false };
+    dragStartRef.current = { key: sectionKey, startX: event.clientX, startY: event.clientY, moved: false, index: normalizedSections.findIndex((section) => section.section_key === sectionKey) };
     setDraggingKey(sectionKey);
     setDragPointer({ x: event.clientX, y: event.clientY });
   };
@@ -261,7 +262,10 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
   const finishPointerDrag = () => {
     const fromKey = dragStartRef.current?.key ?? draggingKey;
     const toKey = dragOverKey;
-    if (fromKey && toKey && fromKey !== toKey) moveSectionTo(fromKey, toKey, dragOverPosition);
+    const fromIndex = dragStartRef.current?.index ?? -1;
+    const toIndex = normalizedSections.findIndex((section) => section.section_key === toKey);
+    const noChange = (dragOverPosition === "before" && toIndex === fromIndex + 1) || (dragOverPosition === "after" && toIndex === fromIndex - 1);
+    if (fromKey && toKey && fromKey !== toKey && !noChange) moveSectionTo(fromKey, toKey, dragOverPosition);
     dragStartRef.current = null;
     setDraggingKey(null);
     setDragOverKey(null);
@@ -280,7 +284,15 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         </p>
       </div>
 
-      <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-5 inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+        {(["editor", "preview"] as const).map((view) => (
+          <button key={view} type="button" onClick={() => setActiveView(view)} className={`rounded px-3 py-1.5 text-sm font-medium capitalize ${activeView === view ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
+            {view}
+          </button>
+        ))}
+      </div>
+
+      {activeView === "editor" && <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           {(["long_response", "legislation_written", "organizations", "dear_colleague_letters"] as SectionType[]).map((type) => {
             const Icon = sectionIcon(type);
@@ -300,16 +312,20 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
             Save Layout
           </button>
         )}
-      </div>
+      </div>}
 
       {loading ? (
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600">Loading layout...</div>
-      ) : (
+      ) : activeView === "editor" ? (
         <div className="grid grid-cols-2 gap-4">
           {normalizedSections.map((section) => {
             const Icon = sectionIcon(section.section_type);
-            const showMoveBefore = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "before";
-            const showMoveAfter = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "after";
+            const sourceIndex = dragStartRef.current?.index ?? -1;
+            const targetIndex = normalizedSections.findIndex((row) => row.section_key === section.section_key);
+            const beforeWouldChange = targetIndex !== sourceIndex + 1;
+            const afterWouldChange = targetIndex !== sourceIndex - 1;
+            const showMoveBefore = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "before" && beforeWouldChange;
+            const showMoveAfter = dragOverKey === section.section_key && draggingKey !== section.section_key && dragOverPosition === "after" && afterWouldChange;
             return (
               <div key={section.section_key} className={`${section.width === "full" ? "col-span-2" : ""}`}>
               {showMoveBefore && (
@@ -388,8 +404,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
             );
           })}
         </div>
-      )}
-      {!loading && (
+      ) : (
         <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
           <div className="mb-3 flex items-center gap-2">
             <Layout className="h-4 w-4 text-blue-600" />

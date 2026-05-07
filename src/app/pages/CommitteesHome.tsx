@@ -75,10 +75,11 @@ export function CommitteesHome() {
         const s = (cls as any)?.settings ?? {};
         setSettings(s);
         const allowSelfJoin = !!s?.committees?.allowSelfJoin || s?.committees?.assignmentMode === "self-join";
+        const randomAssignments = s?.committees?.assignmentMode === "random";
 
         let nextPreferencesSubmitted = false;
         let nextNeedsPreferences = false;
-        if ((profile as any)?.role === "student" && !allowSelfJoin) {
+        if ((profile as any)?.role === "student" && !allowSelfJoin && !randomAssignments) {
           const { data: sub } = await supabase
             .from("committee_preference_submissions")
             .select("submitted_at")

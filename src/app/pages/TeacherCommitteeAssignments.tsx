@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { useNavigate } from "react-router";
 import { Navigation } from "../components/Navigation";
 import { CommitteeAssignmentColumn } from "../components/CommitteeAssignmentColumn";
-import { Play, Save, AlertCircle } from "lucide-react";
+import { Play, Save, AlertCircle, ArrowLeft } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 
@@ -22,6 +23,7 @@ interface Committee {
 }
 
 export function TeacherCommitteeAssignments() {
+  const navigate = useNavigate();
   const [assignmentStage, setAssignmentStage] = useState<'pending' | 'preview' | 'published'>('pending');
 
   const [loading, setLoading] = useState(true);
@@ -31,6 +33,7 @@ export function TeacherCommitteeAssignments() {
   const [globalCapacity, setGlobalCapacity] = useState(0);
   const [assignmentsPerStudent, setAssignmentsPerStudent] = useState(1);
   const [classSettings, setClassSettings] = useState<any>({});
+  const [submissionCount, setSubmissionCount] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -79,6 +82,13 @@ export function TeacherCommitteeAssignments() {
           .eq("class_id", cid)
           .in("user_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
 
+        const { count: submittedCount } = await supabase
+          .from("committee_preference_submissions")
+          .select("*", { count: "exact", head: true })
+          .eq("class_id", cid)
+          .in("user_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
+        setSubmissionCount(submittedCount ?? 0);
+
         const prefsByUser = new Map<string, string[]>();
         for (const r of prefRows ?? []) {
           const uid = (r as any).user_id as string;
@@ -123,16 +133,22 @@ export function TeacherCommitteeAssignments() {
     const newStudents = students.map((student) => ({ ...student, assignedCommittees: [] as string[] }));
     const committeeCounts: Record<string, number> = {};
     committees.forEach(c => committeeCounts[c.id] = 0);
+    const randomMode = classSettings?.committees?.assignmentMode === "random";
+    const randomCommitteeIds = () => committees.map((committee) => committee.id).sort(() => Math.random() - 0.5);
 
     for (let round = 0; round < assignmentsPerStudent; round += 1) {
-      const ordered = [...newStudents].sort((a, b) => {
-        const aChoice = a.preferences[round] ? 0 : 1;
-        const bChoice = b.preferences[round] ? 0 : 1;
-        return aChoice - bChoice || a.name.localeCompare(b.name);
-      });
+      const ordered = randomMode
+        ? [...newStudents].sort(() => Math.random() - 0.5)
+        : [...newStudents].sort((a, b) => {
+            const aChoice = a.preferences[round] ? 0 : 1;
+            const bChoice = b.preferences[round] ? 0 : 1;
+            return aChoice - bChoice || a.name.localeCompare(b.name);
+          });
 
       for (const student of ordered) {
-        const rankedChoices = [...student.preferences, ...committees.map((committee) => committee.id)].filter((id, index, arr) => arr.indexOf(id) === index);
+        const rankedChoices = randomMode
+          ? randomCommitteeIds()
+          : [...student.preferences, ...committees.map((committee) => committee.id)].filter((id, index, arr) => arr.indexOf(id) === index);
         for (const committeeId of rankedChoices) {
           const committee = committees.find(c => c.id === committeeId);
           if (!committee || student.assignedCommittees.includes(committeeId)) continue;
@@ -229,6 +245,10 @@ export function TeacherCommitteeAssignments() {
         
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="mb-8">
+            <button type="button" onClick={() => navigate(-1)} className="mb-4 inline-flex items-center gap-2 rounded-md px-2 py-1 text-sm font-medium text-gray-700 hover:bg-gray-100">
+              <ArrowLeft className="h-4 w-4" />
+              Back
+            </button>
             <h1 className="text-3xl font-bold text-gray-900 mb-2">Committee Assignments</h1>
             <p className="text-gray-600">
               Run the assignment algorithm, preview results, and make manual adjustments
@@ -245,7 +265,7 @@ export function TeacherCommitteeAssignments() {
                     className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
                   >
                     <Play className="w-4 h-4" />
-                    Run Assignment Algorithm
+                    {classSettings?.committees?.assignmentMode === "random" ? "Run Random Assignment" : "Run Assignment Algorithm"}
                   </button>
                 )}
                 
@@ -270,7 +290,9 @@ export function TeacherCommitteeAssignments() {
               </div>
 
               <div className="text-sm text-gray-600">
-                {students.length} total students • {committees.length} committees
+                {classSettings?.committees?.assignmentMode === "random"
+                  ? `${students.length} total students • ${committees.length} committees`
+                  : `${submissionCount} of ${students.length} students submitted preferences • ${committees.length} committees`}
               </div>
             </div>
             <div className="mt-4 grid gap-3 border-t border-gray-100 pt-4 md:grid-cols-3">
@@ -311,7 +333,9 @@ export function TeacherCommitteeAssignments() {
               <AlertCircle className="w-12 h-12 text-blue-600 mx-auto mb-3" />
               <h3 className="font-semibold text-blue-900 mb-2">Ready to Assign Committees</h3>
               <p className="text-blue-700 text-sm mb-4">
-                Click "Run Assignment Algorithm" to automatically assign students to committees based on their preferences.
+                {classSettings?.committees?.assignmentMode === "random"
+                  ? "Click \"Run Random Assignment\" to randomly assign students to committees."
+                  : "Click \"Run Assignment Algorithm\" to automatically assign students to committees based on their preferences."}
               </p>
               <p className="text-blue-600 text-xs">
                 You'll be able to review, make manual adjustments, and save the assignments.
