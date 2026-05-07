@@ -43,6 +43,8 @@ type RosterCustomColumn = { id: string; label: string };
 type RosterPreferences = {
   customColumns: RosterCustomColumn[];
   customValues: Record<string, Record<string, string>>;
+  columnOrder: string[];
+  hiddenColumns: string[];
   defaultSortBy: RosterSortKey;
 };
 type ExportFormat = "csv" | "xls";
@@ -53,6 +55,8 @@ type ExportHeaderMode = "labels" | "keys";
 const defaultRosterPreferences: RosterPreferences = {
   customColumns: [],
   customValues: {},
+  columnOrder: [],
+  hiddenColumns: [],
   defaultSortBy: "first",
 };
 
@@ -71,6 +75,8 @@ const baseExportColumns = [
   ["committees", "Committees"],
   ["caucuses", "Caucuses"],
 ] as const;
+
+const baseRosterColumns = baseExportColumns.map(([key, label]) => ({ key, label }));
 
 export function ClassManagePage() {
   const { classId } = useParams();
@@ -118,6 +124,8 @@ export function ClassManagePage() {
     return {
       customColumns,
       customValues: raw?.customValues && typeof raw.customValues === "object" ? raw.customValues : {},
+      columnOrder: Array.isArray(raw?.columnOrder) ? raw.columnOrder.filter((key: any) => typeof key === "string") : [],
+      hiddenColumns: Array.isArray(raw?.hiddenColumns) ? raw.hiddenColumns.filter((key: any) => typeof key === "string") : [],
       defaultSortBy,
     };
   };
@@ -458,6 +466,22 @@ export function ClassManagePage() {
     [rosterPreferences.customColumns],
   );
 
+  const rosterColumnOptions = useMemo(
+    () => [
+      ...baseRosterColumns,
+      ...rosterPreferences.customColumns.map((column) => ({ key: `custom:${column.id}`, label: column.label })),
+    ],
+    [rosterPreferences.customColumns],
+  );
+
+  const orderedRosterColumns = useMemo(() => {
+    const byKey = new Map(rosterColumnOptions.map((column) => [column.key, column]));
+    const orderedKeys = [...rosterPreferences.columnOrder.filter((key) => byKey.has(key)), ...rosterColumnOptions.map((column) => column.key).filter((key) => !rosterPreferences.columnOrder.includes(key))];
+    return orderedKeys.map((key) => byKey.get(key)!).filter(Boolean);
+  }, [rosterColumnOptions, rosterPreferences.columnOrder]);
+
+  const visibleRosterColumns = useMemo(() => orderedRosterColumns.filter((column) => !rosterPreferences.hiddenColumns.includes(column.key)), [orderedRosterColumns, rosterPreferences.hiddenColumns]);
+
   const customColumnValue = (memberId: string, columnId: string) => rosterPreferences.customValues?.[memberId]?.[columnId] ?? "";
 
   const setCustomColumnValue = (memberId: string, columnId: string, value: string) => {
@@ -496,8 +520,27 @@ export function ClassManagePage() {
     await saveRosterPreferences({
       ...rosterPreferences,
       customColumns: [...rosterPreferences.customColumns, { id, label }],
+      columnOrder: [...rosterPreferences.columnOrder, `custom:${id}`],
     });
     setNewColumnName("");
+  };
+
+  const toggleRosterColumnHidden = (key: string) => {
+    setRosterPreferences((current) => ({
+      ...current,
+      hiddenColumns: current.hiddenColumns.includes(key) ? current.hiddenColumns.filter((item) => item !== key) : [...current.hiddenColumns, key],
+    }));
+  };
+
+  const reorderRosterColumn = async (sourceKey: string, targetKey: string) => {
+    if (sourceKey === targetKey) return;
+    const keys = orderedRosterColumns.map((column) => column.key);
+    const from = keys.indexOf(sourceKey);
+    const to = keys.indexOf(targetKey);
+    if (from < 0 || to < 0) return;
+    const [key] = keys.splice(from, 1);
+    keys.splice(to, 0, key);
+    setRosterPreferences((current) => ({ ...current, columnOrder: keys }));
   };
 
   const updateCustomColumnLabel = (columnId: string, label: string) => {
@@ -538,6 +581,8 @@ export function ClassManagePage() {
     await saveRosterPreferences({
       ...rosterPreferences,
       customColumns: rosterPreferences.customColumns.filter((column) => column.id !== columnId),
+      columnOrder: rosterPreferences.columnOrder.filter((key) => key !== `custom:${columnId}`),
+      hiddenColumns: rosterPreferences.hiddenColumns.filter((key) => key !== `custom:${columnId}`),
       customValues: nextValues,
     });
     setExportColumns((current) => current.filter((column) => column !== `custom:${columnId}`));
@@ -646,6 +691,35 @@ export function ClassManagePage() {
     return String((member as any)[key] ?? "");
   };
 
+  const rosterCellFor = (member: RosterMember, key: string) => {
+    if (key.startsWith("custom:")) {
+      const columnId = key.slice("custom:".length);
+      return (
+        <input
+          value={customColumnValue(member.id, columnId)}
+          onChange={(event) => setCustomColumnValue(member.id, columnId, event.target.value)}
+          onBlur={(event) => void saveCustomColumnValue(member.id, columnId, event.target.value)}
+          placeholder="Add text"
+          className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      );
+    }
+    if (key === "name") return <Link to={`/profile/${member.id}`} className="text-blue-600 hover:underline">{displayPersonName(member.name)}</Link>;
+    if (key === "email") return member.email;
+    if (key === "role") return <span className="capitalize">{member.role}</span>;
+    if (key === "positions") return member.position;
+    if (key === "party") return member.party !== "N/A" ? <Link to={`/parties?party=${encodeURIComponent(member.party)}`} className="text-blue-600 hover:underline">{member.party}</Link> : "N/A";
+    if (key === "constituency") return member.constituency;
+    if (key === "sponsored") return linkedCountList(member.sponsored);
+    if (key === "passed") return linkedCountList(member.passed);
+    if (key === "failed") return linkedCountList(member.failed);
+    if (key === "cosponsored") return linkList(member.cosponsored, "/bills");
+    if (key === "letters") return <Link to={`/dear-colleague/inbox?author=${encodeURIComponent(member.name)}`} className="text-blue-600 hover:underline">{member.letters}</Link>;
+    if (key === "committees") return linkList(member.committees, "/committees");
+    if (key === "caucuses") return linkList(member.caucuses, "/caucuses");
+    return String((member as any)[key] ?? "");
+  };
+
   const exportRoster = () => {
     const columns = exportColumns;
     if (!columns.length) {
@@ -687,25 +761,12 @@ export function ClassManagePage() {
       </div>
     ) : (
       <div ref={scrollRef} onScroll={(event) => updateTableScroll(event.currentTarget)} className="overflow-x-auto rounded-lg border border-gray-200 bg-white" onMouseEnter={() => updateTableScroll()}>
-        <table className="w-full caption-bottom text-sm" style={{ minWidth: `${2050 + rosterPreferences.customColumns.length * 240}px` }}>
+        <table className="w-full caption-bottom text-sm" style={{ minWidth: `${visibleRosterColumns.length * 180 + 80}px` }}>
           <thead>
             <tr className="border-b">
-              <th className={`sticky left-0 z-20 min-w-56 bg-white px-5 py-3 text-left font-medium ${stickyShadowLeft}`}>Name</th>
-              <th className="min-w-64 px-5 py-3 text-left font-medium">Email</th>
-              <th className="min-w-28 px-5 py-3 text-left font-medium">Role</th>
-              <th className="min-w-36 px-5 py-3 text-left font-medium">Positions</th>
-              <th className="min-w-56 px-5 py-3 text-left font-medium">Party</th>
-              <th className="min-w-44 px-5 py-3 text-left font-medium">Constituency</th>
-              <th className="min-w-60 px-5 py-3 text-left font-medium">Sponsored</th>
-              <th className="min-w-44 px-5 py-3 text-left font-medium">Passed</th>
-              <th className="min-w-44 px-5 py-3 text-left font-medium">Failed</th>
-              {rosterPreferences.customColumns.map((column) => (
-                <th key={column.id} className="min-w-60 px-5 py-3 text-left font-medium">{column.label}</th>
+              {visibleRosterColumns.map((column, index) => (
+                <th key={column.key} className={`${index === 0 ? `sticky left-0 z-20 bg-white ${stickyShadowLeft}` : ""} min-w-44 px-5 py-3 text-left font-medium`}>{column.label}</th>
               ))}
-              <th className="min-w-52 px-5 py-3 text-left font-medium">Cosponsored</th>
-              <th className="min-w-28 px-5 py-3 text-left font-medium">Letters</th>
-              <th className="min-w-52 px-5 py-3 text-left font-medium">Committees</th>
-              <th className="min-w-52 px-5 py-3 text-left font-medium">Caucuses</th>
               <th className={`sticky right-0 z-20 min-w-14 bg-white px-2 py-3 text-right font-medium ${stickyShadowRight}`}>Actions</th>
             </tr>
           </thead>
@@ -718,38 +779,19 @@ export function ClassManagePage() {
               const nameClass = isTeacher || isOwner || isCurrentUser ? "text-emerald-700" : "text-blue-600";
               return (
               <tr key={student.id} className={`${rowClass} border-b`}>
-                <td className={`sticky left-0 z-10 px-5 py-3 font-medium ${stickyShadowLeft} ${rowClass}`}>
-                  <Link to={`/profile/${student.id}`} className={`${nameClass} hover:underline`}>{displayPersonName(student.name)}</Link>
-                  <div className="mt-1 flex flex-wrap gap-1">
-                    {isOwner && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Owner</span>}
-                    {isCurrentUser && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">You</span>}
-                    {pending && student.status === "pending" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Join request</span>}
-                    {pending && student.status === "invited" && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Invitation sent</span>}
-                  </div>
-                </td>
-                <td className="px-5 py-3">{student.email}</td>
-                <td className="px-5 py-3 capitalize">{student.role}</td>
-                <td className="px-5 py-3">{student.position}</td>
-                <td className="px-5 py-3">{student.party !== "N/A" ? <Link to={`/parties?party=${encodeURIComponent(student.party)}`} className="text-blue-600 hover:underline">{student.party}</Link> : "N/A"}</td>
-                <td className="px-5 py-3">{student.constituency}</td>
-                <td className="px-5 py-3">{linkedCountList(student.sponsored)}</td>
-                <td className="px-5 py-3">{linkedCountList(student.passed)}</td>
-                <td className="px-5 py-3">{linkedCountList(student.failed)}</td>
-                {rosterPreferences.customColumns.map((column) => (
-                  <td key={column.id} className="px-5 py-3">
-                    <input
-                      value={customColumnValue(student.id, column.id)}
-                      onChange={(event) => setCustomColumnValue(student.id, column.id, event.target.value)}
-                      onBlur={(event) => void saveCustomColumnValue(student.id, column.id, event.target.value)}
-                      placeholder="Add text"
-                      className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
+                {visibleRosterColumns.map((column, index) => (
+                  <td key={column.key} className={`${index === 0 ? `sticky left-0 z-10 font-medium ${stickyShadowLeft} ${rowClass}` : ""} px-5 py-3`}>
+                    <div className={column.key === "name" ? nameClass : ""}>{rosterCellFor(student, column.key)}</div>
+                    {column.key === "name" && (
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {isOwner && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Owner</span>}
+                        {isCurrentUser && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">You</span>}
+                        {pending && student.status === "pending" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">Join request</span>}
+                        {pending && student.status === "invited" && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Invitation sent</span>}
+                      </div>
+                    )}
                   </td>
                 ))}
-                <td className="px-5 py-3">{linkList(student.cosponsored, "/bills")}</td>
-                <td className="px-5 py-3"><Link to={`/dear-colleague/inbox?author=${encodeURIComponent(student.name)}`} className="text-blue-600 hover:underline">{student.letters}</Link></td>
-                <td className="px-5 py-3">{linkList(student.committees, "/committees")}</td>
-                <td className="px-5 py-3">{linkList(student.caucuses, "/caucuses")}</td>
                 <td className={`sticky right-0 z-10 px-2 py-3 text-right ${stickyShadowRight} ${rowClass}`}>
                   <div className="inline-flex">
                     <button
@@ -998,79 +1040,91 @@ export function ClassManagePage() {
               <section className="rounded-lg border border-gray-200 bg-gray-50 p-4">
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-sm font-semibold text-gray-900">Preview</div>
-                    <div className="text-sm text-gray-600">Drag custom columns to reorder the roster.</div>
+                    <div className="text-sm font-semibold text-gray-900">Columns</div>
+                    <div className="text-sm text-gray-600">Drag columns to reorder them, hide columns, or add teacher text columns.</div>
                   </div>
-                  <button type="button" onClick={() => rosterImportRef.current?.click()} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                    <FileUp className="h-4 w-4" />
-                    Import spreadsheet
-                  </button>
-                  <input
-                    ref={rosterImportRef}
-                    type="file"
-                    accept=".csv,.tsv,.txt"
-                    className="hidden"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0];
-                      event.currentTarget.value = "";
-                      if (file) void importCustomColumnsFromFile(file);
-                    }}
-                  />
+                  <div className="flex shrink-0 gap-2">
+                    <input
+                      value={newColumnName}
+                      onChange={(event) => setNewColumnName(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") void addCustomColumn();
+                      }}
+                      placeholder="Column name"
+                      className="w-40 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                    <Button type="button" onClick={() => void addCustomColumn()} className="inline-flex items-center gap-2">
+                      <Plus className="h-4 w-4" />
+                      Add column
+                    </Button>
+                    <button type="button" onClick={() => rosterImportRef.current?.click()} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <FileUp className="h-4 w-4" />
+                      Import column
+                    </button>
+                    <input
+                      ref={rosterImportRef}
+                      type="file"
+                      accept=".csv,.tsv,.txt"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.currentTarget.value = "";
+                        if (file) void importCustomColumnsFromFile(file);
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="mb-3 rounded-md border border-blue-100 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900">
+                  Import a CSV/TSV with a <span className="font-semibold">Name</span> or <span className="font-semibold">Email</span> column for matching roster rows. Any other header becomes an imported column; each row fills that column for the matching member.
+                </div>
+                <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {orderedRosterColumns.map((column) => (
+                    <div
+                      key={column.key}
+                      draggable
+                      onDragStart={() => setDraggingColumnId(column.key)}
+                      onDragOver={(event) => event.preventDefault()}
+                      onDrop={(event) => {
+                        event.preventDefault();
+                        if (draggingColumnId) void reorderRosterColumn(draggingColumnId, column.key);
+                        setDraggingColumnId(null);
+                      }}
+                      onDragEnd={() => setDraggingColumnId(null)}
+                      className="flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-2 text-sm"
+                    >
+                      <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-gray-400" />
+                      <span className="min-w-0 flex-1 truncate">{column.label}</span>
+                      <button type="button" onClick={() => toggleRosterColumnHidden(column.key)} className={`rounded px-2 py-1 text-xs font-medium ${rosterPreferences.hiddenColumns.includes(column.key) ? "bg-gray-100 text-gray-600" : "bg-blue-50 text-blue-700"}`}>
+                        {rosterPreferences.hiddenColumns.includes(column.key) ? "Hidden" : "Shown"}
+                      </button>
+                      {column.key.startsWith("custom:") && (
+                        <button type="button" onClick={() => void deleteCustomColumn(column.key.slice("custom:".length))} className="rounded p-1 text-red-500 hover:bg-red-50" aria-label="Delete column">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
                 </div>
                 <div className="overflow-x-auto rounded-md border border-gray-200 bg-white">
                   <div
                     className="grid border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-500"
                     style={{
-                      minWidth: `${640 + rosterPreferences.customColumns.length * 160}px`,
-                      gridTemplateColumns: `180px 180px ${rosterPreferences.customColumns.map(() => "160px").join(" ")} 160px 100px 120px 80px`,
+                      minWidth: `${visibleRosterColumns.length * 160}px`,
+                      gridTemplateColumns: visibleRosterColumns.map(() => "160px").join(" "),
                     }}
                   >
-                    {["Name", "Email", ...rosterPreferences.customColumns.map((column) => column.label), "Party", "Passed", "Cosponsors"].map((label, index) => (
-                      <div
-                        key={`${label}-${index}`}
-                        draggable={index >= 2 && index < 2 + rosterPreferences.customColumns.length}
-                        onDragStart={() => {
-                          const column = rosterPreferences.customColumns[index - 2];
-                          if (column) setDraggingColumnId(column.id);
-                        }}
-                        onDragOver={(event) => {
-                          if (index >= 2 && index < 2 + rosterPreferences.customColumns.length) event.preventDefault();
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          const column = rosterPreferences.customColumns[index - 2];
-                          if (draggingColumnId && column) void reorderCustomColumn(draggingColumnId, column.id);
-                          setDraggingColumnId(null);
-                        }}
-                        onDragEnd={() => setDraggingColumnId(null)}
-                        className={`flex min-h-10 items-center gap-2 border-r border-gray-200 px-3 ${index >= 2 && index < 2 + rosterPreferences.customColumns.length ? "cursor-grab bg-white" : ""}`}
-                      >
-                        {index >= 2 && index < 2 + rosterPreferences.customColumns.length && <GripVertical className="h-4 w-4 text-gray-400" />}
-                        <span className="truncate">{label}</span>
-                      </div>
-                    ))}
-                    <button type="button" onClick={() => void addCustomColumn("New column")} className="flex min-h-10 items-center justify-center text-blue-600 hover:bg-blue-50" aria-label="Add column">
-                      <Plus className="h-4 w-4" />
-                    </button>
+                    {visibleRosterColumns.map((column) => <div key={column.key} className="flex min-h-10 items-center gap-2 border-r border-gray-200 px-3"><span className="truncate">{column.label}</span></div>)}
                   </div>
                   {students.filter((student) => student.status === "approved").slice(0, 3).map((student) => (
                     <div
                       key={student.id}
                       className="grid border-b border-gray-100 text-sm last:border-b-0"
                       style={{
-                        minWidth: `${640 + rosterPreferences.customColumns.length * 160}px`,
-                        gridTemplateColumns: `180px 180px ${rosterPreferences.customColumns.map(() => "160px").join(" ")} 160px 100px 120px 80px`,
+                        minWidth: `${visibleRosterColumns.length * 160}px`,
+                        gridTemplateColumns: visibleRosterColumns.map(() => "160px").join(" "),
                       }}
                     >
-                      <div className="truncate border-r border-gray-100 px-3 py-2 font-medium text-gray-900">{displayPersonName(student.name)}</div>
-                      <div className="truncate border-r border-gray-100 px-3 py-2 text-gray-600">{student.email}</div>
-                      {rosterPreferences.customColumns.map((column) => (
-                        <div key={column.id} className="truncate border-r border-gray-100 px-3 py-2 text-gray-600">{customColumnValue(student.id, column.id) || "-"}</div>
-                      ))}
-                      <div className="truncate border-r border-gray-100 px-3 py-2 text-gray-600">{student.party}</div>
-                      <div className="border-r border-gray-100 px-3 py-2 text-gray-600">{student.passed.length}</div>
-                      <div className="border-r border-gray-100 px-3 py-2 text-gray-600">{student.cosponsored.length}</div>
-                      <div />
+                      {visibleRosterColumns.map((column) => <div key={column.key} className="truncate border-r border-gray-100 px-3 py-2 text-gray-600">{exportValueFor(student, column.key) || "-"}</div>)}
                     </div>
                   ))}
                 </div>
@@ -1098,53 +1152,6 @@ export function ClassManagePage() {
                 </Select>
               </section>
 
-              <section className="space-y-3">
-                <div>
-                  <div className="text-sm font-semibold text-gray-900">Custom columns</div>
-                  <div className="text-sm text-gray-600">Teachers can type custom text into these columns directly in the roster.</div>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    value={newColumnName}
-                    onChange={(event) => setNewColumnName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void addCustomColumn();
-                    }}
-                    placeholder="Column name"
-                    className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <Button type="button" onClick={() => void addCustomColumn()} className="inline-flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Add
-                  </Button>
-                </div>
-                <div className="space-y-2">
-                  {rosterPreferences.customColumns.length ? rosterPreferences.customColumns.map((column, index) => (
-                    <div key={column.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
-                      <input
-                        value={column.label}
-                        onChange={(event) => updateCustomColumnLabel(column.id, event.target.value)}
-                        onBlur={(event) => void saveRosterPreferences({
-                          ...rosterPreferences,
-                          customColumns: rosterPreferences.customColumns.map((item) => item.id === column.id ? { ...item, label: event.target.value.trim() || "Untitled column" } : item),
-                        }, { silent: true })}
-                        className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                      <button type="button" onClick={() => void moveCustomColumn(column.id, -1)} disabled={index === 0} className="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900 disabled:opacity-40" aria-label="Move column left">
-                        <ArrowUp className="h-4 w-4" />
-                      </button>
-                      <button type="button" onClick={() => void moveCustomColumn(column.id, 1)} disabled={index === rosterPreferences.customColumns.length - 1} className="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900 disabled:opacity-40" aria-label="Move column right">
-                        <ArrowDown className="h-4 w-4" />
-                      </button>
-                      <button type="button" onClick={() => void deleteCustomColumn(column.id)} className="rounded-md p-2 text-red-500 hover:bg-red-50" aria-label="Delete column">
-                        <Trash2 className="h-4 w-4" />
-                      </button>
-                    </div>
-                  )) : (
-                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">No custom columns yet.</div>
-                  )}
-                </div>
-              </section>
             </div>
             <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
               <button type="button" onClick={() => setRosterSettingsOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>

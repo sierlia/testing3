@@ -10,12 +10,24 @@ import { defaultPartyColor } from "../components/PartyCreateForm";
 import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { houseCommittees, houseCommitteeSubcommittees } from "../constants/houseCommittees";
+import { InfoTooltip } from "../components/InfoTooltip";
 
 type TabId = "general" | "parties" | "committees" | "bills" | "organizations" | "elections" | "profiles" | "permissions" | "joining";
 
 const allParties = ["Democratic Party", "Republican Party", "Green Party", "Libertarian Party", "Independent Party"];
 const defaultPartyOptions = allParties.filter((party) => party !== "Independent Party");
 const allCommittees = houseCommittees;
+const subcommitteeOptions = allCommittees.flatMap((committee) => (houseCommitteeSubcommittees[committee] ?? []).map((subcommittee) => `${committee}::${subcommittee}`));
+const subcommitteeLabels = Object.fromEntries(subcommitteeOptions.map((key) => {
+  const [committee, subcommittee] = key.split("::");
+  return [key, `${committee}: ${subcommittee}`];
+}));
+const partyDetails: Record<string, { text: string; url: string }> = {
+  "Democratic Party": { text: "Traces its roots to Jeffersonian Democratic-Republicans and Jacksonian Democrats; today it is one of the two major U.S. parties.", url: "https://democrats.org" },
+  "Republican Party": { text: "Founded in 1854 by anti-slavery expansion coalitions and became Lincoln's party before becoming today's GOP.", url: "https://gop.com" },
+  "Green Party": { text: "Grew from U.S. Green organizing in the 1980s and 1990s, emphasizing ecology, democracy, social justice, and peace.", url: "https://www.gp.org" },
+  "Libertarian Party": { text: "Founded in 1971 in Colorado around individual liberty, limited government, and free-market principles.", url: "https://www.lp.org" },
+};
 
 const tabs: Array<{ id: TabId; label: string; icon: any }> = [
   { id: "general", label: "General", icon: Settings },
@@ -192,6 +204,8 @@ function CompactDefaultsDropdown({
   onSelectAll,
   onDeselectAll,
   subtexts,
+  labels,
+  optionDetails,
   capacities,
   onCapacityChange,
 }: {
@@ -202,6 +216,8 @@ function CompactDefaultsDropdown({
   onSelectAll: () => void;
   onDeselectAll: () => void;
   subtexts?: Record<string, string[]>;
+  labels?: Record<string, string>;
+  optionDetails?: Record<string, ReactNode>;
   capacities?: Record<string, number>;
   onCapacityChange?: (name: string, value: number) => void;
 }) {
@@ -242,6 +258,7 @@ function CompactDefaultsDropdown({
           <div className="max-h-[24rem] overflow-y-auto pr-1">
             {options.map((option) => {
               const checked = selected.includes(option);
+              const label = labels?.[option] ?? option;
               const subtext = subtexts?.[option]?.join(", ");
               return (
                 <div key={option} className="flex items-start gap-2 rounded-md px-2 py-1 hover:bg-gray-50">
@@ -249,14 +266,15 @@ function CompactDefaultsDropdown({
                     type="button"
                     onClick={() => onToggle(option)}
                     className={`mt-0.5 h-4 w-4 rounded border ${checked ? "border-blue-600 bg-blue-600" : "border-gray-500 bg-white"}`}
-                    aria-label={`${checked ? "Disable" : "Enable"} ${option}`}
+                    aria-label={`${checked ? "Disable" : "Enable"} ${label}`}
                   >
                     {checked && <Check className="h-3.5 w-3.5 text-white" />}
                   </button>
                   <button type="button" onClick={() => onToggle(option)} className="min-w-0 flex-1 text-left">
-                    <span className="block text-xs font-semibold leading-5 text-gray-900">{option}</span>
+                    <span className="block text-xs font-semibold leading-5 text-gray-900">{label}</span>
                     {subtext ? <span className="block text-xs leading-4 text-gray-500">{subtext}</span> : null}
                   </button>
+                  {optionDetails?.[option] ? <div className="mt-0.5 shrink-0">{optionDetails[option]}</div> : null}
                   {onCapacityChange && checked && (
                     <label className="flex shrink-0 items-center gap-1 text-xs text-gray-500">
                       Cap
@@ -359,6 +377,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     requirePartyApproval: true,
     autoApproveParties: [] as string[],
     enabledCommittees: allCommittees.slice(0, 5),
+    committeeSubcommitteesEnabled: true,
+    enabledSubcommittees: subcommitteeOptions,
     committeeCapacitiesByName: {} as Record<string, number>,
     allowSelfJoinCommittees: false,
     committeeAssignmentMode: "preference",
@@ -533,6 +553,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           requirePartyApproval: s?.parties?.requireApproval ?? prev.requirePartyApproval,
           autoApproveParties: s?.parties?.autoApprove ?? prev.autoApproveParties,
           enabledCommittees: s?.committees?.enabled ?? prev.enabledCommittees,
+          committeeSubcommitteesEnabled: s?.committees?.subcommitteesEnabled ?? prev.committeeSubcommitteesEnabled,
+          enabledSubcommittees: s?.committees?.enabledSubcommittees ?? prev.enabledSubcommittees,
           committeeCapacitiesByName: s?.committees?.capacitiesByName ?? prev.committeeCapacitiesByName,
           allowSelfJoinCommittees: !!s?.committees?.allowSelfJoin,
           committeeAssignmentMode: s?.committees?.assignmentMode ?? prev.committeeAssignmentMode,
@@ -671,7 +693,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (toInsert.length) await supabase.from("committees").insert(toInsert);
     const { data: committeeRows } = await supabase.from("committees").select("id,name").eq("class_id", classId).in("name", settings.enabledCommittees.length ? settings.enabledCommittees : [""]);
     const subcommitteeRows = (committeeRows ?? []).flatMap((committee: any) =>
-      (houseCommitteeSubcommittees[committee.name] ?? []).map((name) => ({
+      (settings.committeeSubcommitteesEnabled ? (houseCommitteeSubcommittees[committee.name] ?? []) : [])
+        .filter((name) => settings.enabledSubcommittees.includes(`${committee.name}::${name}`))
+        .map((name) => ({
         committee_id: committee.id,
         class_id: classId,
         name,
@@ -704,6 +728,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               committees: {
                 ...(existing?.committees ?? {}),
                 enabled: settings.enabledCommittees,
+                subcommitteesEnabled: settings.committeeSubcommitteesEnabled,
+                enabledSubcommittees: settings.enabledSubcommittees,
                 capacitiesByName: settings.committeeCapacitiesByName,
                 assignmentMode: settings.allowSelfJoinCommittees ? "self-join" : settings.committeeAssignmentMode,
                 chairElectionMode: settings.chairElectionMode,
@@ -744,6 +770,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               committees: {
                 ...(existing?.committees ?? {}),
                 enabled: settings.enabledCommittees,
+                subcommitteesEnabled: settings.committeeSubcommitteesEnabled,
+                enabledSubcommittees: settings.enabledSubcommittees,
                 capacitiesByName: settings.committeeCapacitiesByName,
                 assignmentMode: settings.allowSelfJoinCommittees ? "self-join" : settings.committeeAssignmentMode,
                 allowSelfJoin: settings.allowSelfJoinCommittees,
@@ -1044,6 +1072,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           allowStudentCreatedParties: raw?.parties?.allowStudentCreated ?? settings.allowStudentCreatedParties,
           requirePartyApproval: raw?.parties?.requireApproval ?? settings.requirePartyApproval,
           enabledCommittees: raw?.committees?.enabled ?? settings.enabledCommittees,
+          committeeSubcommitteesEnabled: raw?.committees?.subcommitteesEnabled ?? settings.committeeSubcommitteesEnabled,
+          enabledSubcommittees: raw?.committees?.enabledSubcommittees ?? settings.enabledSubcommittees,
           committeeCapacitiesByName: raw?.committees?.capacitiesByName ?? settings.committeeCapacitiesByName,
           committeeAssignmentMode: raw?.committees?.assignmentMode ?? settings.committeeAssignmentMode,
           chairElectionMode: raw?.committees?.chairElectionMode ?? settings.chairElectionMode,
@@ -1215,6 +1245,22 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       >
         <SelectItem value="creation-allowed">Enabled, creation allowed</SelectItem>
         <SelectItem value="creation-not-allowed">Enabled, creation not allowed</SelectItem>
+        <SelectItem value="disabled">Disabled</SelectItem>
+      </SettingSelect>
+    </div>
+  );
+
+  const committeesSelect = (
+    <div className="w-80">
+      <SettingSelect
+        value={!settings.enableCommittees ? "disabled" : settings.committeeSubcommitteesEnabled ? "with-subcommittees" : "without-subcommittees"}
+        onValueChange={(value) => {
+          if (value === "disabled") setSettings({ enableCommittees: false, committeeSubcommitteesEnabled: false });
+          else setSettings({ enableCommittees: true, committeeSubcommitteesEnabled: value === "with-subcommittees" });
+        }}
+      >
+        <SelectItem value="with-subcommittees">Enabled, with subcommittees</SelectItem>
+        <SelectItem value="without-subcommittees">Enabled, without subcommittees</SelectItem>
         <SelectItem value="disabled">Disabled</SelectItem>
       </SettingSelect>
     </div>
@@ -1557,6 +1603,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                       title="Default parties"
                       selected={settings.allowedParties.filter((party) => defaultPartyOptions.includes(party))}
                       options={defaultPartyOptions}
+                      optionDetails={Object.fromEntries(defaultPartyOptions.map((party) => [party, partyDetails[party] ? (
+                        <InfoTooltip label={`${party} history`}>
+                          <p>{partyDetails[party].text}</p>
+                          <a href={partyDetails[party].url} target="_blank" rel="noreferrer" className="mt-2 block text-blue-600 underline">Official website</a>
+                        </InfoTooltip>
+                      ) : null]))}
                       onToggle={(party) => setSettings({ allowedParties: settings.allowedParties.includes(party) ? settings.allowedParties.filter((p) => p !== party) : [...settings.allowedParties, party] })}
                       onSelectAll={() => setSettings({ allowedParties: [...defaultPartyOptions] })}
                       onDeselectAll={() => setSettings({ allowedParties: [] })}
@@ -1572,7 +1624,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               </SettingSelect>} />
             </DisabledBlock>
           </SettingsGroup>
-          <SettingsGroup title="Committees" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableCommittees, (v) => setSettings({ enableCommittees: v }), !settings.enableOrganizations)}>
+          <SettingsGroup title="Committees" disabled={!settings.enableOrganizations} action={committeesSelect}>
             <DisabledBlock disabled={!settings.enableCommittees}>
               <SettingRow
                 title="Default committees"
@@ -1594,6 +1646,26 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
+              {settings.committeeSubcommitteesEnabled && (
+                <SettingRow
+                  title="Default subcommittees"
+                  description="Choose which subcommittees are created under the selected default committees."
+                  wide
+                  control={
+                    <div className="ml-auto w-[32rem] max-w-full">
+                      <CompactDefaultsDropdown
+                        title="Default subcommittees"
+                        selected={settings.enabledSubcommittees}
+                        options={subcommitteeOptions.filter((key) => settings.enabledCommittees.includes(key.split("::")[0]))}
+                        labels={subcommitteeLabels}
+                        onToggle={(subcommittee) => setSettings({ enabledSubcommittees: settings.enabledSubcommittees.includes(subcommittee) ? settings.enabledSubcommittees.filter((item) => item !== subcommittee) : [...settings.enabledSubcommittees, subcommittee] })}
+                        onSelectAll={() => setSettings({ enabledSubcommittees: subcommitteeOptions.filter((key) => settings.enabledCommittees.includes(key.split("::")[0])) })}
+                        onDeselectAll={() => setSettings({ enabledSubcommittees: [] })}
+                      />
+                    </div>
+                  }
+                />
+              )}
               <Toggle checked={settings.allowSelfJoinCommittees} onChange={(v) => setSettings({ allowSelfJoinCommittees: v })} title="Allow students to join committees on their own" description="When off, students submit preference rankings." />
               <div className="grid gap-3">
                 <SettingRow title="Assignment mode" description="Choose how students are assigned to committees." control={<SettingSelect value={settings.committeeAssignmentMode} onValueChange={(value) => setSettings({ committeeAssignmentMode: value })}>

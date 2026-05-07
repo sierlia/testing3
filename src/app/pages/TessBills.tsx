@@ -4,6 +4,7 @@ import { Check, Circle, Clock, ExternalLink, Eye, FileText, Plus, Search } from 
 import { Navigation } from "../components/Navigation";
 import { BillPreviewPanel } from "../components/BillPreviewPanel";
 import { InfoTooltip } from "../components/InfoTooltip";
+import { CompactPager } from "../components/CompactPager";
 import { fetchBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 import { useAuth } from "../utils/AuthContext";
@@ -143,7 +144,7 @@ export function TessBills() {
   });
   const [sortBy, setSortBy] = useState<SortKey>("number");
   const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(25);
+  const [pageSize, setPageSize] = useState(10);
   const searchKey = searchParams.toString();
 
   useEffect(() => {
@@ -378,34 +379,7 @@ export function TessBills() {
                 </div>
               )}
             </div>
-            {!loading && filteredBills.length > 0 && (
-              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3 text-sm shadow-sm">
-                <div className="text-gray-600">
-                  Page {currentPage} of {totalPages} · Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredBills.length)} of {filteredBills.length}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-2 text-gray-600">
-                    Per page
-                    <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded-md border border-gray-300 px-2 py-1 text-sm">
-                      {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
-                    </select>
-                  </label>
-                  <button type="button" onClick={() => setPage(1)} disabled={currentPage === 1} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">First</button>
-                  <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">Previous</button>
-                  <input
-                    type="number"
-                    min={1}
-                    max={totalPages}
-                    value={currentPage}
-                    onChange={(event) => setPage(Math.min(totalPages, Math.max(1, Number(event.target.value) || 1)))}
-                    className="w-16 rounded-md border border-gray-300 px-2 py-1.5 text-center text-sm"
-                    aria-label="Go to page"
-                  />
-                  <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">Next</button>
-                  <button type="button" onClick={() => setPage(totalPages)} disabled={currentPage === totalPages} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">Last</button>
-                </div>
-              </div>
-            )}
+            {!loading && filteredBills.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={filteredBills.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
           </div>
 
           {rowMode === "preview" && (

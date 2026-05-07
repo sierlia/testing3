@@ -55,6 +55,8 @@ export function CreateClassPage() {
         },
         committees: {
           enabled: defaultCommittees,
+          subcommitteesEnabled: true,
+          enabledSubcommittees: defaultCommittees.flatMap((committee) => (houseCommitteeSubcommittees[committee] ?? []).map((subcommittee) => `${committee}::${subcommittee}`)),
           assignmentMode: 'preference',
           allowSelfJoin: false,
           chairElectionMode: 'elected',

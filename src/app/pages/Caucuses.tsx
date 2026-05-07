@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Navigation } from "../components/Navigation";
 import { Search, Plus, Users, Tag } from "lucide-react";
 import { Link } from "react-router";
+import { CompactPager } from "../components/CompactPager";
 
 interface Caucus {
   id: string;
@@ -17,6 +18,8 @@ export function Caucuses() {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<'newest' | 'largest' | 'issue'>('newest');
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [caucuses, setCaucuses] = useState<Caucus[]>([
     {
@@ -59,6 +62,9 @@ export function Caucuses() {
     if (sortBy === 'newest') return parseInt(b.id) - parseInt(a.id);
     return 0;
   });
+  const totalPages = Math.max(1, Math.ceil(sortedCaucuses.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageCaucuses = sortedCaucuses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const handleJoinLeave = (caucusId: string) => {
     setCaucuses(caucuses.map(c =>
@@ -169,7 +175,7 @@ export function Caucuses() {
 
         {/* Caucus cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {sortedCaucuses.map(caucus => (
+          {pageCaucuses.map(caucus => (
             <div key={caucus.id} className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
               <div className="mb-4">
                 <Link to={`/caucuses/${caucus.id}`}>
@@ -211,6 +217,7 @@ export function Caucuses() {
             </div>
           ))}
         </div>
+        <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={sortedCaucuses.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} />
       </main>
     </div>
   );
