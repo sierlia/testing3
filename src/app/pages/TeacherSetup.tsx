@@ -481,6 +481,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     committeeDashboardAccessPrice: 100,
     committeeReviewAccessPrice: 250,
     lobbyistJoinMode: "free_join",
+    billComposerFormat: "editor",
+    committeeRevisedTextFormat: "editor",
+    committeeReportFormat: "editor",
+    profileContentFormat: "editor",
   });
 
   const setSettings = (patch: Partial<typeof settings>) => {
@@ -664,6 +668,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           committeeDashboardAccessPrice: s?.money?.committeeDashboardAccessPrice ?? prev.committeeDashboardAccessPrice,
           committeeReviewAccessPrice: s?.money?.committeeReviewAccessPrice ?? prev.committeeReviewAccessPrice,
           lobbyistJoinMode: s?.lobbyists?.joinMode ?? prev.lobbyistJoinMode,
+          billComposerFormat: s?.editorFormats?.billComposer ?? prev.billComposerFormat,
+          committeeRevisedTextFormat: s?.editorFormats?.committeeRevisedText ?? prev.committeeRevisedTextFormat,
+          committeeReportFormat: s?.editorFormats?.committeeReport ?? prev.committeeReportFormat,
+          profileContentFormat: s?.editorFormats?.profile ?? prev.profileContentFormat,
         }));
         setSelectedQuickSetup(null);
         setQuickSetupModified(false);
@@ -747,10 +755,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 subcommitteesEnabled: settings.committeeSubcommitteesEnabled,
                 enabledSubcommittees: settings.enabledSubcommittees,
                 capacitiesByName: settings.committeeCapacitiesByName,
-                assignmentMode: settings.allowSelfJoinCommittees ? "self-join" : settings.committeeAssignmentMode,
+                assignmentMode: settings.committeeAssignmentMode,
                 chairElectionMode: settings.chairElectionMode,
                 chairVoteThresholdPct: settings.chairVoteThresholdPct,
-                allowSelfJoin: settings.allowSelfJoinCommittees,
+                allowSelfJoin: settings.committeeAssignmentMode === "self-join",
               },
               organizations: {
                 ...(existing?.organizations ?? {}),
@@ -791,8 +799,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 subcommitteesEnabled: settings.committeeSubcommitteesEnabled,
                 enabledSubcommittees: settings.enabledSubcommittees,
                 capacitiesByName: settings.committeeCapacitiesByName,
-                assignmentMode: settings.allowSelfJoinCommittees ? "self-join" : settings.committeeAssignmentMode,
-                allowSelfJoin: settings.allowSelfJoinCommittees,
+                assignmentMode: settings.committeeAssignmentMode,
+                allowSelfJoin: settings.committeeAssignmentMode === "self-join",
                 chairElectionMode: settings.chairElectionMode,
                 chairVoteThresholdPct: settings.chairVoteThresholdPct,
                 votePassThresholdPct: Math.min(100, Math.max(1, Number(settings.committeeVotePassThresholdPct) || 50)),
@@ -943,6 +951,13 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 ...(existing?.lobbyists ?? {}),
                 enabled: settings.enableLobbyists,
                 joinMode: settings.lobbyistJoinMode,
+              },
+              editorFormats: {
+                ...(existing?.editorFormats ?? {}),
+                billComposer: settings.billComposerFormat,
+                committeeRevisedText: settings.committeeRevisedTextFormat,
+                committeeReport: settings.committeeReportFormat,
+                profile: settings.profileContentFormat,
               },
               students: {
                 ...(existing?.students ?? {}),
@@ -1424,6 +1439,25 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             />
           </SettingsGroup>
 
+          <SettingsGroup title="Editor and PDF upload modes">
+            <SettingRow title="Bill composer" description="Choose whether students write bills in the site editor or upload a PDF." control={<SettingSelect value={settings.billComposerFormat} onValueChange={(value) => setSettings({ billComposerFormat: value })}>
+              <SelectItem value="editor">Use site editor</SelectItem>
+              <SelectItem value="pdf">Upload PDF</SelectItem>
+            </SettingSelect>} />
+            <SettingRow title="Committee revised text" description="Choose whether committee revisions use the collaborative editor or a PDF upload." control={<SettingSelect value={settings.committeeRevisedTextFormat} onValueChange={(value) => setSettings({ committeeRevisedTextFormat: value })}>
+              <SelectItem value="editor">Use site editor</SelectItem>
+              <SelectItem value="pdf">Upload PDF</SelectItem>
+            </SettingSelect>} />
+            <SettingRow title="Committee report" description="Choose whether committee reports use the site editor or a PDF upload." control={<SettingSelect value={settings.committeeReportFormat} onValueChange={(value) => setSettings({ committeeReportFormat: value })}>
+              <SelectItem value="editor">Use site editor</SelectItem>
+              <SelectItem value="pdf">Upload PDF</SelectItem>
+            </SettingSelect>} />
+            <SettingRow title="Profile" description="Choose whether profile content uses profile fields or a PDF upload." control={<SettingSelect value={settings.profileContentFormat} onValueChange={(value) => setSettings({ profileContentFormat: value })}>
+              <SelectItem value="editor">Use site editor</SelectItem>
+              <SelectItem value="pdf">Upload PDF</SelectItem>
+            </SettingSelect>} />
+          </SettingsGroup>
+
           <SettingsGroup title="Money">
             <Toggle checked={settings.moneyEnabled} onChange={(value) => setSettings({ moneyEnabled: value })} title="Enable money system" description="Show member balances and allow lobbyist contributions when enabled." />
             <DisabledBlock disabled={!settings.moneyEnabled} tight>
@@ -1518,12 +1552,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               <Toggle key={committee} checked={settings.enabledCommittees.includes(committee)} onChange={() => setSettings({ enabledCommittees: settings.enabledCommittees.includes(committee) ? settings.enabledCommittees.filter((c) => c !== committee) : [...settings.enabledCommittees, committee] })} title={committee} description="Enable this committee for bill referrals and membership." />
             ))}
           </div>
-          <Toggle checked={settings.allowSelfJoinCommittees} onChange={(v) => setSettings({ allowSelfJoinCommittees: v })} title="Allow students to join committees on their own" description="When off, students submit preference rankings." />
           <div className="grid gap-3">
             <SettingRow title="Assignment mode" control={<SettingSelect value={settings.committeeAssignmentMode} onValueChange={(value) => setSettings({ committeeAssignmentMode: value })}>
-                <SelectItem value="preference">Preference assigned</SelectItem>
-                <SelectItem value="random">Random</SelectItem>
-                <SelectItem value="self-join">Self join</SelectItem>
+                <SelectItem value="self-join">Self-join</SelectItem>
+                <SelectItem value="random">Assigned: Random</SelectItem>
+                <SelectItem value="preference">Assigned: Ranked preference</SelectItem>
               </SettingSelect>} />
             <SettingRow title="Chair selection" control={<SettingSelect value={settings.chairElectionMode} onValueChange={(value) => setSettings({ chairElectionMode: value })}>
                 <SelectItem value="elected">Committee vote</SelectItem>
@@ -1698,31 +1731,32 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
-              <SettingRow
-                title="Default subcommittees"
-                description="Choose which subcommittees are created when subcommittees are enabled."
-                wide
-                control={
-                  <div className="ml-auto w-[32rem] max-w-full">
-                    <CompactDefaultsDropdown
-                      title="Default subcommittees"
-                      selected={settings.enabledSubcommittees}
-                      options={sortedSubcommitteeOptions}
-                      labels={subcommitteeLabels}
-                      disabled={!settings.committeeSubcommitteesEnabled}
-                      onToggle={(subcommittee) => setSettings({ enabledSubcommittees: settings.enabledSubcommittees.includes(subcommittee) ? settings.enabledSubcommittees.filter((item) => item !== subcommittee) : [...settings.enabledSubcommittees, subcommittee] })}
-                      onSelectAll={() => setSettings({ enabledSubcommittees: [...sortedSubcommitteeOptions] })}
-                      onDeselectAll={() => setSettings({ enabledSubcommittees: [] })}
-                    />
-                  </div>
-                }
-              />
-              <Toggle checked={settings.allowSelfJoinCommittees} onChange={(v) => setSettings({ allowSelfJoinCommittees: v })} title="Allow students to join committees on their own" description="When off, students submit preference rankings." />
+              <div className={!settings.committeeSubcommitteesEnabled ? "pointer-events-none opacity-45" : ""}>
+                <SettingRow
+                  title="Default subcommittees"
+                  description="Choose which subcommittees are created when subcommittees are enabled."
+                  wide
+                  control={
+                    <div className="ml-auto w-[32rem] max-w-full">
+                      <CompactDefaultsDropdown
+                        title="Default subcommittees"
+                        selected={settings.enabledSubcommittees}
+                        options={sortedSubcommitteeOptions}
+                        labels={subcommitteeLabels}
+                        disabled={!settings.committeeSubcommitteesEnabled}
+                        onToggle={(subcommittee) => setSettings({ enabledSubcommittees: settings.enabledSubcommittees.includes(subcommittee) ? settings.enabledSubcommittees.filter((item) => item !== subcommittee) : [...settings.enabledSubcommittees, subcommittee] })}
+                        onSelectAll={() => setSettings({ enabledSubcommittees: [...sortedSubcommitteeOptions] })}
+                        onDeselectAll={() => setSettings({ enabledSubcommittees: [] })}
+                      />
+                    </div>
+                  }
+                />
+              </div>
               <div className="grid gap-3">
                 <SettingRow title="Assignment mode" description="Choose how students are assigned to committees." control={<SettingSelect value={settings.committeeAssignmentMode} onValueChange={(value) => setSettings({ committeeAssignmentMode: value })}>
-                    <SelectItem value="preference">Preference assigned</SelectItem>
-                    <SelectItem value="random">Random</SelectItem>
-                    <SelectItem value="self-join">Self join</SelectItem>
+                    <SelectItem value="self-join">Self-join</SelectItem>
+                    <SelectItem value="random">Assigned: Random</SelectItem>
+                    <SelectItem value="preference">Assigned: Ranked preference</SelectItem>
                   </SettingSelect>} />
                 <SettingRow title="Chair selection" description="Choose how committee chairs are selected." control={<SettingSelect value={settings.chairElectionMode} onValueChange={(value) => setSettings({ chairElectionMode: value })}>
                     <SelectItem value="elected">Committee vote</SelectItem>
@@ -1806,7 +1840,19 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             </DisabledBlock>
           </SettingsGroup>
           <SettingsGroup title="Caucuses" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableCaucuses, (v) => setSettings({ enableCaucuses: v }), !settings.enableOrganizations)}>
-            <div className="text-sm text-gray-600">Students can form caucuses and post announcements.</div>
+            <DisabledBlock disabled={!settings.enableCaucuses}>
+              <div className="text-sm text-gray-600">Students can form caucuses and post announcements.</div>
+              <SettingRow
+                title="Maximum student join restriction"
+                description="Choose whether students can join caucuses directly or must request access."
+                control={
+                  <SettingSelect value={settings.caucusJoinRestriction} onValueChange={(value) => setSettings({ caucusJoinRestriction: value })}>
+                    <SelectItem value="none">No restriction</SelectItem>
+                    <SelectItem value="request">Allow request to join</SelectItem>
+                  </SettingSelect>
+                }
+              />
+            </DisabledBlock>
           </SettingsGroup>
           <SettingsGroup title="Lobbyist groups" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableLobbyists, (v) => setSettings({ enableLobbyists: v }), !settings.enableOrganizations)}>
             <DisabledBlock disabled={!settings.enableLobbyists}>
@@ -1849,20 +1895,20 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (activeTab === "profiles") {
       return (
         <div className={`space-y-4 ${settings.profilesEnabled ? "" : "pointer-events-none opacity-45"}`}>
-          {settings.profileEditingMode === "select" && (
+          {(settings.profileEditingMode === "select" || settings.profileEditingMode === "all") && (
             <SettingRow
               title="Students allowed to edit profiles"
-              description="Only selected students can edit their profile fields."
+              description={settings.profileEditingMode === "all" ? "All students can edit; select-student controls are shown for reference." : "Only selected students can edit their profile fields."}
               wide
               control={
                 <div
                   ref={profileEditingSearchRef}
-                  className="relative ml-auto w-[32rem] max-w-full"
+                  className={`relative ml-auto w-[32rem] max-w-full ${settings.profileEditingMode === "all" ? "pointer-events-none opacity-45" : ""}`}
                   onBlur={(event) => {
                     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setProfileEditingOpen(false);
                   }}
                 >
-                  <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => setProfileEditingOpen(true)}>
+                  <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => settings.profileEditingMode !== "all" && setProfileEditingOpen(true)}>
                     <Search className="h-4 w-4 shrink-0 text-gray-400" />
                     {selectedProfileEditingStudents.map((student) => (
                       <button
@@ -1874,15 +1920,16 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                         {student.name} x
                       </button>
                     ))}
-                    <input
-                      value={profileEditingSearch}
-                      onChange={(event) => setProfileEditingSearch(event.target.value)}
-                      onFocus={() => setProfileEditingOpen(true)}
-                      placeholder="Search students"
-                      className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
-                    />
+                      <input
+                        value={profileEditingSearch}
+                        onChange={(event) => setProfileEditingSearch(event.target.value)}
+                        onFocus={() => setProfileEditingOpen(true)}
+                        disabled={settings.profileEditingMode === "all"}
+                        placeholder="Search students"
+                        className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
+                      />
                   </div>
-                  {profileEditingOpen && (
+                  {profileEditingOpen && settings.profileEditingMode !== "all" && (
                     <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
                       {profileEditingCandidates.length ? (
                         profileEditingCandidates.map((student) => (
@@ -1933,17 +1980,6 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <Toggle variant="checkbox" checked={settings.committeesCanEditBills} onChange={(v) => setSettings({ committeesCanEditBills: v })} title="Revise referred bills" compact normalText />
             <Toggle variant="checkbox" checked={settings.committeesCanVoteBills} onChange={(v) => setSettings({ committeesCanVoteBills: v })} title="Vote on referred bills" compact normalText />
             <Toggle variant="checkbox" checked={settings.committeesCanReportBills} onChange={(v) => setSettings({ committeesCanReportBills: v })} title="Committee report" compact normalText />
-          </SettingsGroup>
-          <SettingsGroup title="Caucuses" disabled={!settings.enableCaucuses}>
-            <SettingRow
-              title="Maximum student join restriction"
-              control={
-                <SettingSelect value={settings.caucusJoinRestriction} onValueChange={(value) => setSettings({ caucusJoinRestriction: value })}>
-                  <SelectItem value="none">No restriction</SelectItem>
-                  <SelectItem value="request">Allow request to join</SelectItem>
-                </SettingSelect>
-              }
-            />
           </SettingsGroup>
           <SettingsGroup title="Speaker of the House">
             <Toggle variant="checkbox" checked={settings.speakerCanReferBills} onChange={(v) => setSettings({ speakerCanReferBills: v })} title="Refer bills to committees" compact normalText />

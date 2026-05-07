@@ -64,6 +64,8 @@ export function CommitteeWorkspace() {
   const [mySubcommitteeIds, setMySubcommitteeIds] = useState<Set<string>>(new Set());
   const [isTeacher, setIsTeacher] = useState(false);
   const [paidReviewAccess, setPaidReviewAccess] = useState(false);
+  const [activeMeeting, setActiveMeeting] = useState<{ id: string; started_at: string; started_by: string } | null>(null);
+  const [meetingBusy, setMeetingBusy] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [seenBillIds, setSeenBillIds] = useState<Set<string>>(() => new Set());
   const [textView, setTextView] = useState<"edited" | "clean" | "original">("edited");
@@ -107,7 +109,7 @@ export function CommitteeWorkspace() {
         }
         if (!cid) return;
 
-        const [{ data: myMembership }, { data: profile }, { data: subRows }, { data: paidAccess }] = await Promise.all([
+        const [{ data: myMembership }, { data: profile }, { data: subRows }, { data: paidAccess }, { data: meeting }] = await Promise.all([
           supabase
           .from("committee_members")
           .select("role")
@@ -117,10 +119,12 @@ export function CommitteeWorkspace() {
           supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle(),
           supabase.from("subcommittees").select("id,name").eq("committee_id", committeeId).order("created_at", { ascending: true }),
           supabase.from("committee_paid_access").select("access_type").eq("committee_id", committeeId).eq("user_id", uid).eq("access_type", "review").maybeSingle(),
+          supabase.from("committee_meetings").select("id,started_at,started_by").eq("committee_id", committeeId).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle(),
         ]);
         setMyCommitteeRole((myMembership as any)?.role ?? null);
         setIsTeacher((profile as any)?.role === "teacher");
         setPaidReviewAccess(Boolean(paidAccess));
+        setActiveMeeting((meeting as any) ?? null);
         setSubcommittees((subRows ?? []) as Subcommittee[]);
         const subIds = (subRows ?? []).map((row: any) => row.id);
         const { data: mySubRows } = subIds.length
@@ -259,6 +263,43 @@ export function CommitteeWorkspace() {
 
   const canOpenBill = (bill: typeof bills[number]) => paidReviewAccess || !bill.subcommitteeId || mySubcommitteeIds.has(bill.subcommitteeId) || isTeacher;
   const canReferSubcommittee = subcommitteeReferralsAvailable && (isTeacher || ["chair", "co_chair", "ranking_member"].includes(String(myCommitteeRole ?? "")));
+  const canManageMeeting = isTeacher || ["chair", "co_chair", "ranking_member"].includes(String(myCommitteeRole ?? ""));
+  const billsEditable = Boolean(activeMeeting) && !paidReviewAccess;
+
+  const startCommitteeMeeting = async () => {
+    if (!classId || !canManageMeeting) return;
+    setMeetingBusy(true);
+    try {
+      const user = await getCurrentUser();
+      const { data, error } = await supabase
+        .from("committee_meetings")
+        .insert({ class_id: classId, committee_id: committeeId, started_by: user?.id } as any)
+        .select("id,started_at,started_by")
+        .single();
+      if (error) throw error;
+      setActiveMeeting((data as any) ?? null);
+      toast.success("Committee meeting started");
+    } catch (error: any) {
+      toast.error(error.message || "Could not start meeting");
+    } finally {
+      setMeetingBusy(false);
+    }
+  };
+
+  const endCommitteeMeeting = async () => {
+    if (!activeMeeting || !canManageMeeting) return;
+    setMeetingBusy(true);
+    try {
+      const { error } = await supabase.from("committee_meetings").update({ ended_at: new Date().toISOString() } as any).eq("id", activeMeeting.id);
+      if (error) throw error;
+      setActiveMeeting(null);
+      toast.success("Committee meeting ended");
+    } catch (error: any) {
+      toast.error(error.message || "Could not end meeting");
+    } finally {
+      setMeetingBusy(false);
+    }
+  };
 
   const updateReferralSubcommittee = async (billId: string, subcommitteeId: string | null) => {
     try {
@@ -423,6 +464,21 @@ export function CommitteeWorkspace() {
         <div className="mb-6">
           <SubcommitteeRolesPanel committeeId={committeeId} compact />
         </div>
+        {!loading && bills.length > 0 && (
+          <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm shadow-sm ${activeMeeting ? "border-blue-200 bg-blue-50 text-blue-900" : "border-gray-200 bg-white text-gray-700"}`}>
+            <div>
+              <div className="font-semibold">{activeMeeting ? "Committee meeting open" : "Committee meeting required for editing"}</div>
+              <div className="text-xs opacity-80">{activeMeeting ? `Opened ${new Date(activeMeeting.started_at).toLocaleString()}. Referred bills are editable while the meeting is open.` : "A chair, co-chair, ranking member, or teacher must start a meeting before bill text can be revised."}</div>
+            </div>
+            {canManageMeeting && (
+              activeMeeting ? (
+                <button type="button" onClick={() => void endCommitteeMeeting()} disabled={meetingBusy} className="rounded-md border border-blue-300 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50">End meeting</button>
+              ) : (
+                <button type="button" onClick={() => void startCommitteeMeeting()} disabled={meetingBusy} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Start meeting</button>
+              )
+            )}
+          </div>
+        )}
 
         {loading ? (
           <div className="text-sm text-gray-600">Loading…</div>
@@ -595,7 +651,7 @@ export function CommitteeWorkspace() {
                           committeeId={committeeId}
                           billId={selected.id}
                           initialHtml={selected.legislativeHtml}
-                          editable={textView === "edited" && !paidReviewAccess}
+                          editable={textView === "edited" && billsEditable}
                           displayMode={textView === "clean" ? "clean" : "tracked"}
                           toolbarControls={textViewControls}
                         />

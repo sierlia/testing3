@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { ExternalLink, Eye, FileText, Mail, Newspaper, Plus, Search, Vote } from "lucide-react";
+import { DollarSign, Download, ExternalLink, Eye, FileText, Mail, Newspaper, Plus, Search, Vote, X } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { CompactPager } from "../components/CompactPager";
@@ -14,6 +14,7 @@ type BaseRecordType = "letter" | "report" | "vote" | "newsletter";
 type RowMode = "preview" | "open";
 type SortKey = "newest" | "oldest" | "title" | "type";
 type VoteList = Record<VoteChoice, Array<{ userId: string; name: string }>>;
+type NewsletterRow = { label: string; detail?: string };
 
 type RecordItem = {
   id: string;
@@ -60,6 +61,99 @@ function statusRank(status: string) {
   return ranks[status] ?? 0;
 }
 
+function pdfEscape(value: string) {
+  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+}
+
+function wrapPdfLine(value: string, max = 86) {
+  const words = value.replace(/\s+/g, " ").trim().split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > max && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [""];
+}
+
+function downloadNewsletterPdf(record: RecordItem) {
+  const newsletter = record.metadata?.newsletter;
+  const sections: Array<[string, NewsletterRow[]]> = [
+    ["Daily Digest", [{ label: record.subtitle }, { label: new Date(record.date).toLocaleString() }]],
+    ["Referrals", newsletter?.referrals ?? []],
+    ["Committee Meetings", newsletter?.meetings ?? []],
+    ["Committee Reports and Votes", newsletter?.reportedBills ?? []],
+    ["Top Cosponsor Gains", newsletter?.cosponsorLeaders ?? []],
+    ["Fastest-Moving Bills", newsletter?.fastestMoving ?? []],
+    ["Advertisement Bids", newsletter?.adBids ?? []],
+  ];
+  const textLines = [record.title, ""];
+  for (const [title, rows] of sections) {
+    textLines.push(title);
+    if (rows.length) rows.forEach((row, index) => textLines.push(`${title === "Daily Digest" ? "" : `${index + 1}. `}${row.label}${row.detail ? ` ${row.detail}` : ""}`));
+    else textLines.push("None");
+    textLines.push("");
+  }
+
+  const pages: string[][] = [[]];
+  for (const rawLine of textLines.flatMap((line) => wrapPdfLine(line))) {
+    if (pages[pages.length - 1].length >= 44) pages.push([]);
+    pages[pages.length - 1].push(rawLine);
+  }
+
+  const objects: string[] = [];
+  const addObject = (value: string) => {
+    objects.push(value);
+    return objects.length;
+  };
+  const pageObjectIds: number[] = [];
+  const contentObjectIds: number[] = [];
+  const pagesId = 2;
+  const fontId = 3;
+  addObject("<< /Type /Catalog /Pages 2 0 R >>");
+  addObject("");
+  addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
+  for (const pageLines of pages) {
+    const stream = [
+      "BT",
+      "/F1 11 Tf",
+      "50 760 Td",
+      ...pageLines.map((line, index) => `${index === 0 ? "" : "0 -16 Td"}(${pdfEscape(line)}) Tj`),
+      "ET",
+    ].join("\n");
+    const contentId = addObject(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
+    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
+    contentObjectIds.push(contentId);
+    pageObjectIds.push(pageId);
+  }
+  objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageObjectIds.length} >>`;
+  void contentObjectIds;
+  let pdf = "%PDF-1.4\n";
+  const offsets = [0];
+  objects.forEach((object, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`;
+  });
+  const xrefStart = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  offsets.slice(1).forEach((offset) => {
+    pdf += `${String(offset).padStart(10, "0")} 00000 n \n`;
+  });
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`;
+  const url = URL.createObjectURL(new Blob([pdf], { type: "application/pdf" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `${record.title.replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "newsletter"}.pdf`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function RecordPreviewPanel({ record }: { record: RecordItem }) {
   const Icon = recordIcon(record.type);
   const voteLists = record.votes;
@@ -98,23 +192,34 @@ function RecordPreviewPanel({ record }: { record: RecordItem }) {
           </div>
         ) : newsletter ? (
           <div className="space-y-4 text-sm">
+            <NewsletterSection title="Referrals" rows={newsletter.referrals} />
+            <NewsletterSection title="Committee Meetings" rows={newsletter.meetings} />
+            <NewsletterSection title="Committee Reports and Votes" rows={newsletter.reportedBills} />
             <NewsletterSection title="Top Cosponsor Gains" rows={newsletter.cosponsorLeaders} />
             <NewsletterSection title="Fastest-Moving Bills" rows={newsletter.fastestMoving} />
-            <NewsletterSection title="Passed Out of Committee" rows={newsletter.reportedBills} />
+            <NewsletterSection title="Advertisement Bids" rows={newsletter.adBids} />
           </div>
         ) : (
           <div className="max-h-[520px] overflow-hidden whitespace-pre-line text-sm leading-6 text-gray-700">{record.body || "Select Open to view the full record."}</div>
         )}
-        <Link to={record.href} className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
-          <ExternalLink className="h-4 w-4" />
-          View Full Record
-        </Link>
+        <div className="grid gap-2">
+          {newsletter && (
+            <button type="button" onClick={() => downloadNewsletterPdf(record)} className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
+              <Download className="h-4 w-4" />
+              Download PDF
+            </button>
+          )}
+          <Link to={record.href} className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
+            <ExternalLink className="h-4 w-4" />
+            View Full Record
+          </Link>
+        </div>
       </div>
     </div>
   );
 }
 
-function NewsletterSection({ title, rows }: { title: string; rows: any[] }) {
+function NewsletterSection({ title, rows }: { title: string; rows?: NewsletterRow[] }) {
   return (
     <div>
       <h4 className="mb-2 font-semibold text-gray-900">{title}</h4>
@@ -150,7 +255,10 @@ export function RecordsPage() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [editorOpen, setEditorOpen] = useState(false);
+  const [adBidOpen, setAdBidOpen] = useState(false);
   const [recordDraft, setRecordDraft] = useState({ title: "", type: "record", body: "" });
+  const [adBidDraft, setAdBidDraft] = useState({ message: "", amount: "0", lobbyistGroupId: "" });
+  const [myLobbyistGroups, setMyLobbyistGroups] = useState<Array<{ id: string; name: string }>>([]);
   const userFilter = searchParams.get("user") ?? searchParams.get("author") ?? "";
 
   const loadRecords = async () => {
@@ -171,7 +279,7 @@ export function RecordsPage() {
     const customTypes = (((cls as any)?.settings?.records?.types ?? ["record"]) as string[]).filter(Boolean);
     setRecordTypes(customTypes.length ? customTypes : ["record"]);
 
-    const [{ data: customRecords }, { data: letters }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, directory] = await Promise.all([
+    const [{ data: customRecords }, { data: letters }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, { data: lobbyistMemberships }, directory] = await Promise.all([
       supabase.from("custom_records").select("id,type,title,body,created_by,generated,metadata,created_at,updated_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase.from("dear_colleague_letters").select("id,sender_user_id,subject,body,created_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase
@@ -190,8 +298,10 @@ export function RecordsPage() {
       supabase.from("committee_members").select("committee_id,user_id"),
       supabase.from("bill_floor_sessions").select("id,bill_id,results_posted_at,closed_at,posted_result,bills(id,hr_label,title)").eq("class_id", activeClassId).not("results_posted_at", "is", null),
       supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", activeClassId),
+      supabase.from("lobbyist_group_members").select("group_id,lobbyist_groups(id,name)").eq("user_id", uid),
       supabase.rpc("class_directory", { target_class: activeClassId } as any),
     ]);
+    setMyLobbyistGroups(((lobbyistMemberships ?? []) as any[]).map((row) => row.lobbyist_groups).filter(Boolean));
 
     const people = ((directory.data ?? []) as any[]).filter((person) => person.role !== "teacher");
     const peopleById = new Map(people.map((person) => [person.user_id, person.display_name ?? "Member"]));
@@ -358,6 +468,22 @@ export function RecordsPage() {
     await loadRecords();
   };
 
+  const createAdBid = async () => {
+    if (!classId || !adBidDraft.message.trim()) return;
+    const currentUser = await getCurrentUser();
+    const { error } = await supabase.from("newsletter_ad_bids").insert({
+      class_id: classId,
+      bidder_user_id: currentUser?.id,
+      lobbyist_group_id: adBidDraft.lobbyistGroupId || null,
+      message: adBidDraft.message.trim(),
+      amount: Math.max(0, Number(adBidDraft.amount) || 0),
+    } as any);
+    if (error) throw error;
+    setAdBidOpen(false);
+    setAdBidDraft({ message: "", amount: "0", lobbyistGroupId: "" });
+    await loadRecords();
+  };
+
   const generateNewsletter = async () => {
     if (!classId) return;
     const currentUser = await getCurrentUser();
@@ -370,7 +496,7 @@ export function RecordsPage() {
       .limit(1)
       .maybeSingle();
     const since = (last as any)?.created_at ?? "1970-01-01T00:00:00.000Z";
-    const [{ data: cosponsors }, { data: bills }, { data: reports }, { data: votes }] = await Promise.all([
+    const [{ data: cosponsors }, { data: bills }, { data: reports }, { data: votes }, { data: meetings }, { data: referrals }, { data: adBids }] = await Promise.all([
       supabase.from("bill_cosponsors").select("bill_id,created_at,bills(id,hr_label,title)").eq("class_id", classId).gt("created_at", since),
       supabase.from("bill_display").select("id,hr_label,title,status,created_at").eq("class_id", classId).gte("created_at", since),
       supabase
@@ -379,6 +505,9 @@ export function RecordsPage() {
         .eq("class_id", classId)
         .gt("committee_report_submitted_at", since),
       supabase.from("bill_committee_votes").select("bill_id,committee_id,vote").eq("class_id", classId),
+      supabase.from("committee_meetings").select("committee_id,started_at,ended_at,committees(name)").eq("class_id", classId).gt("started_at", since).order("started_at", { ascending: true }),
+      supabase.from("bill_referrals").select("bill_id,committee_id,referred_at,bills(id,hr_label,title),committees(id,name)").eq("class_id", classId).gt("referred_at", since).order("referred_at", { ascending: true }),
+      supabase.from("newsletter_ad_bids").select("bidder_user_id,message,amount,created_at,lobbyist_groups(name)").eq("class_id", classId).gt("created_at", since).order("amount", { ascending: false }).limit(8),
     ]);
     const cosponsorCounts = new Map<string, any>();
     for (const row of (cosponsors ?? []) as any[]) {
@@ -402,16 +531,44 @@ export function RecordsPage() {
         detail: `${report.committees?.name ?? "Committee"}; ${counts.yea} yea, ${counts.nay} nay, ${counts.present} present`,
       };
     });
-    const metadata = { newsletter: { since, cosponsorLeaders, fastestMoving, reportedBills } };
+    const meetingRows = ((meetings ?? []) as any[]).map((meeting) => ({
+      label: meeting.committees?.name ?? "Committee meeting",
+      detail: `${new Date(meeting.started_at).toLocaleString()}${meeting.ended_at ? ` to ${new Date(meeting.ended_at).toLocaleString()}` : " (open)"}`,
+    }));
+    const referralRows = ((referrals ?? []) as any[]).map((referral) => ({
+      label: `${referral.bills?.hr_label ?? "Bill"} - ${referral.bills?.title ?? ""}`,
+      detail: `referred to ${referral.committees?.name ?? "committee"}`,
+    }));
+    const bidUserIds = [...new Set(((adBids ?? []) as any[]).map((bid) => bid.bidder_user_id).filter(Boolean))];
+    const { data: bidProfiles } = bidUserIds.length
+      ? await supabase.from("profiles").select("user_id,display_name").in("user_id", bidUserIds)
+      : ({ data: [] } as any);
+    const bidProfileMap = new Map((bidProfiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
+    const adBidRows = ((adBids ?? []) as any[]).map((bid) => ({
+      label: bid.lobbyist_groups?.name ?? bidProfileMap.get(bid.bidder_user_id) ?? "Member",
+      detail: `$${Number(bid.amount ?? 0).toLocaleString()}: ${bid.message}`,
+    }));
+    const metadata = { newsletter: { since, referrals: referralRows, meetings: meetingRows, reportedBills, cosponsorLeaders, fastestMoving, adBids: adBidRows } };
     const body = [
+      "Daily Digest",
+      "",
+      "Referrals",
+      ...referralRows.map((row) => `${row.label} ${row.detail}`),
+      "",
+      "Committee meetings",
+      ...meetingRows.map((row) => `${row.label} ${row.detail}`),
+      "",
+      "Committee reports and votes",
+      ...reportedBills.map((row) => `${row.label} ${row.detail}`),
+      "",
       "Top cosponsor gains",
       ...cosponsorLeaders.map((row, index) => `${index + 1}. ${row.label} ${row.detail}`),
       "",
       "Fastest-moving bills",
       ...fastestMoving.map((row, index) => `${index + 1}. ${row.label} ${row.detail}`),
       "",
-      "Passed out of committee",
-      ...reportedBills.map((row) => `${row.label} ${row.detail}`),
+      "Advertisement bids",
+      ...adBidRows.map((row, index) => `${index + 1}. ${row.label} ${row.detail}`),
     ].join("\n");
     const { error } = await supabase.from("custom_records").insert({
       class_id: classId,
@@ -452,6 +609,12 @@ export function RecordsPage() {
                 Add record
               </button>
             </div>
+          )}
+          {!isTeacher && (
+            <button type="button" onClick={() => setAdBidOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
+              <DollarSign className="h-4 w-4" />
+              Bid for newsletter ad
+            </button>
           )}
         </div>
 
@@ -571,6 +734,33 @@ export function RecordsPage() {
             <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
               <button type="button" onClick={() => setEditorOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
               <button type="button" onClick={() => void createRecord()} disabled={!recordDraft.title.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Save record</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {adBidOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-lg overflow-hidden rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">Bid for newsletter ad</h2>
+              <button type="button" onClick={() => setAdBidOpen(false)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-4 p-5">
+              {myLobbyistGroups.length ? (
+                <Select value={adBidDraft.lobbyistGroupId || "self"} onValueChange={(value) => setAdBidDraft({ ...adBidDraft, lobbyistGroupId: value === "self" ? "" : value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[140]">
+                    <SelectItem value="self">Bid as yourself</SelectItem>
+                    {myLobbyistGroups.map((group) => <SelectItem key={group.id} value={group.id}>Bid as {group.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              <input value={adBidDraft.amount} onChange={(event) => setAdBidDraft({ ...adBidDraft, amount: event.target.value.replace(/[^\d]/g, "") })} placeholder="Bid amount" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              <textarea value={adBidDraft.message} onChange={(event) => setAdBidDraft({ ...adBidDraft, message: event.target.value })} rows={5} placeholder="Advertisement message for the next newsletter" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
+              <button type="button" onClick={() => setAdBidOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+              <button type="button" onClick={() => void createAdBid()} disabled={!adBidDraft.message.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Submit bid</button>
             </div>
           </div>
         </div>

@@ -19,14 +19,16 @@ import {
   RemoveFormatting,
   Send,
   Underline,
+  Upload,
 } from "lucide-react";
 import ReactQuill from "react-quill";
 import "react-quill/dist/quill.snow.css";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/tooltip";
-import { createBillForCurrentClass, fetchBillDetail, updateBillDraftForCurrentClass } from "../services/bills";
+import { createBillForCurrentClass, fetchBillDetail, getCurrentProfileClass, updateBillDraftForCurrentClass } from "../services/bills";
 import { htmlToMarkdown, markdownToHtml } from "../utils/markdown";
+import { supabase } from "../utils/supabase";
 
 type TextMode = "default" | "markdown" | "preview";
 
@@ -90,6 +92,10 @@ function stripMarkdownFormatting(value: string) {
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/<u>(.*?)<\/u>/gi, "$1");
+}
+
+function pdfLinkHtml(url: string) {
+  return `<p><a href="${url}" target="_blank" rel="noopener noreferrer">Open uploaded PDF</a></p>`;
 }
 
 function MarkdownToolbar({
@@ -386,6 +392,8 @@ export function CreateBill() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [savingDraft, setSavingDraft] = useState(false);
+  const [billComposerFormat, setBillComposerFormat] = useState<"editor" | "pdf">("editor");
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
 
   const billTypes = [
     "H.R. Bill",
@@ -393,6 +401,18 @@ export function CreateBill() {
     "H. Con. Res. (Concurrent Resolution)",
     "H. Res. (Simple Resolution)",
   ];
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const { classId } = await getCurrentProfileClass();
+        const { data } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
+        setBillComposerFormat((((data as any)?.settings?.editorFormats?.billComposer ?? "editor") === "pdf" ? "pdf" : "editor"));
+      } catch {
+        setBillComposerFormat("editor");
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (!draftId) return;
@@ -417,7 +437,21 @@ export function CreateBill() {
     })();
   }, [draftId, navigate]);
 
-  const buildBillPayload = () => {
+  const uploadBillPdf = async () => {
+    if (!pdfFile) return formData.legislativeText;
+    const { classId, userId } = await getCurrentProfileClass();
+    const path = `${classId}/bills/${userId}-${Date.now()}-${pdfFile.name.replace(/[^a-z0-9. -]/gi, "_")}`;
+    const { error } = await supabase.storage.from("simulation-pdfs").upload(path, pdfFile, { upsert: true, contentType: "application/pdf" });
+    if (error) throw error;
+    const { data } = supabase.storage.from("simulation-pdfs").getPublicUrl(path);
+    return pdfLinkHtml(data.publicUrl);
+  };
+
+  const buildBillPayload = async () => {
+    if (billComposerFormat === "pdf") {
+      const legislativeHtml = await uploadBillPdf();
+      return { legislativeHtml, supportingHtml: formData.supportingText, supportingText: formData.supportingText || null };
+    }
     const legislativeHtml = formData.legislativeMode === "default" ? formData.legislativeText : markdownToHtml(formData.legislativeMarkdown);
     const supportingHtml = formData.supportingMode === "default" ? formData.supportingText : markdownToHtml(formData.supportingMarkdown);
     return {
@@ -430,12 +464,13 @@ export function CreateBill() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const { legislativeHtml, supportingText } = buildBillPayload();
+    const { legislativeHtml, supportingText } = await buildBillPayload();
     
     // Validation
     const newErrors: Record<string, string> = {};
     if (!formData.title.trim()) newErrors.title = "Title is required";
-    if (!legislativeHtml.replace(/<[^>]+>/g, "").trim()) newErrors.legislativeText = "Legislative text is required";
+    if (billComposerFormat === "pdf" && !pdfFile && !formData.legislativeText.includes("Open uploaded PDF")) newErrors.legislativeText = "Upload a PDF";
+    else if (!legislativeHtml.replace(/<[^>]+>/g, "").trim()) newErrors.legislativeText = "Legislative text is required";
     // Supporting text is optional by default (teacher-configurable tabs can remove it)
 
     if (Object.keys(newErrors).length > 0) {
@@ -469,7 +504,7 @@ export function CreateBill() {
   };
 
   const handleSaveDraft = async () => {
-    const { legislativeHtml, supportingText } = buildBillPayload();
+    const { legislativeHtml, supportingText } = await buildBillPayload();
     if (!formData.title.trim() && !legislativeHtml.replace(/<[^>]+>/g, "").trim() && !supportingText) {
       toast.error("Add a title or bill text before saving");
       return;
@@ -540,21 +575,35 @@ export function CreateBill() {
             </select>
           </div>
 
-          <MarkdownEnabledEditor
-            label="Legislative Text"
-            description="The official text of your proposed legislation"
-            required
-            error={errors.legislativeText}
-            htmlValue={formData.legislativeText}
-            markdownValue={formData.legislativeMarkdown}
-            mode={formData.legislativeMode}
-            textareaRef={legislativeMarkdownRef}
-            onHtmlChange={(value) => setFormData({ ...formData, legislativeText: value })}
-            onMarkdownChange={(value) => setFormData({ ...formData, legislativeMarkdown: value })}
-            onModeChange={(mode) => setFormData((prev) => ({ ...prev, legislativeMode: mode }))}
-            placeholder="Section 1. Short Title..."
-            minHeightClass="min-h-[300px]"
-          />
+          {billComposerFormat === "pdf" ? (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <label className="block text-sm font-semibold text-gray-900">Legislative Text *</label>
+              <p className="mt-1 text-sm text-gray-600">Upload a PDF for the bill text. Other users will open the uploaded PDF from the bill page.</p>
+              <label className={`mt-4 flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center transition-colors ${errors.legislativeText ? "border-red-400 bg-red-50" : "border-gray-300 hover:border-blue-400 hover:bg-blue-50"}`}>
+                <Upload className="mb-2 h-8 w-8 text-gray-400" />
+                <span className="text-sm font-semibold text-gray-900">{pdfFile?.name ?? "Choose PDF"}</span>
+                <span className="mt-1 text-xs text-gray-500">PDF files only</span>
+                <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)} />
+              </label>
+              {errors.legislativeText && <p className="mt-1 text-sm text-red-600">{errors.legislativeText}</p>}
+            </div>
+          ) : (
+            <MarkdownEnabledEditor
+              label="Legislative Text"
+              description="The official text of your proposed legislation"
+              required
+              error={errors.legislativeText}
+              htmlValue={formData.legislativeText}
+              markdownValue={formData.legislativeMarkdown}
+              mode={formData.legislativeMode}
+              textareaRef={legislativeMarkdownRef}
+              onHtmlChange={(value) => setFormData({ ...formData, legislativeText: value })}
+              onMarkdownChange={(value) => setFormData({ ...formData, legislativeMarkdown: value })}
+              onModeChange={(mode) => setFormData((prev) => ({ ...prev, legislativeMode: mode }))}
+              placeholder="Section 1. Short Title..."
+              minHeightClass="min-h-[300px]"
+            />
+          )}
 
           <MarkdownEnabledEditor
             label="Supporting Text"
