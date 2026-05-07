@@ -66,7 +66,7 @@ function Toggle({ checked, onChange, title, description, disabled = false, inden
     >
       <span className={`min-w-0 ${indent ? "pl-10" : "pl-7"}`}>
         <span className="block text-base font-semibold text-gray-900">{title}</span>
-        {description && <span className="block text-sm leading-5 text-gray-600">{description}</span>}
+        {description && <span className="block text-sm font-normal leading-5 text-gray-600">{description}</span>}
       </span>
       <span
         className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
@@ -99,19 +99,22 @@ function SettingsGroup({
   disabled = false,
   action,
   actionGrow = false,
+  actionInline = false,
 }: {
   title: string;
   children: ReactNode;
   disabled?: boolean;
   action?: ReactNode;
   actionGrow?: boolean;
+  actionInline?: boolean;
 }) {
   return (
     <section className="space-y-2 pb-3 last:pb-0">
       <div className="flex min-h-6 items-center gap-3">
         <h3 className="shrink-0 text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
+        {action && actionInline && <div className="shrink-0 self-center">{action}</div>}
         {action && !actionGrow && <span className="h-px flex-1 border-t border-dotted border-gray-300" aria-hidden="true" />}
-        {action && <div className={`${actionGrow ? "flex-1" : "shrink-0"} flex items-center justify-end self-center`}>{action}</div>}
+        {action && !actionInline && <div className={`${actionGrow ? "flex-1" : "shrink-0"} flex items-center justify-end self-center`}>{action}</div>}
       </div>
       <div className={`space-y-2 ${disabled ? "pointer-events-none opacity-45" : ""}`}>{children}</div>
     </section>
@@ -159,7 +162,7 @@ function SettingRow({
       <div className={`relative ${leftPad}`}>
         {sub && <span aria-hidden="true" className="absolute -top-2 left-6 h-[calc(50%+0.5rem)] w-5 rounded-bl-lg border-b-2 border-l-2 border-dotted border-gray-300" />}
         <div className="text-base font-semibold text-gray-900">{title}</div>
-        {description && <div className="text-sm leading-5 text-gray-600">{description}</div>}
+        {description && <div className="text-sm font-normal leading-5 text-gray-600">{description}</div>}
       </div>
       <div className="md:justify-self-end">{control}</div>
     </div>
@@ -183,23 +186,23 @@ function SettingSelect({ value, onValueChange, children }: { value: string; onVa
 
 function PercentInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="relative w-24">
       <input
         type="number"
         min={1}
         max={100}
         value={value}
         onChange={(event) => onChange(Math.min(100, Math.max(1, Number(event.target.value) || 50)))}
-        className="w-20 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+        className="w-full rounded-md border border-gray-300 py-2 pl-3 pr-8 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <span className="text-sm text-gray-600">%</span>
+      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>
     </div>
   );
 }
 
 function WordLimitInput({ label, value, max, onChange }: { label: string; value: number; max: number; onChange: (value: number) => void }) {
   return (
-    <label className="block max-w-52">
+    <label className="flex max-w-52 flex-col items-end text-right">
       {label && <span className="mb-1 block text-base font-semibold text-gray-900">{label}</span>}
       <input
         type="number"
@@ -209,7 +212,7 @@ function WordLimitInput({ label, value, max, onChange }: { label: string; value:
         onChange={(event) => onChange(Math.min(max, Math.max(1, Number(event.target.value) || 1)))}
         className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <span className="mt-1 block text-xs text-gray-500">Maximum Allowed: {max} words</span>
+      <span className="mt-1 block text-sm font-normal leading-5 text-gray-600">Maximum: {max}</span>
     </label>
   );
 }
@@ -316,6 +319,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     profileLongResponseWordLimit: 1000,
     billWordLimit: 5000,
     committeeReportWordLimit: 2000,
+    organizationNameWordLimit: 100,
     organizationDescriptionWordLimit: 500,
     announcementWordLimit: 1000,
     commentWordLimit: 500,
@@ -468,6 +472,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           profileLongResponseWordLimit: s?.wordLimits?.profileLongResponse ?? prev.profileLongResponseWordLimit,
           billWordLimit: s?.wordLimits?.bill ?? prev.billWordLimit,
           committeeReportWordLimit: s?.wordLimits?.committeeReport ?? prev.committeeReportWordLimit,
+          organizationNameWordLimit: s?.wordLimits?.organizationName ?? prev.organizationNameWordLimit,
           organizationDescriptionWordLimit: s?.wordLimits?.organizationDescription ?? prev.organizationDescriptionWordLimit,
           announcementWordLimit: s?.wordLimits?.announcement ?? prev.announcementWordLimit,
           commentWordLimit: s?.wordLimits?.comment ?? prev.commentWordLimit,
@@ -691,6 +696,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 profileLongResponse: Math.min(2000, Math.max(1, Number(settings.profileLongResponseWordLimit) || 1000)),
                 bill: Math.min(5000, Math.max(1, Number(settings.billWordLimit) || 5000)),
                 committeeReport: Math.min(2000, Math.max(1, Number(settings.committeeReportWordLimit) || 2000)),
+                organizationName: Math.min(200, Math.max(1, Number(settings.organizationNameWordLimit) || 100)),
                 organizationDescription: Math.min(500, Math.max(1, Number(settings.organizationDescriptionWordLimit) || 500)),
                 announcement: Math.min(1000, Math.max(1, Number(settings.announcementWordLimit) || 1000)),
                 comment: Math.min(500, Math.max(1, Number(settings.commentWordLimit) || 500)),
@@ -843,6 +849,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           profileLongResponseWordLimit: raw?.wordLimits?.profileLongResponse ?? settings.profileLongResponseWordLimit,
           billWordLimit: raw?.wordLimits?.bill ?? settings.billWordLimit,
           committeeReportWordLimit: raw?.wordLimits?.committeeReport ?? settings.committeeReportWordLimit,
+          organizationNameWordLimit: raw?.wordLimits?.organizationName ?? settings.organizationNameWordLimit,
           organizationDescriptionWordLimit: raw?.wordLimits?.organizationDescription ?? settings.organizationDescriptionWordLimit,
           announcementWordLimit: raw?.wordLimits?.announcement ?? settings.announcementWordLimit,
           commentWordLimit: raw?.wordLimits?.comment ?? settings.commentWordLimit,
@@ -1083,9 +1090,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <SettingRow indent title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
               title="Cosponsorship"
-              actionGrow
+              actionInline
               action={
-                <div className="w-full">
+                <div className="w-72">
                   <SettingSelect value={settings.cosponsorshipMode} onValueChange={(value) => setSettings({ cosponsorshipMode: value, cosponsorAfterCommitteeReport: false })}>
                     <SelectItem value="always">Always allowed</SelectItem>
                     <SelectItem value="before_report">Only before bill is reported from all committees</SelectItem>
@@ -1126,8 +1133,14 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           <DisabledBlock disabled={!settings.enableOrganizations}>
             <SettingRow
               indent
-              title="Organization name and description word limit"
-              description="Applies to organization names and about sections."
+              title="Organization name word limit"
+              description="Maximum words allowed in organization names."
+              control={<WordLimitInput label="" value={settings.organizationNameWordLimit} max={200} onChange={(value) => setSettings({ organizationNameWordLimit: value })} />}
+            />
+            <SettingRow
+              indent
+              title="Organization description word limit"
+              description="Maximum words allowed in organization about sections."
               control={<WordLimitInput label="" value={settings.organizationDescriptionWordLimit} max={500} onChange={(value) => setSettings({ organizationDescriptionWordLimit: value })} />}
             />
           </DisabledBlock>
