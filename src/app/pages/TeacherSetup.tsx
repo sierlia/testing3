@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router";
-import { Check, CheckSquare, Copy, FileText, Mail, Save, Search, Settings, ShieldCheck, UserCog, Users, Vote } from "lucide-react";
+import { Check, CheckSquare, Clock3, Copy, FileText, Mail, Save, Search, Settings, ShieldCheck, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
@@ -24,7 +24,7 @@ const subcommitteeLabels = Object.fromEntries(subcommitteeOptions.map((key) => {
 const sortedSubcommitteeOptions = [...subcommitteeOptions].sort((a, b) => subcommitteeLabels[a].localeCompare(subcommitteeLabels[b]));
 
 const tabs: Array<{ id: TabId; label: string; icon: any }> = [
-  { id: "quick", label: "Quick Setup", icon: Check },
+  { id: "quick", label: "Quick Setup", icon: Clock3 },
   { id: "general", label: "General", icon: Settings },
   { id: "parties", label: "Parties", icon: Users },
   { id: "committees", label: "Committees", icon: CheckSquare },

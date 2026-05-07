@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigation } from "../components/Navigation";
-import { DollarSign, Search } from "lucide-react";
+import { Search } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -291,21 +291,6 @@ export function Members() {
                     <div className="mt-1 truncate text-xs text-purple-700" title={member.leadershipRoles.join("; ")}>
                       {member.leadershipRoles.join("; ")}
                     </div>
-                  )}
-                  {moneyEnabled && member.role !== "teacher" && (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      onClick={(event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        window.location.hash = `/records?type=campaign_contribution&user=${member.user_id}`;
-                      }}
-                      className="mt-2 inline-flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-xs font-semibold text-green-700 hover:bg-green-100"
-                    >
-                      <DollarSign className="h-3 w-3" />
-                      {member.campaignFunds.toLocaleString()}
-                    </span>
                   )}
                 </div>
               </div>

@@ -1,11 +1,13 @@
-import { ChevronDown, CircleHelp, DollarSign, Gavel, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
+import { ChevronDown, CircleHelp, DollarSign, Gavel, LogOut, Settings, User, Mail, Plus, Layers, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { toast } from "sonner";
 import { NotificationBadge } from "./NotificationBadge";
 import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "./DefaultAvatar";
 import { profilePath } from "../utils/profileRoute";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 
 type TeacherClass = { id: string; name: string };
 
@@ -56,6 +58,11 @@ export function Navigation() {
   const [floorOpen, setFloorOpen] = useState(false);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [classMenuOpen, setClassMenuOpen] = useState(false);
+  const [moneyMenuOpen, setMoneyMenuOpen] = useState(false);
+  const [adBidOpen, setAdBidOpen] = useState(false);
+  const [adBidDraft, setAdBidDraft] = useState({ message: "", amount: "0", lobbyistGroupId: "" });
+  const [adBidRows, setAdBidRows] = useState<Array<{ id: string; bidder: string; message: string; amount: number }>>([]);
+  const [myLobbyistGroups, setMyLobbyistGroups] = useState<Array<{ id: string; name: string }>>([]);
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -67,6 +74,7 @@ export function Navigation() {
   const [money, setMoney] = useState<{ enabled: boolean; balance: number }>({ enabled: false, balance: 0 });
   const classMenuRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
+  const moneyMenuRef = useRef<HTMLDivElement | null>(null);
   const orgCloseTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -204,6 +212,17 @@ export function Navigation() {
     return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
   }, [userMenuOpen]);
 
+  useEffect(() => {
+    if (!moneyMenuOpen) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && moneyMenuRef.current?.contains(target)) return;
+      setMoneyMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsideClick);
+    return () => document.removeEventListener("pointerdown", closeOnOutsideClick);
+  }, [moneyMenuOpen]);
+
   const switchClass = async (classId: string) => {
     if (!user?.id) return;
     const next = teacherClasses.find((c) => c.id === classId);
@@ -302,6 +321,64 @@ export function Navigation() {
     setUnreadLetters(count ?? 0);
   };
 
+  const loadAdBids = async () => {
+    if (!activeClassId || !user?.id) return;
+    const [{ data: memberships }, { data: last }] = await Promise.all([
+      supabase.from("lobbyist_group_members").select("group_id,lobbyist_groups(id,name)").eq("user_id", user.id),
+      supabase.from("custom_records").select("created_at").eq("class_id", activeClassId).eq("type", "newsletter").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ]);
+    const since = (last as any)?.created_at ?? "1970-01-01T00:00:00.000Z";
+    const { data: bids } = await supabase
+      .from("newsletter_ad_bids")
+      .select("id,bidder_user_id,message,amount,status,lobbyist_groups(name)")
+      .eq("class_id", activeClassId)
+      .gt("created_at", since)
+      .order("amount", { ascending: false });
+    const bidderIds = [...new Set(((bids ?? []) as any[]).map((bid) => bid.bidder_user_id).filter(Boolean))];
+    const { data: profiles } = bidderIds.length
+      ? await supabase.from("profiles").select("user_id,display_name").in("user_id", bidderIds)
+      : ({ data: [] } as any);
+    const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
+    setMyLobbyistGroups(((memberships ?? []) as any[]).map((row) => row.lobbyist_groups).filter(Boolean));
+    setAdBidRows(((bids ?? []) as any[])
+      .filter((bid) => bid.status === "pending")
+      .map((bid) => ({
+        id: bid.id,
+        bidder: bid.lobbyist_groups?.name ?? profileMap.get(bid.bidder_user_id) ?? "Member",
+        message: bid.message,
+        amount: Number(bid.amount ?? 0),
+      })));
+  };
+
+  const openAdBid = () => {
+    setMoneyMenuOpen(false);
+    setAdBidOpen(true);
+    void loadAdBids();
+  };
+
+  const submitAdBid = async () => {
+    if (!activeClassId || !user?.id || !adBidDraft.message.trim()) return;
+    const wordCount = adBidDraft.message.trim().split(/\s+/).filter(Boolean).length;
+    if (wordCount > 250) {
+      toast.error("Advertisement notes are limited to 250 words.");
+      return;
+    }
+    const { error } = await supabase.from("newsletter_ad_bids").insert({
+      class_id: activeClassId,
+      bidder_user_id: user.id,
+      lobbyist_group_id: adBidDraft.lobbyistGroupId || null,
+      message: adBidDraft.message.trim(),
+      amount: Math.max(0, Number(adBidDraft.amount) || 0),
+    } as any);
+    if (error) {
+      toast.error(error.message || "Could not submit advertisement bid");
+      return;
+    }
+    toast.success("Advertisement bid submitted");
+    setAdBidDraft({ message: "", amount: "0", lobbyistGroupId: "" });
+    await loadAdBids();
+  };
+
   useEffect(() => {
     void refreshUnreadLetters();
   }, [user?.id]);
@@ -380,6 +457,7 @@ export function Navigation() {
         : "/settings/classes";
 
   return (
+    <>
     <nav className="bg-white border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
@@ -441,7 +519,7 @@ export function Navigation() {
 
               <Link
                 to="/records"
-                className={navItemClass(isActivePath(["/records"]))}
+                className={navItemClass(isActivePath(["/records", "/newsletters"]))}
               >
                 Records
               </Link>
@@ -526,10 +604,29 @@ export function Navigation() {
               )}
             </Link>
             {money.enabled && (
-              <Link to={user?.id ? `/records?type=campaign_contribution&user=${user.id}` : "/records?type=campaign_contribution"} className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2.5 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-100" title="Campaign contributions">
-                <DollarSign className="h-4 w-4" />
-                {money.balance.toLocaleString()}
-              </Link>
+              <div className="relative" ref={moneyMenuRef}>
+                <button type="button" onClick={() => setMoneyMenuOpen((open) => !open)} className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2.5 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-100" title="Campaign money">
+                  <DollarSign className="h-4 w-4" />
+                  {money.balance.toLocaleString()}
+                  <ChevronDown className={`h-3.5 w-3.5 transition-transform ${moneyMenuOpen ? "rotate-180" : ""}`} />
+                </button>
+                {moneyMenuOpen && (
+                  <div className="absolute right-0 top-full z-30 mt-2 w-64 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
+                    <Link
+                      to={user?.id ? `/records?type=campaign_contribution&user=${user.id}` : "/records?type=campaign_contribution"}
+                      className="block px-4 py-3 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => setMoneyMenuOpen(false)}
+                    >
+                      <span className="block font-medium text-gray-900">Contribution history</span>
+                      <span className="text-xs text-gray-500">View campaign contribution records.</span>
+                    </Link>
+                    <button type="button" onClick={openAdBid} className="block w-full px-4 py-3 text-left text-sm text-gray-700 hover:bg-gray-50">
+                      <span className="block font-medium text-gray-900">Purchase advertisement</span>
+                      <span className="text-xs text-gray-500">Bid for one of three newsletter spots.</span>
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
             {user?.user_metadata?.role === "teacher" && (
               <div className="relative" ref={classMenuRef}>
@@ -666,5 +763,67 @@ export function Navigation() {
         </div>
       </div>
     </nav>
+    {adBidOpen && (
+      <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4">
+        <div className="w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Purchase Newsletter Advertisement</h2>
+              <p className="text-sm text-gray-500">The top three active bids will be placed in the next newsletter.</p>
+            </div>
+            <button type="button" onClick={() => setAdBidOpen(false)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="grid gap-5 p-5 md:grid-cols-[1fr_1.1fr]">
+            <div>
+              <h3 className="mb-2 text-sm font-semibold text-gray-900">Live Bids</h3>
+              <div className="space-y-2">
+                {adBidRows.length ? adBidRows.slice(0, 3).map((bid, index) => (
+                  <div key={bid.id} className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="font-medium text-gray-900">Spot {index + 1}</span>
+                      <span className="font-semibold text-green-700">${bid.amount.toLocaleString()}</span>
+                    </div>
+                    <div className="mt-1 truncate text-xs text-gray-600">{bid.bidder}</div>
+                    <div className="mt-1 line-clamp-2 text-xs text-gray-500">{bid.message}</div>
+                  </div>
+                )) : (
+                  <div className="rounded-md border border-dashed border-gray-300 px-3 py-6 text-center text-sm text-gray-500">No bids yet.</div>
+                )}
+              </div>
+            </div>
+            <div className="space-y-4">
+              {myLobbyistGroups.length ? (
+                <Select value={adBidDraft.lobbyistGroupId || "self"} onValueChange={(value) => setAdBidDraft({ ...adBidDraft, lobbyistGroupId: value === "self" ? "" : value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="z-[140]">
+                    <SelectItem value="self">Bid as yourself</SelectItem>
+                    {myLobbyistGroups.map((group) => <SelectItem key={group.id} value={group.id}>Bid as {group.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              ) : null}
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Bid amount</span>
+                <span className="relative block">
+                  <DollarSign className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                  <input value={adBidDraft.amount} onChange={(event) => setAdBidDraft({ ...adBidDraft, amount: event.target.value.replace(/[^\d]/g, "") })} className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                </span>
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Message</span>
+                <textarea value={adBidDraft.message} onChange={(event) => setAdBidDraft({ ...adBidDraft, message: event.target.value })} rows={5} placeholder="Advertisement message for the next newsletter" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500" />
+                <span className="mt-1 block text-xs text-gray-500">{adBidDraft.message.trim() ? adBidDraft.message.trim().split(/\s+/).length : 0}/250 words</span>
+              </label>
+            </div>
+          </div>
+          <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
+            <button type="button" onClick={() => setAdBidOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+            <button type="button" onClick={() => void submitAdBid()} disabled={!adBidDraft.message.trim()} className="rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 disabled:opacity-50">Submit bid</button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 }

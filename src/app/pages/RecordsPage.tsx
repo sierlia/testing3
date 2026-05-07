@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { DollarSign, Download, ExternalLink, Eye, FileText, Mail, Newspaper, Plus, Search, Vote, X } from "lucide-react";
+import { DollarSign, Download, ExternalLink, Eye, FileText, Mail, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
+import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { CompactPager } from "../components/CompactPager";
@@ -8,13 +9,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 import { useAuth } from "../utils/AuthContext";
+import { formatConstituency } from "../utils/constituency";
+import { profilePath } from "../utils/profileRoute";
 
 type VoteChoice = "yea" | "nay" | "present" | "not_voted";
 type BaseRecordType = "letter" | "report" | "vote" | "newsletter" | "campaign_contribution";
 type RowMode = "preview" | "open";
 type SortKey = "newest" | "oldest" | "title" | "type";
 type VoteList = Record<VoteChoice, Array<{ userId: string; name: string }>>;
-type NewsletterRow = { label: string; detail?: string; href?: string; sponsor?: string };
+type NewsletterRow = { label: string; detail?: string; href?: string; sponsor?: string; sponsorHref?: string; transition?: string };
 
 type RecordItem = {
   id: string;
@@ -55,6 +58,16 @@ function recordIcon(type: string) {
   if (type === "newsletter") return Newspaper;
   if (type === "campaign_contribution") return DollarSign;
   return FileText;
+}
+
+function partyAbbr(party: string | null | undefined) {
+  const normalized = String(party ?? "").toLowerCase();
+  if (normalized.includes("democrat")) return "D";
+  if (normalized.includes("republican")) return "R";
+  if (normalized.includes("independent")) return "I";
+  if (normalized.includes("green")) return "G";
+  if (normalized.includes("libertarian")) return "L";
+  return party?.trim()?.slice(0, 1).toUpperCase() || "I";
 }
 
 function statusRank(status: string) {
@@ -98,6 +111,23 @@ function wrapPdfLine(value: string, max = 86) {
   return lines.length ? lines : [""];
 }
 
+function newsletterRowText(row: NewsletterRow) {
+  if (row.sponsor || row.transition) {
+    return [row.label, row.sponsor ? `Sponsored by ${row.sponsor}` : "", row.transition ?? row.detail ?? ""].filter(Boolean).join(" | ");
+  }
+  return `${row.label}${row.detail ? ` ${row.detail}` : ""}`;
+}
+
+function absolutePdfUrl(href: string) {
+  if (/^https?:\/\//i.test(href)) return href;
+  const base = `${window.location.origin}${window.location.pathname}`;
+  return `${base}#${href.startsWith("/") ? href : `/${href}`}`;
+}
+
+function pdfUriEscape(value: string) {
+  return pdfEscape(value).replace(/\r?\n/g, "");
+}
+
 function downloadNewsletterPdf(record: RecordItem) {
   const newsletter = record.metadata?.newsletter;
   const sections: Array<[string, NewsletterRow[]]> = [
@@ -107,20 +137,41 @@ function downloadNewsletterPdf(record: RecordItem) {
     ["Committee Reports and Votes", newsletter?.reportedBills ?? []],
     ["Top Cosponsor Gains", newsletter?.cosponsorLeaders ?? []],
     ["Fastest-Moving Bills", newsletter?.fastestMoving ?? []],
-    ["Advertisement Bids", newsletter?.adBids ?? []],
   ];
-  const textLines = [record.title, ""];
+  type PdfLine = { text: string; size?: number; bold?: boolean; links?: Array<{ href: string; start: number; length: number }> };
+  const textLines: PdfLine[] = [{ text: record.title, size: 18, bold: true }, { text: "" }];
   for (const [title, rows] of sections) {
-    textLines.push(title);
-    if (rows.length) rows.forEach((row, index) => textLines.push(`${title === "Daily Digest" ? "" : `${index + 1}. `}${row.label}${row.detail ? ` ${row.detail}` : ""}`));
-    else textLines.push("None");
-    textLines.push("");
+    textLines.push({ text: title, size: 13, bold: true });
+    if (rows.length) {
+      rows.forEach((row, index) => {
+        const prefix = title === "Daily Digest" ? "" : `${index + 1}. `;
+        const text = `${prefix}${newsletterRowText(row)}`;
+        const links: PdfLine["links"] = [];
+        if (row.href) links.push({ href: row.href, start: prefix.length, length: row.label.length });
+        if (row.sponsor && row.sponsorHref) {
+          const sponsorText = `Sponsored by ${row.sponsor}`;
+          const start = text.indexOf(sponsorText);
+          if (start >= 0) links.push({ href: row.sponsorHref, start: start + "Sponsored by ".length, length: row.sponsor.length });
+        }
+        textLines.push({ text, links });
+      });
+    } else {
+      textLines.push({ text: "None" });
+    }
+    textLines.push({ text: "" });
   }
 
-  const pages: string[][] = [[]];
-  for (const rawLine of textLines.flatMap((line) => wrapPdfLine(line))) {
-    if (pages[pages.length - 1].length >= 44) pages.push([]);
-    pages[pages.length - 1].push(rawLine);
+  const pages: PdfLine[][] = [[]];
+  for (const rawLine of textLines) {
+    const wrapped = wrapPdfLine(rawLine.text, rawLine.size && rawLine.size > 13 ? 58 : 86);
+    wrapped.forEach((line, partIndex) => {
+      if (pages[pages.length - 1].length >= 42) pages.push([]);
+      pages[pages.length - 1].push({
+        ...rawLine,
+        text: line,
+        links: partIndex === 0 ? rawLine.links : [],
+      });
+    });
   }
 
   const objects: string[] = [];
@@ -129,27 +180,41 @@ function downloadNewsletterPdf(record: RecordItem) {
     return objects.length;
   };
   const pageObjectIds: number[] = [];
-  const contentObjectIds: number[] = [];
   const pagesId = 2;
   const fontId = 3;
   addObject("<< /Type /Catalog /Pages 2 0 R >>");
   addObject("");
   addObject("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>");
   for (const pageLines of pages) {
+    const annotations: string[] = [];
+    pageLines.forEach((line, index) => {
+      const y = 760 - index * 16;
+      const size = line.size ?? 11;
+      for (const link of line.links ?? []) {
+        const x1 = 50 + link.start * (size * 0.48);
+        const x2 = Math.min(562, x1 + link.length * (size * 0.48));
+        annotations.push(
+          `<< /Type /Annot /Subtype /Link /Rect [${x1.toFixed(1)} ${(y - 2).toFixed(1)} ${x2.toFixed(1)} ${(y + 10).toFixed(1)}] /Border [0 0 0] /A << /S /URI /URI (${pdfUriEscape(absolutePdfUrl(link.href))}) >> >>`,
+        );
+      }
+    });
+    const annotationIds = annotations.map((annotation) => addObject(annotation));
     const stream = [
       "BT",
       "/F1 11 Tf",
       "50 760 Td",
-      ...pageLines.map((line, index) => `${index === 0 ? "" : "0 -16 Td"}(${pdfEscape(line)}) Tj`),
+      ...pageLines.map((line, index) => {
+        const size = line.size ?? 11;
+        const prefix = `${index === 0 ? "" : "0 -16 Td"}${size !== 11 ? `/F1 ${size} Tf ` : ""}`;
+        return `${prefix}(${pdfEscape(line.text)}) Tj${size !== 11 ? " /F1 11 Tf" : ""}`;
+      }),
       "ET",
     ].join("\n");
     const contentId = addObject(`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`);
-    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`);
-    contentObjectIds.push(contentId);
+    const pageId = addObject(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R${annotationIds.length ? ` /Annots [${annotationIds.map((id) => `${id} 0 R`).join(" ")}]` : ""} >>`);
     pageObjectIds.push(pageId);
   }
   objects[pagesId - 1] = `<< /Type /Pages /Kids [${pageObjectIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pageObjectIds.length} >>`;
-  void contentObjectIds;
   let pdf = "%PDF-1.4\n";
   const offsets = [0];
   objects.forEach((object, index) => {
@@ -170,7 +235,7 @@ function downloadNewsletterPdf(record: RecordItem) {
   URL.revokeObjectURL(url);
 }
 
-function RecordPreviewPanel({ record }: { record: RecordItem }) {
+function RecordPreviewPanel({ record, canDeleteNewsletter = false, onDeleteNewsletter }: { record: RecordItem; canDeleteNewsletter?: boolean; onDeleteNewsletter?: (record: RecordItem) => void }) {
   const Icon = recordIcon(record.type);
   const voteLists = record.votes;
   const newsletter = record.metadata?.newsletter;
@@ -225,6 +290,12 @@ function RecordPreviewPanel({ record }: { record: RecordItem }) {
               Download PDF
             </button>
           )}
+          {newsletter && canDeleteNewsletter && (
+            <button type="button" onClick={() => onDeleteNewsletter?.(record)} className="flex w-full items-center justify-center gap-2 rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50">
+              <Trash2 className="h-4 w-4" />
+              Delete Newsletter
+            </button>
+          )}
           <Link to={record.href} className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
             <ExternalLink className="h-4 w-4" />
             View Full Record
@@ -244,8 +315,19 @@ function NewsletterSection({ title, rows }: { title: string; rows?: NewsletterRo
           {rows.map((row, index) => (
             <li key={`${title}-${index}`} className="rounded bg-gray-50 px-3 py-2 text-gray-700">
               {index + 1}. {row.href ? <Link to={row.href} className="font-medium text-blue-600 hover:underline">{row.label}</Link> : row.label}
-              {row.sponsor ? <span className="text-gray-500"> sponsored by {row.sponsor}</span> : null}
-              {row.detail ? <span className="text-gray-500"> {row.detail}</span> : null}
+              {row.sponsor ? (
+                <>
+                  <span className="text-gray-400"> | </span>
+                  <span className="text-gray-500">Sponsored by </span>
+                  {row.sponsorHref ? <Link to={row.sponsorHref} className="font-medium text-blue-600 hover:underline">{row.sponsor}</Link> : <span className="text-gray-600">{row.sponsor}</span>}
+                </>
+              ) : null}
+              {row.transition ? (
+                <>
+                  <span className="text-gray-400"> | </span>
+                  <span className="text-gray-500">{row.transition}</span>
+                </>
+              ) : row.detail ? <span className="text-gray-500"> {row.detail}</span> : null}
             </li>
           ))}
         </ol>
@@ -437,12 +519,17 @@ export function RecordsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, sortBy, typeFilter, pageSize]);
+  }, [query, sortBy, typeFilter, pageSize, userFilter]);
 
   const availableTypes = useMemo(() => Array.from(new Set([...builtInTypes, ...recordTypes, ...records.map((record) => record.type)])), [recordTypes, records]);
+  const defaultRecordsView = !query.trim() && typeFilter === "all" && sortBy === "newest" && !userFilter;
+  const latestNewsletterId = useMemo(
+    () => [...records].filter((record) => record.type === "newsletter").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.id ?? "",
+    [records],
+  );
   const filteredRecords = useMemo(() => {
     const q = query.trim().toLowerCase();
-    return records
+    const list = records
       .filter((record) => typeFilter === "all" || record.type === typeFilter)
       .filter((record) => !userFilter || record.authorId === userFilter || record.voteUserIds?.includes(userFilter))
       .filter((record) => !q || `${record.title} ${record.subtitle} ${record.body ?? ""}`.toLowerCase().includes(q))
@@ -452,7 +539,12 @@ export function RecordsPage() {
         if (sortBy === "type") return typeLabel(a.type).localeCompare(typeLabel(b.type)) || new Date(b.date).getTime() - new Date(a.date).getTime();
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
-  }, [query, records, sortBy, typeFilter, userFilter]);
+    if (defaultRecordsView && latestNewsletterId) {
+      const index = list.findIndex((record) => record.id === latestNewsletterId);
+      if (index > 0) list.unshift(...list.splice(index, 1));
+    }
+    return list;
+  }, [defaultRecordsView, latestNewsletterId, query, records, sortBy, typeFilter, userFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -475,7 +567,13 @@ export function RecordsPage() {
     setQuery("");
     setType("all");
     setSortBy("newest");
-    updateParam("sort", "newest", "newest");
+    const next = new URLSearchParams(searchParams);
+    next.delete("q");
+    next.delete("type");
+    next.delete("sort");
+    next.delete("user");
+    next.delete("author");
+    setSearchParams(next);
   };
 
   const handleRecordClick = (record: RecordItem) => {
@@ -519,6 +617,19 @@ export function RecordsPage() {
     await loadRecords();
   };
 
+  const deleteNewsletter = async (record: RecordItem) => {
+    if (!isTeacher || record.type !== "newsletter") return;
+    const newsletterId = record.id.replace(/^custom:/, "");
+    const { error } = await supabase.from("custom_records").delete().eq("id", newsletterId).eq("type", "newsletter");
+    if (error) {
+      toast.error(error.message || "Could not delete newsletter");
+      return;
+    }
+    toast.success("Newsletter deleted");
+    setSelectedRecord((current) => current?.id === record.id ? null : current);
+    await loadRecords();
+  };
+
   const generateNewsletter = async () => {
     if (!classId) return;
     const currentUser = await getCurrentUser();
@@ -542,7 +653,7 @@ export function RecordsPage() {
       supabase.from("bill_committee_votes").select("bill_id,committee_id,vote").eq("class_id", classId),
       supabase.from("committee_meetings").select("committee_id,started_at,ended_at,committees(name)").eq("class_id", classId).gt("started_at", since).order("started_at", { ascending: true }),
       supabase.from("bill_referrals").select("bill_id,committee_id,referred_at,bills(id,hr_label,title),committees(id,name)").eq("class_id", classId).gt("referred_at", since).order("referred_at", { ascending: true }),
-      supabase.from("newsletter_ad_bids").select("bidder_user_id,message,amount,created_at,lobbyist_groups(name)").eq("class_id", classId).gt("created_at", since).order("amount", { ascending: false }).limit(8),
+      supabase.from("newsletter_ad_bids").select("id,bidder_user_id,message,amount,created_at,status,lobbyist_groups(name)").eq("class_id", classId).gt("created_at", since).order("amount", { ascending: false }),
     ]);
     const cosponsorCounts = new Map<string, any>();
     for (const row of (cosponsors ?? []) as any[]) {
@@ -556,13 +667,24 @@ export function RecordsPage() {
       .map((row) => ({ label: `${row.bill?.hr_label ?? "Bill"} - ${row.bill?.title ?? ""}`, href: `/bills/${row.bill?.id}`, detail: `+${row.count} cosponsor${row.count === 1 ? "" : "s"}` }));
     const authorIds = [...new Set(((bills ?? []) as any[]).map((bill) => bill.author_user_id).filter(Boolean))];
     const { data: authorProfiles } = authorIds.length
-      ? await supabase.from("profiles").select("user_id,display_name").in("user_id", authorIds)
+      ? await supabase.from("profiles").select("user_id,display_name,party,constituency_name").in("user_id", authorIds)
       : ({ data: [] } as any);
-    const authorNameById = new Map((authorProfiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
+    const authorById = new Map((authorProfiles ?? []).map((profile: any) => [profile.user_id, profile]));
     const fastestMoving = ((bills ?? []) as any[])
       .sort((a, b) => statusRank(b.status) - statusRank(a.status))
       .slice(0, 10)
-      .map((bill) => ({ label: `${bill.hr_label ?? "Bill"} - ${bill.title ?? ""}`, href: `/bills/${bill.id}`, sponsor: authorNameById.get(bill.author_user_id) ?? "Member", detail: `moved from Introduced to ${statusLabel(bill.status)}` }));
+      .map((bill) => {
+        const sponsor = authorById.get(bill.author_user_id) as any;
+        const sponsorName = sponsor?.display_name ?? "Member";
+        const district = formatConstituency(sponsor?.constituency_name);
+        return {
+          label: `${bill.hr_label ?? "Bill"} - ${bill.title ?? ""}`,
+          href: `/bills/${bill.id}`,
+          sponsor: `${sponsorName} (Rep.-${partyAbbr(sponsor?.party)}-${district || "N/A"})`,
+          sponsorHref: profilePath(bill.author_user_id),
+          transition: `Introduced -> ${statusLabel(bill.status)}`,
+        };
+      });
     const reportedBills = ((reports ?? []) as any[]).map((report) => {
       const rows = ((votes ?? []) as any[]).filter((vote) => vote.bill_id === report.bill_id && vote.committee_id === report.committee_id);
       const counts = { yea: rows.filter((row) => row.vote === "yea").length, nay: rows.filter((row) => row.vote === "nay").length, present: rows.filter((row) => row.vote === "present").length };
@@ -586,7 +708,8 @@ export function RecordsPage() {
       ? await supabase.from("profiles").select("user_id,display_name").in("user_id", bidUserIds)
       : ({ data: [] } as any);
     const bidProfileMap = new Map((bidProfiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
-    const adBidRows = ((adBids ?? []) as any[]).map((bid) => ({
+    const rankedAdBids = ((adBids ?? []) as any[]).filter((bid) => bid.status === "pending").slice(0, 3);
+    const adBidRows = rankedAdBids.map((bid) => ({
       label: bid.lobbyist_groups?.name ?? bidProfileMap.get(bid.bidder_user_id) ?? "Member",
       detail: `$${Number(bid.amount ?? 0).toLocaleString()}: ${bid.message}`,
     }));
@@ -607,7 +730,7 @@ export function RecordsPage() {
       ...cosponsorLeaders.map((row, index) => `${index + 1}. ${row.label} ${row.detail}`),
       "",
       "Fastest-moving bills",
-      ...fastestMoving.map((row, index) => `${index + 1}. ${row.label} ${row.detail}`),
+      ...fastestMoving.map((row, index) => `${index + 1}. ${newsletterRowText(row)}`),
       "",
       "Advertisement bids",
       ...adBidRows.map((row, index) => `${index + 1}. ${row.label} ${row.detail}`),
@@ -622,6 +745,10 @@ export function RecordsPage() {
       created_by: currentUser?.id ?? null,
     } as any);
     if (error) throw error;
+    const acceptedIds = rankedAdBids.map((bid: any) => bid.id);
+    const rejectedIds = ((adBids ?? []) as any[]).filter((bid: any) => bid.status === "pending" && !acceptedIds.includes(bid.id)).map((bid: any) => bid.id);
+    if (acceptedIds.length) await supabase.from("newsletter_ad_bids").update({ status: "accepted" }).in("id", acceptedIds);
+    if (rejectedIds.length) await supabase.from("newsletter_ad_bids").update({ status: "rejected" }).in("id", rejectedIds);
     await loadRecords();
   };
 
@@ -723,6 +850,12 @@ export function RecordsPage() {
                                 <Icon className="h-3.5 w-3.5" />
                                 {typeLabel(record.type)}
                               </span>
+                              {defaultRecordsView && record.id === latestNewsletterId && (
+                                <span className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
+                                  <Pin className="h-3.5 w-3.5" />
+                                  Pinned
+                                </span>
+                              )}
                               {record.generated && <span className="rounded bg-blue-100 px-2 py-1 text-xs font-medium text-blue-700">Generated</span>}
                             </div>
                             <h2 className="mb-2 text-base font-semibold text-gray-900">{record.title}</h2>
@@ -749,7 +882,7 @@ export function RecordsPage() {
           {rowMode === "preview" && (
             <div className="lg:col-span-1">
               <div className="sticky top-8">
-                {selectedRecord ? <RecordPreviewPanel record={selectedRecord} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
+                {selectedRecord ? <RecordPreviewPanel record={selectedRecord} canDeleteNewsletter={isTeacher} onDeleteNewsletter={deleteNewsletter} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
               </div>
             </div>
           )}
@@ -813,6 +946,9 @@ export function RecordsPage() {
 
 export function NewsletterDetailPage() {
   const { id } = useParams();
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<RecordItem | null>(null);
 
@@ -847,6 +983,17 @@ export function NewsletterDetailPage() {
     void load();
   }, [id]);
 
+  const deleteCurrentNewsletter = async () => {
+    if (!id || !isTeacher) return;
+    const { error } = await supabase.from("custom_records").delete().eq("id", id).eq("type", "newsletter");
+    if (error) {
+      toast.error(error.message || "Could not delete newsletter");
+      return;
+    }
+    toast.success("Newsletter deleted");
+    navigate("/records");
+  };
+
   const newsletter = record?.metadata?.newsletter;
   return (
     <div className="min-h-screen bg-gray-50">
@@ -865,10 +1012,18 @@ export function NewsletterDetailPage() {
                   <h1 className="mt-2 text-2xl font-bold">{record.title}</h1>
                   <div className="mt-1 text-sm text-blue-100">{new Date(record.date).toLocaleString()}</div>
                 </div>
-                <button type="button" onClick={() => downloadNewsletterPdf(record)} className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">
-                  <Download className="h-4 w-4" />
-                  Download PDF
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  {isTeacher && (
+                    <button type="button" onClick={() => void deleteCurrentNewsletter()} className="inline-flex items-center gap-2 rounded-md bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100">
+                      <Trash2 className="h-4 w-4" />
+                      Delete
+                    </button>
+                  )}
+                  <button type="button" onClick={() => downloadNewsletterPdf(record)} className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">
+                    <Download className="h-4 w-4" />
+                    Download PDF
+                  </button>
+                </div>
               </div>
             </div>
             <div className="space-y-6 p-6 text-sm">
