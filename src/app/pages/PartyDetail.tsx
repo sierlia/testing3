@@ -113,7 +113,7 @@ export function PartyDetail() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "election">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "letters" | "election">("dashboard");
   const [classSettings, setClassSettings] = useState<any>({});
 
   const isMember = !!party && comparablePartyName(myParty) === comparablePartyName(party.name);
@@ -674,7 +674,7 @@ export function PartyDetail() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-              {(["dashboard", "election"] as const).filter((tab) => tab === "dashboard" || isMember || isTeacher).map((tab) => (
+              {(["dashboard", "letters", "election"] as const).filter((tab) => tab !== "election" || isMember || isTeacher).map((tab) => (
                 <button
                   key={tab}
                   type="button"
@@ -691,7 +691,9 @@ export function PartyDetail() {
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
               <div className="space-y-6">
-                {activeTab === "dashboard" ? (
+                {activeTab === "letters" ? (
+                  <OrganizationLettersInbox organizationType="party" organizationId={party.id} organizationName={displayPartyName(party.name)} memberIds={members.map((member) => member.user_id)} />
+                ) : activeTab === "dashboard" ? (
                 <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
                   <div className="border-b border-gray-200 p-5">
                     <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
@@ -898,8 +900,6 @@ export function PartyDetail() {
                 </div>
                 )}
               </div>
-
-              <OrganizationLettersInbox organizationType="party" organizationId={party.id} organizationName={displayPartyName(party.name)} memberIds={members.map((member) => member.user_id)} />
 
               <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
                 <div className="mb-4 flex items-center gap-2">

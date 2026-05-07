@@ -120,6 +120,7 @@ export function CommitteeDashboard() {
   const isTeacher = viewerRole === "teacher";
   const canPostAnnouncements = isLeader || isTeacher;
   const canComment = Boolean(myRole) || isTeacher;
+  const activePanel = searchParams.get("tab") === "letters" ? "letters" : "dashboard";
 
   const selectedAnnouncement = useMemo(
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
@@ -1009,10 +1010,14 @@ export function CommitteeDashboard() {
           </div>
         </div>
 
-        <CommitteeTabs committeeId={committeeId} active="dashboard" />
+        <CommitteeTabs committeeId={committeeId} active={activePanel} />
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="space-y-6">
+            {activePanel === "letters" ? (
+              <OrganizationLettersInbox organizationType="committee" organizationId={committeeId} organizationName={committee?.name ?? "committee"} memberIds={members.map((member) => member.user_id)} />
+            ) : (
+            <>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="mb-3 flex items-start justify-between gap-4">
                 <div>
@@ -1207,9 +1212,9 @@ export function CommitteeDashboard() {
                 </div>
               </div>
             </div>
+            </>
+            )}
           </div>
-
-          <OrganizationLettersInbox organizationType="committee" organizationId={committeeId} organizationName={committee?.name ?? "committee"} memberIds={members.map((member) => member.user_id)} />
 
           <div className="self-start bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <SubcommitteeRolesPanel committeeId={committeeId} compact />

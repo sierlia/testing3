@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 
-type TabId = "dashboard" | "review" | "vote" | "election";
+type TabId = "dashboard" | "review" | "vote" | "election" | "letters";
 
 type CountedTabId = "dashboard" | "review" | "vote";
 type Counts = Record<CountedTabId, number>;
@@ -196,6 +196,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     { id: "review" as const, label: "Review", to: `/committee/${committeeId}/workspace` },
     { id: "vote" as const, label: "Vote", to: `/committee/${committeeId}/vote` },
     { id: "election" as const, label: "Election", to: `/committee/${committeeId}/leadership` },
+    { id: "letters" as const, label: "Letters", to: `/committees/${committeeId}?tab=letters` },
   ].filter((tab) => access.isTeacher || access.isMember);
 
   if (!access.loaded) return null;
@@ -212,7 +213,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
           }`}
         >
           {tab.label}
-          {tab.id !== "election" && (
+          {tab.id !== "election" && tab.id !== "letters" && (
             <>
               <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
                 {counts[tab.id]}

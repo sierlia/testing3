@@ -105,7 +105,7 @@ export function TessCaucusDetail() {
   const [announcementsSplitPct, setAnnouncementsSplitPct] = useState(40);
   const [draggingSplit, setDraggingSplit] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
-  const [activeTab, setActiveTab] = useState<"dashboard" | "election">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "letters" | "election">("dashboard");
   const [classSettings, setClassSettings] = useState<any>({});
   const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null);
 
@@ -909,7 +909,7 @@ export function TessCaucusDetail() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-          {(["dashboard", "election"] as const).map((tab) => (
+          {(["dashboard", "letters", "election"] as const).map((tab) => (
             <button
               key={tab}
               type="button"
@@ -923,11 +923,11 @@ export function TessCaucusDetail() {
           ))}
         </div>
 
-        <OrganizationLettersInbox organizationType="caucus" organizationId={caucusId} organizationName={caucus.title} memberIds={members.map((member) => member.user_id)} />
-
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
           <div className="space-y-6">
-            {activeTab === "dashboard" ? (
+            {activeTab === "letters" ? (
+              <OrganizationLettersInbox organizationType="caucus" organizationId={caucusId} organizationName={caucus.title} memberIds={members.map((member) => member.user_id)} />
+            ) : activeTab === "dashboard" ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>

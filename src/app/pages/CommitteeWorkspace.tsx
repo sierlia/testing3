@@ -42,6 +42,7 @@ export function CommitteeWorkspace() {
 
   const [bills, setBills] = useState<Array<{ id: string; number: string; title: string; sponsor: string; legislativeHtml: string; status: string; subcommitteeId: string | null; subcommitteeName: string | null }>>([]);
   const [subcommittees, setSubcommittees] = useState<Subcommittee[]>([]);
+  const [subcommitteeReferralsAvailable, setSubcommitteeReferralsAvailable] = useState(true);
   const [mySubcommitteeIds, setMySubcommitteeIds] = useState<Set<string>>(new Set());
   const [isTeacher, setIsTeacher] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
@@ -106,7 +107,15 @@ export function CommitteeWorkspace() {
           : ({ data: [] } as any);
         setMySubcommitteeIds(new Set((mySubRows ?? []).map((row: any) => row.subcommittee_id)));
 
-        const { data: refs, error: rErr } = await supabase.from("bill_referrals").select("bill_id,subcommittee_id").eq("committee_id", committeeId);
+        let { data: refs, error: rErr } = await supabase.from("bill_referrals").select("bill_id,subcommittee_id").eq("committee_id", committeeId);
+        if (rErr && String(rErr.message ?? "").toLowerCase().includes("subcommittee_id")) {
+          const fallback = await supabase.from("bill_referrals").select("bill_id").eq("committee_id", committeeId);
+          refs = fallback.data;
+          rErr = fallback.error;
+          setSubcommitteeReferralsAvailable(false);
+        } else {
+          setSubcommitteeReferralsAvailable(true);
+        }
         if (rErr) throw rErr;
         const referredSubcommitteeIds = [...new Set((refs ?? []).map((r: any) => r.subcommittee_id).filter(Boolean))];
         const { data: referredSubcommittees } = referredSubcommitteeIds.length
@@ -222,7 +231,7 @@ export function CommitteeWorkspace() {
   };
 
   const canOpenBill = (bill: typeof bills[number]) => !bill.subcommitteeId || mySubcommitteeIds.has(bill.subcommitteeId) || isTeacher;
-  const canReferSubcommittee = isTeacher || ["chair", "co_chair", "ranking_member"].includes(String(myCommitteeRole ?? ""));
+  const canReferSubcommittee = subcommitteeReferralsAvailable && (isTeacher || ["chair", "co_chair", "ranking_member"].includes(String(myCommitteeRole ?? "")));
 
   const updateReferralSubcommittee = async (billId: string, subcommitteeId: string | null) => {
     try {
