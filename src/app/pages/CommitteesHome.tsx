@@ -122,6 +122,19 @@ export function CommitteesHome() {
         }
 
         const ids = finalRows.map((r) => r.id);
+        if ((profile as any)?.role === "teacher" && s?.committees?.subcommitteesEnabled) {
+          const subcommitteeRows = finalRows.flatMap((committee: any) =>
+            ((s?.committees?.enabledSubcommittees ?? []) as string[])
+              .filter((key) => key.startsWith(`${committee.name}::`))
+              .map((key) => ({
+                committee_id: committee.id,
+                class_id: classId,
+                name: key.split("::").slice(1).join("::"),
+                description: "",
+              })),
+          );
+          if (subcommitteeRows.length) await supabase.from("subcommittees").upsert(subcommitteeRows as any, { onConflict: "committee_id,name" });
+        }
         const { data: subRows } = ids.length
           ? await supabase.from("subcommittees").select("id,committee_id,name").in("committee_id", ids)
           : ({ data: [] } as any);
@@ -194,6 +207,11 @@ export function CommitteesHome() {
     const capacity = Number(settings?.committees?.capacities?.[committeeId] ?? (committee ? settings?.committees?.capacitiesByName?.[committee.name] : 0) ?? 0);
     if (capacity > 0 && (memberCounts[committeeId] ?? 0) >= capacity) {
       toast.error("This committee is full");
+      return;
+    }
+    const { data: lobbyMembership } = await supabase.from("lobbyist_group_members").select("group_id").eq("user_id", meId).limit(1);
+    if ((lobbyMembership ?? []).length) {
+      toast.error("Lobbyist group members cannot join committees");
       return;
     }
     setJoiningCommitteeId(committeeId);

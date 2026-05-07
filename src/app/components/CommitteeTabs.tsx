@@ -15,7 +15,7 @@ type CountData = {
 const defaultCounts: Counts = { dashboard: 0, review: 0, vote: 0 };
 const defaultIds: Record<CountedTabId, string[]> = { dashboard: [], review: [], vote: [] };
 const countDataCache = new Map<string, CountData>();
-const membershipCache = new Map<string, { isMember: boolean; isTeacher: boolean; loaded: boolean }>();
+const membershipCache = new Map<string, { isMember: boolean; isTeacher: boolean; dashboardAccess: boolean; reviewAccess: boolean; loaded: boolean }>();
 
 function cloneCountData(data: CountData): CountData {
   return {
@@ -101,15 +101,15 @@ export function committeeNameStorageKey(committeeId: string) {
 export function CommitteeTabs({ committeeId, active }: { committeeId: string; active: TabId }) {
   const [countData, setCountData] = useState<CountData>(() => readCachedCountData(committeeId));
   const [seenVersion, setSeenVersion] = useState(0);
-  const [access, setAccess] = useState(() => membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, loaded: false });
+  const [access, setAccess] = useState(() => membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, dashboardAccess: false, reviewAccess: false, loaded: false });
 
   useEffect(() => {
     let cancelled = false;
     setCountData(readCachedCountData(committeeId));
-    setAccess(membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, loaded: false });
+    setAccess(membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, dashboardAccess: false, reviewAccess: false, loaded: false });
     const load = async () => {
       const uid = (await getCurrentUser())?.id;
-      const [{ data: announcements }, { data: refs }, { data: membership }, { data: profile }] = await Promise.all([
+      const [{ data: announcements }, { data: refs }, { data: membership }, { data: profile }, { data: paidAccess }] = await Promise.all([
         supabase
           .from("committee_announcements")
           .select("id")
@@ -119,9 +119,11 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
           ? supabase.from("committee_members").select("user_id").eq("committee_id", committeeId).eq("user_id", uid).maybeSingle()
           : ({ data: null } as any),
         uid ? supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle() : ({ data: null } as any),
+        uid ? supabase.from("committee_paid_access").select("access_type").eq("committee_id", committeeId).eq("user_id", uid) : ({ data: [] } as any),
       ]);
       if (!cancelled) {
-        const nextAccess = { isMember: Boolean(membership), isTeacher: (profile as any)?.role === "teacher", loaded: true };
+        const paid = new Set(((paidAccess ?? []) as any[]).map((row) => row.access_type));
+        const nextAccess = { isMember: Boolean(membership), isTeacher: (profile as any)?.role === "teacher", dashboardAccess: paid.has("dashboard"), reviewAccess: paid.has("review"), loaded: true };
         membershipCache.set(committeeId, nextAccess);
         setAccess(nextAccess);
       }
@@ -198,7 +200,12 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     { id: "vote" as const, label: "Vote", to: `/committee/${committeeId}/vote` },
     { id: "election" as const, label: "Election", to: `/committee/${committeeId}/leadership` },
     { id: "letters" as const, label: "Letters", to: `/committees/${committeeId}?tab=letters` },
-  ].filter((tab) => access.isTeacher || access.isMember);
+  ].filter((tab) => {
+    if (access.isTeacher || access.isMember) return true;
+    if (tab.id === "dashboard") return access.dashboardAccess;
+    if (tab.id === "review") return access.reviewAccess;
+    return false;
+  });
 
   if (!access.loaded) return null;
   if (!tabs.length) return null;

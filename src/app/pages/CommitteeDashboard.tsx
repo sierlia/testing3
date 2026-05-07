@@ -13,6 +13,7 @@ import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "..
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
+import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
@@ -96,6 +97,9 @@ export function CommitteeDashboard() {
   const [leaving, setLeaving] = useState(false);
   const [allowSelfJoin, setAllowSelfJoin] = useState(false);
   const [committeeCapacity, setCommitteeCapacity] = useState(0);
+  const [moneySettings, setMoneySettings] = useState<any>({});
+  const [paidAccess, setPaidAccess] = useState<Set<string>>(new Set());
+  const [myLobbyGroupId, setMyLobbyGroupId] = useState<string | null>(null);
   const [subcommittees, setSubcommittees] = useState<Subcommittee[]>([]);
   const [newSubcommitteeName, setNewSubcommitteeName] = useState("");
 
@@ -121,6 +125,7 @@ export function CommitteeDashboard() {
   const isLeader = myRole === "chair" || myRole === "co_chair" || myRole === "ranking_member";
   const isTeacher = viewerRole === "teacher";
   const canPostAnnouncements = isLeader || isTeacher;
+  const canViewDashboard = Boolean(myRole) || isTeacher || paidAccess.has("dashboard");
   const canComment = Boolean(myRole) || isTeacher;
   const activePanel = searchParams.get("tab") === "letters" ? "letters" : "dashboard";
 
@@ -192,6 +197,7 @@ export function CommitteeDashboard() {
         if ((c as any).class_id) {
           const { data: cls } = await supabase.from("classes").select("settings").eq("id", (c as any).class_id).maybeSingle();
           const settings = (cls as any)?.settings ?? {};
+          setMoneySettings(settings?.money ?? {});
           nextAllowSelfJoin = !!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join";
           setCommitteeCapacity(Number(settings?.committees?.capacities?.[committeeId] ?? settings?.committees?.capacitiesByName?.[(c as any).name] ?? 0));
         }
@@ -225,6 +231,14 @@ export function CommitteeDashboard() {
         setMembers(nextMembers);
         const nextMyRole = me ? ((mRows ?? []).find((r: any) => r.user_id === me)?.role as any) ?? null : null;
         setMyRole(nextMyRole);
+        if (me) {
+          const [{ data: accessRows }, { data: lobbyRows }] = await Promise.all([
+            supabase.from("committee_paid_access").select("access_type").eq("committee_id", committeeId).eq("user_id", me),
+            supabase.from("lobbyist_group_members").select("group_id").eq("user_id", me).limit(1),
+          ]);
+          setPaidAccess(new Set(((accessRows ?? []) as any[]).map((row) => row.access_type)));
+          setMyLobbyGroupId(((lobbyRows ?? []) as any[])[0]?.group_id ?? null);
+        }
 
         const { data: aRows, error: aErr } = await supabase
           .from("committee_announcements")
@@ -809,6 +823,11 @@ export function CommitteeDashboard() {
       toast.error("This committee is full");
       return;
     }
+    const { data: lobbyMembership } = await supabase.from("lobbyist_group_members").select("group_id").eq("user_id", meId).limit(1);
+    if ((lobbyMembership ?? []).length) {
+      toast.error("Lobbyist group members cannot join committees");
+      return;
+    }
     setJoining(true);
     try {
       const { error } = await supabase
@@ -830,6 +849,30 @@ export function CommitteeDashboard() {
     } finally {
       setJoining(false);
     }
+  };
+
+  const buyCommitteeAccess = async (accessType: "dashboard" | "review") => {
+    if (!meId || !myLobbyGroupId || !committee) return;
+    const amount = accessType === "dashboard" ? Number(moneySettings?.committeeDashboardAccessPrice ?? 100) : Number(moneySettings?.committeeReviewAccessPrice ?? 250);
+    const { error } = await supabase.from("committee_paid_access").insert({
+      committee_id: committeeId,
+      user_id: meId,
+      access_type: accessType,
+      group_id: myLobbyGroupId,
+      amount,
+    } as any);
+    if (error) return toast.error(error.message || "Could not buy access");
+    await supabase.from("lobbyist_contributions").insert({
+      class_id: committee.class_id,
+      group_id: myLobbyGroupId,
+      from_user_id: meId,
+      recipient_type: "committee",
+      recipient_id: committeeId,
+      amount,
+      note: `${accessType === "dashboard" ? "Dashboard" : "Review"} access`,
+    } as any);
+    setPaidAccess((current) => new Set(current).add(accessType));
+    toast.success("Access granted");
   };
 
   const leave = async () => {
@@ -989,6 +1032,12 @@ export function CommitteeDashboard() {
             )}
           </div>
           <div className="flex items-center gap-2">
+            <ContributionButton recipientType="committee" recipientId={committee.id} recipientName={committee.name} />
+            {myLobbyGroupId && moneySettings?.enabled && !paidAccess.has("review") && !myRole && !isTeacher && (
+              <button type="button" onClick={() => void buyCommitteeAccess("review")} className="inline-flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100">
+                Review access ${Number(moneySettings?.committeeReviewAccessPrice ?? 250).toLocaleString()}
+              </button>
+            )}
             {myRole && viewerRole !== "teacher" && (
               <button
                 onClick={() => void leave()}
@@ -1025,24 +1074,15 @@ export function CommitteeDashboard() {
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">About</h2>
                 </div>
-                <div className="flex max-w-md flex-1 items-start justify-end gap-2 border-l border-gray-200 pl-4">
+                <div className="flex max-w-sm flex-1 items-start justify-end gap-2">
                   {(isLeader || isTeacher) && !editingAbout && (
                     <button onClick={() => setEditingAbout(true)} className="mt-1 text-blue-600 hover:text-blue-700 transition-colors">
                       <Pencil className="w-4 h-4" />
                     </button>
                   )}
-                  <div className="min-w-0 flex-1 text-right">
-                    {subcommittees.length ? (
-                      <div className="mb-2 flex flex-wrap justify-end gap-1">
-                        {subcommittees.map((subcommittee) => (
-                          <button key={subcommittee.id} type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="rounded-full bg-gray-100 px-2 py-1 text-xs text-gray-600 enabled:hover:bg-red-50 enabled:hover:text-red-600 disabled:cursor-default">
-                            {subcommittee.name}{(isLeader || isTeacher) ? " x" : ""}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
+                  <div className="min-w-0 flex-1 border-l border-gray-300 pl-3 text-right">
                     {(isLeader || isTeacher) && (
-                      <div className="ml-auto flex max-w-xs gap-1.5">
+                      <div className="ml-auto flex max-w-[16rem] gap-1.5">
                         <input
                           value={newSubcommitteeName}
                           onChange={(event) => setNewSubcommitteeName(event.target.value)}
@@ -1057,6 +1097,17 @@ export function CommitteeDashboard() {
                         </button>
                       </div>
                     )}
+                    {subcommittees.length ? (
+                      <ul className="mt-2 list-disc space-y-0.5 pl-5 text-left text-xs text-gray-600">
+                        {subcommittees.map((subcommittee) => (
+                          <li key={subcommittee.id}>
+                            <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="text-left enabled:hover:text-red-600 disabled:cursor-default">
+                              {subcommittee.name}{(isLeader || isTeacher) ? " x" : ""}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -1085,6 +1136,7 @@ export function CommitteeDashboard() {
               )}
             </div>
 
+            {canViewDashboard ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
               <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
@@ -1209,6 +1261,22 @@ export function CommitteeDashboard() {
                 </div>
               </div>
             </div>
+            ) : (
+              <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+                <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
+                <p className="mt-2 text-sm text-gray-600">Announcement boards are available to committee members. Lobbyists can pay for dashboard access.</p>
+                {myLobbyGroupId && moneySettings?.enabled && (
+                  <button type="button" onClick={() => void buyCommitteeAccess("dashboard")} className="mt-4 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
+                    Pay ${Number(moneySettings?.committeeDashboardAccessPrice ?? 100).toLocaleString()} for dashboard access
+                  </button>
+                )}
+                {myLobbyGroupId && moneySettings?.enabled && !paidAccess.has("review") && (
+                  <button type="button" onClick={() => void buyCommitteeAccess("review")} className="ml-2 mt-4 rounded-md border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100">
+                    Pay ${Number(moneySettings?.committeeReviewAccessPrice ?? 250).toLocaleString()} for review access
+                  </button>
+                )}
+              </div>
+            )}
             </>
             )}
           </div>

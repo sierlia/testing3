@@ -404,6 +404,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     enableParties: true,
     enableCommittees: true,
     enableCaucuses: true,
+    enableLobbyists: false,
     enableOrganizations: true,
     organizationCreationAllowed: true,
     billAssignmentAuthorityMode: "teacher",
@@ -474,6 +475,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     organizationDescriptionWordLimit: 500,
     announcementWordLimit: 1000,
     commentWordLimit: 500,
+    recordTypes: ["record", "resolution", "statement"] as string[],
+    moneyEnabled: false,
+    startingMoney: 1000,
+    committeeDashboardAccessPrice: 100,
+    committeeReviewAccessPrice: 250,
+    lobbyistJoinMode: "free_join",
   });
 
   const setSettings = (patch: Partial<typeof settings>) => {
@@ -565,6 +572,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           enableParties: s?.organizations?.enableParties ?? prev.enableParties,
           enableCommittees: s?.organizations?.enableCommittees ?? prev.enableCommittees,
           enableCaucuses: s?.organizations?.enableCaucuses ?? prev.enableCaucuses,
+          enableLobbyists: s?.organizations?.enableLobbyists ?? prev.enableLobbyists,
           enableOrganizations: s?.organizations?.enabled ?? prev.enableOrganizations,
           organizationCreationAllowed: s?.organizations?.creationAllowed ?? prev.organizationCreationAllowed,
           partyLeadershipElectionMode: s?.parties?.leadershipElectionMode ?? prev.partyLeadershipElectionMode,
@@ -650,6 +658,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           autoOpenVotes: s?.automation?.autoOpenVotes ?? prev.autoOpenVotes,
           autoCloseVotes: s?.automation?.autoCloseVotes ?? prev.autoCloseVotes,
           autoCloseVoteParticipationPct: s?.automation?.autoCloseVoteParticipationPct ?? prev.autoCloseVoteParticipationPct,
+          recordTypes: s?.records?.types ?? prev.recordTypes,
+          moneyEnabled: s?.money?.enabled ?? prev.moneyEnabled,
+          startingMoney: s?.money?.startingAmount ?? prev.startingMoney,
+          committeeDashboardAccessPrice: s?.money?.committeeDashboardAccessPrice ?? prev.committeeDashboardAccessPrice,
+          committeeReviewAccessPrice: s?.money?.committeeReviewAccessPrice ?? prev.committeeReviewAccessPrice,
+          lobbyistJoinMode: s?.lobbyists?.joinMode ?? prev.lobbyistJoinMode,
         }));
         setSelectedQuickSetup(null);
         setQuickSetupModified(false);
@@ -745,6 +759,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 enableParties: settings.enableParties,
                 enableCommittees: settings.enableCommittees,
                 enableCaucuses: settings.enableCaucuses,
+                enableLobbyists: settings.enableLobbyists,
               },
             }
           : {
@@ -754,6 +769,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 enableParties: settings.enableParties,
                 enableCommittees: settings.enableCommittees,
                 enableCaucuses: settings.enableCaucuses,
+                enableLobbyists: settings.enableLobbyists,
                 announcementBoards: {
                   ...(existing?.organizations?.announcementBoards ?? {}),
                   enabled: settings.announcementBoardsEnabled,
@@ -911,6 +927,22 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 autoOpenVotes: settings.autoOpenVotes,
                 autoCloseVotes: settings.autoCloseVotes,
                 autoCloseVoteParticipationPct: Math.min(100, Math.max(1, Number(settings.autoCloseVoteParticipationPct) || 75)),
+              },
+              records: {
+                ...(existing?.records ?? {}),
+                types: settings.recordTypes.map((type) => type.trim()).filter(Boolean),
+              },
+              money: {
+                ...(existing?.money ?? {}),
+                enabled: settings.moneyEnabled,
+                startingAmount: Math.max(0, Number(settings.startingMoney) || 0),
+                committeeDashboardAccessPrice: Math.max(1, Number(settings.committeeDashboardAccessPrice) || 100),
+                committeeReviewAccessPrice: Math.max(1, Number(settings.committeeReviewAccessPrice) || 250),
+              },
+              lobbyists: {
+                ...(existing?.lobbyists ?? {}),
+                enabled: settings.enableLobbyists,
+                joinMode: settings.lobbyistJoinMode,
               },
               students: {
                 ...(existing?.students ?? {}),
@@ -1241,7 +1273,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       <SettingSelect
         value={!settings.enableOrganizations ? "disabled" : settings.organizationCreationAllowed ? "creation-allowed" : "creation-not-allowed"}
         onValueChange={(value) => {
-          if (value === "disabled") setSettings({ enableOrganizations: false, enableParties: false, enableCommittees: false, enableCaucuses: false, organizationCreationAllowed: false });
+          if (value === "disabled") setSettings({ enableOrganizations: false, enableParties: false, enableCommittees: false, enableCaucuses: false, enableLobbyists: false, organizationCreationAllowed: false });
           else setSettings({ enableOrganizations: true, enableParties: true, enableCommittees: true, enableCaucuses: true, organizationCreationAllowed: value === "creation-allowed" });
         }}
       >
@@ -1374,6 +1406,31 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 />
               </div>
             )}
+          </SettingsGroup>
+
+          <SettingsGroup title="Records">
+            <SettingRow
+              title="Record types"
+              description="These teacher-controlled options appear when adding records and filtering Records."
+              wide
+              control={
+                <input
+                  value={settings.recordTypes.join(", ")}
+                  onChange={(event) => setSettings({ recordTypes: event.target.value.split(",").map((type) => type.trim()).filter(Boolean) })}
+                  placeholder="record, resolution, statement"
+                  className="ml-auto w-[32rem] max-w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              }
+            />
+          </SettingsGroup>
+
+          <SettingsGroup title="Money">
+            <Toggle checked={settings.moneyEnabled} onChange={(value) => setSettings({ moneyEnabled: value })} title="Enable money system" description="Show member balances and allow lobbyist contributions when enabled." />
+            <DisabledBlock disabled={!settings.moneyEnabled} tight>
+              <SettingRow indent title="Starting balance" description="Amount each member starts with." control={<WordLimitInput label="" value={settings.startingMoney} max={100000} onChange={(value) => setSettings({ startingMoney: value })} />} />
+              <SettingRow indent title="Committee dashboard access price" description="Amount lobbyists pay to see a committee dashboard." control={<WordLimitInput label="" value={settings.committeeDashboardAccessPrice} max={100000} onChange={(value) => setSettings({ committeeDashboardAccessPrice: value })} />} />
+              <SettingRow indent title="Committee review access price" description="Amount lobbyists pay to view committee review without editing." control={<WordLimitInput label="" value={settings.committeeReviewAccessPrice} max={100000} onChange={(value) => setSettings({ committeeReviewAccessPrice: value })} />} />
+            </DisabledBlock>
           </SettingsGroup>
 
           <SettingsGroup title="Import settings">
@@ -1750,6 +1807,15 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </SettingsGroup>
           <SettingsGroup title="Caucuses" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableCaucuses, (v) => setSettings({ enableCaucuses: v }), !settings.enableOrganizations)}>
             <div className="text-sm text-gray-600">Students can form caucuses and post announcements.</div>
+          </SettingsGroup>
+          <SettingsGroup title="Lobbyist groups" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableLobbyists, (v) => setSettings({ enableLobbyists: v }), !settings.enableOrganizations)}>
+            <DisabledBlock disabled={!settings.enableLobbyists}>
+              <SettingRow title="Join mode" description="Choose whether students can freely join lobbyist groups or must be assigned by the teacher." control={<SettingSelect value={settings.lobbyistJoinMode} onValueChange={(value) => setSettings({ lobbyistJoinMode: value })}>
+                <SelectItem value="free_join">Free join</SelectItem>
+                <SelectItem value="teacher_assigned">Teacher assigns</SelectItem>
+              </SettingSelect>} />
+              <div className="text-sm text-gray-600">Lobbyist group members cannot join parties, committees, or caucuses while they are in a lobbyist group.</div>
+            </DisabledBlock>
           </SettingsGroup>
           <SettingsGroup title="Announcement boards" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.announcementBoardsEnabled, (v) => setSettings({ announcementBoardsEnabled: v }), !settings.enableOrganizations)}>
             <DisabledBlock disabled={!settings.announcementBoardsEnabled}>

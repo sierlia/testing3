@@ -1,4 +1,4 @@
-import { ChevronDown, CircleHelp, Gavel, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
+import { ChevronDown, CircleHelp, DollarSign, Gavel, LogOut, Settings, User, Mail, Plus, Layers } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { NotificationBadge } from "./NotificationBadge";
@@ -64,6 +64,7 @@ export function Navigation() {
   const [activeClassName, setActiveClassName] = useState<string>("");
   const [teacherClasses, setTeacherClasses] = useState<TeacherClass[]>([]);
   const [unreadLetters, setUnreadLetters] = useState(0);
+  const [money, setMoney] = useState<{ enabled: boolean; balance: number }>({ enabled: false, balance: 0 });
   const classMenuRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const orgCloseTimerRef = useRef<number | null>(null);
@@ -99,6 +100,7 @@ export function Navigation() {
         setActiveClassId(null);
         setActiveClassName("");
         setTeacherClasses([]);
+        setMoney({ enabled: false, balance: 0 });
         return;
       }
       const cachedAvatar = readCachedAvatar(user.id);
@@ -120,6 +122,21 @@ export function Navigation() {
       setAvatarUrl(nextAvatar);
       cacheAvatar(user.id, nextAvatar);
       let classId = routeClassId ?? (data as any)?.class_id ?? null;
+      if (classId) {
+        const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
+        const settings = (cls as any)?.settings ?? {};
+        if (settings?.money?.enabled) {
+          const [{ data: sent }, { data: received }] = await Promise.all([
+            supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("from_user_id", user.id),
+            supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("recipient_type", "member").eq("recipient_id", user.id),
+          ]);
+          const spent = (sent ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
+          const incoming = (received ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
+          setMoney({ enabled: true, balance: Number(settings.money.startingAmount ?? 1000) - spent + incoming });
+        } else {
+          setMoney({ enabled: false, balance: 0 });
+        }
+      }
       if ((user.user_metadata as any)?.role === "teacher") {
         const [{ data: ownedClasses }, { data: membershipRows }] = await Promise.all([
           supabase
@@ -432,7 +449,7 @@ export function Navigation() {
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                 <button
                   onClick={() => navigate("/parties")}
-                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/committee"]))}
+                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/lobbyists", "/committee"]))}
                 >
                   Organizations
                   <ChevronDown
@@ -459,6 +476,12 @@ export function Navigation() {
                       className={dropdownItemClass(isActivePath(["/caucuses"]))}
                     >
                       Caucuses
+                    </Link>
+                    <Link
+                      to="/lobbyists"
+                      className={dropdownItemClass(isActivePath(["/lobbyists"]))}
+                    >
+                      Lobbyists
                     </Link>
                   </div>
                 )}
@@ -502,6 +525,12 @@ export function Navigation() {
                 </span>
               )}
             </Link>
+            {money.enabled && (
+              <div className="inline-flex items-center gap-1 rounded-md border border-green-200 bg-green-50 px-2.5 py-1.5 text-sm font-semibold text-green-700" title="Money balance">
+                <DollarSign className="h-4 w-4" />
+                {money.balance.toLocaleString()}
+              </div>
+            )}
             {user?.user_metadata?.role === "teacher" && (
               <div className="relative" ref={classMenuRef}>
                 <button

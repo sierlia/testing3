@@ -27,6 +27,7 @@ import {
 } from "../components/PartySelection";
 import { supabase } from "../utils/supabase";
 import { DefaultAvatar } from "../components/DefaultAvatar";
+import { ContributionButton } from "../components/ContributionButton";
 import { formatConstituencyFull, normalizeConstituencyId } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
@@ -871,6 +872,9 @@ export function StudentProfile() {
                   <Mail className="h-4 w-4" />
                   Send letter
                 </Link>
+              )}
+              {!isMe && profile?.user_id && (
+                <ContributionButton recipientType="member" recipientId={profile.user_id} recipientName={displayPersonName(profile.display_name || "Member")} />
               )}
             </div>
           </div>

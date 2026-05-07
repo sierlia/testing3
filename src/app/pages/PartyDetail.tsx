@@ -10,6 +10,7 @@ import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
+import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
@@ -301,6 +302,11 @@ export function PartyDetail() {
         danger: true,
         onConfirm: () => updatePartyMembership(nextParty),
       });
+      return;
+    }
+    const { data: lobbyMembership } = await supabase.from("lobbyist_group_members").select("group_id").eq("user_id", meId).limit(1);
+    if ((lobbyMembership ?? []).length) {
+      toast.error("Lobbyist group members cannot join parties");
       return;
     }
     if (myParty && myParty !== party.name) {
@@ -644,16 +650,19 @@ export function PartyDetail() {
                     {partyRoleOptions()[1]?.label ?? "Leader"}: {memberForRole(partyRoleOptions()[1]?.role as PartyRole)?.display_name ?? leaderFor("chair")?.display_name ?? "N/A"} | {partyRoleOptions()[2]?.label ?? "Whip"}: {memberForRole(partyRoleOptions()[2]?.role as PartyRole)?.display_name ?? leaderFor("whip")?.display_name ?? "N/A"} | {members.length} members
                   </p>
                 </div>
-                {!isTeacher && (
-                  <button
-                    onClick={() => void joinOrSwitch()}
-                    className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90"
-                    style={{ backgroundColor: party.color || "#2563eb" }}
-                  >
-                    {isMember ? <LogOut className="h-4 w-4" /> : myParty ? <Repeat2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                    {isMember ? "Leave" : myParty ? "Switch to party" : "Join party"}
-                  </button>
-                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <ContributionButton recipientType="party" recipientId={party.id} recipientName={displayPartyName(party.name)} />
+                  {!isTeacher && (
+                    <button
+                      onClick={() => void joinOrSwitch()}
+                      className="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+                      style={{ backgroundColor: party.color || "#2563eb" }}
+                    >
+                      {isMember ? <LogOut className="h-4 w-4" /> : myParty ? <Repeat2 className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                      {isMember ? "Leave" : myParty ? "Switch to party" : "Join party"}
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="mt-5 border-t border-gray-200 pt-5">
                 <div className="mb-3 flex items-center justify-between">

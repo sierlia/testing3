@@ -63,6 +63,7 @@ export function CommitteeWorkspace() {
   const [subcommitteeReferralsAvailable, setSubcommitteeReferralsAvailable] = useState(true);
   const [mySubcommitteeIds, setMySubcommitteeIds] = useState<Set<string>>(new Set());
   const [isTeacher, setIsTeacher] = useState(false);
+  const [paidReviewAccess, setPaidReviewAccess] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
   const [seenBillIds, setSeenBillIds] = useState<Set<string>>(() => new Set());
   const [textView, setTextView] = useState<"edited" | "clean" | "original">("edited");
@@ -106,7 +107,7 @@ export function CommitteeWorkspace() {
         }
         if (!cid) return;
 
-        const [{ data: myMembership }, { data: profile }, { data: subRows }] = await Promise.all([
+        const [{ data: myMembership }, { data: profile }, { data: subRows }, { data: paidAccess }] = await Promise.all([
           supabase
           .from("committee_members")
           .select("role")
@@ -115,9 +116,11 @@ export function CommitteeWorkspace() {
             .maybeSingle(),
           supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle(),
           supabase.from("subcommittees").select("id,name").eq("committee_id", committeeId).order("created_at", { ascending: true }),
+          supabase.from("committee_paid_access").select("access_type").eq("committee_id", committeeId).eq("user_id", uid).eq("access_type", "review").maybeSingle(),
         ]);
         setMyCommitteeRole((myMembership as any)?.role ?? null);
         setIsTeacher((profile as any)?.role === "teacher");
+        setPaidReviewAccess(Boolean(paidAccess));
         setSubcommittees((subRows ?? []) as Subcommittee[]);
         const subIds = (subRows ?? []).map((row: any) => row.id);
         const { data: mySubRows } = subIds.length
@@ -254,7 +257,7 @@ export function CommitteeWorkspace() {
     setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
   };
 
-  const canOpenBill = (bill: typeof bills[number]) => !bill.subcommitteeId || mySubcommitteeIds.has(bill.subcommitteeId) || isTeacher;
+  const canOpenBill = (bill: typeof bills[number]) => paidReviewAccess || !bill.subcommitteeId || mySubcommitteeIds.has(bill.subcommitteeId) || isTeacher;
   const canReferSubcommittee = subcommitteeReferralsAvailable && (isTeacher || ["chair", "co_chair", "ranking_member"].includes(String(myCommitteeRole ?? "")));
 
   const updateReferralSubcommittee = async (billId: string, subcommitteeId: string | null) => {
@@ -592,7 +595,7 @@ export function CommitteeWorkspace() {
                           committeeId={committeeId}
                           billId={selected.id}
                           initialHtml={selected.legislativeHtml}
-                          editable={textView === "edited"}
+                          editable={textView === "edited" && !paidReviewAccess}
                           displayMode={textView === "clean" ? "clean" : "tracked"}
                           toolbarControls={textViewControls}
                         />

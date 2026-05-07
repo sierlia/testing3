@@ -11,6 +11,7 @@ import { DefaultAvatar } from "../components/DefaultAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
+import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
 import { getCurrentUser } from "../utils/currentUser";
 
@@ -497,6 +498,11 @@ export function TessCaucusDetail() {
         setMyRole(null);
         setMembers((prev) => prev.filter((m) => m.user_id !== meId));
       } else {
+        const { data: lobbyMembership } = await supabase.from("lobbyist_group_members").select("group_id").eq("user_id", meId).limit(1);
+        if ((lobbyMembership ?? []).length) {
+          toast.error("Lobbyist group members cannot join caucuses");
+          return;
+        }
         const { error } = await supabase.from("caucus_members").insert({ caucus_id: caucusId, user_id: meId, role: "member" });
         if (error) throw error;
         setMyRole("member");
@@ -890,17 +896,20 @@ export function TessCaucusDetail() {
                 • {members.length} members
               </p>
             </div>
-            {!isTeacher && (
-              <button
-                onClick={joinLeave}
-                className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
-                  myRole ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
-                }`}
-              >
-                {myRole ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
-                {myRole ? "Leave" : "Join"}
-              </button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <ContributionButton recipientType="caucus" recipientId={caucus.id} recipientName={caucus.title} />
+              {!isTeacher && (
+                <button
+                  onClick={joinLeave}
+                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm transition-colors ${
+                    myRole ? "bg-red-100 text-red-700 hover:bg-red-200" : "bg-blue-600 text-white hover:bg-blue-700"
+                  }`}
+                >
+                  {myRole ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                  {myRole ? "Leave" : "Join"}
+                </button>
+              )}
+            </div>
           </div>
           <div className="mt-5 pt-5 border-t border-gray-200">
               <div className="flex items-center justify-between mb-3">
