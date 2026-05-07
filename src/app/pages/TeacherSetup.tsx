@@ -55,13 +55,13 @@ const defaultRoleActions: RoleActions = {
   promoteMembers: false,
 };
 
-function Toggle({ checked, onChange, title, description, disabled = false }: { checked: boolean; onChange: (next: boolean) => void; title: string; description?: string; disabled?: boolean }) {
+function Toggle({ checked, onChange, title, description, disabled = false, indent = false }: { checked: boolean; onChange: (next: boolean) => void; title: string; description?: string; disabled?: boolean; indent?: boolean }) {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className={`flex w-full items-start gap-3 rounded-lg p-2 text-left transition-colors ${disabled ? "cursor-not-allowed opacity-50" : "hover:bg-gray-50"}`}
+      className={`flex w-full items-start gap-3 rounded-lg p-2 text-left transition-colors ${indent ? "pl-7" : ""} ${disabled ? "cursor-not-allowed opacity-50" : "hover:bg-gray-50"}`}
       aria-pressed={checked}
     >
       <span
@@ -96,7 +96,7 @@ function SwitchControl({ checked, onChange, disabled = false }: { checked: boole
 function SettingsGroup({ title, children, disabled = false, action }: { title: string; children: ReactNode; disabled?: boolean; action?: ReactNode }) {
   return (
     <section className="space-y-4 border-b border-gray-200 pb-6 last:border-b-0 last:pb-0">
-      <div className="flex items-center gap-2">
+      <div className="flex min-h-6 items-center justify-between gap-3">
         <h3 className="text-xs font-bold uppercase tracking-wide text-gray-500">{title}</h3>
         {action && <div className="shrink-0">{action}</div>}
       </div>
@@ -105,10 +105,10 @@ function SettingsGroup({ title, children, disabled = false, action }: { title: s
   );
 }
 
-function SettingRow({ title, description, control, wide = false }: { title: string; description?: string; control: ReactNode; wide?: boolean }) {
+function SettingRow({ title, description, control, wide = false, indent = false }: { title: string; description?: string; control: ReactNode; wide?: boolean; indent?: boolean }) {
   return (
     <div className={`grid items-center gap-3 ${wide ? "md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "md:grid-cols-[minmax(0,1fr)_240px]"}`}>
-      <div>
+      <div className={indent ? "pl-5" : ""}>
         <div className="text-base font-semibold text-gray-900">{title}</div>
         {description && <div className="text-sm text-gray-600">{description}</div>}
       </div>
@@ -160,7 +160,7 @@ function WordLimitInput({ label, value, max, onChange }: { label: string; value:
         onChange={(event) => onChange(Math.min(max, Math.max(1, Number(event.target.value) || 1)))}
         className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <span className="mt-1 block text-xs text-gray-500">Maximum allowed: {max.toLocaleString()} words</span>
+      <span className="mt-1 block text-xs text-gray-500">max: {max.toLocaleString()} words</span>
     </label>
   );
 }
@@ -876,7 +876,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           id: "all-online" as const,
           name: "Fully Digital Simulation",
           description: "Enable all features - optimal for digital courses or centralizing participation online.",
-          classes: "border-emerald-200 bg-emerald-50 hover:border-emerald-300 hover:bg-emerald-100",
+          classes: "border-emerald-300 bg-white hover:border-emerald-500 hover:bg-emerald-50",
           selectedClasses: "border-emerald-500 bg-emerald-100 ring-2 ring-emerald-200",
           tagClasses: "bg-emerald-600 text-white",
         },
@@ -884,7 +884,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           id: "blended" as const,
           name: "Hybrid Simulation",
           description: "Disable message boards to facilitate in-person discussion.",
-          classes: "border-sky-200 bg-sky-50 hover:border-sky-300 hover:bg-sky-100",
+          classes: "border-sky-300 bg-white hover:border-sky-500 hover:bg-sky-50",
           selectedClasses: "border-sky-500 bg-sky-100 ring-2 ring-sky-200",
           tagClasses: "bg-sky-600 text-white",
         },
@@ -892,7 +892,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           id: "core" as const,
           name: "Essentialist Simulation",
           description: "Disable message boards, profiles, and non-essential tools to optimize for time or complexity constraints.",
-          classes: "border-amber-200 bg-amber-50 hover:border-amber-300 hover:bg-amber-100",
+          classes: "border-amber-300 bg-white hover:border-amber-500 hover:bg-amber-50",
           selectedClasses: "border-amber-500 bg-amber-100 ring-2 ring-amber-200",
           tagClasses: "bg-amber-600 text-white",
         },
@@ -930,8 +930,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <SettingRow
               title="Import from settings configuration code"
               description="Paste a code to apply a saved settings combination."
+              wide
               control={
-                <div className="flex gap-2">
+                <div className="flex w-full max-w-2xl gap-2">
                   <input value={settingsCode} onChange={(event) => setSettingsCode(event.target.value)} className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" placeholder="Paste code" />
                   <button type="button" onClick={applySettingsCode} disabled={!settingsCode.trim()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Apply</button>
                 </div>
@@ -940,8 +941,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <SettingRow
               title="Copy settings configuration code"
               description="Generate a code from the current settings on this page."
+              wide
               control={
-                <div className="flex min-w-0 items-center gap-2 rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5">
+                <div className="flex min-w-0 w-full max-w-2xl items-center gap-2 rounded-md border border-gray-300 bg-gray-50 px-2 py-1.5">
                   <code className="min-w-0 flex-1 truncate text-xs font-semibold text-gray-700">{settingsCodePreview}</code>
                   <button type="button" onClick={copySettingsCode} className="inline-flex items-center gap-2 rounded-md bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-100">
                     <Copy className="h-4 w-4" />
@@ -953,12 +955,15 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <SettingRow
               title="Duplicate settings from another class"
               description="Select another class where you are a teacher."
+              wide
               control={
-                <div className="flex gap-2">
-                  <SettingSelect value={selectedCopyClassId || "none"} onValueChange={(value) => setSelectedCopyClassId(value === "none" ? "" : value)}>
-                    <SelectItem value="none">Select a class</SelectItem>
-                    {teacherClasses.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
-                  </SettingSelect>
+                <div className="flex w-full max-w-2xl gap-2">
+                  <div className="min-w-0 flex-1">
+                    <SettingSelect value={selectedCopyClassId || "none"} onValueChange={(value) => setSelectedCopyClassId(value === "none" ? "" : value)}>
+                      <SelectItem value="none">Select a class</SelectItem>
+                      {teacherClasses.map((item) => <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>)}
+                    </SettingSelect>
+                  </div>
                   <button type="button" onClick={copyClassSettings} disabled={!selectedCopyClassId} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Use</button>
                 </div>
               }
@@ -1018,7 +1023,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-6">
           <DisabledBlock disabled={!settings.enableBills}>
-            <SettingRow title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
+            <SettingRow indent title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
               title="Cosponsorship"
               action={
@@ -1033,16 +1038,16 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               disabled={!settings.enableBills}
             >
               <DisabledBlock disabled={settings.cosponsorshipMode === "never"}>
-                <Toggle checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} disabled={settings.cosponsorshipMode === "never"} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
+                <Toggle indent checked={settings.showCosponsors} onChange={(v) => setSettings({ showCosponsors: v })} disabled={settings.cosponsorshipMode === "never"} title="Show cosponsors" description="Display cosponsors on bill pages and lists." />
               </DisabledBlock>
             </SettingsGroup>
           <SettingsGroup title="Floor" action={<SwitchControl checked={settings.enableFloor} onChange={(v) => setSettings({ enableFloor: v })} disabled={!settings.enableBills} />}>
             <div className="text-sm text-gray-600">Use the floor page for debate queues and final votes.</div>
             <DisabledBlock disabled={!settings.enableFloor}>
-              <Toggle checked={settings.floorResultsBinding} onChange={(v) => setSettings({ floorResultsBinding: v })} title="Floor vote results determine outcome" description="Passed or failed status is applied when floor votes are posted." />
               <SettingRow
                 title="Floor pass threshold"
                 description="Percentage of present members needed to pass."
+                indent
                 control={
                   <div className="flex flex-wrap items-center gap-2">
                     <PercentInput value={settings.floorVoteThresholdPct} onChange={(value) => setSettings({ floorVoteThresholdPct: value, floorVoteThreshold: value >= 67 ? "two-thirds" : "custom" })} />
@@ -1062,6 +1067,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         <div className="space-y-6">
           <DisabledBlock disabled={!settings.enableOrganizations}>
             <SettingRow
+              indent
               title="Organization name and description word limit"
               description="Applies to organization names and about sections."
               control={<WordLimitInput label="" value={settings.organizationDescriptionWordLimit} max={500} onChange={(value) => setSettings({ organizationDescriptionWordLimit: value })} />}
@@ -1069,12 +1075,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </DisabledBlock>
           <SettingsGroup title="Announcement boards" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.announcementBoardsEnabled} onChange={(v) => setSettings({ announcementBoardsEnabled: v })} disabled={!settings.enableOrganizations} />}>
             <DisabledBlock disabled={!settings.announcementBoardsEnabled}>
-              <SettingRow title="Announcement word limit" description="Maximum words allowed in announcements." control={<WordLimitInput label="" value={settings.announcementWordLimit} max={1000} onChange={(value) => setSettings({ announcementWordLimit: value })} />} />
-              <Toggle checked={settings.announcementCommentsEnabled} onChange={(v) => setSettings({ announcementCommentsEnabled: v })} title="Enable comments" description="Members can comment on announcement boards." />
+              <SettingRow indent title="Announcement word limit" description="Maximum words allowed in announcements." control={<WordLimitInput label="" value={settings.announcementWordLimit} max={1000} onChange={(value) => setSettings({ announcementWordLimit: value })} />} />
+              <Toggle indent checked={settings.announcementCommentsEnabled} onChange={(v) => setSettings({ announcementCommentsEnabled: v })} title="Enable comments" description="Members can comment on announcement boards." />
               <DisabledBlock disabled={!settings.announcementCommentsEnabled}>
-                <SettingRow title="Comment word limit" description="Maximum words allowed in announcement comments." control={<WordLimitInput label="" value={settings.commentWordLimit} max={500} onChange={(value) => setSettings({ commentWordLimit: value })} />} />
+                <SettingRow indent title="Comment word limit" description="Maximum words allowed in announcement comments." control={<WordLimitInput label="" value={settings.commentWordLimit} max={500} onChange={(value) => setSettings({ commentWordLimit: value })} />} />
               </DisabledBlock>
-              <Toggle checked={settings.announcementEmotesEnabled} onChange={(v) => setSettings({ announcementEmotesEnabled: v })} title="Enable emotes" description="Members can react to announcements and comments." />
+              <Toggle indent checked={settings.announcementEmotesEnabled} onChange={(v) => setSettings({ announcementEmotesEnabled: v })} title="Enable emotes" description="Members can react to announcements and comments." />
             </DisabledBlock>
           </SettingsGroup>
           <SettingsGroup title="Parties" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.enableParties} onChange={(v) => setSettings({ enableParties: v })} disabled={!settings.enableOrganizations} />}>
@@ -1082,11 +1088,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </SettingsGroup>
           <SettingsGroup title="Committees" disabled={!settings.enableOrganizations} action={<SwitchControl checked={settings.enableCommittees} onChange={(v) => setSettings({ enableCommittees: v })} disabled={!settings.enableOrganizations} />}>
             <DisabledBlock disabled={!settings.enableCommittees}>
-              <SettingRow title="Committee report word limit" description="Maximum words allowed in submitted committee reports." control={<WordLimitInput label="" value={settings.committeeReportWordLimit} max={2000} onChange={(value) => setSettings({ committeeReportWordLimit: value })} />} />
+              <SettingRow indent title="Committee report word limit" description="Maximum words allowed in submitted committee reports." control={<WordLimitInput label="" value={settings.committeeReportWordLimit} max={2000} onChange={(value) => setSettings({ committeeReportWordLimit: value })} />} />
               <SettingRow
                 title="Bill assignment authority"
                 description="Choose who can assign or refer bills to committees."
                 wide
+                indent
                 control={
                   <div
                     className="min-w-0"
@@ -1129,9 +1136,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
-              <Toggle checked={settings.billsVotedAfterCommittee} onChange={(v) => setSettings({ billsVotedAfterCommittee: v, committeeVoteRequired: v })} title="Committee voting" description="Bills are voted on after committee review." />
+              <Toggle indent checked={settings.billsVotedAfterCommittee} onChange={(v) => setSettings({ billsVotedAfterCommittee: v, committeeVoteRequired: v })} title="Committee voting" description="Bills are voted on after committee review." />
               <DisabledBlock disabled={!settings.billsVotedAfterCommittee}>
-                <SettingRow title="Committee vote pass threshold" description="Percentage of votes needed to report a bill." control={<PercentInput value={settings.committeeVotePassThresholdPct} onChange={(value) => setSettings({ committeeVotePassThresholdPct: value })} />} />
+                <SettingRow indent title="Committee vote pass threshold" description="Percentage of votes needed to report a bill." control={<PercentInput value={settings.committeeVotePassThresholdPct} onChange={(value) => setSettings({ committeeVotePassThresholdPct: value })} />} />
               </DisabledBlock>
             </DisabledBlock>
           </SettingsGroup>
@@ -1159,7 +1166,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-6">
           <DisabledBlock disabled={!settings.profilesEnabled}>
-            <SettingRow title="Profile long response word limit" control={<WordLimitInput label="" value={settings.profileLongResponseWordLimit} max={2000} onChange={(value) => setSettings({ profileLongResponseWordLimit: value })} />} />
+            <SettingRow indent title="Profile long response word limit" control={<WordLimitInput label="" value={settings.profileLongResponseWordLimit} max={2000} onChange={(value) => setSettings({ profileLongResponseWordLimit: value })} />} />
           </DisabledBlock>
           <SettingsGroup title="Profile layout editor" disabled={!settings.profilesEnabled}>
             <ProfileLayoutEditor embedded />
@@ -1299,7 +1306,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </div>
 
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center gap-2">
+            <div className="mb-5 flex items-center justify-between gap-3">
               <h2 className="text-xl font-semibold text-gray-900">{activeTabLabel}</h2>
               {tabHeaderAction()}
             </div>
