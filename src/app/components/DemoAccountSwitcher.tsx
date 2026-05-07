@@ -24,8 +24,10 @@ export function DemoAccountSwitcher() {
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const [demoActive, setDemoActive] = useState(() => window.localStorage.getItem("gavel:demoActive") === "1");
   const [launchOverlayVisible, setLaunchOverlayVisible] = useState(() => window.localStorage.getItem("gavel:demoLaunchOverlay") === "1");
+  const [launchOverlayFading, setLaunchOverlayFading] = useState(false);
   const [launchLoading, setLaunchLoading] = useState(() => window.localStorage.getItem("gavel:demoLaunchLoading") === "1");
-  const [launchProgress, setLaunchProgress] = useState(() => window.localStorage.getItem("gavel:demoLaunchLoading") === "1" ? 8 : 100);
+  const [launchProgress, setLaunchProgress] = useState(() => Number(window.localStorage.getItem("gavel:demoLaunchProgress") ?? (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" ? 5 : 100)));
+  const [launchProgressTarget, setLaunchProgressTarget] = useState(() => Number(window.localStorage.getItem("gavel:demoLaunchProgress") ?? (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" ? 5 : 100)));
   const [burst, setBurst] = useState(false);
   const [justAppeared, setJustAppeared] = useState(false);
   const [dragHintMounted, setDragHintMounted] = useState(false);
@@ -35,6 +37,7 @@ export function DemoAccountSwitcher() {
   const dragRef = useRef<{ startX: number; startY: number; baseX: number; baseY: number; moved: boolean } | null>(null);
   const dragHintTimerRef = useRef<number | null>(null);
   const launchCompletionTimerRef = useRef<number | null>(null);
+  const overlayFadeTimerRef = useRef<number | null>(null);
 
   const centerButton = () => {
     const centered = {
@@ -51,6 +54,17 @@ export function DemoAccountSwitcher() {
     dragHintTimerRef.current = null;
     setDragHintVisible(false);
     window.setTimeout(() => setDragHintMounted(false), 300);
+  };
+
+  const fadeLaunchOverlay = () => {
+    if (overlayFadeTimerRef.current) window.clearTimeout(overlayFadeTimerRef.current);
+    setLaunchOverlayFading(true);
+    window.localStorage.removeItem("gavel:demoLaunchOverlay");
+    overlayFadeTimerRef.current = window.setTimeout(() => {
+      setLaunchOverlayVisible(false);
+      setLaunchOverlayFading(false);
+      overlayFadeTimerRef.current = null;
+    }, 220);
   };
 
   const playLaunchEffectsIfNeeded = () => {
@@ -82,6 +96,8 @@ export function DemoAccountSwitcher() {
 
   useEffect(() => {
     const startLaunch = () => {
+      if (launchCompletionTimerRef.current) window.clearTimeout(launchCompletionTimerRef.current);
+      if (overlayFadeTimerRef.current) window.clearTimeout(overlayFadeTimerRef.current);
       setDemoActive(true);
       setOpen(false);
       setBurst(false);
@@ -89,16 +105,22 @@ export function DemoAccountSwitcher() {
       setDragHintMounted(false);
       setDragHintVisible(false);
       setLaunchOverlayVisible(true);
+      setLaunchOverlayFading(false);
       setLaunchLoading(true);
-      setLaunchProgress(8);
+      setLaunchProgress(5);
+      setLaunchProgressTarget(5);
       centerButton();
     };
     const cancelLaunch = () => {
+      if (launchCompletionTimerRef.current) window.clearTimeout(launchCompletionTimerRef.current);
+      if (overlayFadeTimerRef.current) window.clearTimeout(overlayFadeTimerRef.current);
       setDemoActive(false);
       setOpen(false);
       setLaunchOverlayVisible(false);
+      setLaunchOverlayFading(false);
       setLaunchLoading(false);
       setLaunchProgress(100);
+      setLaunchProgressTarget(100);
       setBurst(false);
       setJustAppeared(false);
       setDragHintMounted(false);
@@ -111,12 +133,22 @@ export function DemoAccountSwitcher() {
       setDemoActive(true);
       setOpen(false);
       setLaunchOverlayVisible(window.localStorage.getItem("gavel:demoLaunchOverlay") === "1");
+      setLaunchOverlayFading(false);
+      setLaunchProgressTarget(100);
       setLaunchProgress(100);
       launchCompletionTimerRef.current = window.setTimeout(() => {
         window.localStorage.removeItem("gavel:demoLaunchLoading");
+        window.localStorage.removeItem("gavel:demoLaunchProgress");
         setLaunchLoading(false);
-        playLaunchEffectsIfNeeded();
-      }, 240);
+        launchCompletionTimerRef.current = window.setTimeout(() => {
+          playLaunchEffectsIfNeeded();
+        }, 40);
+      }, 520);
+    };
+    const onLaunchProgress = (event: Event) => {
+      const next = Number((event as CustomEvent<{ progress?: number }>).detail?.progress ?? 0);
+      if (!Number.isFinite(next)) return;
+      setLaunchProgressTarget((current) => Math.max(current, Math.min(96, next)));
     };
     const onDemoOpened = () => {
       setDemoActive(true);
@@ -126,37 +158,31 @@ export function DemoAccountSwitcher() {
       setDemoActive(false);
       setOpen(false);
       setLaunchOverlayVisible(false);
+      setLaunchOverlayFading(false);
       setLaunchLoading(false);
       setLaunchProgress(100);
+      setLaunchProgressTarget(100);
       window.localStorage.removeItem("gavel:demoLaunchOverlay");
       window.localStorage.removeItem("gavel:demoLaunchLoading");
+      window.localStorage.removeItem("gavel:demoLaunchProgress");
     };
     window.addEventListener("gavel:demo-launch-start", startLaunch);
     window.addEventListener("gavel:demo-launch-cancel", cancelLaunch);
+    window.addEventListener("gavel:demo-launch-progress", onLaunchProgress);
     window.addEventListener("gavel:demo-opened", onDemoOpened);
     window.addEventListener("gavel:demo-ended", onDemoEnded);
     window.addEventListener("gavel:dashboard-ready", completeLaunch);
     const openedAt = Number(window.localStorage.getItem("gavel:demoOpenedAt") ?? 0);
     if (Date.now() - openedAt < 2000) onDemoOpened();
-    if (window.localStorage.getItem("gavel:demoLaunchLoading") === "1") {
-      const fallback = window.setTimeout(completeLaunch, 8000);
-      return () => {
-        window.clearTimeout(fallback);
-        window.removeEventListener("gavel:demo-launch-start", startLaunch);
-        window.removeEventListener("gavel:demo-launch-cancel", cancelLaunch);
-        window.removeEventListener("gavel:demo-opened", onDemoOpened);
-        window.removeEventListener("gavel:demo-ended", onDemoEnded);
-        window.removeEventListener("gavel:dashboard-ready", completeLaunch);
-        if (launchCompletionTimerRef.current) window.clearTimeout(launchCompletionTimerRef.current);
-      };
-    }
     return () => {
       window.removeEventListener("gavel:demo-launch-start", startLaunch);
       window.removeEventListener("gavel:demo-launch-cancel", cancelLaunch);
+      window.removeEventListener("gavel:demo-launch-progress", onLaunchProgress);
       window.removeEventListener("gavel:demo-opened", onDemoOpened);
       window.removeEventListener("gavel:demo-ended", onDemoEnded);
       window.removeEventListener("gavel:dashboard-ready", completeLaunch);
       if (launchCompletionTimerRef.current) window.clearTimeout(launchCompletionTimerRef.current);
+      if (overlayFadeTimerRef.current) window.clearTimeout(overlayFadeTimerRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -172,13 +198,13 @@ export function DemoAccountSwitcher() {
     if (!launchLoading) return;
     const timer = window.setInterval(() => {
       setLaunchProgress((value) => {
-        if (value < 70) return Math.min(70, value + 7);
-        if (value < 90) return Math.min(90, value + 2);
-        return Math.min(96, value + 0.5);
+        if (value >= launchProgressTarget) return value;
+        const distance = launchProgressTarget - value;
+        return Math.min(launchProgressTarget, value + Math.max(0.35, distance * 0.12));
       });
-    }, 180);
+    }, 120);
     return () => window.clearInterval(timer);
-  }, [launchLoading]);
+  }, [launchLoading, launchProgressTarget]);
 
   useEffect(() => {
     const onMove = (event: PointerEvent) => {
@@ -193,8 +219,7 @@ export function DemoAccountSwitcher() {
       if (moved) {
         hideDragHint();
         if (launchOverlayVisible && !launchLoading) {
-          setLaunchOverlayVisible(false);
-          window.localStorage.removeItem("gavel:demoLaunchOverlay");
+          fadeLaunchOverlay();
         }
       }
       positionRef.current = next;
@@ -252,7 +277,7 @@ export function DemoAccountSwitcher() {
 
   return (
     <>
-    {launchOverlayVisible && <div className="fixed inset-0 z-[60] bg-gray-950/45 backdrop-blur-[1px]" aria-hidden="true" />}
+    {launchOverlayVisible && <div className={`fixed inset-0 z-[60] bg-gray-50 transition-opacity duration-200 ${launchOverlayFading ? "opacity-0" : "opacity-100"}`} aria-hidden="true" />}
     <div
       ref={rootRef}
       className={`fixed select-none touch-none ${launchOverlayVisible ? "z-[70]" : "z-50"}`}

@@ -15,6 +15,11 @@ function currentRoutePath() {
   return window.location.pathname || "/";
 }
 
+function setDemoLaunchProgress(progress: number) {
+  window.localStorage.setItem("gavel:demoLaunchProgress", String(progress));
+  window.dispatchEvent(new CustomEvent("gavel:demo-launch-progress", { detail: { progress } }));
+}
+
 export async function switchDemoAccount(key: DemoAccountKey, options?: { confetti?: boolean; preserveLocation?: boolean }) {
   const currentPath = currentRoutePath();
   const launchDemo = Boolean(options?.confetti);
@@ -26,6 +31,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     window.localStorage.setItem("gavel:demoCenter", "1");
     window.localStorage.setItem("gavel:demoLaunchOverlay", "1");
     window.localStorage.setItem("gavel:demoLaunchLoading", "1");
+    setDemoLaunchProgress(5);
     window.dispatchEvent(new CustomEvent("gavel:demo-launch-start"));
   }
 
@@ -34,13 +40,16 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     if (error) throw error;
     const credentials = Array.isArray(data) ? data[0] : data;
     if (!credentials?.email || !credentials?.password) throw new Error("Demo account is not configured.");
+    if (launchDemo) setDemoLaunchProgress(25);
 
     await supabase.auth.signOut();
+    if (launchDemo) setDemoLaunchProgress(40);
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: credentials.email,
       password: credentials.password,
     });
     if (signInError) throw signInError;
+    if (launchDemo) setDemoLaunchProgress(65);
 
     const defaultTarget = credentials.role === "teacher"
       ? `/teacher/class/${credentials.class_id}`
@@ -51,6 +60,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
       (credentials.role === "teacher" && currentPath.startsWith("/class/"));
     const target = options?.preserveLocation && !isPublicRoute && !incompatibleRoleRoute ? currentPath : defaultTarget;
     window.location.hash = target;
+    if (launchDemo) setDemoLaunchProgress(80);
     window.dispatchEvent(new CustomEvent("gavel:demo-opened"));
   } catch (error) {
     if (launchDemo) {
@@ -60,6 +70,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
       window.localStorage.removeItem("gavel:demoCenter");
       window.localStorage.removeItem("gavel:demoLaunchOverlay");
       window.localStorage.removeItem("gavel:demoLaunchLoading");
+      window.localStorage.removeItem("gavel:demoLaunchProgress");
       window.dispatchEvent(new CustomEvent("gavel:demo-launch-cancel"));
     }
     throw error;

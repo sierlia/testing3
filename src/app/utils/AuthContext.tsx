@@ -43,6 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.localStorage.removeItem("gavel:demoCenter");
     window.localStorage.removeItem("gavel:demoLaunchOverlay");
     window.localStorage.removeItem("gavel:demoLaunchLoading");
+    window.localStorage.removeItem("gavel:demoLaunchProgress");
     window.dispatchEvent(new CustomEvent("gavel:demo-ended"));
     setUser(null);
   };
