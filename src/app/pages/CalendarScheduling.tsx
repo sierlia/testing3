@@ -31,6 +31,7 @@ type CalendarTask = {
   due_at: string;
   task_type: string;
 };
+type SpeakerSignup = { bill_id: string; user_id: string; side: "for" | "against"; name?: string | null };
 
 function localDateTimeValue(iso?: string | null) {
   if (!iso) return "";
@@ -53,12 +54,17 @@ export function CalendarScheduling() {
   const [viewMode, setViewMode] = useState<"calendar" | "all">("calendar");
   const [teacherListMode, setTeacherListMode] = useState<"uncalendared" | "calendared">("uncalendared");
   const [taskItems, setTaskItems] = useState<CalendarTask[]>([]);
+  const [classId, setClassId] = useState<string | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
+  const [speakerSignups, setSpeakerSignups] = useState<SpeakerSignup[]>([]);
 
   const load = async () => {
     setLoading(true);
     try {
-      const { profile, classId } = await getCurrentProfileClass();
+      const { profile, classId, userId } = await getCurrentProfileClass();
       setRole(profile.role ?? null);
+      setClassId(classId);
+      setMeId(userId);
       const { data: tasks } = await supabase
         .from("class_tasks")
         .select("id,title,task_type,due_at")
@@ -76,6 +82,15 @@ export function CalendarScheduling() {
         );
       } else {
         setStudentItems(await fetchCalendaredBillsForCurrentClass());
+      }
+      try {
+        const { data: signupRows } = await supabase
+          .from("bill_floor_speakers")
+          .select("bill_id,user_id,side,profiles(display_name)")
+          .eq("class_id", classId);
+        setSpeakerSignups((signupRows ?? []).map((row: any) => ({ bill_id: row.bill_id, user_id: row.user_id, side: row.side, name: row.profiles?.display_name ?? null })));
+      } catch {
+        setSpeakerSignups([]);
       }
     } catch (e: any) {
       toast.error(e.message || "Could not load floor calendar");
@@ -171,6 +186,24 @@ export function CalendarScheduling() {
     }
   };
 
+  const signupForSpeech = async (billId: string, side: "for" | "against") => {
+    if (!classId || !meId) return;
+    const existing = speakerSignups.find((row) => row.bill_id === billId && row.user_id === meId);
+    const next = existing?.side === side
+      ? speakerSignups.filter((row) => !(row.bill_id === billId && row.user_id === meId))
+      : [...speakerSignups.filter((row) => !(row.bill_id === billId && row.user_id === meId)), { bill_id: billId, user_id: meId, side }];
+    setSpeakerSignups(next);
+    try {
+      if (existing?.side === side) {
+        await supabase.from("bill_floor_speakers").delete().eq("bill_id", billId).eq("user_id", meId);
+      } else {
+        await supabase.from("bill_floor_speakers").upsert({ class_id: classId, bill_id: billId, user_id: meId, side } as any, { onConflict: "bill_id,user_id" });
+      }
+    } catch {
+      // Table may not exist until migrations are applied; keep the local UI responsive.
+    }
+  };
+
   const publishedCalendar = (
     <div className="rounded-lg border border-gray-200 bg-white shadow-sm">
       <div className="border-b border-gray-200 p-5">
@@ -262,17 +295,37 @@ export function CalendarScheduling() {
               .slice()
               .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime())
               .map((item) => (
-              <Link key={item.id} to={`/bills/${item.bill_id}`} className="block p-4 hover:bg-gray-50">
+              <div key={item.id} className="block p-4 hover:bg-gray-50">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="font-mono text-sm font-semibold text-gray-900">{item.bill.hr_label}</div>
-                    <div className="mt-1 line-clamp-2 text-sm text-gray-700">{item.bill.title}</div>
+                    <Link to={`/bills/${item.bill_id}`} className="font-mono text-sm font-semibold text-gray-900 hover:text-blue-600">{item.bill.hr_label}</Link>
+                    <Link to={`/bills/${item.bill_id}`} className="mt-1 line-clamp-2 text-sm text-gray-700 hover:text-blue-600">{item.bill.title}</Link>
                   </div>
                   <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
                 </div>
                 <div className="mt-2 text-xs font-medium text-gray-500">{new Date(item.scheduled_at).toLocaleString()}</div>
                 {item.status && <div className="mt-1 text-xs capitalize text-gray-500">{item.status.replace("_", " ")}</div>}
-              </Link>
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                  {(["for", "against"] as const).map((side) => {
+                    const count = speakerSignups.filter((row) => row.bill_id === item.bill_id && row.side === side).length;
+                    const selected = speakerSignups.some((row) => row.bill_id === item.bill_id && row.user_id === meId && row.side === side);
+                    return (
+                      <button
+                        key={side}
+                        type="button"
+                        onClick={(event) => {
+                          event.preventDefault();
+                          event.stopPropagation();
+                          void signupForSpeech(item.bill_id, side);
+                        }}
+                        className={`rounded-md border px-2.5 py-1 text-xs font-medium ${selected ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+                      >
+                        Speak {side === "for" ? "for" : "against"} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               ))}
             {tasks.map((task) => (
               <div key={task.id} className="block bg-sky-50 p-4">

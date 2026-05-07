@@ -11,6 +11,7 @@ import { postCommitteeProgress, proposeBillForCommitteeVote } from "../services/
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 import { formatConstituency } from "../utils/constituency";
 import { profilePath } from "../utils/profileRoute";
+import { getCurrentUser } from "../utils/currentUser";
 
 type BillRow = {
   id: string;
@@ -87,8 +88,8 @@ export function CommitteeWorkspace() {
         setLoading(true);
       }
       try {
-        const { data: auth } = await supabase.auth.getUser();
-        const uid = auth.user?.id;
+        const user = await getCurrentUser();
+        const uid = user?.id;
         if (!uid) return;
 
         // Derive the class from the committee so deep-links/reloads still have a working my_class_id().
@@ -100,8 +101,8 @@ export function CommitteeWorkspace() {
         window.localStorage.setItem(committeeNameStorageKey(committeeId), nextCommitteeName);
         setClassId(cid);
         if (cid) {
-          const desiredRole = (auth.user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
-          await supabase.from("profiles").upsert({ user_id: uid, class_id: cid, role: desiredRole, display_name: auth.user?.user_metadata?.name ?? null } as any);
+          const desiredRole = (user?.user_metadata as any)?.role === "teacher" ? "teacher" : "student";
+          await supabase.from("profiles").upsert({ user_id: uid, class_id: cid, role: desiredRole, display_name: user?.user_metadata?.name ?? null } as any);
         }
         if (!cid) return;
 
@@ -323,12 +324,12 @@ export function CommitteeWorkspace() {
     let cancelled = false;
     const setupPresence = async () => {
       try {
-        const { data: auth } = await supabase.auth.getUser();
-        const uid = auth.user?.id;
+        const user = await getCurrentUser();
+        const uid = user?.id;
         if (!uid) return;
 
         const { data: profile } = await supabase.from("profiles").select("display_name,avatar_url,role").eq("user_id", uid).maybeSingle();
-        const baseName = String((profile as any)?.display_name ?? auth.user?.user_metadata?.name ?? "").trim() || "Member";
+        const baseName = String((profile as any)?.display_name ?? user?.user_metadata?.name ?? "").trim() || "Member";
         const normalizedName = (profile as any)?.role === "teacher" ? `${baseName} (Teacher)` : baseName;
 
         let color = "#2563eb";

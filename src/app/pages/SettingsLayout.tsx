@@ -10,7 +10,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
   const path = location.pathname;
   const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const tabs = [
-    { label: "Notifications", to: "/notifications" },
+    { label: "Notifications", to: "/settings" },
     ...(!isTeacher ? [{ label: "Classes", to: "/settings/classes" }] : []),
   ];
 
@@ -18,7 +18,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
 
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <BackButton className="mb-4" />
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
@@ -28,7 +28,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
         <div className="border-b border-gray-200 mb-6">
           <nav className="-mb-px flex gap-6">
             {tabs.map((tab) => {
-              const active = path === tab.to || (tab.to === "/notifications" && path === "/settings/notifications");
+              const active = path === tab.to || (tab.to === "/settings" && path === "/settings/notifications");
               return (
                 <Link
                   key={tab.to}

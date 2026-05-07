@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
+import { getCurrentUser } from "../utils/currentUser";
 
 type TabId = "dashboard" | "review" | "vote" | "election" | "letters";
 
@@ -107,8 +108,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     setCountData(readCachedCountData(committeeId));
     setAccess(membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, loaded: false });
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth.user?.id;
+      const uid = (await getCurrentUser())?.id;
       const [{ data: announcements }, { data: refs }, { data: membership }, { data: profile }] = await Promise.all([
         supabase
           .from("committee_announcements")

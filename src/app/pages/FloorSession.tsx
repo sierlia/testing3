@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Check, Minus, Search, Trophy, Vote, X } from "lucide-react";
+import { Check, ExternalLink, Minus, MonitorUp, Search, Trophy, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../services/bills";
@@ -10,6 +10,7 @@ import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type VoteChoice = "yea" | "nay" | "present";
 type FloorMode = "election" | "bills";
+type PresentationMode = "agenda" | "debate" | "speaker_for" | "speaker_against" | "vote" | "results" | "recess";
 type CalendarItem = Awaited<ReturnType<typeof fetchCalendaredBillsForCurrentClass>>[number];
 type ManualCounts = { yea: number; nay: number; present: number; not_voted: number };
 type SessionRow = {
@@ -64,6 +65,8 @@ export function FloorSession() {
   const [manualCounts, setManualCounts] = useState<ManualCounts>({ yea: 0, nay: 0, present: 0, not_voted: 0 });
   const [resultMode, setResultMode] = useState<"counts" | "decision">("counts");
   const [manualDecision, setManualDecision] = useState<"passed" | "failed">("passed");
+  const [presentationMode, setPresentationMode] = useState<PresentationMode>("agenda");
+  const [presentationNote, setPresentationNote] = useState("Floor is coming to order.");
 
   const load = async () => {
     setLoading(true);
@@ -460,6 +463,24 @@ export function FloorSession() {
     }
   };
 
+  const publishPresentation = (mode = presentationMode, note = presentationNote) => {
+    const payload = {
+      mode,
+      note: note.trim() || "Floor is in session.",
+      billId: activeItem?.bill_id ?? null,
+      updatedAt: new Date().toISOString(),
+    };
+    window.localStorage.setItem("gavel:floorPresentation", JSON.stringify(payload));
+    window.dispatchEvent(new CustomEvent("gavel:floor-presentation"));
+    toast.success("Presentation screen updated");
+  };
+
+  const quickPresentation = (mode: PresentationMode, note: string) => {
+    setPresentationMode(mode);
+    setPresentationNote(note);
+    publishPresentation(mode, note);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -587,6 +608,41 @@ export function FloorSession() {
         ) : activeItem ? (
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
             <div className="space-y-6">
+              {role === "teacher" && (
+                <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+                  <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <MonitorUp className="h-5 w-5 text-blue-600" />
+                      <h2 className="text-lg font-semibold text-gray-900">Screen Share Display</h2>
+                    </div>
+                    <a href="#/floor/presentation" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <ExternalLink className="h-4 w-4" />
+                      Open display
+                    </a>
+                  </div>
+                  <div className="grid gap-3 lg:grid-cols-[12rem_minmax(0,1fr)_auto]">
+                    <select value={presentationMode} onChange={(event) => setPresentationMode(event.target.value as PresentationMode)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
+                      <option value="agenda">Agenda</option>
+                      <option value="debate">Debate</option>
+                      <option value="speaker_for">Speaker in favor</option>
+                      <option value="speaker_against">Speaker in opposition</option>
+                      <option value="vote">Vote</option>
+                      <option value="results">Results</option>
+                      <option value="recess">Recess</option>
+                    </select>
+                    <input value={presentationNote} onChange={(event) => setPresentationNote(event.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="What should the shared screen show?" />
+                    <button type="button" onClick={() => publishPresentation()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">Update</button>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button type="button" onClick={() => quickPresentation("debate", "Floor debate is open")} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Debate</button>
+                    <button type="button" onClick={() => quickPresentation("speaker_for", "Speaker in favor")} className="rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-sm text-green-700 hover:bg-green-100">For speaker</button>
+                    <button type="button" onClick={() => quickPresentation("speaker_against", "Speaker in opposition")} className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-700 hover:bg-red-100">Against speaker</button>
+                    <button type="button" onClick={() => quickPresentation("vote", "Vote now")} className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100">Vote</button>
+                    <button type="button" onClick={() => quickPresentation("results", "Results posted")} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Results</button>
+                    <button type="button" onClick={() => quickPresentation("recess", "The House stands in recess")} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Recess</button>
+                  </div>
+                </div>
+              )}
               <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>

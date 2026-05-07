@@ -25,6 +25,7 @@ import { TessCaucuses } from "./pages/TessCaucuses";
 import { CaucusDetail } from "./pages/CaucusDetail";
 import { TessCaucusDetail } from "./pages/TessCaucusDetail";
 import { FloorSession } from "./pages/FloorSession";
+import { FloorPresentationScreen } from "./pages/FloorPresentationScreen";
 import { StudentProfile } from "./pages/StudentProfile";
 import { EditProfile } from "./pages/EditProfile";
 import { Resources } from "./pages/Resources";
@@ -240,6 +241,10 @@ export const router = createHashRouter([
     Component: FloorSession,
   },
   {
+    path: "/floor/presentation",
+    Component: FloorPresentationScreen,
+  },
+  {
     path: "/calendar",
     Component: CalendarScheduling,
   },
@@ -281,6 +286,10 @@ export const router = createHashRouter([
   },
   {
     path: "/settings/notifications",
+    Component: SettingsNotifications,
+  },
+  {
+    path: "/settings",
     Component: SettingsNotifications,
   },
   {

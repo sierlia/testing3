@@ -26,6 +26,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
 import { supabase } from "../utils/supabase";
 import { YjsSupabaseProvider } from "../utils/yjsSupabaseProvider";
+import { getCurrentUser } from "../utils/currentUser";
 
 function colorFromId(id: string) {
   const colors = ["#2563eb", "#7c3aed", "#16a34a", "#dc2626", "#0ea5e9", "#ea580c"];
@@ -402,13 +403,22 @@ function createEditAttributionExtension({
             for (const deletion of [...deletions].sort((a, b) => b.at - a.at)) {
               const from = Math.max(0, Math.min(deletion.at, tr.doc.content.size));
               const matchingInsert = ranges.find((range) => range.from === from);
+              const insertedSize = matchingInsert ? Math.max(0, matchingInsert.to - matchingInsert.from) : 0;
               const insertAt = deletion.direction === "backward" && matchingInsert ? Math.min(matchingInsert.to, tr.doc.content.size) : from;
               tr.replaceRange(insertAt, insertAt, deletion.slice);
               const to = insertAt + deletion.slice.size;
               tr.removeMark(insertAt, to, editMarkType);
               tr.addMark(insertAt, to, deleteMark);
               if (deletions.length === 1) {
-                tr.setSelection(TextSelection.create(tr.doc, deletion.direction === "backward" && matchingInsert ? from : to));
+                const caret =
+                  matchingInsert && deletion.direction === "backward"
+                    ? from + insertedSize
+                    : matchingInsert
+                      ? to + insertedSize
+                      : deletion.direction === "backward"
+                        ? from
+                        : to;
+                tr.setSelection(TextSelection.create(tr.doc, Math.min(caret, tr.doc.content.size)));
               }
             }
 
@@ -546,11 +556,11 @@ export function CollaborativeBillEditor({
       setReady(false);
       setCollabStatus("connecting");
 
-      const { data: auth } = await supabase.auth.getUser();
-      const uid = auth.user?.id;
+      const user = await getCurrentUser();
+      const uid = user?.id;
       if (!uid) return;
       const { data: p } = await supabase.from("profiles").select("display_name,role").eq("user_id", uid).maybeSingle();
-      const name = (p as any)?.display_name ?? auth.user?.user_metadata?.name ?? "Member";
+      const name = (p as any)?.display_name ?? user?.user_metadata?.name ?? "Member";
       // Keep authorName in highlights consistent: prefer a concrete non-empty name.
       const baseName = String(name || "").trim() || "Member";
       const normalizedName = (p as any)?.role === "teacher" ? `${baseName} (Teacher)` : baseName;
@@ -653,9 +663,11 @@ export function CollaborativeBillEditor({
               return false;
             },
           },
-          handleKeyDown: (_view, event) => {
-            if (event.key === "Backspace") deleteDirectionRef.current = "backward";
-            if (event.key === "Delete") deleteDirectionRef.current = "forward";
+          handleKeyDown: (view, event) => {
+            if (event.key === "Backspace" || event.key === "Delete") {
+              selectionDirectionRef.current = domSelectionDirection() ?? selectionDirectionRef.current;
+              deleteDirectionRef.current = view.state.selection.empty ? (event.key === "Backspace" ? "backward" : "forward") : null;
+            }
             window.setTimeout(() => {
               deleteDirectionRef.current = null;
             }, 0);
@@ -706,9 +718,11 @@ export function CollaborativeBillEditor({
                 return false;
               },
             },
-            handleKeyDown: (_view, event) => {
-              if (event.key === "Backspace") deleteDirectionRef.current = "backward";
-              if (event.key === "Delete") deleteDirectionRef.current = "forward";
+            handleKeyDown: (view, event) => {
+              if (event.key === "Backspace" || event.key === "Delete") {
+                selectionDirectionRef.current = domSelectionDirection() ?? selectionDirectionRef.current;
+                deleteDirectionRef.current = view.state.selection.empty ? (event.key === "Backspace" ? "backward" : "forward") : null;
+              }
               window.setTimeout(() => {
                 deleteDirectionRef.current = null;
               }, 0);

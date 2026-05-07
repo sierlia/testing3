@@ -1,9 +1,9 @@
 import { supabase } from '../utils/supabase';
 import { BillRecord } from '../types/domain';
+import { getCurrentUser } from '../utils/currentUser';
 
 export async function fetchBillsForCurrentClass() {
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user?.id;
+  const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');
 
   const { data: profile, error: profileError } = await supabase
@@ -69,8 +69,7 @@ export async function createBillForCurrentClass(input: {
   supportingText?: string | null;
   status?: string;
 }) {
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user?.id;
+  const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');
 
   const { data: p, error: pErr } = await supabase.from('profiles').select('class_id').eq('user_id', me).maybeSingle();
@@ -95,8 +94,7 @@ export async function createBillForCurrentClass(input: {
 }
 
 export async function fetchMyBillsForCurrentClass() {
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user?.id;
+  const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');
 
   const { data: profile, error: profileError } = await supabase
@@ -119,8 +117,7 @@ export async function fetchMyBillsForCurrentClass() {
 }
 
 export async function fetchMyCosponsoredBillsForCurrentClass() {
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user?.id;
+  const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');
 
   const { data: profile, error: profileError } = await supabase
@@ -156,8 +153,7 @@ export async function updateBillDraftForCurrentClass(
     status?: 'draft' | 'submitted';
   },
 ) {
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user?.id;
+  const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');
 
   const { data, error } = await supabase
@@ -178,8 +174,7 @@ export async function updateBillDraftForCurrentClass(
 }
 
 export async function fetchBillDetail(billId: string) {
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user?.id;
+  const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');
 
   const { data: profile, error: profileError } = await supabase
@@ -291,8 +286,7 @@ export async function fetchBillDetail(billId: string) {
 }
 
 export async function toggleCosponsor(billId: string, shouldCosponsor: boolean) {
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user?.id;
+  const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');
 
   if (shouldCosponsor) {
@@ -307,8 +301,7 @@ export async function toggleCosponsor(billId: string, shouldCosponsor: boolean) 
 }
 
 export async function getCurrentProfileClass() {
-  const { data: auth } = await supabase.auth.getUser();
-  const me = auth.user?.id;
+  const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');
   const { data: profile, error } = await supabase
     .from('profiles')

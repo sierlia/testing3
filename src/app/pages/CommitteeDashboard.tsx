@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { CollapsibleText } from "../components/CollapsibleText";
 import { supabase } from "../utils/supabase";
-import { GraduationCap, LogOut, MoreHorizontal, Plus, Users, Send, Pencil, Save, X, UserPlus, Trash2, UserX } from "lucide-react";
+import { GraduationCap, LogOut, MoreHorizontal, Users, Send, Pencil, Save, X, UserPlus, Trash2, UserX } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -1023,19 +1023,34 @@ export function CommitteeDashboard() {
               <div className="mb-3 flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg font-semibold text-gray-900">About</h2>
-                  {subcommittees.length ? (
-                    <div className="mt-1 max-w-xl text-xs text-gray-500 sm:hidden">{subcommittees.map((item) => item.name).join(", ")}</div>
-                  ) : null}
                 </div>
-                <div className="flex items-start gap-3">
-                  {subcommittees.length ? (
-                    <div className="hidden max-w-sm text-right text-xs leading-5 text-gray-500 sm:block">{subcommittees.map((item) => item.name).join(", ")}</div>
-                  ) : null}
+                <div className="flex max-w-md flex-1 items-start justify-end gap-2">
                   {(isLeader || isTeacher) && !editingAbout && (
-                    <button onClick={() => setEditingAbout(true)} className="text-blue-600 hover:text-blue-700 transition-colors">
+                    <button onClick={() => setEditingAbout(true)} className="mt-1 text-blue-600 hover:text-blue-700 transition-colors">
                       <Pencil className="w-4 h-4" />
                     </button>
                   )}
+                  <div className="min-w-0 flex-1 text-right">
+                    {subcommittees.length ? (
+                      <div className="mb-2 text-xs leading-5 text-gray-500">{subcommittees.map((item) => item.name).join(", ")}</div>
+                    ) : null}
+                    {(isLeader || isTeacher) && (
+                      <div className="ml-auto flex max-w-xs gap-1.5">
+                        <input
+                          value={newSubcommitteeName}
+                          onChange={(event) => setNewSubcommitteeName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") void addSubcommittee();
+                          }}
+                          placeholder="Subcommittee"
+                          className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button type="button" onClick={() => void addSubcommittee()} disabled={!newSubcommitteeName.trim()} className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                          Add
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               {editingAbout ? (
@@ -1060,23 +1075,6 @@ export function CommitteeDashboard() {
                 </div>
               ) : (
                 <p className="text-gray-700 whitespace-pre-line">{committee.description || "No description yet."}</p>
-              )}
-              {(isLeader || isTeacher) && (
-                <div className="mt-4 flex gap-2 border-t border-gray-100 pt-4">
-                  <input
-                    value={newSubcommitteeName}
-                    onChange={(event) => setNewSubcommitteeName(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") void addSubcommittee();
-                    }}
-                    placeholder="Subcommittee name"
-                    className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button type="button" onClick={() => void addSubcommittee()} disabled={!newSubcommitteeName.trim()} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                    <Plus className="h-4 w-4" />
-                    Add
-                  </button>
-                </div>
               )}
               {(isLeader || isTeacher) && subcommittees.length ? (
                 <div className="mt-2 flex flex-wrap gap-1">
@@ -1219,7 +1217,7 @@ export function CommitteeDashboard() {
 
           <div className="self-start bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <SubcommitteeRolesPanel committeeId={committeeId} compact />
-            <div className="mt-6">
+            <div className={subcommittees.length ? "mt-6" : ""}>
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Members ({committeeCapacity > 0 ? `${members.length}/${committeeCapacity}` : members.length})</h2>

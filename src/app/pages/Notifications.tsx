@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
-import { Bell, ChevronLeft, MessageSquare, Settings, ThumbsUp, Trash2 } from "lucide-react";
+import { Link } from "react-router";
+import { Bell, MessageSquare, Settings, ThumbsUp, Trash2 } from "lucide-react";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { supabase } from "../utils/supabase";
 import { useAuth } from "../utils/AuthContext";
 
@@ -16,7 +17,6 @@ type NotificationItem = {
 };
 
 export function Notifications() {
-  const navigate = useNavigate();
   const { user } = useAuth();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -67,16 +67,12 @@ export function Notifications() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-        <button type="button" onClick={() => navigate(-1)} className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-gray-600 hover:text-gray-900">
-          <ChevronLeft className="h-4 w-4" />
-          Back
-        </button>
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <BackButton className="mb-5" />
 
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">Notifications</h1>
-            <p className="mt-1 text-gray-600">Comments, reactions, and updates from your simulation.</p>
           </div>
           <div className="flex items-center gap-2">
             {items.some((item) => !item.read_at) && (
@@ -84,7 +80,7 @@ export function Notifications() {
                 Mark all read
               </button>
             )}
-            <Link to="/settings/notifications" className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+            <Link to="/settings" className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
               <Settings className="h-4 w-4" />
               Settings
             </Link>

@@ -30,7 +30,8 @@ import { formatConstituencyFull, normalizeConstituencyId } from "../utils/consti
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
 import { displayPersonName, nameInputPlaceholder } from "../utils/displayName";
-import { userIdFromMemberCode } from "../utils/profileRoute";
+import { memberCodeFromUserId, uuidPattern } from "../utils/profileRoute";
+import { getCurrentUser } from "../utils/currentUser";
 
 type EditingSection = string | null;
 
@@ -124,11 +125,21 @@ export function StudentProfile() {
 
   useEffect(() => {
     (async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const currentUserId = auth.user?.id ?? null;
+      const currentUser = await getCurrentUser();
+      const currentUserId = currentUser?.id ?? null;
       setAuthUserId(currentUserId);
 
-      const uid = id === "me" || !id ? currentUserId : userIdFromMemberCode(id);
+      let uid = id === "me" || !id ? currentUserId : id;
+      if (uid && !uuidPattern.test(uid)) {
+        const { data: currentProfile } = currentUserId
+          ? await supabase.from("profiles").select("class_id").eq("user_id", currentUserId).maybeSingle()
+          : ({ data: null } as any);
+        const classId = (currentProfile as any)?.class_id;
+        const { data: candidates } = classId
+          ? await supabase.from("profiles").select("user_id").eq("class_id", classId)
+          : await supabase.from("profiles").select("user_id");
+        uid = ((candidates ?? []) as any[]).find((candidate) => memberCodeFromUserId(candidate.user_id) === id)?.user_id ?? id;
+      }
       if (!uid) return;
 
       const { data: p } = await supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle();
