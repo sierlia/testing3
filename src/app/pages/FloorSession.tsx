@@ -10,7 +10,7 @@ import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type VoteChoice = "yea" | "nay" | "present";
 type FloorMode = "election" | "bills";
-type PresentationMode = "agenda" | "debate" | "speaker_for" | "speaker_against" | "vote" | "results" | "recess";
+type PresentationMode = "agenda" | "debate" | "speaker_for" | "speaker_against" | "vote" | "previous_question" | "results" | "recess";
 type CalendarItem = Awaited<ReturnType<typeof fetchCalendaredBillsForCurrentClass>>[number];
 type ManualCounts = { yea: number; nay: number; present: number; not_voted: number };
 type SessionRow = {
@@ -27,6 +27,8 @@ type VoteRow = { session_id: string; bill_id: string; user_id: string; vote: Vot
 type SpeakerCandidate = { id: string; name: string; party?: string | null; constituency?: string | null };
 type SpeakerVoteRow = { class_id: string; voter_user_id: string; candidate_user_id: string };
 type SpeakerOptOutRow = { class_id: string; user_id: string };
+type FloorSpeakerRow = { bill_id: string; user_id: string; side: "for" | "against"; status: "pending" | "approved" | "rejected"; speaker_role: "speaker" | "opposition_leader"; name: string; party?: string | null; constituency?: string | null };
+type PreviousQuestionVoteRow = { bill_id: string; user_id: string; vote: "yea" | "nay" };
 
 function partyAbbr(party: string | null | undefined) {
   const normalized = String(party ?? "").toLowerCase();
@@ -67,6 +69,8 @@ export function FloorSession() {
   const [manualDecision, setManualDecision] = useState<"passed" | "failed">("passed");
   const [presentationMode, setPresentationMode] = useState<PresentationMode>("agenda");
   const [presentationNote, setPresentationNote] = useState("Floor is coming to order.");
+  const [floorSpeakers, setFloorSpeakers] = useState<FloorSpeakerRow[]>([]);
+  const [previousQuestionVotes, setPreviousQuestionVotes] = useState<PreviousQuestionVoteRow[]>([]);
 
   const load = async () => {
     setLoading(true);
@@ -75,7 +79,7 @@ export function FloorSession() {
       setRole(current.profile.role ?? null);
       setMeId(current.userId);
       setClassId(current.classId);
-      const [calendarRows, sessionRows, voteRows, directory, classRow, speakerVoteRows, speakerOptOutRows] = await Promise.all([
+      const [calendarRows, sessionRows, voteRows, directory, classRow, speakerVoteRows, speakerOptOutRows, floorSpeakerRows, previousQuestionRows] = await Promise.all([
         fetchCalendaredBillsForCurrentClass(),
         supabase.from("bill_floor_sessions").select("id,bill_id,status,opened_at,closed_at,manual_counts,posted_result,results_posted_at").eq("class_id", current.classId),
         supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", current.classId),
@@ -83,6 +87,8 @@ export function FloorSession() {
         supabase.from("classes").select("settings").eq("id", current.classId).maybeSingle(),
         supabase.from("class_speaker_votes").select("class_id,voter_user_id,candidate_user_id").eq("class_id", current.classId),
         supabase.from("class_speaker_opt_outs").select("class_id,user_id").eq("class_id", current.classId),
+        supabase.from("bill_floor_speakers").select("bill_id,user_id,side,status,speaker_role,profiles(display_name,party,constituency_name)").eq("class_id", current.classId),
+        supabase.from("bill_previous_question_votes").select("bill_id,user_id,vote").eq("class_id", current.classId),
       ]);
       if (sessionRows.error) throw sessionRows.error;
       if (voteRows.error) throw voteRows.error;
@@ -96,6 +102,8 @@ export function FloorSession() {
       setStudentCount(students.length);
       setClassSettings((classRow.data as any)?.settings ?? {});
       setSpeakerCandidates(students.map((student) => ({ id: student.user_id, name: student.display_name ?? "Student", party: student.party, constituency: student.constituency_name })));
+      setFloorSpeakers(((floorSpeakerRows.data ?? []) as any[]).map((row) => ({ bill_id: row.bill_id, user_id: row.user_id, side: row.side, status: row.status ?? "approved", speaker_role: row.speaker_role ?? "speaker", name: row.profiles?.display_name ?? "Member", party: row.profiles?.party, constituency: row.profiles?.constituency_name })));
+      setPreviousQuestionVotes((previousQuestionRows.data ?? []) as any);
       const nextSpeakerVotes = (speakerVoteRows.data ?? []) as any[];
       setSpeakerVotes(nextSpeakerVotes);
       setSpeakerVote(nextSpeakerVotes.find((row) => row.voter_user_id === current.userId)?.candidate_user_id ?? null);
@@ -218,6 +226,16 @@ export function FloorSession() {
   const displayedNotVoted = activeSession?.manual_counts?.not_voted ?? Math.max(0, studentCount - counts.yea - counts.nay - counts.present);
   const totalVoted = counts.yea + counts.nay + counts.present;
   const displayedEligible = Math.max(studentCount, totalVoted + displayedNotVoted);
+  const activeFloorSpeakers = activeItem ? floorSpeakers.filter((row) => row.bill_id === activeItem.bill_id && row.status === "approved") : [];
+  const floorSpeakersFor = activeFloorSpeakers.filter((row) => row.side === "for");
+  const floorSpeakersAgainst = activeFloorSpeakers.filter((row) => row.side === "against");
+  const pendingFloorSpeakers = activeItem ? floorSpeakers.filter((row) => row.bill_id === activeItem.bill_id && row.status === "pending") : [];
+  const previousQuestionForBill = activeItem ? previousQuestionVotes.filter((row) => row.bill_id === activeItem.bill_id) : [];
+  const myPreviousQuestionVote = meId ? previousQuestionForBill.find((row) => row.user_id === meId)?.vote ?? null : null;
+  const previousQuestionCounts = {
+    yea: previousQuestionForBill.filter((row) => row.vote === "yea").length,
+    nay: previousQuestionForBill.filter((row) => row.vote === "nay").length,
+  };
   const speakerParties = useMemo(
     () => [...new Set(speakerCandidates.map((candidate) => candidate.party || "No party"))].sort((a, b) => a.localeCompare(b)),
     [speakerCandidates],
@@ -481,6 +499,45 @@ export function FloorSession() {
     publishPresentation(mode, note);
   };
 
+  const speakerDisplayName = (speaker: FloorSpeakerRow) => `${speaker.name} (Rep.-${partyAbbr(speaker.party)}-${formatConstituency(speaker.constituency) || "N/A"})`;
+
+  const publishSpeaker = (speaker: FloorSpeakerRow) => {
+    const mode = speaker.side === "for" ? "speaker_for" : "speaker_against";
+    quickPresentation(mode, speakerDisplayName(speaker));
+  };
+
+  const approveSpeaker = async (speaker: FloorSpeakerRow, status: "approved" | "rejected") => {
+    try {
+      const { error } = await supabase.from("bill_floor_speakers").update({ status } as any).eq("bill_id", speaker.bill_id).eq("user_id", speaker.user_id);
+      if (error) throw error;
+      setFloorSpeakers((prev) => prev.map((row) => row.bill_id === speaker.bill_id && row.user_id === speaker.user_id ? { ...row, status } : row));
+    } catch (e: any) {
+      toast.error(e.message || "Could not update speaker");
+    }
+  };
+
+  const makeOppositionLeader = async (speaker: FloorSpeakerRow) => {
+    try {
+      await supabase.from("bill_floor_speakers").update({ speaker_role: "speaker" } as any).eq("bill_id", speaker.bill_id).eq("side", "against");
+      const { error } = await supabase.from("bill_floor_speakers").update({ speaker_role: "opposition_leader", status: "approved" } as any).eq("bill_id", speaker.bill_id).eq("user_id", speaker.user_id);
+      if (error) throw error;
+      setFloorSpeakers((prev) => prev.map((row) => row.bill_id === speaker.bill_id ? { ...row, speaker_role: row.user_id === speaker.user_id ? "opposition_leader" : "speaker", status: row.user_id === speaker.user_id ? "approved" : row.status } : row));
+    } catch (e: any) {
+      toast.error(e.message || "Could not set opposition leader");
+    }
+  };
+
+  const castPreviousQuestionVote = async (vote: "yea" | "nay") => {
+    if (!activeItem || !classId || !meId || role === "teacher") return;
+    try {
+      const { error } = await supabase.from("bill_previous_question_votes").upsert({ class_id: classId, bill_id: activeItem.bill_id, user_id: meId, vote, updated_at: new Date().toISOString() } as any, { onConflict: "bill_id,user_id" });
+      if (error) throw error;
+      setPreviousQuestionVotes((prev) => [...prev.filter((row) => !(row.bill_id === activeItem.bill_id && row.user_id === meId)), { bill_id: activeItem.bill_id, user_id: meId, vote }]);
+    } catch (e: any) {
+      toast.error(e.message || "Could not record vote");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -627,6 +684,7 @@ export function FloorSession() {
                       <option value="speaker_for">Speaker in favor</option>
                       <option value="speaker_against">Speaker in opposition</option>
                       <option value="vote">Vote</option>
+                      <option value="previous_question">Previous question</option>
                       <option value="results">Results</option>
                       <option value="recess">Recess</option>
                     </select>
@@ -637,10 +695,43 @@ export function FloorSession() {
                     <button type="button" onClick={() => quickPresentation("debate", "Floor debate is open")} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Debate</button>
                     <button type="button" onClick={() => quickPresentation("speaker_for", "Speaker in favor")} className="rounded-md border border-green-200 bg-green-50 px-3 py-1.5 text-sm text-green-700 hover:bg-green-100">For speaker</button>
                     <button type="button" onClick={() => quickPresentation("speaker_against", "Speaker in opposition")} className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-sm text-red-700 hover:bg-red-100">Against speaker</button>
-                    <button type="button" onClick={() => quickPresentation("vote", "Vote now")} className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100">Vote</button>
+                    <button type="button" onClick={() => quickPresentation("vote", "Vote now")} className="rounded-md border border-blue-200 bg-blue-50 px-3 py-1.5 text-sm text-blue-700 hover:bg-blue-100">Vote live count</button>
+                    <button type="button" onClick={() => quickPresentation("previous_question", "Motion for the previous question")} className="rounded-md border border-purple-200 bg-purple-50 px-3 py-1.5 text-sm text-purple-700 hover:bg-purple-100">Previous question</button>
                     <button type="button" onClick={() => quickPresentation("results", "Results posted")} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Results</button>
+                    <button type="button" onClick={() => quickPresentation("recess", "Debate is closed")} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Close</button>
                     <button type="button" onClick={() => quickPresentation("recess", "The House stands in recess")} className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Recess</button>
                   </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-md border border-green-200 bg-green-50 p-3">
+                      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-green-700">For speaker</div>
+                      {floorSpeakersFor.length ? floorSpeakersFor.map((speaker) => (
+                        <button key={speaker.user_id} type="button" onClick={() => publishSpeaker(speaker)} className="block w-full rounded px-2 py-1.5 text-left text-sm text-green-900 hover:bg-green-100">{speakerDisplayName(speaker)}</button>
+                      )) : <div className="text-sm text-green-700">No approved speakers</div>}
+                    </div>
+                    <div className="rounded-md border border-red-200 bg-red-50 p-3">
+                      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-red-700">Against speaker</div>
+                      {floorSpeakersAgainst.length ? floorSpeakersAgainst.map((speaker) => (
+                        <div key={speaker.user_id} className="flex items-center gap-2">
+                          <button type="button" onClick={() => publishSpeaker(speaker)} className="min-w-0 flex-1 rounded px-2 py-1.5 text-left text-sm text-red-900 hover:bg-red-100">{speaker.speaker_role === "opposition_leader" ? "Opposition leader: " : ""}{speakerDisplayName(speaker)}</button>
+                          <button type="button" onClick={() => void makeOppositionLeader(speaker)} className="rounded px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100">Leader</button>
+                        </div>
+                      )) : <div className="text-sm text-red-700">No approved speakers</div>}
+                    </div>
+                  </div>
+                  {pendingFloorSpeakers.length > 0 && (
+                    <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+                      <div className="mb-2 text-xs font-bold uppercase tracking-wide text-amber-700">Speaker requests</div>
+                      {pendingFloorSpeakers.map((speaker) => (
+                        <div key={speaker.user_id} className="flex items-center justify-between gap-3 rounded px-2 py-1.5 text-sm text-amber-900">
+                          <span>{speaker.name} - {speaker.side === "for" ? "in favor" : "in opposition"}</span>
+                          <span className="flex gap-2">
+                            <button type="button" onClick={() => void approveSpeaker(speaker, "approved")} className="rounded bg-white px-2 py-1 text-xs font-medium text-green-700">Approve</button>
+                            <button type="button" onClick={() => void approveSpeaker(speaker, "rejected")} className="rounded bg-white px-2 py-1 text-xs font-medium text-red-700">Reject</button>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -731,6 +822,35 @@ export function FloorSession() {
                       <div className="h-3 rounded-full bg-blue-600" style={{ width: `${displayedEligible ? (totalVoted / displayedEligible) * 100 : 0}%` }} />
                     </div>
                     <div className="mt-2 text-right text-xs text-gray-500">{totalVoted} / {displayedEligible} votes cast</div>
+                  </div>
+                </div>
+                <div className="mb-5 rounded-lg border border-purple-200 bg-white p-5 shadow-sm">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-gray-900">Motion for the Previous Question</h2>
+                      <p className="mt-1 text-sm text-gray-600">A yea vote ends debate and moves toward final consideration.</p>
+                    </div>
+                    {role === "teacher" && (
+                      <button type="button" onClick={() => quickPresentation("previous_question", "Motion for the previous question")} className="rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100">Show live count</button>
+                    )}
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                    <div className="rounded-md bg-green-50 p-3 text-center">
+                      <div className="text-2xl font-bold text-green-700">{previousQuestionCounts.yea}</div>
+                      <div className="text-xs font-medium text-green-700">Yea</div>
+                    </div>
+                    <div className="rounded-md bg-red-50 p-3 text-center">
+                      <div className="text-2xl font-bold text-red-700">{previousQuestionCounts.nay}</div>
+                      <div className="text-xs font-medium text-red-700">Nay</div>
+                    </div>
+                    {role === "teacher" ? (
+                      <button type="button" onClick={() => quickPresentation("recess", "Previous question ordered")} className="rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">Push through</button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <button type="button" onClick={() => void castPreviousQuestionVote("yea")} className={`rounded-md px-4 py-2 text-sm font-semibold ${myPreviousQuestionVote === "yea" ? "bg-green-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>Yea</button>
+                        <button type="button" onClick={() => void castPreviousQuestionVote("nay")} className={`rounded-md px-4 py-2 text-sm font-semibold ${myPreviousQuestionVote === "nay" ? "bg-red-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>Nay</button>
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="prose max-w-none rounded-md border border-gray-200 bg-white p-5" dangerouslySetInnerHTML={{ __html: activeItem.bill.legislative_text || "<p><em>No legislative text</em></p>" }} />

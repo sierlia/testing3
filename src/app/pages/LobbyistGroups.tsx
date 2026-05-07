@@ -18,24 +18,38 @@ export function LobbyistGroups() {
   const [settings, setSettings] = useState<any>({});
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState({ name: "", description: "" });
+  const [loading, setLoading] = useState(true);
+  const [spentByGroup, setSpentByGroup] = useState<Record<string, number>>({});
 
   const load = async () => {
+    setLoading(true);
     const uid = (await getCurrentUser())?.id;
-    if (!uid) return;
+    if (!uid) {
+      setLoading(false);
+      return;
+    }
     const { data: profile } = await supabase.from("profiles").select("class_id,role").eq("user_id", uid).maybeSingle();
     const activeClassId = (profile as any)?.class_id ?? null;
     setRole(((profile as any)?.role ?? null) as any);
     setClassId(activeClassId);
-    if (!activeClassId) return;
+    if (!activeClassId) {
+      setLoading(false);
+      return;
+    }
     const { data: cls } = await supabase.from("classes").select("settings").eq("id", activeClassId).maybeSingle();
     setSettings((cls as any)?.settings ?? {});
-    const [{ data: rows }, { data: members }] = await Promise.all([
+    const [{ data: rows }, { data: members }, { data: contributions }] = await Promise.all([
       supabase.from("lobbyist_groups").select("id,class_id,name,description,join_mode,starting_amount,created_at").eq("class_id", activeClassId).order("created_at", { ascending: true }),
       supabase.from("lobbyist_group_members").select("group_id"),
+      supabase.from("lobbyist_contributions").select("group_id,amount").eq("class_id", activeClassId),
     ]);
     const counts: Record<string, number> = {};
     for (const member of members ?? []) counts[(member as any).group_id] = (counts[(member as any).group_id] ?? 0) + 1;
+    const spent: Record<string, number> = {};
+    for (const row of contributions ?? []) spent[(row as any).group_id] = (spent[(row as any).group_id] ?? 0) + Number((row as any).amount ?? 0);
+    setSpentByGroup(spent);
     setGroups(((rows ?? []) as any[]).map((row) => ({ ...row, memberCount: counts[row.id] ?? 0 })));
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -96,7 +110,9 @@ export function LobbyistGroups() {
                 </div>
               </div>
             )}
-            {!settings?.lobbyists?.enabled && role !== "teacher" ? (
+            {loading ? (
+              <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Loading lobbyist groups...</div>
+            ) : !settings?.lobbyists?.enabled && role !== "teacher" ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">Lobbyist groups are disabled.</div>
             ) : items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No lobbyist groups yet.</div>
@@ -111,7 +127,7 @@ export function LobbyistGroups() {
                         <Users className="h-3.5 w-3.5" />
                         {group.memberCount} members
                         <span className="text-gray-300">|</span>
-                        ${Number(group.starting_amount ?? 0).toLocaleString()} starting funds
+                        ${Math.max(0, Number(group.starting_amount ?? 0) - Number(spentByGroup[group.id] ?? 0)).toLocaleString()} total money
                       </div>
                     </div>
                   </div>

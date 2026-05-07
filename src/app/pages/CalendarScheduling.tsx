@@ -22,7 +22,7 @@ type CalendarEntry = {
   scheduled_at: string;
   duration_minutes: number;
   status?: string;
-  bill: { hr_label: string; title: string };
+  bill: { hr_label: string; title: string; author_user_id?: string };
 };
 
 type CalendarTask = {
@@ -31,7 +31,7 @@ type CalendarTask = {
   due_at: string;
   task_type: string;
 };
-type SpeakerSignup = { bill_id: string; user_id: string; side: "for" | "against"; name?: string | null };
+type SpeakerSignup = { bill_id: string; user_id: string; side: "for" | "against"; status: "pending" | "approved" | "rejected"; speaker_role?: "speaker" | "opposition_leader"; name?: string | null };
 
 function localDateTimeValue(iso?: string | null) {
   if (!iso) return "";
@@ -57,6 +57,7 @@ export function CalendarScheduling() {
   const [classId, setClassId] = useState<string | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
   const [speakerSignups, setSpeakerSignups] = useState<SpeakerSignup[]>([]);
+  const [classSettings, setClassSettings] = useState<any>({});
 
   const load = async () => {
     setLoading(true);
@@ -65,12 +66,11 @@ export function CalendarScheduling() {
       setRole(profile.role ?? null);
       setClassId(classId);
       setMeId(userId);
-      const { data: tasks } = await supabase
-        .from("class_tasks")
-        .select("id,title,task_type,due_at")
-        .eq("class_id", classId)
-        .not("due_at", "is", null)
-        .order("due_at", { ascending: true });
+      const [{ data: tasks }, { data: cls }] = await Promise.all([
+        supabase.from("class_tasks").select("id,title,task_type,due_at").eq("class_id", classId).not("due_at", "is", null).order("due_at", { ascending: true }),
+        supabase.from("classes").select("settings").eq("id", classId).maybeSingle(),
+      ]);
+      setClassSettings((cls as any)?.settings ?? {});
       setTaskItems(((tasks ?? []) as any[]).filter((task) => task.due_at));
       if (profile.role === "teacher") {
         const rows = await fetchReportedBillsForTeacherCalendar();
@@ -86,9 +86,9 @@ export function CalendarScheduling() {
       try {
         const { data: signupRows } = await supabase
           .from("bill_floor_speakers")
-          .select("bill_id,user_id,side,profiles(display_name)")
+          .select("bill_id,user_id,side,status,speaker_role,profiles(display_name)")
           .eq("class_id", classId);
-        setSpeakerSignups((signupRows ?? []).map((row: any) => ({ bill_id: row.bill_id, user_id: row.user_id, side: row.side, name: row.profiles?.display_name ?? null })));
+        setSpeakerSignups((signupRows ?? []).map((row: any) => ({ bill_id: row.bill_id, user_id: row.user_id, side: row.side, status: row.status ?? "approved", speaker_role: row.speaker_role ?? "speaker", name: row.profiles?.display_name ?? null })));
       } catch {
         setSpeakerSignups([]);
       }
@@ -188,19 +188,30 @@ export function CalendarScheduling() {
 
   const signupForSpeech = async (billId: string, side: "for" | "against") => {
     if (!classId || !meId) return;
+    const status = classSettings?.floor?.speakerSignupMode === "request" ? "pending" : "approved";
     const existing = speakerSignups.find((row) => row.bill_id === billId && row.user_id === meId);
     const next = existing?.side === side
       ? speakerSignups.filter((row) => !(row.bill_id === billId && row.user_id === meId))
-      : [...speakerSignups.filter((row) => !(row.bill_id === billId && row.user_id === meId)), { bill_id: billId, user_id: meId, side }];
+      : [...speakerSignups.filter((row) => !(row.bill_id === billId && row.user_id === meId)), { bill_id: billId, user_id: meId, side, status }];
     setSpeakerSignups(next);
     try {
       if (existing?.side === side) {
         await supabase.from("bill_floor_speakers").delete().eq("bill_id", billId).eq("user_id", meId);
       } else {
-        await supabase.from("bill_floor_speakers").upsert({ class_id: classId, bill_id: billId, user_id: meId, side } as any, { onConflict: "bill_id,user_id" });
+        await supabase.from("bill_floor_speakers").upsert({ class_id: classId, bill_id: billId, user_id: meId, side, status } as any, { onConflict: "bill_id,user_id" });
       }
     } catch {
       // Table may not exist until migrations are applied; keep the local UI responsive.
+    }
+  };
+
+  const updateSpeakerRequest = async (billId: string, userId: string, status: "approved" | "rejected") => {
+    try {
+      const { error } = await supabase.from("bill_floor_speakers").update({ status } as any).eq("bill_id", billId).eq("user_id", userId);
+      if (error) throw error;
+      setSpeakerSignups((prev) => prev.map((row) => row.bill_id === billId && row.user_id === userId ? { ...row, status } : row));
+    } catch (e: any) {
+      toast.error(e.message || "Could not update request");
     }
   };
 
@@ -307,7 +318,9 @@ export function CalendarScheduling() {
                 {item.status && <div className="mt-1 text-xs capitalize text-gray-500">{item.status.replace("_", " ")}</div>}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {(["for", "against"] as const).map((side) => {
-                    const count = speakerSignups.filter((row) => row.bill_id === item.bill_id && row.side === side).length;
+                    const rows = speakerSignups.filter((row) => row.bill_id === item.bill_id && row.side === side && row.status === "approved");
+                    const pendingCount = speakerSignups.filter((row) => row.bill_id === item.bill_id && row.side === side && row.status === "pending").length;
+                    const count = rows.length;
                     const selected = speakerSignups.some((row) => row.bill_id === item.bill_id && row.user_id === meId && row.side === side);
                     return (
                       <button
@@ -320,11 +333,37 @@ export function CalendarScheduling() {
                         }}
                         className={`rounded-md border px-2.5 py-1 text-xs font-medium ${selected ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
                       >
-                        Speak {side === "for" ? "for" : "against"} ({count})
+                        {classSettings?.floor?.speakerSignupMode === "request" ? "Request" : "Speak"} {side === "for" ? "for" : "against"} ({count}{pendingCount ? `, ${pendingCount} pending` : ""})
                       </button>
                     );
                   })}
                 </div>
+                <div className="mt-3 grid gap-3 text-xs text-gray-600 sm:grid-cols-2">
+                  {(["for", "against"] as const).map((side) => (
+                    <div key={side} className="rounded-md bg-gray-50 p-2">
+                      <div className="mb-1 font-semibold text-gray-900">{side === "for" ? "In favor" : "In opposition"}</div>
+                      {speakerSignups.filter((row) => row.bill_id === item.bill_id && row.side === side && row.status === "approved").length ? (
+                        speakerSignups.filter((row) => row.bill_id === item.bill_id && row.side === side && row.status === "approved").map((row) => (
+                          <div key={row.user_id}>{row.speaker_role === "opposition_leader" ? "Opposition leader: " : ""}{row.name ?? "Member"}</div>
+                        ))
+                      ) : <div className="text-gray-400">No approved speakers</div>}
+                    </div>
+                  ))}
+                </div>
+                {(role === "teacher" || item.bill.author_user_id === meId) && speakerSignups.some((row) => row.bill_id === item.bill_id && row.status === "pending") && (
+                  <div className="mt-3 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs">
+                    <div className="mb-1 font-semibold text-amber-900">Speaker requests</div>
+                    {speakerSignups.filter((row) => row.bill_id === item.bill_id && row.status === "pending").map((row) => (
+                      <div key={row.user_id} className="flex items-center justify-between gap-2 py-1">
+                        <span>{row.name ?? "Member"} - {row.side === "for" ? "in favor" : "in opposition"}</span>
+                        <span className="flex gap-1">
+                          <button type="button" onClick={() => void updateSpeakerRequest(item.bill_id, row.user_id, "approved")} className="rounded bg-white px-2 py-1 font-medium text-green-700">Approve</button>
+                          <button type="button" onClick={() => void updateSpeakerRequest(item.bill_id, row.user_id, "rejected")} className="rounded bg-white px-2 py-1 font-medium text-red-700">Reject</button>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               ))}
             {tasks.map((task) => (

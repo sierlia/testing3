@@ -419,6 +419,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     organizationElectionMode: "student-vote",
     calendarAutoPublish: true,
     floorResultsBinding: true,
+    floorSpeakerSignupMode: "open",
     floorVoteThreshold: "simple-majority",
     floorVoteThresholdPct: 50,
     showVoteResultsLive: true,
@@ -599,6 +600,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           enableFloor: s?.floor?.enabled ?? prev.enableFloor,
           calendarAutoPublish: s?.floor?.calendarAutoPublish ?? prev.calendarAutoPublish,
           floorResultsBinding: s?.floor?.binding ?? prev.floorResultsBinding,
+          floorSpeakerSignupMode: s?.floor?.speakerSignupMode ?? prev.floorSpeakerSignupMode,
           floorVoteThreshold: s?.floor?.voteThreshold ?? prev.floorVoteThreshold,
           floorVoteThresholdPct: s?.floor?.voteThresholdPct ?? (s?.floor?.voteThreshold === "two-thirds" ? 67 : prev.floorVoteThresholdPct),
           showVoteResultsLive: s?.floor?.showVoteResultsLive ?? prev.showVoteResultsLive,
@@ -832,6 +834,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 voteThresholdPct: Math.min(100, Math.max(1, Number(settings.floorVoteThresholdPct) || 50)),
                 showVoteResultsLive: settings.showVoteResultsLive,
                 calendarAutoPublish: settings.calendarAutoPublish,
+                speakerSignupMode: settings.floorSpeakerSignupMode,
               },
               elections: {
                 ...(existing?.elections ?? {}),
@@ -1150,6 +1153,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           floorResultsBinding: raw?.floor?.binding ?? settings.floorResultsBinding,
           floorVoteThreshold: raw?.floor?.voteThreshold ?? settings.floorVoteThreshold,
           floorVoteThresholdPct: raw?.floor?.voteThresholdPct ?? settings.floorVoteThresholdPct,
+          floorSpeakerSignupMode: raw?.floor?.speakerSignupMode ?? settings.floorSpeakerSignupMode,
           profilesEnabled: raw?.profiles?.enabled ?? settings.profilesEnabled,
           profileEditingAllowed: raw?.profiles?.editingAllowed ?? settings.profileEditingAllowed,
           profileEditingMode: raw?.profiles?.editingMode ?? settings.profileEditingMode,
@@ -1665,6 +1669,17 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                     <button type="button" onClick={() => setSettings({ floorVoteThresholdPct: 50, floorVoteThreshold: "simple-majority" })} className={`rounded-md border px-2 py-1.5 text-sm font-medium ${settings.floorVoteThresholdPct === 50 ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>1/2</button>
                     <button type="button" onClick={() => setSettings({ floorVoteThresholdPct: 67, floorVoteThreshold: "two-thirds" })} className={`rounded-md border px-2 py-1.5 text-sm font-medium ${settings.floorVoteThresholdPct === 67 ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-300 text-gray-700 hover:bg-gray-50"}`}>2/3</button>
                   </div>
+                }
+              />
+              <SettingRow
+                title="Speaker list signup"
+                description="Choose whether students can join floor speaker lists directly or must request approval."
+                indent
+                control={
+                  <SettingSelect value={settings.floorSpeakerSignupMode} onValueChange={(value) => setSettings({ floorSpeakerSignupMode: value })}>
+                    <SelectItem value="open">Students can join speaker lists</SelectItem>
+                    <SelectItem value="request">Students request to speak</SelectItem>
+                  </SettingSelect>
                 }
               />
             </DisabledBlock>

@@ -21,6 +21,7 @@ export function OrganizationsLayout({ active, children }: { active: "parties" | 
             <Tab to="/parties" active={active === "parties"}>Parties</Tab>
             <Tab to="/committees" active={active === "committees"}>Committees</Tab>
             <Tab to="/caucuses" active={active === "caucuses"}>Caucuses</Tab>
+            <div className="mx-1 h-px bg-gray-300 md:mx-0 md:my-1 md:h-px" aria-hidden="true" />
             <Tab to="/lobbyists" active={active === "lobbyists"}>Lobbyists</Tab>
           </div>
         </div>

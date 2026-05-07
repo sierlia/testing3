@@ -3,7 +3,7 @@ import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../
 import { supabase } from "../utils/supabase";
 
 type PresentationState = {
-  mode: "agenda" | "debate" | "speaker_for" | "speaker_against" | "vote" | "results" | "recess";
+  mode: "agenda" | "debate" | "speaker_for" | "speaker_against" | "vote" | "previous_question" | "results" | "recess";
   note: string;
   billId?: string | null;
 };
@@ -22,6 +22,7 @@ function modeTitle(mode: PresentationState["mode"]) {
   if (mode === "speaker_for") return "Speaker in Favor";
   if (mode === "speaker_against") return "Speaker in Opposition";
   if (mode === "vote") return "Vote Open";
+  if (mode === "previous_question") return "Previous Question";
   if (mode === "results") return "Vote Results";
   if (mode === "recess") return "Recess";
   if (mode === "debate") return "Floor Debate";
@@ -32,19 +33,25 @@ export function FloorPresentationScreen() {
   const [state, setState] = useState<PresentationState>(() => readPresentationState());
   const [activeBill, setActiveBill] = useState<any | null>(null);
   const [session, setSession] = useState<any | null>(null);
+  const [floorVotes, setFloorVotes] = useState<any[]>([]);
+  const [previousQuestionVotes, setPreviousQuestionVotes] = useState<any[]>([]);
 
   const load = async () => {
     try {
       const { classId } = await getCurrentProfileClass();
-      const [items, sessions] = await Promise.all([
+      const [items, sessions, votes, previousVotes] = await Promise.all([
         fetchCalendaredBillsForCurrentClass(),
         supabase.from("bill_floor_sessions").select("bill_id,status,manual_counts,posted_result").eq("class_id", classId),
+        supabase.from("bill_floor_votes").select("bill_id,vote").eq("class_id", classId),
+        supabase.from("bill_previous_question_votes").select("bill_id,vote").eq("class_id", classId),
       ]);
       const nextState = readPresentationState();
       setState(nextState);
       const item = items.find((candidate) => candidate.bill_id === nextState.billId) ?? items[0] ?? null;
       setActiveBill(item?.bill ?? null);
       setSession((sessions.data ?? []).find((row: any) => row.bill_id === item?.bill_id) ?? null);
+      setFloorVotes((votes.data ?? []).filter((row: any) => row.bill_id === item?.bill_id));
+      setPreviousQuestionVotes((previousVotes.data ?? []).filter((row: any) => row.bill_id === item?.bill_id));
     } catch {
       setActiveBill(null);
       setSession(null);
@@ -67,10 +74,20 @@ export function FloorPresentationScreen() {
     };
   }, []);
 
-  const counts = session?.manual_counts;
+  const liveCounts = {
+    yea: floorVotes.filter((row) => row.vote === "yea").length,
+    nay: floorVotes.filter((row) => row.vote === "nay").length,
+    present: floorVotes.filter((row) => row.vote === "present").length,
+  };
+  const counts = session?.manual_counts ?? liveCounts;
+  const previousCounts = {
+    yea: previousQuestionVotes.filter((row) => row.vote === "yea").length,
+    nay: previousQuestionVotes.filter((row) => row.vote === "nay").length,
+  };
   const result = session?.posted_result;
   const palette = useMemo(() => {
     if (state.mode === "vote") return "bg-blue-700 text-white";
+    if (state.mode === "previous_question") return "bg-purple-700 text-white";
     if (state.mode === "results") return result === "failed" ? "bg-red-700 text-white" : "bg-green-700 text-white";
     if (state.mode === "speaker_against") return "bg-red-700 text-white";
     if (state.mode === "speaker_for") return "bg-green-700 text-white";
@@ -89,7 +106,19 @@ export function FloorPresentationScreen() {
             <div className="mt-3 text-balance text-4xl font-semibold">{activeBill.title}</div>
           </div>
         ) : null}
-        {state.mode === "vote" && <div className="mt-12 text-5xl font-bold">Voting is open</div>}
+        {state.mode === "vote" && (
+          <div className="mt-12 grid grid-cols-3 gap-8 text-center">
+            <div><div className="text-6xl font-bold">{counts?.yea ?? 0}</div><div className="mt-2 text-xl opacity-80">Yea</div></div>
+            <div><div className="text-6xl font-bold">{counts?.nay ?? 0}</div><div className="mt-2 text-xl opacity-80">Nay</div></div>
+            <div><div className="text-6xl font-bold">{counts?.present ?? 0}</div><div className="mt-2 text-xl opacity-80">Present</div></div>
+          </div>
+        )}
+        {state.mode === "previous_question" && (
+          <div className="mt-12 grid grid-cols-2 gap-12 text-center">
+            <div><div className="text-7xl font-bold">{previousCounts.yea}</div><div className="mt-2 text-2xl opacity-80">Yea</div></div>
+            <div><div className="text-7xl font-bold">{previousCounts.nay}</div><div className="mt-2 text-2xl opacity-80">Nay</div></div>
+          </div>
+        )}
         {state.mode === "results" && (
           <div className="mt-12 grid grid-cols-3 gap-8 text-center">
             <div><div className="text-6xl font-bold">{counts?.yea ?? 0}</div><div className="mt-2 text-xl opacity-80">Yea</div></div>

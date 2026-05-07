@@ -102,6 +102,9 @@ export function LobbyistGroupDetail() {
             <div>
               <h1 className="text-3xl font-bold text-gray-900">{group.name}</h1>
               <p className="mt-2 whitespace-pre-line text-gray-700">{group.description || "No description yet."}</p>
+              <div className="mt-4 inline-flex rounded-md bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
+                Total money: ${Math.max(0, Number(group.starting_amount ?? 0) - total).toLocaleString()}
+              </div>
             </div>
             {!isTeacher && group.join_mode === "free_join" && (
               isMember ? (
@@ -142,7 +145,7 @@ export function LobbyistGroupDetail() {
             </div>
             <div className="grid gap-2">
               <div className="rounded-md bg-green-50 p-3 text-sm font-semibold text-green-800">Starting funds: ${Number(group.starting_amount ?? 0).toLocaleString()}</div>
-              <div className="rounded-md bg-gray-50 p-3 text-sm font-semibold text-gray-800">Remaining: ${Math.max(0, Number(group.starting_amount ?? 0) - total).toLocaleString()}</div>
+              <div className="rounded-md bg-gray-50 p-3 text-sm font-semibold text-gray-800">Total money: ${Math.max(0, Number(group.starting_amount ?? 0) - total).toLocaleString()}</div>
               <div className="rounded-md bg-blue-50 p-3 text-sm font-semibold text-blue-800">Total contributed: ${total.toLocaleString()}</div>
             </div>
             <div className="mt-4 space-y-2">
