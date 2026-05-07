@@ -64,8 +64,8 @@ function PartyIcon({ name }: { name: string }) {
 }
 
 const partyDetails: Record<string, { text: string; url: string }> = {
-  "Democratic Party": { text: "Traces its roots to Jeffersonian Democratic-Republicans and Jacksonian Democrats; today it is one of the two major U.S. parties.", url: "https://democrats.org" },
-  "Republican Party": { text: "Founded in 1854 by anti-slavery expansion coalitions and became Lincoln's party before becoming today's GOP.", url: "https://gop.com" },
+  "Democratic Party": { text: "The Democratic Party traces its roots to the Democratic-Republican tradition and the party built around Andrew Jackson in the 1820s and 1830s. Over time it became associated with a broad national coalition that, in modern politics, often emphasizes civil rights, social programs, labor, climate policy, and a more active federal government. Today it is one of the two major parties, meaning one of the two parties that dominate national elections, congressional organization, and presidential politics in the United States.", url: "https://democrats.org" },
+  "Republican Party": { text: "The Republican Party was founded in 1854 by anti-slavery expansion coalitions and rose nationally with Abraham Lincoln's election in 1860. In modern politics it is often associated with conservatism, limited government, lower taxes, deregulation, social conservatism, and a strong national defense. Today it is one of the two major parties, meaning one of the two parties that dominate national elections, congressional organization, and presidential politics in the United States.", url: "https://gop.com" },
   "Green Party": { text: "Grew from U.S. Green organizing in the 1980s and 1990s, emphasizing ecology, democracy, social justice, and peace.", url: "https://www.gp.org" },
   "Libertarian Party": { text: "Founded in 1971 in Colorado around individual liberty, limited government, and free-market principles.", url: "https://www.lp.org" },
 };

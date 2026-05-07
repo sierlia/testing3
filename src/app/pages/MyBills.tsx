@@ -112,7 +112,7 @@ export function MyBills() {
         <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">My Bills</h1>
-            <p className="mt-1 text-gray-600">{filtered.length} bills found</p>
+            <p className="mt-1 text-gray-600">{loading ? "Loading bills..." : `${filtered.length} bills found`}</p>
           </div>
           <Link to="/bills/create" className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
             <Plus className="h-4 w-4" />

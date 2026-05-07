@@ -234,6 +234,7 @@ export function TessBills() {
   const totalPages = Math.max(1, Math.ceil(filteredBills.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageBills = filteredBills.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const resultLabel = loading ? "Loading bills..." : `${filteredBills.length} bills found`;
 
   const resetFilters = () => {
     setSearchQuery("");
@@ -262,7 +263,7 @@ export function TessBills() {
                 <p className="mt-2">All Bills shows bills from the user's cohort.</p>
               </InfoTooltip>
             </div>
-            <p className="text-gray-600">{filteredBills.length} bills found</p>
+            <p className="text-gray-600">{resultLabel}</p>
           </div>
           <div className="flex flex-wrap items-center justify-end gap-3">
             {isTeacher && (
@@ -334,6 +335,7 @@ export function TessBills() {
 
         <div className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-3" : ""}`}>
           <div className={rowMode === "preview" ? "lg:col-span-2" : ""}>
+            {!loading && filteredBills.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={filteredBills.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               {loading ? (
                 <div className="py-12 text-center text-gray-500">Loading bills...</div>
@@ -391,7 +393,6 @@ export function TessBills() {
                 </div>
               )}
             </div>
-            {!loading && filteredBills.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={filteredBills.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
           </div>
 
           {rowMode === "preview" && (

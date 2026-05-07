@@ -172,6 +172,7 @@ export function Members() {
   }, [members, searchQuery, filterParty, filterCommittee, filterCaucus, filterState, sortBy]);
 
   const memberCount = filteredMembers.length;
+  const countLabel = loading ? "Loading members..." : `${memberCount} member${memberCount === 1 ? "" : "s"} found`;
   const resetFilters = () => {
     setSearchQuery("");
     setFilterParty("all");
@@ -188,11 +189,12 @@ export function Members() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold text-gray-900">Members ({memberCount})</h1>
+            <h1 className="text-3xl font-bold text-gray-900">{loading ? "Members" : `Members (${memberCount})`}</h1>
             <InfoTooltip label="What are members?">
-              <p>Members represent the class's House of Representatives. They sponsor and cosponsor bills, join organizations, vote, and hold leadership roles.</p>
+              <p>Members of the House of Representatives are elected to represent congressional districts in the federal legislature. They introduce and debate legislation, vote on bills and resolutions, and serve on committees that study issues in detail. Members also conduct oversight of the executive branch, help shape the federal budget, and respond to concerns from constituents. Their work combines lawmaking, public representation, investigation, and negotiation with other members of Congress.</p>
             </InfoTooltip>
           </div>
+          <p className="mt-1 text-gray-600">{countLabel}</p>
         </div>
 
         {/* Search and filters */}
@@ -295,6 +297,11 @@ export function Members() {
           ))}
         </div>
 
+        {loading && (
+          <div className="text-center py-12 text-gray-500">
+            Loading members...
+          </div>
+        )}
         {!loading && filteredMembers.length === 0 && (
           <div className="text-center py-12 text-gray-500">
             No members found

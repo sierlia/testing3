@@ -14,7 +14,7 @@ type CountData = {
 const defaultCounts: Counts = { dashboard: 0, review: 0, vote: 0 };
 const defaultIds: Record<CountedTabId, string[]> = { dashboard: [], review: [], vote: [] };
 const countDataCache = new Map<string, CountData>();
-const membershipCache = new Map<string, { isMember: boolean; isTeacher: boolean }>();
+const membershipCache = new Map<string, { isMember: boolean; isTeacher: boolean; loaded: boolean }>();
 
 function cloneCountData(data: CountData): CountData {
   return {
@@ -100,7 +100,7 @@ export function committeeNameStorageKey(committeeId: string) {
 export function CommitteeTabs({ committeeId, active }: { committeeId: string; active: TabId }) {
   const [countData, setCountData] = useState<CountData>(() => readCachedCountData(committeeId));
   const [seenVersion, setSeenVersion] = useState(0);
-  const [access, setAccess] = useState(() => membershipCache.get(committeeId) ?? { isMember: true, isTeacher: false });
+  const [access, setAccess] = useState({ isMember: false, isTeacher: false, loaded: false });
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +120,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
         uid ? supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle() : ({ data: null } as any),
       ]);
       if (!cancelled) {
-        const nextAccess = { isMember: Boolean(membership), isTeacher: (profile as any)?.role === "teacher" };
+        const nextAccess = { isMember: Boolean(membership), isTeacher: (profile as any)?.role === "teacher", loaded: true };
         membershipCache.set(committeeId, nextAccess);
         setAccess(nextAccess);
       }
@@ -198,6 +198,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     { id: "election" as const, label: "Election", to: `/committee/${committeeId}/leadership` },
   ].filter((tab) => access.isTeacher || access.isMember);
 
+  if (!access.loaded) return null;
   if (!tabs.length) return null;
 
   return (

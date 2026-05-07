@@ -23,7 +23,7 @@ export function CompactPager({
   const clampPage = (page: number) => Math.min(totalPages, Math.max(1, page || 1));
 
   return (
-    <div className="mt-3 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
+    <div className="my-3 flex flex-wrap items-center justify-between gap-3 text-sm text-gray-600">
       <div>{start}-{end} of {totalItems}</div>
       <div className="flex items-center gap-2">
         <select value={pageSize} onChange={(event) => onPageSizeChange(Number(event.target.value))} className="rounded-md border border-gray-300 bg-white px-2 py-1.5 text-sm">
@@ -41,7 +41,7 @@ export function CompactPager({
               max={totalPages}
               value={currentPage}
               onChange={(event) => onPageChange(clampPage(Number(event.target.value)))}
-              className="w-8 bg-transparent text-center text-sm outline-none focus:underline"
+              className="w-10 rounded-md border border-gray-300 bg-white px-1 py-1 text-center text-sm outline-none focus:ring-2 focus:ring-blue-500"
             />
             <span>of {totalPages}</span>
           </label>

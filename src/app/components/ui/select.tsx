@@ -77,11 +77,7 @@ function SelectContent({
           event.preventDefault();
           onCloseAutoFocus?.(event);
         }}
-        onPointerDownOutside={(event) => {
-          const target = event.target as HTMLElement | null;
-          if (target?.closest('[data-slot="select-trigger"]')) event.preventDefault();
-          onPointerDownOutside?.(event);
-        }}
+        onPointerDownOutside={onPointerDownOutside}
         {...props}
       >
         <SelectScrollUpButton />

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
+import { CompactPager } from "../components/CompactPager";
 
 interface Caucus {
   id: string;
@@ -30,6 +31,8 @@ export function TessCaucuses() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [sortBy, setSortBy] = useState<"createdAt" | "members">("createdAt");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -147,6 +150,12 @@ export function TessCaucuses() {
       return sortOrder === "asc" ? comparison : -comparison;
     });
   }, [filteredCaucuses, sortBy, sortOrder]);
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize, searchQuery, sortBy, sortOrder]);
+  const totalPages = Math.max(1, Math.ceil(sortedCaucuses.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageCaucuses = sortedCaucuses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const toggleSortOrder = () => setSortOrder(sortOrder === "asc" ? "desc" : "asc");
 
@@ -364,12 +373,12 @@ export function TessCaucuses() {
                 placeholder="Search caucuses..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                className="h-10 w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <button
               onClick={() => setShowCreateForm(!showCreateForm)}
-              className="flex items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
+              className="flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
             >
               <Plus className="w-4 h-4" />
               Create Caucus
@@ -391,13 +400,14 @@ export function TessCaucuses() {
           </div>
         </div>
 
+        {!loading && sortedCaucuses.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={sortedCaucuses.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {loading ? (
             <div className="col-span-full text-center py-12 text-gray-500">Loading caucuses...</div>
           ) : sortedCaucuses.length === 0 ? (
             <div className="col-span-full rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No caucuses yet.</div>
           ) : (
-            sortedCaucuses.map((caucus) => (
+            pageCaucuses.map((caucus) => (
               <div
                 key={caucus.id}
                 role="button"

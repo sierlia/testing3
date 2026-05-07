@@ -1208,13 +1208,12 @@ export function CommitteeDashboard() {
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+          <div className="self-start bg-white rounded-lg shadow-sm border border-gray-200 p-6">
             <SubcommitteeRolesPanel committeeId={committeeId} compact />
             <div className="mt-6">
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Members</h2>
-              <span className="text-sm text-gray-500">{committeeCapacity > 0 ? `${members.length}/${committeeCapacity}` : members.length} member{members.length === 1 ? "" : "s"}</span>
+              <h2 className="text-lg font-semibold text-gray-900">Members ({committeeCapacity > 0 ? `${members.length}/${committeeCapacity}` : members.length})</h2>
             </div>
             <div className="flex gap-2 mb-4">
               <input
