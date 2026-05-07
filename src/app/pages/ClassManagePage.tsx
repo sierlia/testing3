@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Activity, Check, Copy, Download, MailPlus, MoreHorizontal, Search, UserX, Users } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, Check, Copy, Download, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -38,6 +38,40 @@ interface ClassDetails {
   teacherId: string;
 }
 
+type RosterSortKey = "first" | "last" | "role" | "party" | "joined" | "sponsored" | "passed" | "failed" | "cosponsored" | "letters";
+type RosterCustomColumn = { id: string; label: string };
+type RosterPreferences = {
+  customColumns: RosterCustomColumn[];
+  customValues: Record<string, Record<string, string>>;
+  defaultSortBy: RosterSortKey;
+};
+type ExportFormat = "csv" | "xls";
+type ExportScope = "filtered" | "all";
+type ExportListMode = "details" | "counts";
+type ExportHeaderMode = "labels" | "keys";
+
+const defaultRosterPreferences: RosterPreferences = {
+  customColumns: [],
+  customValues: {},
+  defaultSortBy: "first",
+};
+
+const baseExportColumns = [
+  ["name", "Name"],
+  ["email", "Email"],
+  ["role", "Role"],
+  ["positions", "Positions"],
+  ["party", "Party"],
+  ["constituency", "Constituency"],
+  ["sponsored", "Sponsored"],
+  ["passed", "Passed"],
+  ["failed", "Failed"],
+  ["cosponsored", "Cosponsored"],
+  ["letters", "Letters"],
+  ["committees", "Committees"],
+  ["caucuses", "Caucuses"],
+] as const;
+
 export function ClassManagePage() {
   const { classId } = useParams();
   const navigate = useNavigate();
@@ -47,7 +81,7 @@ export function ClassManagePage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [titleFilter, setTitleFilter] = useState("all");
   const [organizationFilter, setOrganizationFilter] = useState("all");
-  const [sortBy, setSortBy] = useState<"first" | "last" | "sponsored" | "passed" | "failed" | "cosponsored" | "letters">("first");
+  const [sortBy, setSortBy] = useState<RosterSortKey>("first");
   const [actionMenuOpen, setActionMenuOpen] = useState<string | null>(null);
   const [actionMenuPosition, setActionMenuPosition] = useState<{ top: number; left: number } | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
@@ -57,9 +91,47 @@ export function ClassManagePage() {
   const [rosterTab, setRosterTab] = useState<"members" | "pending">("members");
   const [tableScroll, setTableScroll] = useState({ atStart: true, atEnd: true });
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [exportColumns, setExportColumns] = useState<string[]>(["name", "email", "role", "positions", "party", "constituency", "sponsored", "passed", "failed", "cosponsored", "letters", "committees", "caucuses"]);
+  const [exportColumns, setExportColumns] = useState<string[]>(["name"]);
+  const [exportFormat, setExportFormat] = useState<ExportFormat>("csv");
+  const [exportScope, setExportScope] = useState<ExportScope>("filtered");
+  const [exportListMode, setExportListMode] = useState<ExportListMode>("details");
+  const [exportHeaderMode, setExportHeaderMode] = useState<ExportHeaderMode>("labels");
+  const [exportIncludeSummary, setExportIncludeSummary] = useState(false);
+  const [rosterSettingsOpen, setRosterSettingsOpen] = useState(false);
+  const [newColumnName, setNewColumnName] = useState("");
+  const [classSettings, setClassSettings] = useState<Record<string, any>>({});
+  const [rosterPreferences, setRosterPreferences] = useState<RosterPreferences>(defaultRosterPreferences);
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const actionMenuRef = useRef<HTMLDivElement | null>(null);
+
+  const normalizeRosterPreferences = (raw: any): RosterPreferences => {
+    const customColumns = Array.isArray(raw?.customColumns)
+      ? raw.customColumns
+          .filter((column: any) => typeof column?.id === "string" && typeof column?.label === "string" && column.label.trim())
+          .map((column: any) => ({ id: column.id, label: column.label.trim() }))
+      : [];
+    const defaultSortBy = (["first", "last", "role", "party", "joined", "sponsored", "passed", "failed", "cosponsored", "letters"] as RosterSortKey[]).includes(raw?.defaultSortBy)
+      ? raw.defaultSortBy
+      : "first";
+    return {
+      customColumns,
+      customValues: raw?.customValues && typeof raw.customValues === "object" ? raw.customValues : {},
+      defaultSortBy,
+    };
+  };
+
+  const saveRosterPreferences = async (nextRoster: RosterPreferences, options: { silent?: boolean } = {}) => {
+    if (!classId) return;
+    const nextSettings = { ...(classSettings ?? {}), roster: nextRoster };
+    setRosterPreferences(nextRoster);
+    setClassSettings(nextSettings);
+    const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
+    if (error) {
+      toast.error(error.message || "Could not save roster settings");
+      return;
+    }
+    if (!options.silent) toast.success("Roster settings saved");
+  };
 
   const loadClassData = async () => {
     if (!classId) return;
@@ -76,9 +148,14 @@ export function ClassManagePage() {
         });
       }
 
-      const { data: cls, error: cErr } = await supabase.from("classes").select("id,name,class_code,teacher_id").eq("id", classId).single();
+      const { data: cls, error: cErr } = await supabase.from("classes").select("id,name,class_code,teacher_id,settings").eq("id", classId).single();
       if (cErr) throw cErr;
       setClassDetails({ id: cls.id, name: cls.name, classCode: cls.class_code, teacherId: cls.teacher_id });
+      const loadedSettings = ((cls as any).settings ?? {}) as Record<string, any>;
+      const loadedRosterPreferences = normalizeRosterPreferences(loadedSettings.roster);
+      setClassSettings(loadedSettings);
+      setRosterPreferences(loadedRosterPreferences);
+      setSortBy(loadedRosterPreferences.defaultSortBy);
 
       const { data: roster, error: rErr } = await supabase
         .from("class_memberships")
@@ -299,6 +376,9 @@ export function ClassManagePage() {
       if (sortBy === "failed") return b.failed.length - a.failed.length || a.name.localeCompare(b.name);
       if (sortBy === "cosponsored") return b.cosponsored.length - a.cosponsored.length || a.name.localeCompare(b.name);
       if (sortBy === "letters") return b.letters - a.letters || a.name.localeCompare(b.name);
+      if (sortBy === "role") return a.role.localeCompare(b.role) || a.name.localeCompare(b.name);
+      if (sortBy === "party") return a.party.localeCompare(b.party) || a.name.localeCompare(b.name);
+      if (sortBy === "joined") return new Date(a.joinedAt).getTime() - new Date(b.joinedAt).getTime() || a.name.localeCompare(b.name);
       if (sortBy === "last") return namePart(a.name, "last").localeCompare(namePart(b.name, "last")) || namePart(a.name, "first").localeCompare(namePart(b.name, "first"));
       return namePart(a.name, "first").localeCompare(namePart(b.name, "first")) || namePart(a.name, "last").localeCompare(namePart(b.name, "last"));
     });
@@ -368,29 +448,145 @@ export function ClassManagePage() {
       </div>
     ) : "0";
 
+  const exportColumnOptions = useMemo(
+    () => [
+      ...baseExportColumns.map(([key, label]) => ({ key, label })),
+      ...rosterPreferences.customColumns.map((column) => ({ key: `custom:${column.id}`, label: column.label })),
+    ],
+    [rosterPreferences.customColumns],
+  );
+
+  const customColumnValue = (memberId: string, columnId: string) => rosterPreferences.customValues?.[memberId]?.[columnId] ?? "";
+
+  const setCustomColumnValue = (memberId: string, columnId: string, value: string) => {
+    setRosterPreferences((current) => ({
+      ...current,
+      customValues: {
+        ...current.customValues,
+        [memberId]: {
+          ...(current.customValues?.[memberId] ?? {}),
+          [columnId]: value,
+        },
+      },
+    }));
+  };
+
+  const saveCustomColumnValue = async (memberId: string, columnId: string, value: string) => {
+    await saveRosterPreferences(
+      {
+        ...rosterPreferences,
+        customValues: {
+          ...rosterPreferences.customValues,
+          [memberId]: {
+            ...(rosterPreferences.customValues?.[memberId] ?? {}),
+            [columnId]: value,
+          },
+        },
+      },
+      { silent: true },
+    );
+  };
+
+  const addCustomColumn = async () => {
+    const label = newColumnName.trim();
+    if (!label) return toast.error("Enter a column name");
+    const id = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `custom-${Date.now()}`;
+    await saveRosterPreferences({
+      ...rosterPreferences,
+      customColumns: [...rosterPreferences.customColumns, { id, label }],
+    });
+    setNewColumnName("");
+  };
+
+  const updateCustomColumnLabel = (columnId: string, label: string) => {
+    setRosterPreferences((current) => ({
+      ...current,
+      customColumns: current.customColumns.map((column) => column.id === columnId ? { ...column, label } : column),
+    }));
+  };
+
+  const moveCustomColumn = async (columnId: string, direction: -1 | 1) => {
+    const index = rosterPreferences.customColumns.findIndex((column) => column.id === columnId);
+    const nextIndex = index + direction;
+    if (index < 0 || nextIndex < 0 || nextIndex >= rosterPreferences.customColumns.length) return;
+    const nextColumns = [...rosterPreferences.customColumns];
+    const [column] = nextColumns.splice(index, 1);
+    nextColumns.splice(nextIndex, 0, column);
+    await saveRosterPreferences({ ...rosterPreferences, customColumns: nextColumns });
+  };
+
+  const deleteCustomColumn = async (columnId: string) => {
+    const nextValues = Object.fromEntries(
+      Object.entries(rosterPreferences.customValues).map(([memberId, values]) => {
+        const { [columnId]: _removed, ...rest } = values ?? {};
+        return [memberId, rest];
+      }),
+    );
+    await saveRosterPreferences({
+      ...rosterPreferences,
+      customColumns: rosterPreferences.customColumns.filter((column) => column.id !== columnId),
+      customValues: nextValues,
+    });
+    setExportColumns((current) => current.filter((column) => column !== `custom:${columnId}`));
+  };
+
+  const saveRosterSettings = async () => {
+    const nextRoster = {
+      ...rosterPreferences,
+      customColumns: rosterPreferences.customColumns.map((column) => ({ ...column, label: column.label.trim() || "Untitled column" })),
+      defaultSortBy: sortBy,
+    };
+    await saveRosterPreferences(nextRoster);
+    setRosterSettingsOpen(false);
+  };
+
+  const headerFor = (key: string) => {
+    const option = exportColumnOptions.find((column) => column.key === key);
+    if (!option) return key;
+    return exportHeaderMode === "keys" ? key : option.label;
+  };
+
+  const exportValueFor = (member: RosterMember, key: string) => {
+    if (key.startsWith("custom:")) return customColumnValue(member.id, key.slice("custom:".length));
+    if (key === "name") return displayPersonName(member.name);
+    if (key === "positions") return member.position;
+    if (key === "sponsored") return exportListMode === "counts" ? String(member.sponsored.length) : `${member.sponsored.length}${member.sponsored.length ? ` (${member.sponsored.map((bill) => bill.label).join("; ")})` : ""}`;
+    if (key === "passed") return exportListMode === "counts" ? String(member.passed.length) : `${member.passed.length}${member.passed.length ? ` (${member.passed.map((bill) => bill.label).join("; ")})` : ""}`;
+    if (key === "failed") return exportListMode === "counts" ? String(member.failed.length) : `${member.failed.length}${member.failed.length ? ` (${member.failed.map((bill) => bill.label).join("; ")})` : ""}`;
+    if (key === "cosponsored") return exportListMode === "counts" ? String(member.cosponsored.length) : member.cosponsored.map((bill) => bill.label).join("; ");
+    if (key === "committees") return exportListMode === "counts" ? String(member.committees.length) : member.committees.map((item) => item.name).join("; ");
+    if (key === "caucuses") return exportListMode === "counts" ? String(member.caucuses.length) : member.caucuses.map((item) => item.name).join("; ");
+    return String((member as any)[key] ?? "");
+  };
+
   const exportRoster = () => {
     const columns = exportColumns;
     if (!columns.length) {
       toast.error("Select at least one column to export");
       return;
     }
-    const valueFor = (member: RosterMember, key: string) => {
-      if (key === "name") return displayPersonName(member.name);
-      if (key === "positions") return member.position;
-      if (key === "sponsored") return `${member.sponsored.length}${member.sponsored.length ? ` (${member.sponsored.map((bill) => bill.label).join("; ")})` : ""}`;
-      if (key === "passed") return `${member.passed.length}${member.passed.length ? ` (${member.passed.map((bill) => bill.label).join("; ")})` : ""}`;
-      if (key === "failed") return `${member.failed.length}${member.failed.length ? ` (${member.failed.map((bill) => bill.label).join("; ")})` : ""}`;
-      if (key === "cosponsored") return member.cosponsored.map((bill) => bill.label).join("; ");
-      if (key === "committees") return member.committees.map((item) => item.name).join("; ");
-      if (key === "caucuses") return member.caucuses.map((item) => item.name).join("; ");
-      return String((member as any)[key] ?? "");
-    };
-    const csv = [columns.join(","), ...approvedMembers.map((member) => columns.map((column) => `"${valueFor(member, column).replace(/"/g, '""')}"`).join(","))].join("\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const rows = exportScope === "all" ? students.filter((student) => student.status === "approved") : approvedMembers;
+    const headers = columns.map(headerFor);
+    const tableRows = rows.map((member) => columns.map((column) => exportValueFor(member, column)));
+    const safeClassName = (classDetails?.name ?? "class").replace(/[^a-z0-9-_]+/gi, "-").replace(/^-+|-+$/g, "") || "class";
+    const escapeHtml = (value: string) => value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    let blob: Blob;
+    let extension = "csv";
+    if (exportFormat === "xls") {
+      const summary = exportIncludeSummary ? `<p><strong>${escapeHtml(classDetails?.name ?? "Class")}</strong> - ${rows.length} member${rows.length === 1 ? "" : "s"}</p>` : "";
+      const html = `<!doctype html><html><head><meta charset="utf-8" /></head><body>${summary}<table border="1"><thead><tr>${headers.map((header) => `<th>${escapeHtml(header)}</th>`).join("")}</tr></thead><tbody>${tableRows.map((row) => `<tr>${row.map((cell) => `<td>${escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}</tbody></table></body></html>`;
+      blob = new Blob([html], { type: "application/vnd.ms-excel;charset=utf-8" });
+      extension = "xls";
+    } else {
+      const csvRows = [headers, ...tableRows];
+      if (exportIncludeSummary) csvRows.unshift([classDetails?.name ?? "Class", `${rows.length} member${rows.length === 1 ? "" : "s"}`]);
+      const csv = csvRows.map((row) => row.map((value) => `"${value.replace(/"/g, '""')}"`).join(",")).join("\n");
+      blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    }
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${classDetails?.name ?? "class"}-roster.csv`;
+    link.download = `${safeClassName}-roster.${extension}`;
     link.click();
     URL.revokeObjectURL(url);
     setExportDialogOpen(false);
@@ -404,7 +600,7 @@ export function ClassManagePage() {
       </div>
     ) : (
       <div ref={scrollRef} onScroll={(event) => updateTableScroll(event.currentTarget)} className="overflow-x-auto rounded-lg border border-gray-200 bg-white" onMouseEnter={() => updateTableScroll()}>
-        <table className="min-w-[2050px] w-full caption-bottom text-sm">
+        <table className="w-full caption-bottom text-sm" style={{ minWidth: `${2050 + rosterPreferences.customColumns.length * 240}px` }}>
           <thead>
             <tr className="border-b">
               <th className={`sticky left-0 z-20 min-w-56 bg-white px-5 py-3 text-left font-medium ${stickyShadowLeft}`}>Name</th>
@@ -416,6 +612,9 @@ export function ClassManagePage() {
               <th className="min-w-60 px-5 py-3 text-left font-medium">Sponsored</th>
               <th className="min-w-44 px-5 py-3 text-left font-medium">Passed</th>
               <th className="min-w-44 px-5 py-3 text-left font-medium">Failed</th>
+              {rosterPreferences.customColumns.map((column) => (
+                <th key={column.id} className="min-w-60 px-5 py-3 text-left font-medium">{column.label}</th>
+              ))}
               <th className="min-w-52 px-5 py-3 text-left font-medium">Cosponsored</th>
               <th className="min-w-28 px-5 py-3 text-left font-medium">Letters</th>
               <th className="min-w-52 px-5 py-3 text-left font-medium">Committees</th>
@@ -449,6 +648,17 @@ export function ClassManagePage() {
                 <td className="px-5 py-3">{linkedCountList(student.sponsored)}</td>
                 <td className="px-5 py-3">{linkedCountList(student.passed)}</td>
                 <td className="px-5 py-3">{linkedCountList(student.failed)}</td>
+                {rosterPreferences.customColumns.map((column) => (
+                  <td key={column.id} className="px-5 py-3">
+                    <input
+                      value={customColumnValue(student.id, column.id)}
+                      onChange={(event) => setCustomColumnValue(student.id, column.id, event.target.value)}
+                      onBlur={(event) => void saveCustomColumnValue(student.id, column.id, event.target.value)}
+                      placeholder="Add text"
+                      className="w-full rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </td>
+                ))}
                 <td className="px-5 py-3">{linkList(student.cosponsored, "/bills")}</td>
                 <td className="px-5 py-3"><Link to={`/dear-colleague/inbox?author=${encodeURIComponent(student.name)}`} className="text-blue-600 hover:underline">{student.letters}</Link></td>
                 <td className="px-5 py-3">{linkList(student.committees, "/committees")}</td>
@@ -619,6 +829,9 @@ export function ClassManagePage() {
                       <SelectContent>
                         <SelectItem value="first">Sort first name</SelectItem>
                         <SelectItem value="last">Sort last name</SelectItem>
+                        <SelectItem value="role">Sort role</SelectItem>
+                        <SelectItem value="party">Sort party</SelectItem>
+                        <SelectItem value="joined">Sort joined date</SelectItem>
                         <SelectItem value="sponsored">Sort sponsored</SelectItem>
                         <SelectItem value="passed">Sort passed</SelectItem>
                         <SelectItem value="failed">Sort failed</SelectItem>
@@ -626,6 +839,10 @@ export function ClassManagePage() {
                         <SelectItem value="letters">Sort letters</SelectItem>
                       </SelectContent>
                     </Select>
+                    <button type="button" onClick={() => setRosterSettingsOpen(true)} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                      <Settings className="h-4 w-4" />
+                      Roster settings
+                    </button>
                     <button type="button" onClick={() => setExportDialogOpen(true)} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-md border border-gray-300 px-3 text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <Download className="h-4 w-4" />
                       Export
@@ -681,37 +898,181 @@ export function ClassManagePage() {
           })()}
         </div>
       )}
+      {rosterSettingsOpen && (
+        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Roster settings</h2>
+                <p className="mt-1 text-sm text-gray-600">Add custom roster columns and choose the default row order.</p>
+              </div>
+              <button type="button" onClick={() => setRosterSettingsOpen(false)} className="rounded-md px-2 py-1 text-sm font-medium text-gray-500 hover:bg-gray-100">Close</button>
+            </div>
+            <div className="max-h-[70vh] space-y-6 overflow-y-auto p-5">
+              <section className="grid gap-3 md:grid-cols-[190px_1fr] md:items-center">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">Default row order</div>
+                  <div className="text-sm text-gray-600">Used when this roster opens.</div>
+                </div>
+                <Select value={sortBy} onValueChange={(value) => setSortBy(value as RosterSortKey)}>
+                  <SelectTrigger className="h-10 bg-white"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="first">First name</SelectItem>
+                    <SelectItem value="last">Last name</SelectItem>
+                    <SelectItem value="role">Role</SelectItem>
+                    <SelectItem value="party">Party</SelectItem>
+                    <SelectItem value="joined">Joined date</SelectItem>
+                    <SelectItem value="sponsored">Sponsored bills</SelectItem>
+                    <SelectItem value="passed">Passed bills</SelectItem>
+                    <SelectItem value="failed">Failed bills</SelectItem>
+                    <SelectItem value="cosponsored">Cosponsored bills</SelectItem>
+                    <SelectItem value="letters">Dear colleague letters</SelectItem>
+                  </SelectContent>
+                </Select>
+              </section>
+
+              <section className="space-y-3">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">Custom columns</div>
+                  <div className="text-sm text-gray-600">Teachers can type custom text into these columns directly in the roster.</div>
+                </div>
+                <div className="flex gap-2">
+                  <input
+                    value={newColumnName}
+                    onChange={(event) => setNewColumnName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void addCustomColumn();
+                    }}
+                    placeholder="Column name"
+                    className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <Button type="button" onClick={() => void addCustomColumn()} className="inline-flex items-center gap-2">
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  {rosterPreferences.customColumns.length ? rosterPreferences.customColumns.map((column, index) => (
+                    <div key={column.id} className="flex items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 p-2">
+                      <input
+                        value={column.label}
+                        onChange={(event) => updateCustomColumnLabel(column.id, event.target.value)}
+                        onBlur={(event) => void saveRosterPreferences({
+                          ...rosterPreferences,
+                          customColumns: rosterPreferences.customColumns.map((item) => item.id === column.id ? { ...item, label: event.target.value.trim() || "Untitled column" } : item),
+                        }, { silent: true })}
+                        className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <button type="button" onClick={() => void moveCustomColumn(column.id, -1)} disabled={index === 0} className="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900 disabled:opacity-40" aria-label="Move column left">
+                        <ArrowUp className="h-4 w-4" />
+                      </button>
+                      <button type="button" onClick={() => void moveCustomColumn(column.id, 1)} disabled={index === rosterPreferences.customColumns.length - 1} className="rounded-md p-2 text-gray-500 hover:bg-white hover:text-gray-900 disabled:opacity-40" aria-label="Move column right">
+                        <ArrowDown className="h-4 w-4" />
+                      </button>
+                      <button type="button" onClick={() => void deleteCustomColumn(column.id)} className="rounded-md p-2 text-red-500 hover:bg-red-50" aria-label="Delete column">
+                        <Trash2 className="h-4 w-4" />
+                      </button>
+                    </div>
+                  )) : (
+                    <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center text-sm text-gray-500">No custom columns yet.</div>
+                  )}
+                </div>
+              </section>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
+              <button type="button" onClick={() => setRosterSettingsOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+              <Button type="button" onClick={() => void saveRosterSettings()}>Save roster settings</Button>
+            </div>
+          </div>
+        </div>
+      )}
       {exportDialogOpen && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-lg rounded-lg bg-white shadow-xl">
-            <div className="border-b border-gray-200 px-5 py-4">
-              <h2 className="text-lg font-semibold text-gray-900">Export roster columns</h2>
+          <div className="w-full max-w-3xl overflow-hidden rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Export roster</h2>
+                <p className="mt-1 text-sm text-gray-600">Choose columns and spreadsheet formatting before downloading.</p>
+              </div>
+              <button type="button" onClick={() => setExportDialogOpen(false)} className="rounded-md px-2 py-1 text-sm font-medium text-gray-500 hover:bg-gray-100">Close</button>
             </div>
-            <div className="grid max-h-[60vh] gap-2 overflow-y-auto p-5 sm:grid-cols-2">
-              {[
-                ["name", "Name"],
-                ["email", "Email"],
-                ["role", "Role"],
-                ["positions", "Positions"],
-                ["party", "Party"],
-                ["constituency", "Constituency"],
-                ["sponsored", "Sponsored"],
-                ["passed", "Passed"],
-                ["failed", "Failed"],
-                ["cosponsored", "Cosponsored"],
-                ["letters", "Letters"],
-                ["committees", "Committees"],
-                ["caucuses", "Caucuses"],
-              ].map(([key, label]) => (
-                <label key={key} className="flex cursor-pointer items-center gap-2 rounded-md p-2 text-sm hover:bg-gray-50">
-                  <input
-                    type="checkbox"
-                    checked={exportColumns.includes(key)}
-                    onChange={(event) => setExportColumns((current) => event.target.checked ? [...current, key] : current.filter((column) => column !== key))}
-                  />
-                  {label}
+            <div className="grid max-h-[70vh] gap-5 overflow-y-auto p-5 lg:grid-cols-[1.1fr_0.9fr]">
+              <section className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">Columns</div>
+                    <div className="text-sm text-gray-600">Only Name is selected by default.</div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => setExportColumns(exportColumnOptions.map((column) => column.key))} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Select all</button>
+                    <button type="button" onClick={() => setExportColumns(["name"])} className="rounded-md border border-gray-300 px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50">Name only</button>
+                  </div>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {exportColumnOptions.map(({ key, label }) => (
+                    <label key={key} className="flex cursor-pointer items-center gap-2 rounded-md border border-gray-200 bg-white p-2 text-sm hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={exportColumns.includes(key)}
+                        onChange={(event) => setExportColumns((current) => event.target.checked ? [...current, key] : current.filter((column) => column !== key))}
+                        className="h-4 w-4"
+                      />
+                      <span className="min-w-0 truncate">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </section>
+
+              <section className="space-y-4 rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div>
+                  <div className="text-sm font-semibold text-gray-900">Excel formatting</div>
+                  <div className="text-sm text-gray-600">Controls how Excel or Sheets reads the file.</div>
+                </div>
+                <label className="block text-sm font-medium text-gray-700">
+                  File type
+                  <Select value={exportFormat} onValueChange={(value) => setExportFormat(value as ExportFormat)}>
+                    <SelectTrigger className="mt-1 h-10 bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="csv">Excel-compatible CSV</SelectItem>
+                      <SelectItem value="xls">Excel worksheet (.xls)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </label>
-              ))}
+                <label className="block text-sm font-medium text-gray-700">
+                  Rows
+                  <Select value={exportScope} onValueChange={(value) => setExportScope(value as ExportScope)}>
+                    <SelectTrigger className="mt-1 h-10 bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="filtered">Current filtered roster</SelectItem>
+                      <SelectItem value="all">All approved members</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Multi-item cells
+                  <Select value={exportListMode} onValueChange={(value) => setExportListMode(value as ExportListMode)}>
+                    <SelectTrigger className="mt-1 h-10 bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="details">Counts with names</SelectItem>
+                      <SelectItem value="counts">Counts only</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Column headers
+                  <Select value={exportHeaderMode} onValueChange={(value) => setExportHeaderMode(value as ExportHeaderMode)}>
+                    <SelectTrigger className="mt-1 h-10 bg-white"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="labels">Readable labels</SelectItem>
+                      <SelectItem value="keys">Raw field keys</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2 rounded-md bg-white p-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={exportIncludeSummary} onChange={(event) => setExportIncludeSummary(event.target.checked)} className="h-4 w-4" />
+                  Include class summary row
+                </label>
+              </section>
             </div>
             <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
               <button type="button" onClick={() => setExportDialogOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
