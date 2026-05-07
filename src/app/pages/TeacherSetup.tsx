@@ -55,7 +55,23 @@ const defaultRoleActions: RoleActions = {
   promoteMembers: false,
 };
 
-function Toggle({ checked, onChange, title, description, disabled = false, indent = false }: { checked: boolean; onChange: (next: boolean) => void; title: string; description?: string; disabled?: boolean; indent?: boolean }) {
+function Toggle({
+  checked,
+  onChange,
+  title,
+  description,
+  disabled = false,
+  indent = false,
+  variant = "switch",
+}: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  title: string;
+  description?: string;
+  disabled?: boolean;
+  indent?: boolean;
+  variant?: "switch" | "checkbox";
+}) {
   return (
     <button
       type="button"
@@ -68,13 +84,19 @@ function Toggle({ checked, onChange, title, description, disabled = false, inden
         <span className="block text-base font-semibold text-gray-900">{title}</span>
         {description && <span className="block text-sm font-normal leading-5 text-gray-600">{description}</span>}
       </span>
-      <span
-        className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
-          checked ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-transparent"
-        }`}
-      >
-        <Check className="h-3.5 w-3.5" />
-      </span>
+      {variant === "checkbox" ? (
+        <span
+          className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded border transition-colors ${
+            checked ? "border-blue-600 bg-blue-600 text-white" : "border-gray-300 bg-white text-transparent"
+          }`}
+        >
+          <Check className="h-3.5 w-3.5" />
+        </span>
+      ) : (
+        <span className={`inline-flex h-5 w-9 flex-shrink-0 items-center rounded-full transition-colors ${checked ? "bg-blue-600" : "bg-gray-300"}`}>
+          <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`} />
+        </span>
+      )}
     </button>
   );
 }
@@ -136,7 +158,7 @@ function SettingRow({
   indent?: boolean;
   sub?: boolean;
 }) {
-  const leftPad = sub ? "pl-[3.5rem]" : indent ? "pl-[2.5rem]" : "pl-7";
+  const leftPad = sub ? "pl-20" : indent ? "pl-[2.5rem]" : "pl-7";
   return (
     <div
       className={`grid cursor-pointer items-center rounded-lg px-2 py-1.5 transition-colors hover:bg-gray-50 ${wide ? "gap-5 md:grid-cols-[minmax(0,260px)_minmax(0,1fr)]" : "gap-3 md:grid-cols-[minmax(0,1fr)_240px]"}`}
@@ -160,7 +182,7 @@ function SettingRow({
       }}
     >
       <div className={`relative ${leftPad}`}>
-        {sub && <span aria-hidden="true" className="absolute -top-2 left-6 h-[calc(50%+0.5rem)] w-5 rounded-bl-lg border-b-2 border-l-2 border-dotted border-gray-300" />}
+        {sub && <span aria-hidden="true" className="absolute -top-2 left-12 h-[calc(50%+0.5rem)] w-6 rounded-bl-lg border-b-2 border-l-2 border-dotted border-gray-300" />}
         <div className="text-base font-semibold text-gray-900">{title}</div>
         {description && <div className="text-sm font-normal leading-5 text-gray-600">{description}</div>}
       </div>
@@ -185,17 +207,33 @@ function SettingSelect({ value, onValueChange, children }: { value: string; onVa
 }
 
 function PercentInput({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  const [draft, setDraft] = useState(String(value));
+
+  useEffect(() => {
+    setDraft(String(value));
+  }, [value]);
+
+  const commit = () => {
+    const next = Math.min(100, Math.max(1, Number(draft) || 50));
+    setDraft(String(next));
+    onChange(next);
+  };
+
   return (
-    <div className="relative w-24">
+    <div className="relative w-14">
       <input
         type="number"
         min={1}
         max={100}
-        value={value}
-        onChange={(event) => onChange(Math.min(100, Math.max(1, Number(event.target.value) || 50)))}
-        className="w-full rounded-md border border-gray-300 py-2 pl-3 pr-8 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+        value={draft}
+        onChange={(event) => {
+          const next = event.target.value;
+          if (next === "" || /^\d{0,3}$/.test(next)) setDraft(next);
+        }}
+        onBlur={commit}
+        className="w-full rounded-md border border-gray-300 py-2 pl-2 pr-5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
-      <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>
+      <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-sm text-gray-500">%</span>
     </div>
   );
 }
@@ -748,20 +786,28 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     setSettings({ billAssignmentAuthorityTags: settings.billAssignmentAuthorityTags.filter((item) => !(item.id === tag.id && item.type === tag.type)) });
   };
 
-  const authorityCandidates = [
-    { id: "speaker-of-the-house", label: `Speaker of the House: ${speakerName}`, type: "role" as const },
-    ...memberOptions.filter((member) => member.role === "student").map((member) => ({ id: member.id, label: member.name, type: "member" as const })),
-  ].filter((tag) => {
+  const speakerAuthorityCandidate: AuthorityTag = {
+    id: "speaker-of-the-house",
+    label: `Speaker of the House: ${speakerName === "No speaker selected" ? "none" : speakerName}`,
+    type: "role",
+  };
+  const authorityMatches = (tag: AuthorityTag) => {
     const query = authoritySearch.trim().toLowerCase();
     const matches = !query || tag.label.toLowerCase().includes(query);
     const unused = !settings.billAssignmentAuthorityTags.some((item) => item.id === tag.id && item.type === tag.type);
     return matches && unused;
-  });
+  };
+  const showSpeakerAuthorityCandidate = authorityMatches(speakerAuthorityCandidate);
+  const studentAuthorityCandidates = memberOptions
+    .filter((member) => member.role === "student")
+    .map((member) => ({ id: member.id, label: member.name, type: "member" as const }))
+    .filter(authorityMatches);
+  const hasAuthorityCandidates = showSpeakerAuthorityCandidate || studentAuthorityCandidates.length > 0;
 
   const authorityTags = (settings.billAssignmentAuthorityTags.some((tag) => tag.type === "teacher")
     ? settings.billAssignmentAuthorityTags
     : [{ id: "teachers", label: "Teachers", type: "teacher" as const, locked: true }, ...settings.billAssignmentAuthorityTags]
-  ).map((tag) => tag.id === "speaker-of-the-house" && tag.type === "role" ? { ...tag, label: `Speaker of the House: ${speakerName}` } : tag);
+  ).map((tag) => tag.id === "speaker-of-the-house" && tag.type === "role" ? { ...tag, label: speakerAuthorityCandidate.label } : tag);
 
   const encodeSettings = () => {
     try {
@@ -920,7 +966,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     return (
       <div className="grid gap-2">
         {rows.filter((row) => row.show !== false).map((row) => (
-          <Toggle key={row.key} checked={!!current[row.key]} onChange={(value) => setRoleAction(roleKey, row.key, value)} title={row.label} />
+          <Toggle key={row.key} variant="checkbox" checked={!!current[row.key]} onChange={(value) => setRoleAction(roleKey, row.key, value)} title={row.label} />
         ))}
       </div>
     );
@@ -1090,9 +1136,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <SettingRow indent title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
               title="Cosponsorship"
-              actionInline
               action={
-                <div className="w-72">
+                <div className="w-[22rem]">
                   <SettingSelect value={settings.cosponsorshipMode} onValueChange={(value) => setSettings({ cosponsorshipMode: value, cosponsorAfterCommitteeReport: false })}>
                     <SelectItem value="always">Always allowed</SelectItem>
                     <SelectItem value="before_report">Only before bill is reported from all committees</SelectItem>
@@ -1167,12 +1212,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 wide
                 control={
                   <div
-                    className="min-w-0"
+                    className="relative min-w-0"
                     onBlur={(event) => {
                       if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setAuthorityOpen(false);
                     }}
                   >
-                    <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500">
+                    <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => setAuthorityOpen(true)}>
                       {authorityTags.map((tag) => (
                         <button
                           key={`${tag.type}:${tag.id}`}
@@ -1187,12 +1232,25 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                         value={authoritySearch}
                         onChange={(event) => setAuthoritySearch(event.target.value)}
                         onFocus={() => setAuthorityOpen(true)}
-                        placeholder="Search people with bill assignment authority..."
-                        className="min-w-[20rem] flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
+                        placeholder="Search students"
+                        className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
                       />
                     </div>
-                    {authorityOpen && <div className="mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
-                      {authorityCandidates.length ? authorityCandidates.map((tag) => (
+                    {authorityOpen && <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
+                      {hasAuthorityCandidates ? (
+                        <>
+                          {showSpeakerAuthorityCandidate && (
+                            <button
+                              type="button"
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={() => addAuthorityTag(speakerAuthorityCandidate)}
+                              className="block w-full px-3 py-2 text-left text-sm hover:bg-blue-50"
+                            >
+                              #1 {speakerAuthorityCandidate.label}
+                            </button>
+                          )}
+                          {studentAuthorityCandidates.length > 0 && <div className="border-t border-gray-100 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">#2 Students</div>}
+                          {studentAuthorityCandidates.map((tag) => (
                         <button
                           key={`${tag.type}:${tag.id}`}
                           type="button"
@@ -1202,7 +1260,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                         >
                           {tag.label}
                         </button>
-                      )) : <div className="px-3 py-2 text-sm text-gray-500">No matches</div>}
+                          ))}
+                        </>
+                      ) : <div className="px-3 py-2 text-sm text-gray-500">No matches</div>}
                     </div>}
                   </div>
                 }
@@ -1252,10 +1312,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-4">
           <SettingsGroup title="Students">
-            <Toggle checked={settings.studentCanCreateBills} onChange={(v) => setSettings({ studentCanCreateBills: v })} title="Create bills" />
-            <Toggle checked={settings.studentCanAnnounce} onChange={(v) => setSettings({ studentCanAnnounce: v })} title="Make announcements in announcement boards" />
-            <Toggle checked={settings.studentCanComment} onChange={(v) => setSettings({ studentCanComment: v })} title="Make comments in announcement boards" />
-            <Toggle checked={settings.studentCanReact} onChange={(v) => setSettings({ studentCanReact: v })} title="React to announcements and comments in announcement boards" />
+            <Toggle variant="checkbox" checked={settings.studentCanCreateBills} onChange={(v) => setSettings({ studentCanCreateBills: v })} title="Create bills" />
+            <Toggle variant="checkbox" checked={settings.studentCanAnnounce} onChange={(v) => setSettings({ studentCanAnnounce: v })} title="Make announcements in announcement boards" />
+            <Toggle variant="checkbox" checked={settings.studentCanComment} onChange={(v) => setSettings({ studentCanComment: v })} title="Make comments in announcement boards" />
+            <Toggle variant="checkbox" checked={settings.studentCanReact} onChange={(v) => setSettings({ studentCanReact: v })} title="React to announcements and comments in announcement boards" />
           </SettingsGroup>
           <SettingsGroup title="Parties" disabled={!settings.enableParties}>
             <SettingRow
@@ -1269,9 +1329,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             />
           </SettingsGroup>
           <SettingsGroup title="Committees" disabled={!settings.enableCommittees}>
-            <Toggle checked={settings.committeesCanEditBills} onChange={(v) => setSettings({ committeesCanEditBills: v })} title="Revise referred bills" />
-            <Toggle checked={settings.committeesCanVoteBills} onChange={(v) => setSettings({ committeesCanVoteBills: v })} title="Vote on referred bills" />
-            <Toggle checked={settings.committeesCanReportBills} onChange={(v) => setSettings({ committeesCanReportBills: v })} title="Committee report" />
+            <Toggle variant="checkbox" checked={settings.committeesCanEditBills} onChange={(v) => setSettings({ committeesCanEditBills: v })} title="Revise referred bills" />
+            <Toggle variant="checkbox" checked={settings.committeesCanVoteBills} onChange={(v) => setSettings({ committeesCanVoteBills: v })} title="Vote on referred bills" />
+            <Toggle variant="checkbox" checked={settings.committeesCanReportBills} onChange={(v) => setSettings({ committeesCanReportBills: v })} title="Committee report" />
           </SettingsGroup>
           <SettingsGroup title="Caucuses" disabled={!settings.enableCaucuses}>
             <SettingRow
@@ -1285,8 +1345,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             />
           </SettingsGroup>
           <SettingsGroup title="Speaker of the House">
-            <Toggle checked={settings.speakerCanReferBills} onChange={(v) => setSettings({ speakerCanReferBills: v })} title="Refer bills to committees" />
-            <Toggle checked={settings.speakerCanCalendarBills} onChange={(v) => setSettings({ speakerCanCalendarBills: v })} title="Calendar bills" />
+            <Toggle variant="checkbox" checked={settings.speakerCanReferBills} onChange={(v) => setSettings({ speakerCanReferBills: v })} title="Refer bills to committees" />
+            <Toggle variant="checkbox" checked={settings.speakerCanCalendarBills} onChange={(v) => setSettings({ speakerCanCalendarBills: v })} title="Calendar bills" />
           </SettingsGroup>
           <SettingsGroup title="Majority Whip" disabled={!settings.enableParties}>
             {roleActionControls("majorityWhipActions")}
