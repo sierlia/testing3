@@ -13,6 +13,7 @@ import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 type TabId = "general" | "parties" | "committees" | "bills" | "organizations" | "elections" | "profiles" | "permissions" | "joining";
 
 const allParties = ["Democratic Party", "Republican Party", "Green Party", "Libertarian Party", "Independent Party"];
+const defaultPartyOptions = allParties.filter((party) => party !== "Independent Party");
 const allCommittees = [
   "Education Committee",
   "Environment & Energy Committee",
@@ -252,6 +253,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const [authorityOpen, setAuthorityOpen] = useState(false);
   const [billSubmissionSearch, setBillSubmissionSearch] = useState("");
   const [billSubmissionOpen, setBillSubmissionOpen] = useState(false);
+  const [profileEditingSearch, setProfileEditingSearch] = useState("");
+  const [profileEditingOpen, setProfileEditingOpen] = useState(false);
   const [memberOptions, setMemberOptions] = useState<MemberOption[]>([]);
   const [teacherClasses, setTeacherClasses] = useState<ClassOption[]>([]);
   const [settingsCode, setSettingsCode] = useState("");
@@ -262,6 +265,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const authoritySearchRef = useRef<HTMLDivElement | null>(null);
   const billSubmissionSearchRef = useRef<HTMLDivElement | null>(null);
+  const profileEditingSearchRef = useRef<HTMLDivElement | null>(null);
   const [settings, setSettingsState] = useState({
     allowedParties: ["Democratic Party", "Republican Party"],
     allowStudentCreatedParties: false,
@@ -310,6 +314,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     profilePartyRequired: true,
     profilesEnabled: true,
     profileEditingAllowed: true,
+    profileEditingMode: "all",
+    profileEditingStudentIds: [] as string[],
+    selfSufficiencyMode: "teacher-initiated",
+    autoOpenVotes: false,
+    autoCloseVotes: false,
+    autoCloseVoteParticipationPct: 75,
     teacherPermissions: "full",
     studentPermissions: "standard",
     leadershipPermissions: "moderate",
@@ -472,6 +482,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           organizationElectionMode: s?.elections?.organizations?.mode ?? prev.organizationElectionMode,
           profilesEnabled: s?.profiles?.enabled ?? prev.profilesEnabled,
           profileEditingAllowed: s?.profiles?.editingAllowed ?? prev.profileEditingAllowed,
+          profileEditingMode: s?.profiles?.editingMode ?? (s?.profiles?.editingAllowed === false ? "none" : prev.profileEditingMode),
+          profileEditingStudentIds: s?.profiles?.editingStudentIds ?? prev.profileEditingStudentIds,
           profileDistrictRequired: s?.profiles?.districtRequired ?? prev.profileDistrictRequired,
           profilePartyRequired: s?.profiles?.partyRequired ?? prev.profilePartyRequired,
           teacherPermissions: s?.permissions?.teacher ?? prev.teacherPermissions,
@@ -521,6 +533,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           organizationDescriptionWordLimit: s?.wordLimits?.organizationDescription ?? prev.organizationDescriptionWordLimit,
           announcementWordLimit: s?.wordLimits?.announcement ?? prev.announcementWordLimit,
           commentWordLimit: s?.wordLimits?.comment ?? prev.commentWordLimit,
+          selfSufficiencyMode: s?.automation?.selfSufficiencyMode ?? prev.selfSufficiencyMode,
+          autoOpenVotes: s?.automation?.autoOpenVotes ?? prev.autoOpenVotes,
+          autoCloseVotes: s?.automation?.autoCloseVotes ?? prev.autoCloseVotes,
+          autoCloseVoteParticipationPct: s?.automation?.autoCloseVoteParticipationPct ?? prev.autoCloseVoteParticipationPct,
         }));
         setSelectedQuickSetup(null);
         setQuickSetupModified(false);
@@ -547,10 +563,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       const target = event.target as Node | null;
       if (authorityOpen && target && !authoritySearchRef.current?.contains(target)) setAuthorityOpen(false);
       if (billSubmissionOpen && target && !billSubmissionSearchRef.current?.contains(target)) setBillSubmissionOpen(false);
+      if (profileEditingOpen && target && !profileEditingSearchRef.current?.contains(target)) setProfileEditingOpen(false);
     };
     document.addEventListener("pointerdown", closeSearches);
     return () => document.removeEventListener("pointerdown", closeSearches);
-  }, [authorityOpen, billSubmissionOpen]);
+  }, [authorityOpen, billSubmissionOpen, profileEditingOpen]);
 
   const syncPartiesAndCommittees = async (classId: string) => {
     if (settings.allowedParties.length) {
@@ -666,6 +683,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 ...(existing?.profiles ?? {}),
                 enabled: settings.profilesEnabled,
                 editingAllowed: settings.profileEditingAllowed,
+                editingMode: settings.profileEditingMode,
+                editingStudentIds: settings.profileEditingStudentIds,
                 districtRequired: settings.profileDistrictRequired,
                 partyRequired: settings.profilePartyRequired,
               },
@@ -752,6 +771,13 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 ...(existing?.notifications ?? {}),
                 announcements: settings.notifyOnAnnouncements,
                 calendaredBills: settings.notifyOnCalendaredBills,
+              },
+              automation: {
+                ...(existing?.automation ?? {}),
+                selfSufficiencyMode: settings.selfSufficiencyMode,
+                autoOpenVotes: settings.autoOpenVotes,
+                autoCloseVotes: settings.autoCloseVotes,
+                autoCloseVoteParticipationPct: Math.min(100, Math.max(1, Number(settings.autoCloseVoteParticipationPct) || 75)),
               },
               students: {
                 ...(existing?.students ?? {}),
@@ -853,6 +879,22 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     setSettings({ billSubmissionStudentIds: settings.billSubmissionStudentIds.filter((id) => id !== studentId) });
   };
 
+  const selectedProfileEditingStudents = studentOptions.filter((member) => settings.profileEditingStudentIds.includes(member.id));
+  const profileEditingCandidates = studentOptions.filter((member) => {
+    const query = profileEditingSearch.trim().toLowerCase();
+    return !settings.profileEditingStudentIds.includes(member.id) && (!query || member.name.toLowerCase().includes(query) || member.email.toLowerCase().includes(query));
+  });
+
+  const addProfileEditingStudent = (studentId: string) => {
+    if (settings.profileEditingStudentIds.includes(studentId)) return;
+    setSettings({ profileEditingStudentIds: [...settings.profileEditingStudentIds, studentId] });
+    setProfileEditingSearch("");
+  };
+
+  const removeProfileEditingStudent = (studentId: string) => {
+    setSettings({ profileEditingStudentIds: settings.profileEditingStudentIds.filter((id) => id !== studentId) });
+  };
+
   const encodeSettings = () => {
     try {
       return btoa(unescape(encodeURIComponent(JSON.stringify(settings))));
@@ -923,6 +965,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           floorVoteThresholdPct: raw?.floor?.voteThresholdPct ?? settings.floorVoteThresholdPct,
           profilesEnabled: raw?.profiles?.enabled ?? settings.profilesEnabled,
           profileEditingAllowed: raw?.profiles?.editingAllowed ?? settings.profileEditingAllowed,
+          profileEditingMode: raw?.profiles?.editingMode ?? settings.profileEditingMode,
+          profileEditingStudentIds: raw?.profiles?.editingStudentIds ?? settings.profileEditingStudentIds,
           profileDistrictRequired: raw?.profiles?.districtRequired ?? settings.profileDistrictRequired,
           profilePartyRequired: raw?.profiles?.partyRequired ?? settings.profilePartyRequired,
           announcementBoardsEnabled: raw?.organizations?.announcementBoards?.enabled ?? settings.announcementBoardsEnabled,
@@ -947,6 +991,10 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           organizationDescriptionWordLimit: raw?.wordLimits?.organizationDescription ?? settings.organizationDescriptionWordLimit,
           announcementWordLimit: raw?.wordLimits?.announcement ?? settings.announcementWordLimit,
           commentWordLimit: raw?.wordLimits?.comment ?? settings.commentWordLimit,
+          selfSufficiencyMode: raw?.automation?.selfSufficiencyMode ?? settings.selfSufficiencyMode,
+          autoOpenVotes: raw?.automation?.autoOpenVotes ?? settings.autoOpenVotes,
+          autoCloseVotes: raw?.automation?.autoCloseVotes ?? settings.autoCloseVotes,
+          autoCloseVoteParticipationPct: raw?.automation?.autoCloseVoteParticipationPct ?? settings.autoCloseVoteParticipationPct,
         },
         `Settings copied from ${selected.name}`,
       );
@@ -971,7 +1019,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       billSubmissionMode: "all",
       organizationCreationAllowed: true,
       profileEditingAllowed: true,
+      profileEditingMode: "all",
       studentCanCreateBills: true,
+      selfSufficiencyMode: "teacher-initiated",
+      autoOpenVotes: false,
+      autoCloseVotes: false,
     };
     const applyPresetState = (patch: Partial<typeof settings>, message: string) => {
       setSettingsState((prev) => ({ ...prev, ...patch }));
@@ -985,7 +1037,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     } else if (kind === "blended") {
       applyPresetState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false }, "Hybrid Simulation applied");
     } else {
-      applyPresetState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false, profilesEnabled: false, profileEditingAllowed: false, enableCaucuses: false, enableOrganizationElections: false }, "Essentialist Simulation applied");
+      applyPresetState({ ...common, announcementBoardsEnabled: false, announcementCommentsEnabled: false, announcementEmotesEnabled: false, profilesEnabled: false, profileEditingAllowed: false, profileEditingMode: "none", enableCaucuses: false, enableOrganizationElections: false }, "Essentialist Simulation applied");
     }
   };
 
@@ -1067,13 +1119,14 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const profilesSelect = (
     <div className="w-80">
       <SettingSelect
-        value={!settings.profilesEnabled ? "disabled" : settings.profileEditingAllowed ? "editing-allowed" : "editing-not-allowed"}
+        value={!settings.profilesEnabled ? "disabled" : settings.profileEditingMode === "select" ? "editing-select" : settings.profileEditingAllowed ? "editing-allowed" : "editing-not-allowed"}
         onValueChange={(value) => {
           if (value === "disabled") setSettings({ profilesEnabled: false, profileEditingAllowed: false });
-          else setSettings({ profilesEnabled: true, profileEditingAllowed: value === "editing-allowed" });
+          else setSettings({ profilesEnabled: true, profileEditingAllowed: value !== "editing-not-allowed", profileEditingMode: value === "editing-select" ? "select" : value === "editing-allowed" ? "all" : "none" });
         }}
       >
         <SelectItem value="editing-allowed">Enabled, editing allowed</SelectItem>
+        <SelectItem value="editing-select">Enabled, editing allowed for select students</SelectItem>
         <SelectItem value="editing-not-allowed">Enabled, editing not allowed</SelectItem>
         <SelectItem value="disabled">Disabled</SelectItem>
       </SettingSelect>
@@ -1085,15 +1138,15 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       const quickSetups = [
         {
           id: "all-online" as const,
-          name: "Fully Digital Simulation",
-          description: "Enable all features - optimal for digital courses or centralizing participation online.",
+          name: "Enable all features",
+          description: "Enable all features - optimal for digital courses and centralizing participation online.",
           classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
           selectedClasses: "border-blue-500 bg-blue-50 ring-1 ring-blue-100",
           tagClasses: "bg-blue-600 text-white",
         },
         {
           id: "blended" as const,
-          name: "Hybrid Simulation",
+          name: "Disable message boards",
           description: "Disable message boards to facilitate in-person discussion.",
           classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
           selectedClasses: "border-blue-500 bg-blue-50 ring-1 ring-blue-100",
@@ -1101,8 +1154,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
         },
         {
           id: "core" as const,
-          name: "Essentialist Simulation",
-          description: "Disable message boards, profiles, and non-essential tools to optimize for time or complexity constraints.",
+          name: "Disable non-essential tools",
+          description: "Disable message boards, profiles, and non-essential tools to refine for time or complexity constraints.",
           classes: "border-gray-200 bg-white hover:border-gray-400 hover:bg-gray-50",
           selectedClasses: "border-blue-500 bg-blue-50 ring-1 ring-blue-100",
           tagClasses: "bg-blue-600 text-white",
@@ -1113,6 +1166,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       return (
         <div className="space-y-4">
           <SettingsGroup title="Quick setup">
+            <div className="mb-2 text-sm font-semibold text-gray-900">Level of Virtual Features</div>
             <div className="grid gap-2 md:grid-cols-3">
               {quickSetups.map((item) => {
                 const selected = selectedQuickSetup === item.id;
@@ -1135,6 +1189,39 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 );
               })}
             </div>
+            <div className="mt-4 text-sm font-semibold text-gray-900">Self-sufficiency</div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {[
+                { id: "teacher-initiated", name: "Actions are teacher-initiated", description: "Teachers open and close major simulation actions manually." },
+                { id: "self-sufficient", name: "Simulation is fully self-sufficient", description: "Votes can open automatically and close after the configured participation threshold." },
+              ].map((item) => {
+                const selected = settings.selfSufficiencyMode === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSettings({
+                      selfSufficiencyMode: item.id,
+                      autoOpenVotes: item.id === "self-sufficient",
+                      autoCloseVotes: item.id === "self-sufficient",
+                    })}
+                    className={`rounded-lg border-2 bg-white p-4 text-left transition ${selected ? "border-blue-500 bg-blue-50 ring-1 ring-blue-100" : "border-gray-200 hover:border-gray-400 hover:bg-gray-50"}`}
+                  >
+                    <span className="block text-base font-semibold text-gray-950">{item.name}</span>
+                    <span className="mt-1 block text-sm leading-5 text-gray-600">{item.description}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {settings.selfSufficiencyMode === "self-sufficient" && (
+              <div className="mt-2">
+                <SettingRow
+                  title="Auto-close vote threshold"
+                  description="Automatically close votes once this percentage of present members have voted."
+                  control={<PercentInput value={settings.autoCloseVoteParticipationPct} onChange={(value) => setSettings({ autoCloseVoteParticipationPct: value })} />}
+                />
+              </div>
+            )}
           </SettingsGroup>
 
           <SettingsGroup title="Import settings">
@@ -1356,10 +1443,22 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </DisabledBlock>
           <SettingsGroup title="Parties" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableParties, (v) => setSettings({ enableParties: v }), !settings.enableOrganizations)}>
             <DisabledBlock disabled={!settings.enableParties}>
-              <div className="grid gap-2 sm:grid-cols-2">
-                {allParties.map((party) => (
-                  <Toggle key={party} checked={settings.allowedParties.includes(party)} onChange={() => setSettings({ allowedParties: settings.allowedParties.includes(party) ? settings.allowedParties.filter((p) => p !== party) : [...settings.allowedParties, party] })} title={party} description="Create and approve this party for the class." />
-                ))}
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">Default parties</div>
+                    <div className="text-sm text-gray-600">Choose which parties are created and approved for this class.</div>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" onClick={() => setSettings({ allowedParties: [...defaultPartyOptions] })} className="text-sm font-medium text-blue-600">Select all</button>
+                    <button type="button" onClick={() => setSettings({ allowedParties: [] })} className="text-sm font-medium text-blue-600">Deselect all</button>
+                  </div>
+                </div>
+                <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
+                  {defaultPartyOptions.map((party) => (
+                    <Toggle key={party} checked={settings.allowedParties.includes(party)} onChange={() => setSettings({ allowedParties: settings.allowedParties.includes(party) ? settings.allowedParties.filter((p) => p !== party) : [...settings.allowedParties, party] })} title={party} />
+                  ))}
+                </div>
               </div>
               <Toggle checked={settings.allowStudentCreatedParties} onChange={(v) => setSettings({ allowStudentCreatedParties: v })} title="Allow student-created parties" description="Students can propose custom parties from the organizations area." />
               <Toggle checked={settings.requirePartyApproval} onChange={(v) => setSettings({ requirePartyApproval: v })} title="Require approval for new parties" description="Student-created parties stay pending until approved." />
@@ -1371,14 +1470,22 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </SettingsGroup>
           <SettingsGroup title="Committees" disabled={!settings.enableOrganizations} action={enabledDisabledSelect(settings.enableCommittees, (v) => setSettings({ enableCommittees: v }), !settings.enableOrganizations)}>
             <DisabledBlock disabled={!settings.enableCommittees}>
-              <div className="flex items-center justify-end gap-3">
-                <button onClick={() => setSettings({ enabledCommittees: [...allCommittees] })} className="text-sm font-medium text-blue-600">Select all</button>
-                <button onClick={() => setSettings({ enabledCommittees: [] })} className="text-sm font-medium text-blue-600">Deselect all</button>
-              </div>
-              <div className="grid gap-2">
-                {allCommittees.map((committee) => (
-                  <Toggle key={committee} checked={settings.enabledCommittees.includes(committee)} onChange={() => setSettings({ enabledCommittees: settings.enabledCommittees.includes(committee) ? settings.enabledCommittees.filter((c) => c !== committee) : [...settings.enabledCommittees, committee] })} title={committee} description="Enable this committee for bill referrals and membership." />
-                ))}
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-semibold text-gray-900">Default committees</div>
+                    <div className="text-sm text-gray-600">Choose which committees are available for referrals and membership.</div>
+                  </div>
+                  <div className="flex shrink-0 gap-2">
+                    <button type="button" onClick={() => setSettings({ enabledCommittees: [...allCommittees] })} className="text-sm font-medium text-blue-600">Select all</button>
+                    <button type="button" onClick={() => setSettings({ enabledCommittees: [] })} className="text-sm font-medium text-blue-600">Deselect all</button>
+                  </div>
+                </div>
+                <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
+                  {allCommittees.map((committee) => (
+                    <Toggle key={committee} checked={settings.enabledCommittees.includes(committee)} onChange={() => setSettings({ enabledCommittees: settings.enabledCommittees.includes(committee) ? settings.enabledCommittees.filter((c) => c !== committee) : [...settings.enabledCommittees, committee] })} title={committee} />
+                  ))}
+                </div>
               </div>
               <Toggle checked={settings.allowSelfJoinCommittees} onChange={(v) => setSettings({ allowSelfJoinCommittees: v })} title="Allow students to join committees on their own" description="When off, students submit preference rankings." />
               <div className="grid gap-3">
@@ -1502,7 +1609,63 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     if (activeTab === "profiles") {
       return (
-        <div className={`${settings.profilesEnabled ? "" : "pointer-events-none opacity-45"}`}>
+        <div className={`space-y-4 ${settings.profilesEnabled ? "" : "pointer-events-none opacity-45"}`}>
+          {settings.profileEditingMode === "select" && (
+            <SettingRow
+              title="Students allowed to edit profiles"
+              description="Only selected students can edit their profile fields."
+              wide
+              control={
+                <div
+                  ref={profileEditingSearchRef}
+                  className="relative ml-auto w-[32rem] max-w-full"
+                  onBlur={(event) => {
+                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setProfileEditingOpen(false);
+                  }}
+                >
+                  <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => setProfileEditingOpen(true)}>
+                    <Search className="h-4 w-4 shrink-0 text-gray-400" />
+                    {selectedProfileEditingStudents.map((student) => (
+                      <button
+                        key={student.id}
+                        type="button"
+                        onClick={() => removeProfileEditingStudent(student.id)}
+                        className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200"
+                      >
+                        {student.name} x
+                      </button>
+                    ))}
+                    <input
+                      value={profileEditingSearch}
+                      onChange={(event) => setProfileEditingSearch(event.target.value)}
+                      onFocus={() => setProfileEditingOpen(true)}
+                      placeholder="Search students"
+                      className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
+                    />
+                  </div>
+                  {profileEditingOpen && (
+                    <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
+                      {profileEditingCandidates.length ? (
+                        profileEditingCandidates.map((student) => (
+                          <button
+                            key={student.id}
+                            type="button"
+                            onMouseDown={(event) => event.preventDefault()}
+                            onClick={() => addProfileEditingStudent(student.id)}
+                            className="block w-full px-3 py-2 text-left text-sm hover:bg-blue-50"
+                          >
+                            {student.name}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-gray-500">No matches</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              }
+            />
+          )}
           <ProfileLayoutEditor embedded />
         </div>
       );

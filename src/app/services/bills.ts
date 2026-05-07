@@ -48,12 +48,16 @@ export async function fetchBillsForCurrentClass() {
     const profile = profileMap.get((row as any).user_id);
     cosponsorsByBill.set(billId, [...(cosponsorsByBill.get(billId) ?? []), profile ?? { user_id: (row as any).user_id, display_name: 'Unknown', party: null }]);
   }
-  const committeeByBill = new Map((referralRows ?? []).map((r: any) => [r.bill_id, r.committees?.name ?? null]));
+  const committeesByBill = new Map<string, string[]>();
+  for (const row of referralRows ?? []) {
+    const name = (row as any).committees?.name;
+    if (name) committeesByBill.set((row as any).bill_id, [...(committeesByBill.get((row as any).bill_id) ?? []), name]);
+  }
 
   return (data ?? []).map((b: any) => ({
     ...b,
     profiles: profileMap.get(b.author_user_id) ?? null,
-    committee_name: committeeByBill.get(b.id) ?? null,
+    committee_name: committeesByBill.get(b.id)?.join(", ") ?? null,
     cosponsor_count: cosponsorsByBill.get(b.id)?.length ?? 0,
     cosponsors: cosponsorsByBill.get(b.id) ?? [],
   })) as BillRecord[];
@@ -365,11 +369,15 @@ export async function fetchReportedBillsForTeacherCalendar() {
   if (bErr) throw bErr;
   if (cErr) throw cErr;
   const calendarMap = new Map((calendar ?? []).map((r: any) => [r.bill_id, r]));
-  const committeeMap = new Map((referrals ?? []).map((r: any) => [r.bill_id, r.committees?.name ?? 'Committee']));
+  const committeeMap = new Map<string, string[]>();
+  for (const row of referrals ?? []) {
+    const name = (row as any).committees?.name ?? 'Committee';
+    committeeMap.set((row as any).bill_id, [...(committeeMap.get((row as any).bill_id) ?? []), name]);
+  }
   return (bills ?? []).map((bill: any) => ({
     ...bill,
     calendar: calendarMap.get(bill.id) ?? null,
-    committee_name: committeeMap.get(bill.id) ?? '',
+    committee_name: committeeMap.get(bill.id)?.join(', ') ?? '',
   }));
 }
 

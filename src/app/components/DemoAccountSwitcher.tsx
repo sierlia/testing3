@@ -243,6 +243,7 @@ export function DemoAccountSwitcher() {
     try {
       await switchDemoAccount(key, { preserveLocation: true });
       setOpen(false);
+      window.location.reload();
     } catch (error: any) {
       toast.error(error.message || "Could not switch demo account");
     } finally {

@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { CollapsibleText } from "../components/CollapsibleText";
 import { supabase } from "../utils/supabase";
-import { GraduationCap, LogOut, MoreHorizontal, Users, Send, Pencil, Save, X, UserPlus, Trash2, UserX } from "lucide-react";
+import { GraduationCap, LogOut, MoreHorizontal, Plus, Users, Send, Pencil, Save, X, UserPlus, Trash2, UserX } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { DefaultAvatar } from "../components/DefaultAvatar";
@@ -13,6 +13,7 @@ import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "..
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
+type Subcommittee = { id: string; committee_id: string; class_id: string; name: string; description: string | null; created_at: string };
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null; role?: string | null; organization_role?: MembershipRole | null };
 
 type Announcement = { id: string; committee_id: string; author_user_id: string; title: string; body: string; created_at: string; author?: ProfileLite | null };
@@ -62,6 +63,7 @@ const dashboardCache = new Map<
     myRole: MembershipRole | null;
     viewerRole: "teacher" | "student" | null;
     allowSelfJoin: boolean;
+    subcommittees: Subcommittee[];
     announcements: Announcement[];
     selectedAnnouncementId: string | null;
     commentsByAnnouncement: Record<string, ThreadComment[]>;
@@ -89,6 +91,8 @@ export function CommitteeDashboard() {
   const [joining, setJoining] = useState(false);
   const [leaving, setLeaving] = useState(false);
   const [allowSelfJoin, setAllowSelfJoin] = useState(false);
+  const [subcommittees, setSubcommittees] = useState<Subcommittee[]>([]);
+  const [newSubcommitteeName, setNewSubcommitteeName] = useState("");
 
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
@@ -139,6 +143,7 @@ export function CommitteeDashboard() {
         setMyRole(cached.myRole);
         setViewerRole(cached.viewerRole);
         setAllowSelfJoin(cached.allowSelfJoin);
+        setSubcommittees(cached.subcommittees);
         setAnnouncements(cached.announcements);
         setSelectedAnnouncementId((prev) => prev ?? cached.selectedAnnouncementId);
         setCommentsByAnnouncement(cached.commentsByAnnouncement);
@@ -184,6 +189,12 @@ export function CommitteeDashboard() {
           nextAllowSelfJoin = !!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join";
         }
         setAllowSelfJoin(nextAllowSelfJoin);
+        const { data: subRows } = await supabase
+          .from("subcommittees")
+          .select("id,committee_id,class_id,name,description,created_at")
+          .eq("committee_id", committeeId)
+          .order("created_at", { ascending: true });
+        setSubcommittees((subRows ?? []) as Subcommittee[]);
 
         const { data: mRows, error: mErr } = await supabase
           .from("committee_members")
@@ -314,6 +325,7 @@ export function CommitteeDashboard() {
             myRole: nextMyRole,
             viewerRole: ((prof as any)?.role ?? null) as any,
             allowSelfJoin: nextAllowSelfJoin,
+            subcommittees: (subRows ?? []) as Subcommittee[],
             announcements: mappedAnnouncements,
             selectedAnnouncementId:
               requestedAnnouncement && mappedAnnouncements.some((a) => a.id === requestedAnnouncement)
@@ -330,6 +342,7 @@ export function CommitteeDashboard() {
             myRole: nextMyRole,
             viewerRole: ((prof as any)?.role ?? null) as any,
             allowSelfJoin: nextAllowSelfJoin,
+            subcommittees: (subRows ?? []) as Subcommittee[],
             announcements: mappedAnnouncements,
             selectedAnnouncementId:
               requestedAnnouncement && mappedAnnouncements.some((a) => a.id === requestedAnnouncement)
@@ -523,6 +536,35 @@ export function CommitteeDashboard() {
     } catch (e: any) {
       toast.error(e.message || "Could not rename committee");
     }
+  };
+
+  const addSubcommittee = async () => {
+    if (!committee || !newSubcommitteeName.trim()) return;
+    const { data, error } = await supabase
+      .from("subcommittees")
+      .insert({
+        committee_id: committee.id,
+        class_id: committee.class_id,
+        name: newSubcommitteeName.trim(),
+        description: "",
+      } as any)
+      .select("id,committee_id,class_id,name,description,created_at")
+      .single();
+    if (error) return toast.error(error.message || "Could not create subcommittee");
+    const next = [...subcommittees, data as Subcommittee];
+    setSubcommittees(next);
+    setNewSubcommitteeName("");
+    const cached = dashboardCache.get(committeeId);
+    if (cached) dashboardCache.set(committeeId, { ...cached, subcommittees: next });
+  };
+
+  const deleteSubcommittee = async (subcommitteeId: string) => {
+    const { error } = await supabase.from("subcommittees").delete().eq("id", subcommitteeId);
+    if (error) return toast.error(error.message || "Could not delete subcommittee");
+    const next = subcommittees.filter((item) => item.id !== subcommitteeId);
+    setSubcommittees(next);
+    const cached = dashboardCache.get(committeeId);
+    if (cached) dashboardCache.set(committeeId, { ...cached, subcommittees: next });
   };
 
   const postAnnouncement = async () => {
@@ -994,6 +1036,45 @@ export function CommitteeDashboard() {
                 </div>
               ) : (
                 <p className="text-gray-700 whitespace-pre-line">{committee.description || "No description yet."}</p>
+              )}
+            </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900">Subcommittees</h2>
+              </div>
+              {(isLeader || isTeacher) && (
+                <div className="mb-3 flex gap-2">
+                  <input
+                    value={newSubcommitteeName}
+                    onChange={(event) => setNewSubcommitteeName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") void addSubcommittee();
+                    }}
+                    placeholder="Subcommittee name"
+                    className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <button type="button" onClick={() => void addSubcommittee()} disabled={!newSubcommitteeName.trim()} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </button>
+                </div>
+              )}
+              {subcommittees.length ? (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {subcommittees.map((subcommittee) => (
+                    <div key={subcommittee.id} className="flex items-center justify-between gap-2 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm">
+                      <span className="font-medium text-gray-800">{subcommittee.name}</span>
+                      {(isLeader || isTeacher) && (
+                        <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} className="rounded-md p-1 text-gray-500 hover:bg-red-50 hover:text-red-600" aria-label="Delete subcommittee">
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-500">No subcommittees yet.</div>
               )}
             </div>
 

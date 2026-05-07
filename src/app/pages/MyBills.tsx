@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Plus, Search } from "lucide-react";
+import { Check, Circle, Clock, Plus, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { fetchMyBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
@@ -18,6 +18,38 @@ function statusClass(status: string) {
 
 function statusLabel(status: string) {
   return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function billTrackerSteps(status: string) {
+  const referred = ["in_committee", "committee_vote", "reported", "calendared", "floor", "passed", "failed"].includes(status);
+  const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
+  const calendared = ["calendared", "floor", "passed", "failed"].includes(status);
+  const floor = ["floor", "passed", "failed"].includes(status);
+  const final = ["passed", "failed"].includes(status);
+  return [
+    { label: "Introduced", done: status !== "draft", current: status === "submitted" },
+    { label: "Committee", done: referred, current: status === "in_committee" || status === "committee_vote" },
+    { label: "Reported", done: reported, current: status === "reported" },
+    { label: "Calendared", done: calendared, current: status === "calendared" },
+    { label: "Floor", done: floor, current: status === "floor" },
+    { label: final && status === "failed" ? "Failed" : "Passed", done: final, current: final },
+  ];
+}
+
+function BillTracker({ status }: { status: string }) {
+  return (
+    <div className="mt-3 grid max-w-2xl grid-cols-6 gap-1.5">
+      {billTrackerSteps(status).map((step) => (
+        <div key={step.label} className="min-w-0">
+          <div className={`h-1.5 rounded-full ${step.done ? "bg-blue-600" : step.current ? "bg-blue-300" : "bg-gray-200"}`} />
+          <div className={`mt-1 flex items-center gap-1 truncate text-[11px] ${step.done || step.current ? "text-gray-700" : "text-gray-400"}`}>
+            {step.done ? <Check className="h-3 w-3 flex-shrink-0" /> : step.current ? <Clock className="h-3 w-3 flex-shrink-0" /> : <Circle className="h-3 w-3 flex-shrink-0" />}
+            <span className="truncate">{step.label}</span>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 export function MyBills() {
@@ -122,6 +154,7 @@ export function MyBills() {
                     </div>
                     <h2 className="truncate font-semibold text-gray-900">{bill.title}</h2>
                     <p className="mt-1 text-xs text-gray-500">{new Date(bill.created_at).toLocaleDateString()}</p>
+                    <BillTracker status={bill.status} />
                   </div>
                 </Link>
               ))}

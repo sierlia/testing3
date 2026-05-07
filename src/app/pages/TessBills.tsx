@@ -130,7 +130,6 @@ export function TessBills() {
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const isTeacher = (user?.user_metadata as any)?.role === "teacher";
-  const currentUserId = user?.id ?? "";
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBill, setSelectedBill] = useState<BillView | null>(null);
   const [allBills, setAllBills] = useState<BillView[]>([]);
@@ -143,6 +142,8 @@ export function TessBills() {
     cosponsorId: "all",
   });
   const [sortBy, setSortBy] = useState<SortKey>("number");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const searchKey = searchParams.toString();
 
   useEffect(() => {
@@ -212,6 +213,14 @@ export function TessBills() {
       return a.billNumber - b.billNumber;
     });
   }, [allBills, filters, searchQuery, sortBy]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters, pageSize, searchQuery, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredBills.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageBills = filteredBills.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   const resetFilters = () => {
     setSearchQuery("");
@@ -319,8 +328,8 @@ export function TessBills() {
                 <div className="py-12 text-center text-gray-500">No bills found matching your criteria</div>
               ) : (
                 <div className="divide-y divide-gray-200">
-                  {filteredBills.map((bill) => {
-                    const authoredByMe = bill.sponsorId === currentUserId;
+                  {pageBills.map((bill) => {
+                    const teacherAuthored = bill.sponsorRole === "teacher";
                     return (
                     <div
                       key={bill.id}
@@ -331,8 +340,8 @@ export function TessBills() {
                         if (event.key === "Enter" || event.key === " ") handleBillClick(bill);
                       }}
                       className={`block w-full p-4 text-left transition-colors ${
-                        authoredByMe ? "bg-green-50/40 hover:bg-green-50/70" : "hover:bg-gray-50"
-                      } ${selectedBill?.id === bill.id && rowMode === "preview" ? (authoredByMe ? "bg-green-50 hover:bg-green-50" : "bg-blue-50 hover:bg-blue-50") : ""}`}
+                        teacherAuthored ? "bg-green-50/40 hover:bg-green-50/70" : "hover:bg-gray-50"
+                      } ${selectedBill?.id === bill.id && rowMode === "preview" ? (teacherAuthored ? "bg-green-50 hover:bg-green-50" : "bg-blue-50 hover:bg-blue-50") : ""}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0 flex-1">
@@ -369,6 +378,34 @@ export function TessBills() {
                 </div>
               )}
             </div>
+            {!loading && filteredBills.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-3 text-sm shadow-sm">
+                <div className="text-gray-600">
+                  Page {currentPage} of {totalPages} · Showing {(currentPage - 1) * pageSize + 1}-{Math.min(currentPage * pageSize, filteredBills.length)} of {filteredBills.length}
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 text-gray-600">
+                    Per page
+                    <select value={pageSize} onChange={(event) => setPageSize(Number(event.target.value))} className="rounded-md border border-gray-300 px-2 py-1 text-sm">
+                      {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size}</option>)}
+                    </select>
+                  </label>
+                  <button type="button" onClick={() => setPage(1)} disabled={currentPage === 1} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">First</button>
+                  <button type="button" onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={currentPage === 1} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">Previous</button>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={currentPage}
+                    onChange={(event) => setPage(Math.min(totalPages, Math.max(1, Number(event.target.value) || 1)))}
+                    className="w-16 rounded-md border border-gray-300 px-2 py-1.5 text-center text-sm"
+                    aria-label="Go to page"
+                  />
+                  <button type="button" onClick={() => setPage((value) => Math.min(totalPages, value + 1))} disabled={currentPage === totalPages} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">Next</button>
+                  <button type="button" onClick={() => setPage(totalPages)} disabled={currentPage === totalPages} className="rounded-md border border-gray-300 px-3 py-1.5 font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-40">Last</button>
+                </div>
+              </div>
+            )}
           </div>
 
           {rowMode === "preview" && (

@@ -11,6 +11,7 @@ type CommitteeRow = { id: string; name: string; description: string | null; crea
 type CommitteesCache = {
   committees: CommitteeRow[];
   memberCounts: Record<string, number>;
+  leadershipNames: Record<string, { chair?: string; ranking?: string }>;
   role: "teacher" | "student" | null;
   settings: any;
   preferencesSubmitted: boolean;
@@ -28,6 +29,7 @@ export function CommitteesHome() {
   const [committees, setCommittees] = useState<CommitteeRow[]>([]);
   const [memberCounts, setMemberCounts] = useState<Record<string, number>>({});
   const [memberNames, setMemberNames] = useState<Record<string, string[]>>({});
+  const [leadershipNames, setLeadershipNames] = useState<Record<string, { chair?: string; ranking?: string }>>({});
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
   const [settings, setSettings] = useState<any>({});
   const [activeClassId, setActiveClassId] = useState<string | null>(null);
@@ -45,6 +47,7 @@ export function CommitteesHome() {
     if (committeesHomeCache) {
       setCommittees(committeesHomeCache.committees);
       setMemberCounts(committeesHomeCache.memberCounts);
+      setLeadershipNames(committeesHomeCache.leadershipNames);
       setRole(committeesHomeCache.role);
       setSettings(committeesHomeCache.settings);
       setPreferencesSubmitted(committeesHomeCache.preferencesSubmitted);
@@ -117,7 +120,7 @@ export function CommitteesHome() {
         const ids = finalRows.map((r) => r.id);
         const { data: memRows } = await supabase
           .from("committee_members")
-          .select("committee_id,user_id")
+          .select("committee_id,user_id,role")
           .in("committee_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"]);
         const counts: Record<string, number> = {};
         const joined = new Set<string>();
@@ -132,16 +135,22 @@ export function CommitteesHome() {
           : ({ data: [] } as any);
         const profileNameMap = new Map((memberProfiles ?? []).map((row: any) => [row.user_id, row.display_name ?? "Member"]));
         const names: Record<string, string[]> = {};
+        const leaders: Record<string, { chair?: string; ranking?: string }> = {};
         for (const row of memRows ?? []) {
           const cid = (row as any).committee_id;
-          names[cid] = [...(names[cid] ?? []), profileNameMap.get((row as any).user_id) ?? "Member"];
+          const name = profileNameMap.get((row as any).user_id) ?? "Member";
+          names[cid] = [...(names[cid] ?? []), name];
+          if ((row as any).role === "chair") leaders[cid] = { ...(leaders[cid] ?? {}), chair: name };
+          if ((row as any).role === "ranking_member") leaders[cid] = { ...(leaders[cid] ?? {}), ranking: name };
         }
         setMemberNames(names);
+        setLeadershipNames(leaders);
         setMemberCounts(counts);
         setJoinedCommitteeIds(joined);
         committeesHomeCache = {
           committees: finalRows as any,
           memberCounts: counts,
+          leadershipNames: leaders,
           role: ((profile as any)?.role ?? null) as any,
           settings: s,
           preferencesSubmitted: nextPreferencesSubmitted,
@@ -162,8 +171,8 @@ export function CommitteesHome() {
     const query = searchQuery.toLowerCase().trim();
     return committees
       .filter((committee) => !query || committee.name.toLowerCase().includes(query) || (committee.description ?? "").toLowerCase().includes(query) || (memberNames[committee.id] ?? []).some((name) => name.toLowerCase().includes(query)))
-      .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0 }));
-  }, [committees, memberCounts, memberNames, searchQuery]);
+      .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0, leadership: leadershipNames[c.id] ?? {} }));
+  }, [committees, leadershipNames, memberCounts, memberNames, searchQuery]);
   const canSelfJoin = role === "student" && (!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
 
   const joinCommittee = async (committeeId: string) => {
@@ -365,6 +374,10 @@ export function CommitteesHome() {
                       <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
                         <Users className="w-3.5 h-3.5" />
                         {c.memberCount} members
+                      </div>
+                      <div className="mt-2 grid gap-1 text-xs text-gray-600 sm:grid-cols-2">
+                        <div><span className="font-semibold text-gray-700">Chair:</span> {c.leadership.chair ?? "None"}</div>
+                        <div><span className="font-semibold text-gray-700">Ranking:</span> {c.leadership.ranking ?? "None"}</div>
                       </div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">

@@ -11,7 +11,7 @@ interface Bill {
   number: string;
   title: string;
   text: string;
-  assignedCommittee?: string;
+  assignedCommittees: string[];
 }
 
 interface Committee {
@@ -73,7 +73,7 @@ function CommitteeDropZone({
     collect: (monitor) => ({ isOver: monitor.isOver() }),
   });
 
-  const assignedBills = bills.filter((b) => b.assignedCommittee === committee.id);
+  const assignedBills = bills.filter((b) => b.assignedCommittees.includes(committee.id));
 
   return (
     <div ref={drop} className={`rounded-lg border bg-white p-4 shadow-sm transition-all min-h-[280px] ${isOver ? "border-blue-500 bg-blue-50" : "border-gray-200"}`}>
@@ -164,7 +164,10 @@ export function TeacherBillSorting() {
         if (bErr) throw bErr;
         if (rErr) throw rErr;
 
-        const referralMap = new Map((referralRows ?? []).map((r: any) => [r.bill_id, r.committee_id]));
+        const referralMap = new Map<string, string[]>();
+        for (const row of referralRows ?? []) {
+          referralMap.set((row as any).bill_id, [...(referralMap.get((row as any).bill_id) ?? []), (row as any).committee_id]);
+        }
         setCommittees((committeeRows ?? []) as any);
         setBills(
           (billRows ?? []).map((b: any) => ({
@@ -172,7 +175,7 @@ export function TeacherBillSorting() {
             number: b.hr_label,
             title: b.title,
             text: b.legislative_text,
-            assignedCommittee: referralMap.get(b.id) ?? undefined,
+            assignedCommittees: referralMap.get(b.id) ?? [],
           })),
         );
       } catch (e: any) {
@@ -184,8 +187,8 @@ export function TeacherBillSorting() {
     void load();
   }, []);
 
-  const handleDrop = (billId: string, committeeId: string) => setBills((prev) => prev.map((b) => (b.id === billId ? { ...b, assignedCommittee: committeeId } : b)));
-  const handleDropUnassigned = (billId: string) => setBills((prev) => prev.map((b) => (b.id === billId ? { ...b, assignedCommittee: undefined } : b)));
+  const handleDrop = (billId: string, committeeId: string) => setBills((prev) => prev.map((b) => (b.id === billId ? { ...b, assignedCommittees: b.assignedCommittees.includes(committeeId) ? b.assignedCommittees : [...b.assignedCommittees, committeeId] } : b)));
+  const handleDropUnassigned = (billId: string) => setBills((prev) => prev.map((b) => (b.id === billId ? { ...b, assignedCommittees: [] } : b)));
   const handleViewText = (bill: Bill) => setSelectedBill(bill);
   const handleConfirm = () => setShowConfirmModal(true);
 
@@ -195,10 +198,10 @@ export function TeacherBillSorting() {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id ?? null;
 
-      const assigned = bills.filter((b) => b.assignedCommittee);
+      const assigned = bills.filter((b) => b.assignedCommittees.length);
       const assignedBillIds = new Set(assigned.map((b) => b.id));
 
-      const { data: existing, error: exErr } = await supabase.from("bill_referrals").select("bill_id").eq("class_id", classId);
+      const { data: existing, error: exErr } = await supabase.from("bill_referrals").select("bill_id,committee_id").eq("class_id", classId);
       if (exErr) throw exErr;
       const toDelete = (existing ?? []).map((r: any) => r.bill_id).filter((id: string) => !assignedBillIds.has(id));
       if (toDelete.length) {
@@ -208,14 +211,20 @@ export function TeacherBillSorting() {
       }
 
       if (assigned.length) {
-        const rows = assigned.map((b) => ({
+        const wantedPairs = new Set(assigned.flatMap((b) => b.assignedCommittees.map((committeeId) => `${b.id}:${committeeId}`)));
+        const stalePairs = (existing ?? []).filter((row: any) => assignedBillIds.has(row.bill_id) && !wantedPairs.has(`${row.bill_id}:${row.committee_id}`));
+        for (const row of stalePairs) {
+          const { error: dErr } = await supabase.from("bill_referrals").delete().eq("class_id", classId).eq("bill_id", (row as any).bill_id).eq("committee_id", (row as any).committee_id);
+          if (dErr) throw dErr;
+        }
+        const rows = assigned.flatMap((b) => b.assignedCommittees.map((committeeId) => ({
           bill_id: b.id,
           class_id: classId,
-          committee_id: b.assignedCommittee,
+          committee_id: committeeId,
           referred_by: uid,
           referred_at: new Date().toISOString(),
-        }));
-        const { error } = await supabase.from("bill_referrals").upsert(rows as any, { onConflict: "bill_id" });
+        })));
+        const { error } = await supabase.from("bill_referrals").upsert(rows as any, { onConflict: "bill_id,committee_id" });
         if (error) throw error;
         await supabase.from("bills").update({ status: "in_committee" } as any).eq("class_id", classId).in("id", assigned.map((b) => b.id));
       }
@@ -230,12 +239,12 @@ export function TeacherBillSorting() {
   const unassignedBills = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return bills.filter((b) => {
-      if (b.assignedCommittee) return false;
+      if (b.assignedCommittees.length) return false;
       if (!query) return true;
       return b.number.toLowerCase().includes(query) || b.title.toLowerCase().includes(query);
     });
   }, [bills, searchQuery]);
-  const hasAssignments = bills.some((b) => b.assignedCommittee);
+  const hasAssignments = bills.some((b) => b.assignedCommittees.length);
 
   return (
     <DndProvider backend={HTML5Backend}>
@@ -309,8 +318,10 @@ export function TeacherBillSorting() {
               <div className="border-b border-gray-200 p-5">
                 <span className="font-mono text-sm font-bold text-gray-900">{selectedBill.number}</span>
                 <h2 className="mt-1 text-xl font-semibold text-gray-900">{selectedBill.title}</h2>
-                {selectedBill.assignedCommittee && (
-                  <p className="mt-2 text-sm text-gray-600">Assigned to {committees.find((c) => c.id === selectedBill.assignedCommittee)?.name}</p>
+                {selectedBill.assignedCommittees.length > 0 && (
+                  <p className="mt-2 text-sm text-gray-600">
+                    Assigned to {selectedBill.assignedCommittees.map((committeeId) => committees.find((c) => c.id === committeeId)?.name).filter(Boolean).join(", ")}
+                  </p>
                 )}
               </div>
               <div className="max-h-[60vh] overflow-y-auto p-6">
@@ -335,11 +346,11 @@ export function TeacherBillSorting() {
               <div className="px-5 py-4">
                 <div className="max-h-72 space-y-2 overflow-y-auto">
                   {bills
-                    .filter((b) => b.assignedCommittee)
+                    .filter((b) => b.assignedCommittees.length)
                     .map((bill) => (
                       <div key={bill.id} className="rounded-md bg-gray-50 p-3 text-sm">
                         <span className="font-semibold">{bill.number}</span> →{" "}
-                        <span className="text-blue-600">{committees.find((c) => c.id === bill.assignedCommittee)?.name}</span>
+                        <span className="text-blue-600">{bill.assignedCommittees.map((committeeId) => committees.find((c) => c.id === committeeId)?.name).filter(Boolean).join(", ")}</span>
                       </div>
                     ))}
                 </div>

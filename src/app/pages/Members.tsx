@@ -21,7 +21,7 @@ type Member = {
   cosponsors: number;
 };
 
-type SortKey = "name" | "party" | "passed" | "failed" | "cosponsors";
+type SortKey = "name" | "party" | "passed" | "cosponsors";
 
 function partyAbbr(party: string | null | undefined) {
   const normalized = String(party ?? "").toLowerCase();
@@ -123,7 +123,6 @@ export function Members() {
       return matchesSearch && matchesParty && matchesCommittee && matchesCaucus;
     }).sort((a, b) => {
       if (sortBy === "passed") return b.passedBills - a.passedBills || (a.display_name ?? "").localeCompare(b.display_name ?? "");
-      if (sortBy === "failed") return b.failedBills - a.failedBills || (a.display_name ?? "").localeCompare(b.display_name ?? "");
       if (sortBy === "cosponsors") return b.cosponsors - a.cosponsors || (a.display_name ?? "").localeCompare(b.display_name ?? "");
       if (sortBy === "party") return (a.party ?? "").localeCompare(b.party ?? "") || (a.display_name ?? "").localeCompare(b.display_name ?? "");
       if (a.role !== b.role) return a.role === "teacher" ? -1 : 1;
@@ -139,10 +138,7 @@ export function Members() {
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Members</h1>
-          <p className="text-gray-600">
-            {memberCount} member{memberCount === 1 ? "" : "s"} in the directory
-          </p>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Members ({memberCount})</h1>
         </div>
 
         {/* Search and filters */}
@@ -198,14 +194,13 @@ export function Members() {
               <option value="name">Sort by name</option>
               <option value="party">Sort by party</option>
               <option value="passed">Most passed bills</option>
-              <option value="failed">Most failed bills</option>
               <option value="cosponsors">Most cosponsors</option>
             </select>
           </div>
         </div>
 
         {/* Members grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {filteredMembers.map((member) => (
             <Link
               key={member.user_id}
@@ -232,14 +227,10 @@ export function Members() {
                 </div>
               </div>
               {member.role !== "teacher" && (
-                <div className="grid grid-cols-3 gap-2 border-t border-gray-100 pt-4 text-center text-sm">
+                <div className="grid grid-cols-2 gap-2 border-t border-gray-100 pt-4 text-center text-sm">
                   <div>
                     <div className="font-semibold text-gray-900">{member.passedBills}</div>
                     <div className="text-xs text-gray-500">Passed</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-gray-900">{member.failedBills}</div>
-                    <div className="text-xs text-gray-500">Failed</div>
                   </div>
                   <div>
                     <div className="font-semibold text-gray-900">{member.cosponsors}</div>
