@@ -1,6 +1,7 @@
 import { supabase } from '../utils/supabase';
 import { BillRecord } from '../types/domain';
 import { getCurrentUser } from '../utils/currentUser';
+import { sanitizeHtml } from '../utils/sanitizeHtml';
 
 export async function fetchBillsForCurrentClass() {
   const me = (await getCurrentUser())?.id;
@@ -83,8 +84,8 @@ export async function createBillForCurrentClass(input: {
       class_id: classId,
       author_user_id: me,
       title: input.title,
-      legislative_text: input.legislativeText,
-      supporting_text: input.supportingText ?? null,
+      legislative_text: sanitizeHtml(input.legislativeText),
+      supporting_text: input.supportingText ? sanitizeHtml(input.supportingText) : null,
       status: input.status ?? 'submitted',
     })
     .select('id')
@@ -160,8 +161,8 @@ export async function updateBillDraftForCurrentClass(
     .from('bills')
     .update({
       title: input.title,
-      legislative_text: input.legislativeText,
-      supporting_text: input.supportingText ?? null,
+      legislative_text: sanitizeHtml(input.legislativeText),
+      supporting_text: input.supportingText ? sanitizeHtml(input.supportingText) : null,
       status: input.status ?? 'draft',
     } as any)
     .eq('id', billId)

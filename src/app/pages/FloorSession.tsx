@@ -7,6 +7,7 @@ import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 type VoteChoice = "yea" | "nay" | "present";
 type FloorMode = "election" | "bills";
@@ -853,7 +854,7 @@ export function FloorSession() {
                     )}
                   </div>
                 </div>
-                <div className="prose max-w-none rounded-md border border-gray-200 bg-white p-5" dangerouslySetInnerHTML={{ __html: activeItem.bill.legislative_text || "<p><em>No legislative text</em></p>" }} />
+                <div className="prose max-w-none rounded-md border border-gray-200 bg-white p-5" dangerouslySetInnerHTML={{ __html: sanitizeHtml(activeItem.bill.legislative_text || "<p><em>No legislative text</em></p>") }} />
               </div>
             </div>
 

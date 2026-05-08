@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { FileText, BookOpen, User, AlertCircle } from "lucide-react";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 interface Bill {
   id: string;
@@ -82,13 +83,13 @@ export function BillViewer({ bill }: BillViewerProps) {
         {activeTab === 'legislative' && (
           <div 
             className="prose max-w-none"
-            dangerouslySetInnerHTML={{ __html: bill.legislativeText }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislativeText) }}
           />
         )}
         {activeTab === 'supporting' && (
           <div 
             className="prose max-w-none"
-            dangerouslySetInnerHTML={{ __html: bill.supportingText }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.supportingText) }}
           />
         )}
         {activeTab === 'history' && (

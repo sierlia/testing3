@@ -1,6 +1,7 @@
 import { ExternalLink, User, Building2, Calendar } from "lucide-react";
 import { Link } from "react-router";
 import { profilePath } from "../utils/profileRoute";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 interface Bill {
   id: string;
@@ -134,7 +135,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
           <h4 className="text-sm font-semibold text-gray-900 mb-2">Legislative Text</h4>
           <div 
             className="max-h-[520px] overflow-hidden text-sm leading-6 text-gray-700"
-            dangerouslySetInnerHTML={{ __html: bill.legislativeText }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislativeText) }}
           />
         </div>
 

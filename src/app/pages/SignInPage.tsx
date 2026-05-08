@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router';
+import { Link, useNavigate, useSearchParams } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 
 export function SignInPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -33,8 +34,9 @@ export function SignInPage() {
 
         toast.success('Successfully signed in!');
         
-        // Redirect based on role
-        navigate(role === 'teacher' ? '/classes' : '/dashboard');
+        const redirect = searchParams.get('redirect');
+        const safeRedirect = redirect && redirect.startsWith('/') && !redirect.startsWith('/signin') && !redirect.startsWith('/signup') ? redirect : null;
+        navigate(safeRedirect ?? (role === 'teacher' ? '/classes' : '/dashboard'));
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to sign in');

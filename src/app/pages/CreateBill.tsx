@@ -29,6 +29,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "../components/ui/toolti
 import { createBillForCurrentClass, fetchBillDetail, getCurrentProfileClass, updateBillDraftForCurrentClass } from "../services/bills";
 import { htmlToMarkdown, markdownToHtml } from "../utils/markdown";
 import { supabase } from "../utils/supabase";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 type TextMode = "default" | "markdown" | "preview";
 
@@ -366,7 +367,7 @@ function MarkdownEnabledEditor({
             />
           </>
         )}
-        {mode === "preview" && <div className={`prose max-w-none bg-white ${minHeightClass} p-4`} dangerouslySetInnerHTML={{ __html: previewHtml }} />}
+        {mode === "preview" && <div className={`prose max-w-none bg-white ${minHeightClass} p-4`} dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewHtml) }} />}
       </div>
       {error && <p className="mt-1 text-sm text-red-600">{error}</p>}
     </div>

@@ -12,6 +12,7 @@ import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 import { formatConstituency } from "../utils/constituency";
 import { profilePath } from "../utils/profileRoute";
 import { getCurrentUser } from "../utils/currentUser";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 type BillRow = {
   id: string;
@@ -662,7 +663,7 @@ export function CommitteeWorkspace() {
                             {textViewControls}
                           </div>
                           <div className="prose max-w-none min-h-[420px] p-4 rounded-b-md border border-gray-200 bg-gray-50">
-                            <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
+                            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.legislativeHtml || "<p></p>") }} />
                           </div>
                         </div>
                       )}

@@ -5,6 +5,7 @@ import { BookOpen, Check, FileText, GripVertical, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 interface Bill {
   id: string;
@@ -399,7 +400,7 @@ export function TeacherBillSorting() {
                 )}
               </div>
               <div className="max-h-[60vh] overflow-y-auto p-6">
-                <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: selectedBill.text }} />
+                <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(selectedBill.text) }} />
               </div>
               <div className="flex items-center justify-end border-t border-gray-200 bg-gray-50 p-4">
                 <button onClick={() => setSelectedBill(null)} className="rounded-md bg-blue-600 px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">

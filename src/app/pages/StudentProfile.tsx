@@ -113,6 +113,7 @@ export function StudentProfile() {
   const { id } = useParams();
   const [authUserId, setAuthUserId] = useState<string | null>(null);
   const [profile, setProfile] = useState<ProfileRow | null>(null);
+  const [accessDenied, setAccessDenied] = useState(false);
   const [billsAuthored, setBillsAuthored] = useState<any[]>([]);
   const [billsCosponsored, setBillsCosponsored] = useState<any[]>([]);
   const [lettersAuthored, setLettersAuthored] = useState<any[]>([]);
@@ -150,6 +151,7 @@ export function StudentProfile() {
 
   useEffect(() => {
     (async () => {
+      setAccessDenied(false);
       const currentUser = await getCurrentUser();
       const currentUserId = currentUser?.id ?? null;
       setAuthUserId(currentUserId);
@@ -160,14 +162,30 @@ export function StudentProfile() {
           ? await supabase.from("profiles").select("class_id").eq("user_id", currentUserId).maybeSingle()
           : ({ data: null } as any);
         const classId = (currentProfile as any)?.class_id;
+        if (!classId) {
+          setAccessDenied(true);
+          setProfile(null);
+          return;
+        }
         const { data: candidates } = classId
           ? await supabase.from("profiles").select("user_id").eq("class_id", classId)
           : await supabase.from("profiles").select("user_id");
-        uid = ((candidates ?? []) as any[]).find((candidate) => memberCodeFromUserId(candidate.user_id) === id)?.user_id ?? id;
+        const resolved = ((candidates ?? []) as any[]).find((candidate) => memberCodeFromUserId(candidate.user_id) === id)?.user_id;
+        if (!resolved) {
+          setAccessDenied(true);
+          setProfile(null);
+          return;
+        }
+        uid = resolved;
       }
       if (!uid) return;
 
       const { data: p } = await supabase.from("profiles").select("*").eq("user_id", uid).maybeSingle();
+      if (!p && uid !== currentUserId) {
+        setAccessDenied(true);
+        setProfile(null);
+        return;
+      }
       const pr: ProfileRow =
         (p as any) ?? {
           user_id: uid,
@@ -528,6 +546,20 @@ export function StudentProfile() {
     } as any);
     setShowConstituencyModal(false);
   };
+
+  if (accessDenied) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="mx-auto max-w-3xl px-4 py-16 text-center">
+          <div className="rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+            <h1 className="text-xl font-semibold text-gray-900">Access denied</h1>
+            <p className="mt-2 text-gray-600">You do not have permission to view this member profile.</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   if (!profile) {
     return <div className="min-h-screen flex items-center justify-center">Loading...</div>;

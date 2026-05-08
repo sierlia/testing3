@@ -8,6 +8,7 @@ import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { supabase } from "../utils/supabase";
 import { closeCommitteeVote, finalizeCommitteeVote, submitCommitteeReport } from "../services/bills";
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 type BillRow = {
   id: string;
@@ -595,7 +596,7 @@ export function CommitteeVote() {
                             {textViewControls}
                           </div>
                           <div className="prose max-w-none min-h-[420px] p-4 rounded-b-md border border-gray-200 bg-gray-50">
-                            <div dangerouslySetInnerHTML={{ __html: selected.legislativeHtml || "<p></p>" }} />
+                            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.legislativeHtml || "<p></p>") }} />
                           </div>
                         </div>
                       )}

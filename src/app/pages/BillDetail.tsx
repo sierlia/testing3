@@ -13,6 +13,7 @@ import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
 import { displayPersonName } from "../utils/displayName";
 import { profilePath } from "../utils/profileRoute";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 
 type TextTab = "revised" | "original" | "supporting";
 type TrackerStatus = "completed" | "current" | "upcoming";
@@ -79,7 +80,7 @@ function cleanRevisedHtml(html: string) {
     while (node.firstChild) parent.insertBefore(node.firstChild, node);
     parent.removeChild(node);
   });
-  return doc.body.innerHTML;
+  return sanitizeHtml(doc.body.innerHTML);
 }
 
 function revisedHtmlFromSnapshot(snapshot?: string | null) {
@@ -686,10 +687,10 @@ export function BillDetail() {
 
               <div className="p-6">
                 {activeTab === "revised" && showRevisedText && (
-                  <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: revisedHtml }} />
+                  <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(revisedHtml) }} />
                 )}
-                {activeTab === "original" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: bill.legislative_text }} />}
-                {activeTab === "supporting" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: bill.supporting_text || "<p><em>No supporting text</em></p>" }} />}
+                {activeTab === "original" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislative_text) }} />}
+                {activeTab === "supporting" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.supporting_text || "<p><em>No supporting text</em></p>") }} />}
               </div>
             </div>
           </div>
