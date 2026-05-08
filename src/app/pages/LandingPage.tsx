@@ -3,6 +3,7 @@ import { Link } from "react-router";
 import {
   ArrowRight,
   BadgeDollarSign,
+  BarChart3,
   CheckCircle2,
   ClipboardCheck,
   Download,
@@ -117,7 +118,7 @@ export function PublicNav({ active = "home" }: PublicNavProps) {
           </Link>
           <Link
             to="/signup"
-            className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
           >
             Sign up
           </Link>
@@ -542,43 +543,39 @@ const teacherTools: TeacherTool[] = [
 function TeacherToolsShowcase() {
   return (
     <section id="grading" className="border-y border-neutral-200 bg-white py-20">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.7fr_1.3fr] lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Built for grading</h2>
-          <p className="mt-4 text-lg leading-8 text-slate-600">
-            Assignments, rubrics, records, roster data, exports, and SIS sync stay connected to classroom work.
-          </p>
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Built for grading</h2>
+            <p className="mt-4 text-lg leading-8 text-slate-600">
+              Turn simulation activity into organized evidence for review, export, and grading.
+            </p>
+          </div>
         </Reveal>
 
         <Reveal delay={120}>
-          <div className="relative overflow-hidden rounded-[1rem] border border-neutral-200 bg-[#fbfaf8] p-5 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
-            <div className="absolute bottom-6 left-[2.35rem] top-6 w-px bg-neutral-200" />
-            <ol className="relative space-y-1">
-              {teacherTools.map((tool, index) => {
-                const Icon = tool.icon;
-                return (
-                  <li
-                    key={tool.title}
-                    className="grid grid-cols-[3.2rem_1fr_auto] items-center gap-3 border-b border-slate-100 py-3 last:border-b-0"
-                  >
-                    <div className="relative z-10 grid h-10 w-10 place-items-center rounded-md border border-neutral-200 bg-white text-slate-900 shadow-sm">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <div className="text-sm font-black text-slate-950">{tool.title}</div>
-                      <p className="mt-1 text-sm leading-6 text-slate-600">{tool.description}</p>
-                    </div>
-                    <span
-                      className={`hidden rounded-full px-3 py-1.5 text-xs font-black sm:inline-flex ${
-                        index === 1 || index === 5 ? "bg-slate-950 text-white" : "bg-neutral-100 text-slate-600"
-                      }`}
-                    >
-                      {tool.detail}
-                    </span>
-                  </li>
-                );
-              })}
-            </ol>
+          <div className="mt-12 grid gap-5 lg:grid-cols-2">
+            <div className="rounded-[1rem] bg-[#f3f1ed] p-7">
+              <div className="flex h-11 w-11 items-center justify-center rounded-md bg-blue-600 text-white">
+                <ClipboardCheck className="h-5 w-5" />
+              </div>
+              <h3 className="mt-6 text-2xl font-black text-slate-950">Assignments</h3>
+              <p className="mt-3 text-base leading-7 text-slate-600">
+                Create graded work for bills, reports, speeches, letters, profiles, and participation. Rubrics stay tied
+                to the assignment, and selected scores can sync to Synergy SIS when the teacher is ready.
+              </p>
+            </div>
+
+            <div className="rounded-[1rem] bg-[#f3f1ed] p-7">
+              <div className="flex h-11 w-11 items-center justify-center rounded-md bg-blue-600 text-white">
+                <BarChart3 className="h-5 w-5" />
+              </div>
+              <h3 className="mt-6 text-2xl font-black text-slate-950">Tracking</h3>
+              <p className="mt-3 text-base leading-7 text-slate-600">
+                Full activity tracking shows simulation and student progress in one place, so teachers can check the class
+                at a glance instead of opening every student record one at a time.
+              </p>
+            </div>
           </div>
         </Reveal>
       </div>
@@ -689,80 +686,60 @@ function BillTimelineSection() {
   useEffect(() => {
     const id = window.setInterval(() => {
       setActiveStage((stage) => (stage + 1) % billTimelineStages.length);
-    }, 3200);
+    }, 2400);
 
     return () => window.clearInterval(id);
   }, []);
 
-  const active = billTimelineStages[activeStage];
-  const progress = `${4 + (activeStage / (billTimelineStages.length - 1)) * 92}%`;
-
   return (
     <section id="bill-timeline" className="bg-[#fbfaf8] py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+      <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.55fr_0.45fr] lg:px-8">
         <Reveal>
-          <div className="mx-auto max-w-3xl text-center">
+          <div>
             <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Complete bill tracking</h2>
             <p className="mt-4 text-lg leading-8 text-slate-600">
-              Follow a bill from draft to record without rebuilding the timeline by hand.
+              A condensed timeline shows where a bill is, what happened, and what comes next.
             </p>
+            <div className="mt-8 rounded-[1rem] bg-white p-5 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
+              <div className="font-mono text-sm font-black text-blue-700">H.R. 31</div>
+              <div className="mt-1 text-2xl font-black text-slate-950">Local Food Security Act</div>
+              <div className="mt-1 text-sm text-slate-500">Sponsored by Rep. Elena Park</div>
+            </div>
           </div>
         </Reveal>
 
         <Reveal delay={120}>
-          <div className="mt-14">
-            <div className="flex items-start justify-between gap-6">
-              <div>
-                <div className="font-mono text-sm font-black text-slate-700">H.R. 31</div>
-                <div className="mt-1 text-2xl font-black text-slate-950">Local Food Security Act</div>
-                <div className="mt-1 text-sm text-slate-500">Sponsored by Rep. Elena Park</div>
-              </div>
-              <div className="hidden rounded-md bg-white px-4 py-2 text-sm font-black text-slate-700 ring-1 ring-neutral-200 sm:block">
-                Teacher-visible status
-              </div>
-            </div>
-
-            <div className="relative mt-12 pb-32 pt-10">
-              <div className="absolute left-0 right-0 top-[4.3rem] h-1 rounded-full bg-slate-200" />
-              <div
-                className="absolute left-0 top-[4.3rem] h-1 rounded-full bg-slate-950 transition-all duration-700 ease-out"
-                style={{ width: progress }}
-              />
-              <div
-                className="absolute top-[3.45rem] z-20 -translate-x-1/2 rounded-full bg-slate-950 px-3 py-2 text-xs font-black text-white shadow-lg transition-all duration-700 ease-out"
-                style={{ left: progress }}
-              >
-                H.R. 31
-              </div>
-
-              <div className="relative z-10 grid grid-cols-2 gap-3 sm:grid-cols-5">
-                {billTimelineStages.map((stage, index) => (
-                  <button
-                    key={stage.label}
-                    type="button"
-                    onClick={() => setActiveStage(index)}
-                    className={`group flex min-h-24 flex-col items-center justify-start rounded-2xl border bg-white px-3 py-4 text-center shadow-sm transition ${
-                      activeStage === index
-                        ? "border-slate-950 text-slate-950 shadow-neutral-200"
-                        : "border-neutral-200 text-slate-600 hover:border-slate-400 hover:text-slate-950"
-                    }`}
-                  >
-                    <span
-                      className={`grid h-8 w-8 place-items-center rounded-full text-xs font-black ${
-                        activeStage === index ? "bg-slate-950 text-white" : "bg-neutral-100 text-slate-500 group-hover:bg-neutral-200"
-                      }`}
+          <div className="rounded-[1rem] bg-white p-6 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
+            <div className="relative">
+              <div className="absolute bottom-6 left-[0.55rem] top-6 border-l border-dashed border-slate-300" />
+              <div className="space-y-2">
+                {billTimelineStages.map((stage, index) => {
+                  const isRevealed = index <= activeStage;
+                  return (
+                    <button
+                      key={stage.label}
+                      type="button"
+                      onClick={() => setActiveStage(index)}
+                      className="relative grid w-full grid-cols-[1.5rem_1fr] gap-4 rounded-md px-1 py-2 text-left transition hover:bg-[#fbfaf8]"
                     >
-                      {index + 1}
-                    </span>
-                    <span className="mt-2 text-sm font-black">{stage.label}</span>
-                  </button>
-                ))}
-              </div>
-
-              <div className="absolute bottom-0 left-0 right-0 mx-auto max-w-2xl rounded-[1rem] border border-neutral-200 bg-white p-5 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{active.meta}</div>
-                <h3 className="mt-2 text-2xl font-black text-slate-950">{active.title}</h3>
-                <p className="mt-2 text-base leading-7 text-slate-600">{active.body}</p>
+                      <span
+                        className={`relative z-10 mt-1 h-3 w-3 rounded-full ring-4 ring-white transition ${
+                          isRevealed ? "bg-blue-600" : "bg-slate-300"
+                        }`}
+                      />
+                      <span>
+                        <span className="block text-sm font-black text-slate-950">{stage.label}</span>
+                        <span
+                          className={`block overflow-hidden text-sm leading-6 text-slate-600 transition-all duration-500 ${
+                            isRevealed ? "mt-1 max-h-28 opacity-100" : "max-h-0 opacity-0"
+                          }`}
+                        >
+                          <span className="font-semibold text-slate-800">{stage.title}.</span> {stage.body}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -869,18 +846,20 @@ function OrganizationExplorerSection() {
 
   return (
     <section id="organizations" className="bg-white py-24">
-      <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.68fr_1.32fr] lg:px-8">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Organizations and messaging</h2>
-          <p className="mt-4 text-lg leading-8 text-slate-600">
-            Parties, committees, caucuses, media groups, lobbyists, message boards, live committee editing, and dear
-            colleague letters all stay in the same classroom system.
-          </p>
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Organizations and messaging</h2>
+            <p className="mt-4 text-lg leading-8 text-slate-600">
+              Parties, committees, caucuses, media groups, lobbyists, message boards, live committee editing, and dear
+              colleague letters all stay in the same classroom system.
+            </p>
+          </div>
         </Reveal>
 
         <Reveal delay={120}>
-          <div className="grid gap-5 lg:grid-cols-[0.74fr_1.26fr]">
-            <div className="overflow-hidden rounded-[1rem] border border-neutral-200 bg-white shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
+          <div className="mt-12 grid min-h-[32rem] overflow-hidden rounded-[1rem] bg-[#fbfaf8] shadow-[0_16px_60px_rgba(15,23,42,0.08)] lg:grid-cols-[0.42fr_0.58fr]">
+            <div className="border-b border-neutral-200 bg-white lg:border-b-0 lg:border-r">
               {organizationItems.map((item, index) => {
                 const ItemIcon = item.icon;
                 return (
@@ -888,9 +867,9 @@ function OrganizationExplorerSection() {
                     key={item.label}
                     type="button"
                     onClick={() => setActiveItem(index)}
-                    className={`relative flex w-full items-center gap-3 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 ${
+                    className={`relative flex w-full items-center gap-3 border-b border-neutral-200 px-6 py-5 text-left transition last:border-b-0 ${
                       activeItem === index
-                        ? "bg-neutral-100 text-slate-950"
+                        ? "bg-blue-50 text-blue-700"
                         : "bg-white text-slate-700 hover:bg-neutral-50 hover:text-slate-950"
                     }`}
                   >
@@ -899,7 +878,7 @@ function OrganizationExplorerSection() {
                     {activeItem === index ? (
                       <span
                         key={activeItem}
-                        className="gavel-org-progress absolute bottom-0 left-0 h-1 bg-slate-950"
+                        className="gavel-org-progress absolute bottom-0 left-0 h-1 bg-blue-600"
                         style={{ animationDuration: `${cycleMs}ms` }}
                       />
                     ) : null}
@@ -908,21 +887,21 @@ function OrganizationExplorerSection() {
               })}
             </div>
 
-            <div className="min-h-[31rem] rounded-[1rem] border border-neutral-200 bg-[#fbfaf8] p-7 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
+            <div className="p-8 lg:p-10">
               <div className="flex items-start justify-between gap-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-950 text-white">
+                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-600 text-white">
                   <Icon className="h-6 w-6" />
                 </div>
-                <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
+                <div className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
                   {Math.round(cycleMs / 1000)} sec
                 </div>
               </div>
-              <h3 className="mt-6 text-3xl font-black tracking-tight text-slate-950">{active.title}</h3>
-              <p className="mt-4 text-lg leading-8 text-slate-600">{active.body}</p>
-              <ul className="mt-8 space-y-4">
+              <h3 className="mt-6 text-4xl font-black tracking-tight text-slate-950">{active.title}</h3>
+              <p className="mt-4 max-w-2xl text-lg leading-8 text-slate-600">{active.body}</p>
+              <ul className="mt-8 max-w-3xl divide-y divide-neutral-200">
                 {active.details.map((detail) => (
-                  <li key={detail} className="flex gap-3 text-base leading-7 text-slate-700">
-                    <CheckCircle2 className="mt-1 h-5 w-5 flex-none text-emerald-600" />
+                  <li key={detail} className="flex gap-3 py-4 text-base leading-7 text-slate-700">
+                    <CheckCircle2 className="mt-1 h-5 w-5 flex-none text-blue-600" />
                     <span>{detail}</span>
                   </li>
                 ))}
@@ -1019,7 +998,7 @@ export function LandingPage() {
                 <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                   <Link
                     to="/signup"
-                    className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-6 py-3 text-base font-black text-white shadow-sm transition hover:bg-slate-800"
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-6 py-3 text-base font-black text-white shadow-sm transition hover:bg-blue-700"
                   >
                     Create a free simulation
                     <ArrowRight className="h-5 w-5" />
@@ -1038,19 +1017,6 @@ export function LandingPage() {
             <Reveal delay={120}>
               <HeroScene />
             </Reveal>
-          </div>
-        </section>
-
-        <section className="border-y border-neutral-200 bg-white py-10">
-          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            <p className="text-sm font-bold text-slate-500">Replace scattered class tools with one workspace for</p>
-            <div className="mt-5 flex flex-wrap justify-center gap-3 text-sm font-semibold text-slate-700">
-              {["Google Docs", "spreadsheets", "email", "LMS assignments", "grade exports", "class discussion"].map((tool) => (
-                <span key={tool} className="rounded-md border border-neutral-200 bg-[#fbfaf8] px-3 py-2">
-                  {tool}
-                </span>
-              ))}
-            </div>
           </div>
         </section>
 
@@ -1103,7 +1069,7 @@ export function LandingPage() {
               <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
                 <Link
                   to="/signup"
-                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-6 py-3 text-base font-black text-white shadow-sm transition hover:bg-slate-800"
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-6 py-3 text-base font-black text-white shadow-sm transition hover:bg-blue-700"
                 >
                   Sign up free
                   <ArrowRight className="h-5 w-5" />
@@ -1122,70 +1088,16 @@ export function LandingPage() {
       </main>
 
       <footer className="border-t border-neutral-200 bg-[#fbfaf8]">
-        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 text-sm sm:px-6 md:grid-cols-[1.3fr_1fr_1fr_1fr] lg:px-8">
-          <div>
-            <div className="flex items-center gap-2 font-black text-slate-950">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-950 text-white">
-                <Gavel className="h-4 w-4" />
-              </span>
-              Gavel
-            </div>
-            <p className="mt-4 max-w-sm leading-6 text-slate-600">
-              Customizable Mock Congress software for teachers who need bills, organizations, records, and grading in one
-              place.
-            </p>
-          </div>
-
-          <div>
-            <div className="font-black text-slate-950">Product</div>
-            <div className="mt-4 grid gap-3 text-slate-600">
-              <a href="#grading" className="hover:text-slate-950">
-                Grading
-              </a>
-              <a href="#bill-timeline" className="hover:text-slate-950">
-                Bill timeline
-              </a>
-              <a href="#organizations" className="hover:text-slate-950">
-                Organizations
-              </a>
-              <a href="#customization" className="hover:text-slate-950">
-                Customization
-              </a>
-            </div>
-          </div>
-
-          <div>
-            <div className="font-black text-slate-950">Account</div>
-            <div className="mt-4 grid gap-3 text-slate-600">
-              <Link to="/signin" className="hover:text-slate-950">
-                Log in
-              </Link>
-              <Link to="/signup" className="hover:text-slate-950">
-                Sign up
-              </Link>
-              <button type="button" onClick={startDemo} className="text-left hover:text-slate-950">
-                Open Demo
-              </button>
-            </div>
-          </div>
-
-          <div>
-            <div className="font-black text-slate-950">Support</div>
-            <div className="mt-4 grid gap-3 text-slate-600">
-              <Link to="/about" className="hover:text-slate-950">
-                Contact
-              </Link>
-              <span>Privacy policy</span>
-              <span>Terms</span>
-              <span>Accessibility</span>
-            </div>
-          </div>
-        </div>
-        <div className="border-t border-slate-200">
-          <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-slate-500 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-            <span>Gavel for Mock Congress simulations.</span>
-            <span>Built for classroom use.</span>
-          </div>
+        <div className="mx-auto flex max-w-7xl justify-center gap-8 px-4 py-8 text-sm font-semibold text-slate-600 sm:px-6 lg:px-8">
+          <Link to="/" className="hover:text-slate-950">
+            Home
+          </Link>
+          <Link to="/about" className="hover:text-slate-950">
+            Contact
+          </Link>
+          <button type="button" onClick={startDemo} className="hover:text-slate-950">
+            Open Demo
+          </button>
         </div>
       </footer>
     </div>
