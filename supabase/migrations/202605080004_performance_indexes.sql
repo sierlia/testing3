@@ -86,6 +86,13 @@ on public.bill_floor_votes(class_id, session_id);
 create index if not exists bill_floor_votes_user_created_idx
 on public.bill_floor_votes(user_id, created_at desc);
 
+-- Older databases may have bill_floor_speakers from the first signup migration,
+-- where the later status/role columns were skipped by create table if not exists.
+alter table public.bill_floor_speakers
+  add column if not exists status text not null default 'approved',
+  add column if not exists speaker_role text not null default 'speaker',
+  add column if not exists updated_at timestamptz not null default now();
+
 create index if not exists bill_floor_speakers_class_bill_status_idx
 on public.bill_floor_speakers(class_id, bill_id, status);
 
