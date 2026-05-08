@@ -6,7 +6,7 @@ import { BillPreviewPanel } from "../components/BillPreviewPanel";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { CompactPager } from "../components/CompactPager";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { fetchBillPreviewText, fetchBillsForCurrentClass } from "../services/bills";
+import { fetchBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 import { useAuth } from "../utils/AuthContext";
 import { formatConstituency } from "../utils/constituency";
@@ -146,7 +146,6 @@ export function TessBills() {
   const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBill, setSelectedBill] = useState<BillView | null>(null);
-  const [billTextById, setBillTextById] = useState<Record<string, { legislativeText: string; supportingText: string }>>({});
   const [allBills, setAllBills] = useState<BillView[]>([]);
   const [loading, setLoading] = useState(true);
   const [rowMode, setRowMode] = useState<RowMode>("preview");
@@ -185,28 +184,6 @@ export function TessBills() {
       sponsorId: sponsorId || prev.sponsorId,
     }));
   }, [searchKey]);
-
-  useEffect(() => {
-    if (!selectedBill || billTextById[selectedBill.id]) return;
-    const billId = selectedBill.id;
-    let cancelled = false;
-    (async () => {
-      try {
-        const text = await fetchBillPreviewText(billId);
-        if (!cancelled) setBillTextById((current) => ({ ...current, [billId]: text }));
-      } catch {
-        if (!cancelled) {
-          setBillTextById((current) => ({
-            ...current,
-            [billId]: { legislativeText: "<p><em>Could not load preview.</em></p>", supportingText: "" },
-          }));
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [billTextById, selectedBill?.id]);
 
   const statusOptions = useMemo(() => Array.from(new Set(allBills.map((bill) => bill.status))).sort(), [allBills]);
   const committeeOptions = useMemo(() => Array.from(new Set(allBills.map((bill) => bill.committee).filter(Boolean))).sort(), [allBills]);
@@ -259,13 +236,6 @@ export function TessBills() {
   const currentPage = Math.min(page, totalPages);
   const pageBills = filteredBills.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const resultLabel = loading ? "Loading bills..." : `${filteredBills.length} bills found`;
-  const selectedBillPreview = selectedBill
-    ? {
-        ...selectedBill,
-        legislativeText: billTextById[selectedBill.id]?.legislativeText ?? "<p><em>Loading preview...</em></p>",
-        supportingText: billTextById[selectedBill.id]?.supportingText ?? "",
-      }
-    : null;
 
   const resetFilters = () => {
     setSearchQuery("");
@@ -429,8 +399,8 @@ export function TessBills() {
           {rowMode === "preview" && (
             <div className="lg:col-span-1">
               <div className="sticky top-8">
-                {selectedBillPreview ? (
-                  <BillPreviewPanel bill={selectedBillPreview} />
+                {selectedBill ? (
+                  <BillPreviewPanel bill={selectedBill} />
                 ) : (
                   <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
                     <p className="text-gray-500">Select a bill to preview</p>

@@ -42,6 +42,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     if (!credentials?.email || !credentials?.password) throw new Error("Demo account is not configured.");
     if (launchDemo) setDemoLaunchProgress(25);
 
+    window.localStorage.setItem("gavel:demoAuthSwitch", "1");
     await supabase.auth.signOut();
     if (launchDemo) setDemoLaunchProgress(40);
     const { error: signInError } = await supabase.auth.signInWithPassword({
@@ -49,6 +50,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
       password: credentials.password,
     });
     if (signInError) throw signInError;
+    window.localStorage.removeItem("gavel:demoAuthSwitch");
     if (launchDemo) setDemoLaunchProgress(65);
 
     const defaultTarget = "/dashboard";
@@ -61,6 +63,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     if (launchDemo) setDemoLaunchProgress(80);
     window.dispatchEvent(new CustomEvent("gavel:demo-opened"));
   } catch (error) {
+    window.localStorage.removeItem("gavel:demoAuthSwitch");
     if (launchDemo) {
       window.localStorage.removeItem("gavel:demoActive");
       window.localStorage.removeItem("gavel:demoOpenedAt");

@@ -31,7 +31,7 @@ function AppToaster() {
 }
 
 function AppRouterGate() {
-  const { user, loading } = useAuth();
+  const { user, loading, sessionExpired, clearSessionExpired } = useAuth();
   const [hash, setHash] = useState(window.location.hash.replace(/^#/, "") || "/");
 
   useEffect(() => {
@@ -55,6 +55,30 @@ function AppRouterGate() {
         <div className="flex items-center gap-2 text-sm font-medium">
           <Gavel className="h-5 w-5 text-blue-600" />
           Loading...
+        </div>
+      </div>
+    );
+  }
+
+  if (sessionExpired) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-gray-200 p-4">
+        <div className="w-full max-w-md rounded-lg border border-gray-300 bg-white p-6 text-center shadow-sm">
+          <Gavel className="mx-auto mb-3 h-8 w-8 text-blue-600" />
+          <h1 className="text-lg font-semibold text-gray-900">Session ended</h1>
+          <p className="mt-2 text-sm text-gray-600">
+            Your session is no longer authenticated. This can happen if you sign in on another device, your session expires, or the server revokes the login.
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              clearSessionExpired();
+              window.location.hash = `/signin?redirect=${encodeURIComponent(hash.startsWith("/") ? hash : `/${hash}`)}`;
+            }}
+            className="mt-5 inline-flex w-full items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            Go to sign in
+          </button>
         </div>
       </div>
     );
