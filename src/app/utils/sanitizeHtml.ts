@@ -26,7 +26,8 @@ const allowedAttrs = new Set(["class", "data-delete-highlight", "data-edit-highl
 function isSafeUrl(value: string) {
   const trimmed = value.trim();
   if (!trimmed) return false;
-  return /^(https?:|mailto:|\/|#)/i.test(trimmed);
+  if (trimmed.startsWith("//")) return false;
+  return /^(https?:|mailto:|\/(?!\/)|#)/i.test(trimmed);
 }
 
 function cleanStyle(value: string) {

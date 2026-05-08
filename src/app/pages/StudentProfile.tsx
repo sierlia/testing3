@@ -358,14 +358,15 @@ export function StudentProfile() {
   const saveProfile = async (patch: Partial<ProfileRow>, syncName = false) => {
     if (!profile) return;
     const payload = {
-      user_id: profile.user_id,
-      role: profile.role ?? "student",
-      class_id: profile.class_id ?? null,
       ...patch,
       updated_at: new Date().toISOString(),
     };
 
-    const { error } = await supabase.from("profiles").upsert(payload as any);
+    delete (payload as any).user_id;
+    delete (payload as any).role;
+    delete (payload as any).class_id;
+
+    const { error } = await supabase.from("profiles").update(payload as any).eq("user_id", profile.user_id);
     if (error) {
       toast.error(error.message || "Could not save profile");
       return;

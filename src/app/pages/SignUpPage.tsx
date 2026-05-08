@@ -124,7 +124,7 @@ function TeacherSignUp({ onBack }: { onBack: () => void }) {
 
     try {
       // Create user with Supabase Auth
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
@@ -137,13 +137,9 @@ function TeacherSignUp({ onBack }: { onBack: () => void }) {
       });
 
       if (error) throw error;
-      if (data.user?.id) {
-        await supabase.from("profiles").upsert({
-          user_id: data.user.id,
-          role: "teacher",
-          display_name: formData.name.trim(),
-        } as any);
-      }
+      // A teacher profile is created when the teacher creates or opens a class.
+      // Keeping teacher role assignment tied to an owned class prevents direct
+      // profile edits from becoming an authorization path.
 
       toast.success('Account created successfully!');
       navigate('/classes');
