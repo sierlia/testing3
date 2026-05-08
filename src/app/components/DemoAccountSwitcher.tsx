@@ -171,8 +171,12 @@ export function DemoAccountSwitcher() {
     window.addEventListener("gavel:demo-opened", onDemoOpened);
     window.addEventListener("gavel:demo-ended", onDemoEnded);
     window.addEventListener("gavel:dashboard-ready", completeLaunch);
-    const openedAt = Number(window.localStorage.getItem("gavel:demoOpenedAt") ?? 0);
-    if (Date.now() - openedAt < 2000) onDemoOpened();
+    if (
+      window.localStorage.getItem("gavel:demoActive") === "1" &&
+      (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" || window.localStorage.getItem("gavel:demoConfetti") === "1")
+    ) {
+      onDemoOpened();
+    }
     return () => {
       window.removeEventListener("gavel:demo-launch-start", startLaunch);
       window.removeEventListener("gavel:demo-launch-cancel", cancelLaunch);
