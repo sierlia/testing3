@@ -82,7 +82,7 @@ export function PublicNav({ active = "home" }: PublicNavProps) {
     }`;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-neutral-200 bg-[#f4f4f2]/95 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-neutral-200 bg-white/95 backdrop-blur">
       <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:px-6 md:grid-cols-[1fr_auto_1fr] lg:px-8">
         <Link to="/" className="flex items-center gap-2 justify-self-start">
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-950 text-white">
@@ -127,123 +127,145 @@ export function PublicNav({ active = "home" }: PublicNavProps) {
 }
 
 function HeroScene() {
-  const editorCursors = [
-    { name: "Maya", color: "border-blue-200 bg-blue-50 text-blue-700", className: "gavel-editor-cursor-maya" },
-    { name: "Jordan", color: "border-emerald-200 bg-emerald-50 text-emerald-700", className: "gavel-editor-cursor-jordan" },
-    { name: "Avery", color: "border-rose-200 bg-rose-50 text-rose-700", className: "gavel-editor-cursor-avery" },
+  const stats = [
+    ["Bills", "24", "8 ready for review"],
+    ["Assignments", "6", "2 auto-tracked"],
+    ["Records", "41", "votes, letters, reports"],
   ];
 
   return (
-    <div className="pointer-events-none relative mt-12 w-full overflow-hidden rounded-[1.25rem] border border-neutral-300 bg-white p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-4">
+    <div className="rounded-[1.5rem] border border-neutral-200 bg-white p-5">
+      <div className="flex items-center justify-between border-b border-neutral-200 pb-4">
+        <div>
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Teacher workspace</div>
+          <div className="mt-1 text-lg font-black text-slate-950">Period 3 Mock Congress</div>
+        </div>
+        <span className="rounded-full bg-blue-600 px-3 py-1.5 text-xs font-black text-white">Live</span>
+      </div>
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+        {stats.map(([label, value, detail]) => (
+          <div key={label} className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+            <div className="text-xs font-bold uppercase tracking-[0.14em] text-slate-500">{label}</div>
+            <div className="mt-2 text-3xl font-black text-slate-950">{value}</div>
+            <div className="mt-1 text-xs leading-5 text-slate-500">{detail}</div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+        <div className="rounded-2xl border border-neutral-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-sm font-black text-slate-950">Review current bill</div>
+              <div className="mt-1 text-xs text-slate-500">Committee report ready for grading</div>
+            </div>
+            <span className="rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">
+              H.R. 31
+            </span>
+          </div>
+          <div className="mt-4 rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+            <div className="text-sm font-black text-slate-950">Local Food Security Act</div>
+            <div className="mt-2 flex flex-wrap gap-2 text-xs font-bold text-slate-600">
+              <span className="rounded-full bg-white px-2.5 py-1">3 cosponsors</span>
+              <span className="rounded-full bg-white px-2.5 py-1">Reported 14-6</span>
+              <span className="rounded-full bg-white px-2.5 py-1">Rubric attached</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-2xl border border-neutral-200 bg-slate-950 p-4 text-white">
+          <div className="text-sm font-black">Use one teacher view</div>
+          <div className="mt-3 space-y-3 text-sm text-slate-200">
+            {["Open grading queues", "Export participation records", "Sync grades to SIS"].map((item) => (
+              <div key={item} className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 last:border-b-0 last:pb-0">
+                <span>{item}</span>
+                <CheckCircle2 className="h-4 w-4 text-blue-300" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CommitteeEditingDemo() {
+  const cursors = [
+    {
+      name: "Maya",
+      className: "gavel-live-cursor-maya",
+      pointer: "text-blue-700",
+      tone: "border-blue-200 bg-blue-50 text-blue-700",
+    },
+    {
+      name: "Jordan",
+      className: "gavel-live-cursor-jordan",
+      pointer: "text-emerald-700",
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-700",
+    },
+    {
+      name: "Avery",
+      className: "gavel-live-cursor-avery",
+      pointer: "text-rose-700",
+      tone: "border-rose-200 bg-rose-50 text-rose-700",
+    },
+  ];
+
+  return (
+    <div className="pointer-events-none relative overflow-hidden rounded-[1.5rem] border border-neutral-300 bg-white p-5">
+      <div className="flex items-center justify-between border-b border-neutral-200 pb-4">
         <div>
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Committee live editor</div>
           <div className="mt-1 text-lg font-black text-slate-950">H.R. 42 - Student Transit Access Act</div>
         </div>
-        <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-emerald-700">
-            Meeting open
-          </span>
-          <span className="gavel-editor-status rounded-full border border-blue-200 bg-blue-50 px-3 py-1.5 text-blue-700">
-            Submitted
-          </span>
+        <div className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">
+          Meeting open
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_16rem]">
-        <div className="relative min-h-[25rem] overflow-hidden rounded-2xl border border-neutral-200 bg-[#fcfcfb] p-4 sm:p-5">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-3">
-            <div className="text-sm font-black text-slate-950">Revised bill text</div>
-            <span className="gavel-editor-submit rounded-md bg-blue-600 px-3 py-2 text-xs font-black text-white">
-              Submit revisions
+      <div className="relative mt-5 min-h-[25rem] overflow-hidden rounded-2xl border border-neutral-200 bg-[#fcfcfb] p-5">
+        <div className="mb-5 flex items-center justify-between gap-3 border-b border-neutral-200 pb-3">
+          <div className="text-sm font-black text-slate-950">Revise bill text</div>
+          <span className="rounded-md bg-blue-600 px-3 py-2 text-xs font-black text-white">Save revision</span>
+        </div>
+
+        <div className="space-y-4 font-serif text-[15px] leading-7 text-slate-800">
+          <p>
+            <span className="font-mono text-xs font-black text-slate-500">SECTION 1.</span> This Act may be cited as
+            the Student Transit Access Act.
+          </p>
+          <p>
+            <span className="font-mono text-xs font-black text-slate-500">SEC. 2.</span> The Secretary of Transportation
+            shall establish a pilot program to help school districts provide{" "}
+            <span className="gavel-live-selection rounded px-1">after-school transit</span> for students participating in
+            debate, athletics, tutoring, and career programs{" "}
+            <span className="gavel-live-insert inline-block overflow-hidden whitespace-nowrap rounded px-1 text-emerald-700">
+              and weekend civic events
             </span>
-          </div>
-
-          <div className="mt-5 space-y-4 font-serif text-[15px] leading-7 text-slate-800">
-            <p>
-              <span className="font-mono text-xs font-black text-slate-500">SECTION 1.</span> This Act may be cited as
-              the Student Transit Access Act.
-            </p>
-            <p>
-              <span className="font-mono text-xs font-black text-slate-500">SEC. 2.</span> The Secretary of Transportation
-              shall establish a grant program to help school districts provide{" "}
-              <span className="gavel-edit-highlight gavel-edit-one rounded px-1">safe evening transit routes</span> for
-              students participating in debate, athletics, tutoring, and career programs.
-            </p>
-            <p>
-              Eligible districts shall submit a plan describing student demand, proposed stops, and coordination with{" "}
-              <span className="gavel-edit-highlight gavel-edit-two rounded px-1">local transit agencies and county offices</span>.
-            </p>
-            <p className="gavel-edit-line rounded-xl border border-blue-100 bg-blue-50/70 px-3 py-2 text-sm leading-6 text-slate-700">
-              Added: Each recipient shall publish quarterly access data and report barriers identified by students and
-              families.
-            </p>
-          </div>
-
-          <div className="absolute bottom-4 left-4 right-4 rounded-xl border border-neutral-200 bg-white p-3">
-            <div className="mb-2 flex items-center justify-between gap-4 text-xs font-bold text-slate-500">
-              <span>Committee collaborators</span>
-              <span>Autosaved</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {editorCursors.map((cursor) => (
-                <span key={cursor.name} className={`rounded-full border px-3 py-1 text-xs font-black ${cursor.color}`}>
-                  {cursor.name}
-                </span>
-              ))}
-            </div>
-          </div>
-
-          {editorCursors.map((cursor) => (
-            <div
-              key={cursor.name}
-              className={`absolute hidden items-start gap-1 sm:flex ${cursor.className}`}
-              aria-hidden="true"
-            >
-              <MousePointer2 className="h-5 w-5 fill-current" />
-              <span className={`rounded-full border px-2 py-0.5 text-xs font-black ${cursor.color}`}>
-                {cursor.name}
-              </span>
-            </div>
-          ))}
+            .
+          </p>
+          <p>
+            Eligible districts shall submit a plan describing student demand, proposed stops, and coordination with local
+            transit agencies. A grant may not require use of a{" "}
+            <span className="gavel-live-delete rounded px-1">single vendor contract</span> if multiple local providers
+            can meet safety standards.
+          </p>
+          <p>
+            Reports shall include ridership totals, wait times, and barriers identified by students and families.
+          </p>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-            <div className="text-sm font-black text-slate-950">Committee queue</div>
-            <div className="mt-3 space-y-2">
-              <div
-                className="gavel-queue-primary rounded-xl border border-blue-200 bg-blue-50 p-3 text-sm font-bold text-blue-900"
-              >
-                H.R. 42 - Student Transit Access Act
-              </div>
-              <div className="gavel-queue-secondary rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm font-bold text-slate-700">
-                H.R. 57 - Community Solar Schools Act
-              </div>
-              <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 text-sm font-bold text-slate-500">
-                H.R. 63 - Civic Service Credit Act
-              </div>
-            </div>
+        {cursors.map((cursor) => (
+          <div
+            key={cursor.name}
+            className={`absolute hidden items-start gap-1 sm:flex ${cursor.pointer} ${cursor.className}`}
+            aria-hidden="true"
+          >
+            <MousePointer2 className="h-5 w-5 fill-current" />
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-black ${cursor.tone}`}>{cursor.name}</span>
           </div>
-
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4">
-            <div className="text-sm font-black text-slate-950">Activity</div>
-            <div className="mt-3 space-y-3 text-xs leading-5 text-slate-600">
-              <div className="flex gap-2">
-                <span className="mt-1 h-2 w-2 rounded-full bg-blue-600" />
-                Maya clarifies grant eligibility.
-              </div>
-              <div className="flex gap-2">
-                <span className="mt-1 h-2 w-2 rounded-full bg-emerald-600" />
-                Jordan adds reporting language.
-              </div>
-              <div className="flex gap-2">
-                <span className="mt-1 h-2 w-2 rounded-full bg-rose-600" />
-                Avery submits the revision.
-              </div>
-            </div>
-          </div>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -252,6 +274,58 @@ function HeroScene() {
 function SiteMotionStyles() {
   return (
     <style>{`
+      @keyframes gavelLiveCursorMaya {
+        0%, 6% { opacity: 0; transform: translate(110px, 116px); }
+        12% { opacity: 1; transform: translate(248px, 155px); }
+        22% { opacity: 1; transform: translate(392px, 155px); }
+        30%, 100% { opacity: 0; transform: translate(392px, 155px); }
+      }
+
+      @keyframes gavelLiveCursorJordan {
+        0%, 26% { opacity: 0; transform: translate(292px, 154px); }
+        34% { opacity: 1; transform: translate(560px, 154px); }
+        48% { opacity: 1; transform: translate(660px, 154px); }
+        58%, 100% { opacity: 0; transform: translate(660px, 154px); }
+      }
+
+      @keyframes gavelLiveCursorAvery {
+        0%, 52% { opacity: 0; transform: translate(400px, 250px); }
+        62% { opacity: 1; transform: translate(508px, 250px); }
+        76% { opacity: 1; transform: translate(654px, 250px); }
+        88%, 100% { opacity: 0; transform: translate(654px, 250px); }
+      }
+
+      @keyframes gavelLiveSelection {
+        0%, 9% { background-color: transparent; }
+        14%, 29% { background-color: #bfdbfe; }
+        38%, 100% { background-color: transparent; }
+      }
+
+      @keyframes gavelLiveInsert {
+        0%, 33% { max-width: 0; opacity: 0; }
+        42%, 84% { max-width: 13rem; opacity: 1; }
+        96%, 100% { max-width: 0; opacity: 0; }
+      }
+
+      @keyframes gavelLiveDelete {
+        0%, 55% { background-color: transparent; color: inherit; text-decoration-color: transparent; }
+        64%, 86% { background-color: #ffe4e6; color: #be123c; text-decoration: line-through; text-decoration-thickness: 2px; }
+        98%, 100% { background-color: transparent; color: inherit; text-decoration-color: transparent; }
+      }
+
+      .gavel-live-cursor-maya,
+      .gavel-live-cursor-jordan,
+      .gavel-live-cursor-avery {
+        z-index: 20;
+      }
+
+      .gavel-live-cursor-maya { animation: gavelLiveCursorMaya 10s ease-in-out infinite; }
+      .gavel-live-cursor-jordan { animation: gavelLiveCursorJordan 10s ease-in-out infinite; }
+      .gavel-live-cursor-avery { animation: gavelLiveCursorAvery 10s ease-in-out infinite; }
+      .gavel-live-selection { animation: gavelLiveSelection 10s ease-in-out infinite; }
+      .gavel-live-insert { animation: gavelLiveInsert 10s ease-in-out infinite; vertical-align: baseline; }
+      .gavel-live-delete { animation: gavelLiveDelete 10s ease-in-out infinite; }
+
       @keyframes gavelEditorCursorMaya {
         0%, 5% { opacity: 0; transform: translate(86px, 92px); }
         10%, 26% { opacity: 1; transform: translate(268px, 148px); }
@@ -512,6 +586,12 @@ function SiteMotionStyles() {
       .gavel-org-progress { animation-name: gavelOrgProgress; animation-timing-function: linear; animation-fill-mode: forwards; }
 
       @media (prefers-reduced-motion: reduce) {
+        .gavel-live-cursor-maya,
+        .gavel-live-cursor-jordan,
+        .gavel-live-cursor-avery,
+        .gavel-live-selection,
+        .gavel-live-insert,
+        .gavel-live-delete,
         .gavel-editor-cursor-maya,
         .gavel-editor-cursor-jordan,
         .gavel-editor-cursor-avery,
@@ -562,63 +642,70 @@ function TeacherToolsShowcase() {
     {
       icon: BarChart3,
       tone: "bg-blue-600",
-      title: "Detailed dashboards",
+      title: "Open detailed dashboards",
       description: "Access class and student information in one click, so clicks do not multiply for every student.",
     },
     {
       icon: ClipboardCheck,
       tone: "bg-emerald-600",
-      title: "Assignments & automated rubrics",
+      title: "Create assignments and rubrics",
       description:
         "Create assignments with resources, grade manually with feedback, or set requirements like Write 2 Bills for Gavel to track.",
     },
     {
       icon: GraduationCap,
       tone: "bg-amber-600",
-      title: "SIS syncing",
+      title: "Sync grades to SIS",
       description: "Sync grades automatically to Synergy SIS, Schoology, and PowerSchool.",
     },
     {
       icon: Vote,
       tone: "bg-rose-600",
-      title: "Comprehensive activity tracking",
+      title: "Track every activity",
       description: "Track all simulation activity from bills and votes to letters, records, and organization work.",
     },
     {
       icon: NotebookText,
       tone: "bg-slate-950",
-      title: "See all teacher documentation",
+      title: "Read teacher documentation",
       description: "Open the help center for documentation covering every teacher tool in Gavel.",
     },
   ];
 
   return (
-    <section id="grading" className="py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+    <section id="grading" className="bg-[#f7f7f5] py-24">
+      <div className="mx-auto grid max-w-7xl items-start gap-12 px-4 sm:px-6 lg:grid-cols-[0.36fr_0.64fr] lg:px-8">
         <Reveal>
-          <div className="max-w-3xl">
-            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Built for grading</h2>
+          <div>
+            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Grade work faster</h2>
+            <p className="mt-4 text-lg leading-8 text-slate-600">
+              Use one teacher view for dashboards, assignments, rubrics, exports, activity history, and SIS sync.
+            </p>
           </div>
         </Reveal>
 
         <Reveal delay={120}>
-          <div className="mt-10 grid gap-4 lg:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2">
             {gradingCards.map((card) => {
               const Icon = card.icon;
               return (
                 <Link
                   key={card.title}
                   to="/help"
-                  className="group flex min-h-72 flex-col rounded-[1.25rem] border border-neutral-300 bg-white p-5 transition hover:border-blue-300"
+                  className="group rounded-[1.25rem] border border-neutral-200 bg-white p-5 transition hover:border-blue-300"
                 >
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-full text-white ${card.tone}`}>
-                    <Icon className="h-5 w-5" />
+                  <div className="flex items-start gap-4">
+                    <div className={`flex h-11 w-11 flex-none items-center justify-center rounded-full text-white ${card.tone}`}>
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="flex items-start gap-2">
+                        <h3 className="text-lg font-black leading-tight text-slate-950">{card.title}</h3>
+                        <ArrowRight className="mt-0.5 h-5 w-5 flex-none text-slate-400 transition group-hover:translate-x-1 group-hover:text-blue-600" />
+                      </div>
+                      <p className="mt-2 text-sm leading-6 text-slate-600">{card.description}</p>
+                    </div>
                   </div>
-                  <div className="mt-6 flex items-start justify-between gap-3">
-                    <h3 className="text-xl font-black leading-tight text-slate-950">{card.title}</h3>
-                    <ArrowRight className="mt-1 h-5 w-5 flex-none text-slate-400 transition group-hover:translate-x-1 group-hover:text-blue-600" />
-                  </div>
-                  <p className="mt-3 text-sm leading-6 text-slate-600">{card.description}</p>
                 </Link>
               );
             })}
@@ -629,41 +716,72 @@ function TeacherToolsShowcase() {
   );
 }
 
+function CommitteeEditingSection() {
+  return (
+    <section id="committee-editing" className="bg-white py-24">
+      <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.62fr_0.38fr] lg:px-8">
+        <Reveal>
+          <CommitteeEditingDemo />
+        </Reveal>
+
+        <Reveal delay={120}>
+          <div>
+            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Edit bills together</h2>
+            <p className="mt-4 text-lg leading-8 text-slate-600">
+              Open committee meetings when students should revise text collaboratively, then keep the revised language
+              attached to the bill for review and grading.
+            </p>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  );
+}
+
 const billTimelineStages = [
   {
     label: "Introduced",
-    title: "Bill introduced",
+    title: "Introduce the bill",
     body: "The bill is filed, labeled, tied to a sponsor, and added to the class bill list.",
   },
   {
     label: "Referred",
-    title: "Committee referral",
+    title: "Refer to committee",
     body: "The teacher or authorized member sends the bill to one or more committees for review.",
   },
   {
     label: "Revised and discussed in committee",
-    title: "Committee work",
+    title: "Revise in committee",
     body: "Committee members revise text, discuss changes, write reports, and vote on whether to report the bill.",
   },
   {
     label: "Calendared",
-    title: "Calendar placement",
+    title: "Calendar for floor",
     body: "The bill moves onto the calendar so speakers can prepare and floor time can be managed.",
   },
   {
     label: "Debated and voted on floor",
-    title: "Floor action",
+    title: "Debate and vote",
     body: "The class debates, votes, and generates a record teachers can use for grading and reflection.",
   },
 ];
 
 function BillTimelineSection() {
   return (
-    <section id="bill-timeline" className="py-24">
-      <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.55fr_0.45fr] lg:px-8">
-        <div>
-          <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Complete legislative process</h2>
-          <div className="mt-8 rounded-[1rem] border border-neutral-300 bg-white p-5">
+    <section id="bill-timeline" className="bg-[#f7f7f5] py-24">
+      <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.38fr_0.62fr] lg:px-8">
+        <Reveal>
+          <div>
+            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Track every bill</h2>
+            <p className="mt-4 text-lg leading-8 text-slate-600">
+              Follow each measure from introduction through referral, committee work, calendaring, floor debate, vote,
+              and records without rebuilding the timeline by hand.
+            </p>
+          </div>
+        </Reveal>
+
+        <Reveal delay={120}>
+          <div className="rounded-[1.25rem] border border-neutral-300 bg-white p-5">
             <div className="font-mono text-sm font-black text-blue-700">H.R. 31</div>
             <div className="mt-1 text-2xl font-black text-slate-950">Local Food Security Act</div>
             <div className="mt-1 text-sm text-slate-500">Sponsored by Rep. Elena Park</div>
@@ -677,27 +795,27 @@ function BillTimelineSection() {
                 </span>
               ))}
             </div>
-          </div>
-        </div>
 
-        <div className="rounded-[1rem] border border-neutral-300 bg-white p-6">
-          <div className="relative">
-            <div className="absolute bottom-6 left-[0.55rem] top-6 border-l border-dashed border-slate-300" />
-            <div className="space-y-2">
-              {billTimelineStages.map((stage) => (
-                <div key={stage.label} className="relative grid grid-cols-[1.5rem_1fr] gap-4 rounded-md px-1 py-2 text-left">
-                  <span className="relative z-10 mt-1 h-3 w-3 rounded-full bg-blue-600 ring-4 ring-white" />
-                  <span>
-                    <span className="block text-sm font-black text-slate-950">{stage.label}</span>
-                    <span className="mt-1 block text-sm leading-6 text-slate-600">
-                      <span className="font-semibold text-slate-800">{stage.title}.</span> {stage.body}
-                    </span>
-                  </span>
+            <div className="mt-6 rounded-[1rem] border border-neutral-200 bg-neutral-50 p-5">
+              <div className="relative">
+                <div className="absolute bottom-6 left-[0.55rem] top-6 border-l border-dashed border-slate-300" />
+                <div className="space-y-2">
+                  {billTimelineStages.map((stage) => (
+                    <div key={stage.label} className="relative grid grid-cols-[1.5rem_1fr] gap-4 rounded-md px-1 py-2 text-left">
+                      <span className="relative z-10 mt-1 h-3 w-3 rounded-full bg-blue-600 ring-4 ring-neutral-50" />
+                      <span>
+                        <span className="block text-sm font-black text-slate-950">{stage.label}</span>
+                        <span className="mt-1 block text-sm leading-6 text-slate-600">
+                          <span className="font-semibold text-slate-800">{stage.title}.</span> {stage.body}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -706,7 +824,7 @@ function BillTimelineSection() {
 const organizationItems = [
   {
     label: "Parties",
-    title: "Parties organize coalitions.",
+    title: "Organize coalitions with parties.",
     body: "Teachers can enable party membership, leadership, elections, platforms, and announcement boards.",
     icon: Users,
     details: [
@@ -717,7 +835,7 @@ const organizationItems = [
   },
   {
     label: "Committees",
-    title: "Committees handle the substantive work.",
+    title: "Review bills through committees.",
     body: "Committee pages include membership, roles, reports, vote tools, and live collaborative editing when meetings are open.",
     icon: Gavel,
     details: [
@@ -728,7 +846,7 @@ const organizationItems = [
   },
   {
     label: "Caucuses",
-    title: "Caucuses create issue-based pressure.",
+    title: "Create issue pressure with caucuses.",
     body: "Teachers can allow issue-based coalitions while controlling creation and join rules.",
     icon: Megaphone,
     details: [
@@ -739,7 +857,7 @@ const organizationItems = [
   },
   {
     label: "Media groups",
-    title: "Media groups add narrative pressure.",
+    title: "Publish through media groups.",
     body: "Media organizations can publish messages and shape the public side of the simulation.",
     icon: Mail,
     details: [
@@ -750,7 +868,7 @@ const organizationItems = [
   },
   {
     label: "Lobbyists",
-    title: "Lobbyists add optional money and access.",
+    title: "Add money and access with lobbyists.",
     body: "When enabled, lobbyist groups can track spending, contributions, and paid committee access.",
     icon: BadgeDollarSign,
     details: [
@@ -764,7 +882,7 @@ const organizationItems = [
 const messagingItems = [
   {
     label: "Message boards",
-    title: "Boards keep announcements in context.",
+    title: "Post announcements in context.",
     body: "Organization announcements and comments stay attached to the relevant group instead of scattered elsewhere.",
     icon: Megaphone,
     details: [
@@ -775,7 +893,7 @@ const messagingItems = [
   },
   {
     label: "Dear colleague letters",
-    title: "Letters keep persuasion inside the site.",
+    title: "Send dear colleague letters.",
     body: "Built-in inboxes support cosponsor requests, strategy messages, and member contact.",
     icon: Mail,
     details: [
@@ -786,7 +904,7 @@ const messagingItems = [
   },
   {
     label: "Committee editing",
-    title: "Live editing keeps discussion productive.",
+    title: "Revise text during meetings.",
     body: "Committee work can include live collaborative editing when a meeting is open.",
     icon: ClipboardCheck,
     details: [
@@ -802,11 +920,17 @@ type ExplorerItem = (typeof organizationItems)[number] | (typeof messagingItems)
 function ListDetailShowcase({
   id,
   title,
+  description,
   items,
+  reverse = false,
+  background = "bg-white",
 }: {
   id: string;
   title: string;
+  description: string;
   items: ExplorerItem[];
+  reverse?: boolean;
+  background?: string;
 }) {
   const [activeItem, setActiveItem] = useState(0);
   const [autoAdvance, setAutoAdvance] = useState(true);
@@ -824,18 +948,20 @@ function ListDetailShowcase({
 
   const active = items[activeItem];
   const Icon = active.icon;
+  const gridClass = reverse ? "lg:grid-cols-[0.62fr_0.38fr]" : "lg:grid-cols-[0.38fr_0.62fr]";
 
   return (
-    <section id={id} className="py-24">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <Reveal>
-          <div className="max-w-3xl">
+    <section id={id} className={`${background} py-24`}>
+      <div className={`mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:px-8 ${gridClass}`}>
+        <Reveal className={reverse ? "lg:order-2" : ""}>
+          <div>
             <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">{title}</h2>
+            <p className="mt-4 text-lg leading-8 text-slate-600">{description}</p>
           </div>
         </Reveal>
 
-        <Reveal delay={120}>
-          <div className="mt-12 grid min-h-[32rem] overflow-hidden rounded-[1.25rem] border border-neutral-300 bg-white lg:grid-cols-[0.42fr_0.58fr]">
+        <Reveal className={reverse ? "lg:order-1" : ""} delay={120}>
+          <div className="grid min-h-[32rem] overflow-hidden rounded-[1.25rem] border border-neutral-300 bg-white lg:grid-cols-[0.42fr_0.58fr]">
             <div className="bg-white py-4 lg:border-r lg:border-neutral-200">
               {items.map((item, index) => {
                 const ItemIcon = item.icon;
@@ -896,7 +1022,7 @@ function SettingsVisual() {
     <div className="rounded-[1rem] border border-neutral-300 bg-white p-4">
       <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] text-slate-500">
         <Settings2 className="h-4 w-4" />
-        Simulation settings
+        Configure simulation settings
       </div>
       <div className="mt-4 space-y-3">
         {[
@@ -928,17 +1054,17 @@ function SettingsVisual() {
 
 export function LandingPage() {
   return (
-    <div className="min-h-screen bg-[#f4f4f2] text-slate-950">
+    <div className="min-h-screen bg-[#fcfcfb] text-slate-950">
       <SiteMotionStyles />
       <PublicNav active="home" />
 
-      <main className="bg-[#f4f4f2]">
-        <section className="relative isolate overflow-hidden bg-[#f4f4f2]">
-          <div className="relative z-10 mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-            <div className="max-w-4xl">
+      <main className="bg-[#fcfcfb]">
+        <section className="relative isolate overflow-hidden bg-[#fcfcfb]">
+          <div className="relative z-10 mx-auto grid max-w-7xl items-center gap-12 px-4 py-16 sm:px-6 lg:grid-cols-[0.48fr_0.52fr] lg:px-8">
+            <div>
               <Reveal>
                 <h1 className="text-5xl font-black tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
-                  Mock Congress, from first bill to final grade.
+                  Run Mock Congress from first bill to final grade.
                 </h1>
                 <p className="mt-5 max-w-3xl text-xl leading-8 text-slate-700">
                   Centralize bills, cosponsors, committee edits, floor debate, organizations, letters, records, rubrics,
@@ -971,19 +1097,34 @@ export function LandingPage() {
 
         <TeacherToolsShowcase />
 
+        <CommitteeEditingSection />
+
         <BillTimelineSection />
 
-        <ListDetailShowcase id="organizations" title="Organizations" items={organizationItems} />
+        <ListDetailShowcase
+          id="organizations"
+          title="Organize student groups"
+          description="Run parties, committees, caucuses, media groups, and lobbyists with membership, leadership, announcements, elections, and permissions in the same workspace."
+          items={organizationItems}
+          reverse
+          background="bg-white"
+        />
 
-        <ListDetailShowcase id="messaging" title="Messaging" items={messagingItems} />
+        <ListDetailShowcase
+          id="messaging"
+          title="Manage class communication"
+          description="Keep announcements, dear colleague letters, and committee work connected to the people, bills, and organizations they affect."
+          items={messagingItems}
+          background="bg-[#f7f7f5]"
+        />
 
-        <section id="customization" className="py-24">
+        <section id="customization" className="bg-white py-24">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-            <Reveal className="lg:order-2">
+            <Reveal className="lg:order-1">
               <SettingsVisual />
             </Reveal>
-            <Reveal className="lg:order-1" delay={120}>
-              <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Highly customizable</h2>
+            <Reveal className="lg:order-2" delay={120}>
+              <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Customize the simulation</h2>
               <p className="mt-4 text-lg leading-8 text-slate-600">
                 Adjust time, complexity, and realism so the same simulation can fit a short unit, a semester project, or a
                 full-year course for middle school, high school, college, civics, government, history, or debate.
@@ -1005,14 +1146,14 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="py-24">
+        <section className="bg-[#f7f7f5] py-24">
           <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
             <Reveal>
               <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white">
                 <Gavel className="h-7 w-7" />
               </div>
               <h2 className="mt-6 text-4xl font-black tracking-tight text-slate-950">
-                Start a teacher-run Mock Congress simulation for free.
+                Launch a free simulation.
               </h2>
               <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-600">
                 Set up a class, choose the rules, and keep the work organized from draft to grade.
@@ -1038,7 +1179,7 @@ export function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-neutral-200 bg-[#f4f4f2]">
+      <footer className="border-t border-neutral-200 bg-white">
         <div className="mx-auto flex max-w-7xl justify-center gap-8 px-4 py-8 text-sm font-semibold text-slate-600 sm:px-6 lg:px-8">
           <Link to="/" className="hover:text-slate-950">
             Home
