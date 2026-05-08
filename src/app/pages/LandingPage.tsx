@@ -16,6 +16,7 @@ import {
   ShieldCheck,
   Users,
   Vote,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -83,15 +84,15 @@ export function PublicNav({ active = "home" }: PublicNavProps) {
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link to="/" className="flex items-center gap-2">
+      <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:px-6 md:grid-cols-[1fr_auto_1fr] lg:px-8">
+        <Link to="/" className="flex items-center gap-2 justify-self-start">
           <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-white shadow-sm">
             <Gavel className="h-5 w-5" aria-hidden="true" />
           </span>
           <span className="text-lg font-black tracking-tight text-slate-950">Gavel</span>
         </Link>
 
-        <nav className="order-3 flex w-full items-center justify-center gap-2 border-t border-slate-100 pt-3 md:order-none md:ml-6 md:w-auto md:border-t-0 md:pt-0">
+        <nav className="order-3 col-span-2 flex w-full items-center justify-center gap-2 border-t border-slate-100 pt-3 md:order-none md:col-span-1 md:w-auto md:border-t-0 md:pt-0">
           <Link to="/" className={navLinkClass("home")}>
             Home
           </Link>
@@ -107,7 +108,7 @@ export function PublicNav({ active = "home" }: PublicNavProps) {
           </button>
         </nav>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="flex items-center gap-2 justify-self-end">
           <Link
             to="/signin"
             className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
@@ -132,7 +133,7 @@ function HeroScene() {
       <div className="absolute inset-0 bg-[linear-gradient(115deg,#f8fafc_0%,#eef2ff_50%,#f8fafc_100%)]" />
       <div className="absolute inset-x-0 bottom-0 h-40 bg-gradient-to-t from-white via-white/80 to-transparent" />
 
-      <div className="absolute right-[-6rem] top-16 hidden w-[50rem] max-w-[58vw] lg:block">
+      <div className="absolute right-[-7rem] top-24 hidden w-[42rem] max-w-[43vw] xl:block">
         <div className="rounded-[2rem] border border-slate-200 bg-white/92 p-4 shadow-2xl shadow-slate-300/50">
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div>
@@ -168,7 +169,7 @@ function HeroScene() {
                   <div
                     key={number}
                     className={`gavel-bill-row rounded-xl border p-3 ${
-                      index === 0 ? "border-blue-200 bg-blue-50/70" : "border-slate-200 bg-slate-50"
+                      index === 0 ? "gavel-hero-bill-row border-blue-200 bg-blue-50/70" : "border-slate-200 bg-slate-50"
                     }`}
                     style={{ animationDelay: `${index * 240}ms` }}
                   >
@@ -179,9 +180,16 @@ function HeroScene() {
                         </div>
                         <div className="mt-1 text-xs text-slate-500">Assigned to {committee}</div>
                       </div>
-                      <span className="whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-blue-700 shadow-sm">
-                        {status}
-                      </span>
+                      <div className="flex flex-col items-end gap-2">
+                        {index === 0 ? (
+                          <span className="gavel-hero-refer-button whitespace-nowrap rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                            Refer
+                          </span>
+                        ) : null}
+                        <span className="whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-blue-700 shadow-sm">
+                          {status}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))}
@@ -189,7 +197,7 @@ function HeroScene() {
             </div>
 
             <div className="space-y-4">
-              <div className="rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white">
+              <div className="gavel-hero-vote-card rounded-2xl border border-slate-200 bg-slate-950 p-4 text-white">
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-sm font-black">Floor vote</div>
@@ -231,23 +239,27 @@ function HeroScene() {
           <div className="relative mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
             <div className="gavel-route-fill absolute left-4 top-1/2 h-1 -translate-y-1/2 rounded-full bg-blue-500" />
             <div className="relative grid grid-cols-5 gap-3 text-center text-[11px] font-bold text-slate-700">
-              {["Drafted", "Committee", "Reported", "Floor", "Records"].map((stage) => (
-                <span key={stage} className="rounded-full border border-slate-200 bg-white px-2 py-2 shadow-sm">
+              {["Drafted", "Committee", "Reported", "Floor", "Records"].map((stage, index) => (
+                <span
+                  key={stage}
+                  className={`rounded-full border border-slate-200 bg-white px-2 py-2 shadow-sm ${
+                    index === 1 ? "gavel-hero-stage-committee" : index === 3 ? "gavel-hero-stage-floor" : ""
+                  }`}
+                >
                   {stage}
                 </span>
               ))}
             </div>
+            <div className="gavel-hero-stage-popup pointer-events-none absolute left-[19%] top-[-2.35rem] rounded-lg border border-blue-200 bg-white px-3 py-2 text-[11px] font-bold text-blue-700 shadow-lg">
+              Referred to committee
+            </div>
           </div>
         </div>
 
-        <div className="gavel-action-cursor absolute left-7 top-7 h-8 w-7 bg-slate-950 shadow-lg">
-          <span className="absolute left-6 top-5 rounded-md bg-slate-950 px-2 py-1 text-[10px] font-bold text-white shadow">
-            click
-          </span>
-        </div>
-        <span className="gavel-click-pulse gavel-click-one absolute h-8 w-8 rounded-full border-2 border-blue-500" />
-        <span className="gavel-click-pulse gavel-click-two absolute h-8 w-8 rounded-full border-2 border-blue-500" />
-        <span className="gavel-click-pulse gavel-click-three absolute h-8 w-8 rounded-full border-2 border-blue-500" />
+        <MousePointer2 className="gavel-action-cursor absolute left-0 top-0 h-5 w-5 fill-slate-950 text-slate-950 drop-shadow-lg" />
+        <span className="gavel-click-pulse gavel-click-one absolute h-7 w-7 rounded-full border-2 border-blue-500" />
+        <span className="gavel-click-pulse gavel-click-two absolute h-7 w-7 rounded-full border-2 border-blue-500" />
+        <span className="gavel-click-pulse gavel-click-three absolute h-7 w-7 rounded-full border-2 border-blue-500" />
       </div>
     </div>
   );
@@ -258,10 +270,10 @@ function SiteMotionStyles() {
     <style>{`
       @keyframes gavelCursorPath {
         0%, 8% { transform: translate(0, 0); opacity: 0; }
-        12%, 30% { transform: translate(118px, 162px); opacity: 1; }
-        40%, 58% { transform: translate(445px, 290px); opacity: 1; }
-        68%, 84% { transform: translate(585px, 90px); opacity: 1; }
-        94%, 100% { transform: translate(620px, 255px); opacity: 0; }
+        12%, 28% { transform: translate(362px, 185px); opacity: 1; }
+        40%, 56% { transform: translate(205px, 458px); opacity: 1; }
+        68%, 84% { transform: translate(562px, 145px); opacity: 1; }
+        94%, 100% { transform: translate(610px, 255px); opacity: 0; }
       }
 
       @keyframes gavelClickOne {
@@ -284,6 +296,36 @@ function SiteMotionStyles() {
         40% { width: 35%; }
         62% { width: 60%; }
         84%, 100% { width: calc(100% - 2rem); }
+      }
+
+      @keyframes gavelHeroReferButton {
+        0%, 100% { transform: translateY(0) scale(1); background: #2563eb; }
+        13%, 20% { transform: translateY(-1px) scale(1.08); background: #0f172a; }
+      }
+
+      @keyframes gavelHeroBillRow {
+        0%, 100% { transform: translateX(0); border-color: #bfdbfe; background: rgba(239, 246, 255, 0.7); }
+        18%, 32% { transform: translateX(8px); border-color: #2563eb; background: #dbeafe; }
+      }
+
+      @keyframes gavelHeroStage {
+        0%, 36%, 63%, 100% { transform: translateY(0) scale(1); background: #ffffff; color: #334155; border-color: #e2e8f0; }
+        43%, 56% { transform: translateY(-2px) scale(1.05); background: #2563eb; color: #ffffff; border-color: #2563eb; }
+      }
+
+      @keyframes gavelHeroFloorStage {
+        0%, 64%, 90%, 100% { transform: translateY(0) scale(1); background: #ffffff; color: #334155; border-color: #e2e8f0; }
+        70%, 83% { transform: translateY(-2px) scale(1.05); background: #0f172a; color: #ffffff; border-color: #0f172a; }
+      }
+
+      @keyframes gavelHeroStagePopup {
+        0%, 38%, 60%, 100% { opacity: 0; transform: translateY(8px) scale(0.96); }
+        43%, 55% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes gavelHeroVoteCard {
+        0%, 64%, 88%, 100% { transform: scale(1); box-shadow: none; }
+        70%, 83% { transform: scale(1.025); box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18); }
       }
 
       @keyframes gavelVoteBar {
@@ -319,22 +361,75 @@ function SiteMotionStyles() {
         92%, 100% { transform: translate(330px, 154px); opacity: 0; }
       }
 
-      .gavel-action-cursor,
+      @keyframes gavelBillTokenMove {
+        0%, 9% { left: 5%; }
+        20%, 27% { left: 27%; }
+        39%, 46% { left: 50%; }
+        58%, 66% { left: 72%; }
+        81%, 100% { left: 94%; }
+      }
+
+      @keyframes gavelBillTimelineFill {
+        0%, 9% { width: 5%; }
+        24% { width: 27%; }
+        43% { width: 50%; }
+        63% { width: 72%; }
+        86%, 100% { width: 94%; }
+      }
+
+      @keyframes gavelBillPopupDraft {
+        0%, 12%, 100% { opacity: 0; transform: translateY(8px) scale(0.96); }
+        2%, 9% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes gavelBillPopupCosponsor {
+        0%, 19%, 31%, 100% { opacity: 0; transform: translateY(8px) scale(0.96); }
+        22%, 28% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes gavelBillPopupCommittee {
+        0%, 38%, 50%, 100% { opacity: 0; transform: translateY(8px) scale(0.96); }
+        41%, 47% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes gavelBillPopupFloor {
+        0%, 57%, 70%, 100% { opacity: 0; transform: translateY(8px) scale(0.96); }
+        60%, 67% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
+      @keyframes gavelBillPopupRecord {
+        0%, 80%, 100% { opacity: 0; transform: translateY(8px) scale(0.96); }
+        84%, 96% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+
       .gavel-small-cursor {
         clip-path: polygon(0 0, 0 100%, 28% 76%, 48% 100%, 63% 91%, 43% 68%, 76% 68%);
       }
 
       .gavel-action-cursor { animation: gavelCursorPath 9s ease-in-out infinite; }
-      .gavel-click-one { left: 168px; top: 202px; animation: gavelClickOne 9s ease-out infinite; }
-      .gavel-click-two { left: 492px; top: 328px; animation: gavelClickTwo 9s ease-out infinite; }
-      .gavel-click-three { left: 632px; top: 128px; animation: gavelClickThree 9s ease-out infinite; }
+      .gavel-click-one { left: 349px; top: 172px; animation: gavelClickOne 9s ease-out infinite; }
+      .gavel-click-two { left: 192px; top: 445px; animation: gavelClickTwo 9s ease-out infinite; }
+      .gavel-click-three { left: 549px; top: 132px; animation: gavelClickThree 9s ease-out infinite; }
       .gavel-route-fill { animation: gavelRouteFill 9s ease-in-out infinite; }
       .gavel-vote-bar { animation: gavelVoteBar 4s ease-in-out infinite; }
       .gavel-bill-row:first-child { animation: gavelBillAttention 9s ease-in-out infinite; }
+      .gavel-hero-bill-row { animation: gavelHeroBillRow 9s ease-in-out infinite; }
+      .gavel-hero-refer-button { animation: gavelHeroReferButton 9s ease-in-out infinite; }
+      .gavel-hero-stage-committee { animation: gavelHeroStage 9s ease-in-out infinite; }
+      .gavel-hero-stage-floor { animation: gavelHeroFloorStage 9s ease-in-out infinite; }
+      .gavel-hero-stage-popup { animation: gavelHeroStagePopup 9s ease-in-out infinite; }
+      .gavel-hero-vote-card { animation: gavelHeroVoteCard 9s ease-in-out infinite; }
       .gavel-progress-fill { animation: gavelProgress 5s ease-in-out infinite alternate; }
       .gavel-step-focus { animation: gavelStepFocus 6s ease-in-out infinite; }
       .gavel-tab-cycle { animation: gavelTabCycle 7s ease-in-out infinite; }
       .gavel-small-cursor { animation: gavelCursorTap 7s ease-in-out infinite; }
+      .gavel-bill-token { animation: gavelBillTokenMove 12s ease-in-out infinite; }
+      .gavel-bill-timeline-fill { animation: gavelBillTimelineFill 12s ease-in-out infinite; }
+      .gavel-bill-popup-draft { animation: gavelBillPopupDraft 12s ease-in-out infinite; }
+      .gavel-bill-popup-cosponsor { animation: gavelBillPopupCosponsor 12s ease-in-out infinite; }
+      .gavel-bill-popup-committee { animation: gavelBillPopupCommittee 12s ease-in-out infinite; }
+      .gavel-bill-popup-floor { animation: gavelBillPopupFloor 12s ease-in-out infinite; }
+      .gavel-bill-popup-record { animation: gavelBillPopupRecord 12s ease-in-out infinite; }
 
       @media (prefers-reduced-motion: reduce) {
         .gavel-action-cursor,
@@ -343,9 +438,22 @@ function SiteMotionStyles() {
         .gavel-route-fill,
         .gavel-vote-bar,
         .gavel-bill-row,
+        .gavel-hero-bill-row,
+        .gavel-hero-refer-button,
+        .gavel-hero-stage-committee,
+        .gavel-hero-stage-floor,
+        .gavel-hero-stage-popup,
+        .gavel-hero-vote-card,
         .gavel-progress-fill,
         .gavel-step-focus,
-        .gavel-tab-cycle {
+        .gavel-tab-cycle,
+        .gavel-bill-token,
+        .gavel-bill-timeline-fill,
+        .gavel-bill-popup-draft,
+        .gavel-bill-popup-cosponsor,
+        .gavel-bill-popup-committee,
+        .gavel-bill-popup-floor,
+        .gavel-bill-popup-record {
           animation: none !important;
         }
       }
@@ -359,6 +467,103 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <div className="text-2xl font-black text-slate-950">{value}</div>
       <div className="mt-1 text-sm text-slate-500">{label}</div>
     </div>
+  );
+}
+
+type TeacherTool = {
+  icon: LucideIcon;
+  title: string;
+  description: string;
+  detail: string;
+};
+
+const teacherTools: TeacherTool[] = [
+  {
+    icon: ClipboardCheck,
+    title: "Assignments",
+    description: "Create work tied to bills, letters, reports, floor speeches, and participation.",
+    detail: "due dates",
+  },
+  {
+    icon: CheckCircle2,
+    title: "Rubrics and auto-grading",
+    description: "Score submissions against teacher criteria while keeping review and overrides available.",
+    detail: "criteria",
+  },
+  {
+    icon: Users,
+    title: "Roster tools",
+    description: "Import students, reorder columns, hide fields, add custom columns, and export clean sheets.",
+    detail: "columns",
+  },
+  {
+    icon: Settings2,
+    title: "Simulation rules",
+    description: "Adjust realism, committee rules, speaker lists, organizations, profiles, and money systems.",
+    detail: "settings",
+  },
+  {
+    icon: Vote,
+    title: "Floor and vote controls",
+    description: "Run screen-share views, speaker queues, live vote counts, and final vote records.",
+    detail: "floor",
+  },
+  {
+    icon: Download,
+    title: "Exports and SIS sync",
+    description: "Export participation and grades, then sync selected scores to Synergy SIS.",
+    detail: "grades",
+  },
+];
+
+function TeacherToolsShowcase() {
+  return (
+    <section className="border-y border-slate-200 bg-slate-50 py-16">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.72fr_1.28fr] lg:px-8">
+        <Reveal>
+          <div className="text-sm font-black uppercase tracking-[0.18em] text-blue-600">Teacher tools</div>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+            Everything teachers usually juggle is listed, trackable, and ready to export.
+          </h2>
+          <p className="mt-4 text-lg leading-8 text-slate-600">
+            Gavel keeps the teacher view practical: setup, grading, roster management, records, exports, and live floor
+            controls live together instead of across disconnected files.
+          </p>
+        </Reveal>
+
+        <Reveal delay={120}>
+          <div className="relative overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70">
+            <div className="absolute bottom-6 left-[2.35rem] top-6 w-px bg-slate-200" />
+            <ol className="relative space-y-1">
+              {teacherTools.map((tool, index) => {
+                const Icon = tool.icon;
+                return (
+                  <li
+                    key={tool.title}
+                    className="grid grid-cols-[3.2rem_1fr_auto] items-center gap-3 border-b border-slate-100 py-3 last:border-b-0"
+                  >
+                    <div className="relative z-10 grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-blue-600 shadow-sm">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <div className="text-sm font-black text-slate-950">{tool.title}</div>
+                      <p className="mt-1 text-sm leading-6 text-slate-600">{tool.description}</p>
+                    </div>
+                    <span
+                      className={`hidden rounded-full px-3 py-1.5 text-xs font-black sm:inline-flex ${
+                        index === 1 || index === 5 ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {tool.detail}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          </div>
+        </Reveal>
+      </div>
+    </section>
   );
 }
 
@@ -427,8 +632,28 @@ function TeacherConsoleVisual() {
 }
 
 function BillFlowVisual() {
+  const stages = [
+    { label: "Draft", x: "5%", popupClass: "gavel-bill-popup-draft", note: "Bill created", detail: "H.R. 31 enters the docket." },
+    {
+      label: "Cosponsor",
+      x: "27%",
+      popupClass: "gavel-bill-popup-cosponsor",
+      note: "Support grows",
+      detail: "Five members add their names.",
+    },
+    {
+      label: "Committee",
+      x: "50%",
+      popupClass: "gavel-bill-popup-committee",
+      note: "Referred",
+      detail: "Energy and Commerce starts markup.",
+    },
+    { label: "Floor", x: "72%", popupClass: "gavel-bill-popup-floor", note: "Calendared", detail: "Speakers sign up for debate." },
+    { label: "Record", x: "94%", popupClass: "gavel-bill-popup-record", note: "Finalized", detail: "Vote report is saved to records." },
+  ];
+
   return (
-    <div className="relative rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
+    <div className="relative overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Student workflow</div>
@@ -440,54 +665,60 @@ function BillFlowVisual() {
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-        <div className="space-y-3">
-          {[
-            ["H.R. 31", "Local Food Security Act", "5 cosponsors"],
-            ["H.R. 34", "Clean Transit Grants Act", "committee revision"],
-            ["H.R. 39", "Civic Archives Act", "reported favorably"],
-          ].map(([number, title, status], index) => (
-            <div key={number} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <div className="text-sm font-black text-slate-950">
-                    {number} - {title}
-                  </div>
-                  <div className="mt-1 text-xs text-slate-500">Sponsored by Rep. Elena Park</div>
-                </div>
-                <span
-                  className={`rounded-full px-2.5 py-1 text-[11px] font-bold ${
-                    index === 1 ? "bg-blue-100 text-blue-700" : "bg-white text-slate-600"
-                  }`}
-                >
-                  {status}
-                </span>
+      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+        <div className="flex items-start justify-between gap-4 rounded-xl bg-white p-4">
+          <div>
+            <div className="font-mono text-sm font-black text-blue-700">H.R. 31</div>
+            <div className="mt-1 text-lg font-black text-slate-950">Local Food Security Act</div>
+            <div className="mt-1 text-sm text-slate-500">Sponsored by Rep. Elena Park</div>
+          </div>
+          <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">tracked live</span>
+        </div>
+
+        <div className="relative mt-6 min-h-[18rem] overflow-hidden rounded-2xl bg-white p-5">
+          <div className="absolute left-5 right-5 top-[7.35rem] h-1 rounded-full bg-slate-200" />
+          <div className="gavel-bill-timeline-fill absolute left-5 top-[7.35rem] h-1 rounded-full bg-blue-600" />
+          <div className="gavel-bill-token absolute top-[6.45rem] z-20 -translate-x-1/2 rounded-full bg-slate-950 px-3 py-2 text-xs font-black text-white shadow-lg">
+            H.R. 31
+          </div>
+
+          {stages.map((stage, index) => (
+            <div key={stage.label}>
+              <div
+                className="absolute top-[6.95rem] z-10 h-4 w-4 -translate-x-1/2 rounded-full border-4 border-white bg-blue-600 shadow"
+                style={{ left: stage.x }}
+              />
+              <div
+                className="absolute top-[8.75rem] -translate-x-1/2 text-center text-[11px] font-black uppercase tracking-wide text-slate-500"
+                style={{ left: stage.x }}
+              >
+                {stage.label}
+              </div>
+              <div
+                className={`${stage.popupClass} absolute top-0 w-44 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xl ${
+                  index === 0 ? "left-0" : index === stages.length - 1 ? "right-0" : "-translate-x-1/2"
+                }`}
+                style={index === 0 || index === stages.length - 1 ? undefined : { left: stage.x }}
+              >
+                <div className="text-xs font-black text-blue-700">{stage.note}</div>
+                <div className="mt-1 text-xs leading-5 text-slate-600">{stage.detail}</div>
               </div>
             </div>
           ))}
-        </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center justify-between">
-            <div className="text-sm font-black text-slate-950">Committee live editor</div>
-            <div className="flex items-center gap-2 text-xs font-bold text-emerald-700">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Meeting open
+          <div className="absolute bottom-5 left-5 right-5 grid gap-3 sm:grid-cols-3">
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="text-xs font-black text-slate-950">Committee editor</div>
+              <div className="mt-1 text-xs text-slate-500">Markup opens during meetings.</div>
             </div>
-          </div>
-          <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-600">
-            <p>
-              Section 2. The Secretary shall establish grant criteria for transit agencies serving students and
-              workers.
-            </p>
-            <p className="rounded-lg bg-blue-100 px-2 py-1 text-blue-900">
-              Amendment: priority shall be given to districts with documented transportation gaps.
-            </p>
-          </div>
-          <div className="mt-4 grid grid-cols-3 gap-2 text-center text-xs font-bold text-slate-600">
-            <span className="rounded-xl bg-slate-100 px-2 py-2">Draft</span>
-            <span className="rounded-xl bg-blue-600 px-2 py-2 text-white">Revision</span>
-            <span className="rounded-xl bg-slate-100 px-2 py-2">Report</span>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="text-xs font-black text-slate-950">Speaker list</div>
+              <div className="mt-1 text-xs text-slate-500">For and against speakers queue.</div>
+            </div>
+            <div className="rounded-xl bg-slate-50 p-3">
+              <div className="text-xs font-black text-slate-950">Vote record</div>
+              <div className="mt-1 text-xs text-slate-500">Member votes are archived.</div>
+            </div>
           </div>
         </div>
       </div>
@@ -670,23 +901,7 @@ export function LandingPage() {
           </div>
         </section>
 
-        <section className="border-y border-slate-200 bg-slate-50 py-12">
-          <div className="mx-auto grid max-w-7xl gap-4 px-4 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
-            {[
-              ["Bills", "Cosponsors, referrals, live committee editing, floor debate, and final records."],
-              ["Organizations", "Parties, committees, caucuses, media groups, and lobbyists with membership and elections."],
-              ["Letters", "Dear colleague letters and inboxes keep communication inside the simulation."],
-              ["Grades", "Assignments, rubrics, exports, auto-grading, and Synergy SIS sync are built into the teacher view."],
-            ].map(([title, text], index) => (
-              <Reveal key={title} delay={index * 80}>
-                <div className="h-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-                  <div className="text-lg font-black text-slate-950">{title}</div>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">{text}</p>
-                </div>
-              </Reveal>
-            ))}
-          </div>
-        </section>
+        <TeacherToolsShowcase />
 
         <section className="py-24">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
