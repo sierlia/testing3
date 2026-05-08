@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Reply, Trash2 } from "lucide-react";
 import { Link } from "react-router";
 import { ReactionEmoji, ReactionsBar, ReactionsSummary } from "./ReactionsBar";
-import { DefaultAvatar } from "./DefaultAvatar";
+import { SecureAvatar } from "./SecureAvatar";
 import { profilePath } from "../utils/profileRoute";
 
 export type ProfileLite = {
@@ -86,15 +86,7 @@ export function ThreadedComments({
             borderLeft: depth > 0 ? "1px solid rgb(229 231 235)" : undefined,
           }}
         >
-          {comment.author?.avatar_url ? (
-            <img
-              src={comment.author.avatar_url}
-              alt={comment.author.display_name ?? "Member"}
-              className="w-8 h-8 rounded-full object-cover flex-shrink-0"
-            />
-          ) : (
-            <DefaultAvatar className="w-8 h-8 flex-shrink-0" iconClassName="w-4 h-4 text-gray-500" />
-          )}
+          <SecureAvatar src={comment.author?.avatar_url} alt={comment.author?.display_name ?? "Member"} className="w-8 h-8 rounded-full object-cover flex-shrink-0" fallbackClassName="w-8 h-8 flex-shrink-0" iconClassName="w-4 h-4 text-gray-500" />
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between gap-3">
               <div className="text-sm">

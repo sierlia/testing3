@@ -60,6 +60,7 @@ import { ClassActivityPage } from "./pages/ClassActivityPage";
 import { HelpPage } from "./pages/HelpPage";
 import { NewsletterDetailPage, RecordsPage } from "./pages/RecordsPage";
 import { AboutPage } from "./pages/AboutPage";
+import { StorageFileRedirect } from "./pages/StorageFileRedirect";
 
 export const router = createHashRouter([
   {
@@ -277,6 +278,10 @@ export const router = createHashRouter([
   {
     path: "/resources",
     Component: Resources,
+  },
+  {
+    path: "/storage-file",
+    Component: StorageFileRedirect,
   },
   {
     path: "/teacher/deadlines",

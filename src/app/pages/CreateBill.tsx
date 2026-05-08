@@ -30,6 +30,7 @@ import { createBillForCurrentClass, fetchBillDetail, getCurrentProfileClass, upd
 import { htmlToMarkdown, markdownToHtml } from "../utils/markdown";
 import { supabase } from "../utils/supabase";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
+import { randomStoragePath } from "../utils/privateStorage";
 
 type TextMode = "default" | "markdown" | "preview";
 
@@ -95,8 +96,9 @@ function stripMarkdownFormatting(value: string) {
     .replace(/<u>(.*?)<\/u>/gi, "$1");
 }
 
-function pdfLinkHtml(url: string) {
-  return `<p><a href="${url}" target="_blank" rel="noopener noreferrer">Open uploaded PDF</a></p>`;
+function pdfLinkHtml(path: string) {
+  const href = `#/storage-file?bucket=simulation-pdfs&path=${encodeURIComponent(path)}`;
+  return `<p><a href="${href}" target="_blank" rel="noopener noreferrer">Open uploaded PDF</a></p>`;
 }
 
 function MarkdownToolbar({
@@ -441,11 +443,10 @@ export function CreateBill() {
   const uploadBillPdf = async () => {
     if (!pdfFile) return formData.legislativeText;
     const { classId, userId } = await getCurrentProfileClass();
-    const path = `${classId}/bills/${userId}-${Date.now()}-${pdfFile.name.replace(/[^a-z0-9. -]/gi, "_")}`;
-    const { error } = await supabase.storage.from("simulation-pdfs").upload(path, pdfFile, { upsert: true, contentType: "application/pdf" });
+    const path = randomStoragePath(`${classId}/bills/${userId}`, pdfFile.name);
+    const { error } = await supabase.storage.from("simulation-pdfs").upload(path, pdfFile, { upsert: false, contentType: "application/pdf" });
     if (error) throw error;
-    const { data } = supabase.storage.from("simulation-pdfs").getPublicUrl(path);
-    return pdfLinkHtml(data.publicUrl);
+    return pdfLinkHtml(path);
   };
 
   const buildBillPayload = async () => {

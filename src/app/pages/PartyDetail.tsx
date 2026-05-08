@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { CollapsibleText } from "../components/CollapsibleText";
 import { supabase } from "../utils/supabase";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { InfoTooltip } from "../components/InfoTooltip";
@@ -928,7 +928,7 @@ export function PartyDetail() {
                     const roleLabel = partyMemberRole(m.user_id);
                     return (
                       <div key={m.user_id} className="relative flex items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
-                        {m.avatar_url ? <img src={m.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
+                        <SecureAvatar src={m.avatar_url} alt={m.display_name ?? "Member"} className="h-10 w-10 rounded-full object-cover" fallbackClassName="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />
                         <div className="min-w-0 flex-1">
                           <Link to={profilePath(m.user_id)} className={`truncate text-sm font-medium hover:underline ${m.role === "teacher" ? "text-green-700" : roleLabel ? "text-purple-700" : "text-[var(--party-color)]"}`}>{m.display_name ?? "Member"}</Link>
                           {m.role !== "teacher" && <div className="truncate text-xs text-gray-500">Rep.-{partyAbbr(m.party)}-{formatConstituency(m.constituency_name) || "N/A"}</div>}

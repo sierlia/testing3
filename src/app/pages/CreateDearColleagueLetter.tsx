@@ -4,7 +4,7 @@ import { Send, X, Search } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { formatConstituency } from "../utils/constituency";
 
 type RecipientType = "individual" | "caucus" | "party" | "committee";
@@ -250,10 +250,8 @@ export function CreateDearColleagueLetter() {
               <div className="flex min-h-10 w-full flex-wrap items-center gap-2 rounded-md border border-gray-300 py-1.5 pl-9 pr-3 focus-within:ring-2 focus-within:ring-blue-500">
                 {recipients.map((recipient, index) => (
                   <div key={`${recipient.type}:${recipient.id}`} className="flex items-center gap-2 rounded-full bg-blue-100 px-2.5 py-1 text-blue-800">
-                    {recipient.type === "individual" && recipient.image ? (
-                      <img src={recipient.image} alt={recipient.name} className="w-5 h-5 rounded-full object-cover" />
-                    ) : recipient.type === "individual" ? (
-                      <DefaultAvatar className="w-5 h-5" iconClassName="w-3 h-3 text-blue-700" />
+                    {recipient.type === "individual" ? (
+                      <SecureAvatar src={recipient.image} alt={recipient.name} className="w-5 h-5 rounded-full object-cover" fallbackClassName="w-5 h-5" iconClassName="w-3 h-3 text-blue-700" />
                     ) : null}
                     <span className="text-sm font-medium">
                       {recipient.name}
@@ -295,11 +293,7 @@ export function CreateDearColleagueLetter() {
                         }
                         className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
                       >
-                        {s.image ? (
-                          <img src={s.image} alt={s.name} className="w-8 h-8 rounded-full object-cover" />
-                        ) : (
-                          <DefaultAvatar className="w-8 h-8" iconClassName="w-4 h-4 text-gray-500" />
-                        )}
+                        <SecureAvatar src={s.image} alt={s.name} className="w-8 h-8 rounded-full object-cover" fallbackClassName="w-8 h-8" iconClassName="w-4 h-4 text-gray-500" />
                         <div>
                           <div className="font-medium text-gray-900">{s.name}</div>
                           <div className="text-sm text-gray-600">{s.district || "N/A"}</div>

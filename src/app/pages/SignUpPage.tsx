@@ -148,7 +148,6 @@ function TeacherSignUp({ onBack }: { onBack: () => void }) {
       toast.success('Account created successfully!');
       navigate('/classes');
     } catch (error: any) {
-      console.error('Signup error:', error);
       toast.error(error.message || 'Failed to create account');
     } finally {
       setLoading(false);
@@ -291,7 +290,6 @@ function StudentSignUp({ onBack }: { onBack: () => void }) {
       
       navigate('/join-class');
     } catch (error: any) {
-      console.error('Signup error:', error);
       toast.error(error.message || 'Failed to create account');
     } finally {
       setLoading(false);

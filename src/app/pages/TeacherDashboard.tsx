@@ -79,8 +79,8 @@ export function TeacherDashboard() {
         }));
         setClasses(normalized as any);
       }
-    } catch (error) {
-      console.error('Error loading classes:', error);
+    } catch {
+      toast.error('Error loading classes');
     } finally {
       setLoading(false);
     }

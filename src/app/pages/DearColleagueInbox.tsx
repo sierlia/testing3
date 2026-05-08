@@ -4,7 +4,7 @@ import { Calendar, CheckCircle, Mail, PenSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
 import { profilePath } from "../utils/profileRoute";
@@ -265,11 +265,7 @@ export function DearColleagueInbox() {
                     } ${it.mailbox === "inbox" && !it.read_at ? "font-semibold" : ""}`}
                   >
                     <div className="flex items-start gap-3">
-                      {it.from_avatar ? (
-                        <img src={it.from_avatar} alt={it.from_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" />
-                      ) : (
-                        <DefaultAvatar className="w-10 h-10 flex-shrink-0" iconClassName="w-5 h-5 text-gray-500" />
-                      )}
+                      <SecureAvatar src={it.from_avatar} alt={it.from_name} className="w-10 h-10 rounded-full object-cover flex-shrink-0" fallbackClassName="w-10 h-10 flex-shrink-0" iconClassName="w-5 h-5 text-gray-500" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="text-sm text-gray-900 truncate">{it.mailbox === "sent" ? `To: ${it.to_names.join(", ") || "Recipients"}` : it.from_name}</span>
@@ -289,11 +285,7 @@ export function DearColleagueInbox() {
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                   <div className="flex items-start gap-4 mb-6 pb-6 border-b border-gray-200">
                     <Link to={profilePath(selected.from_user_id)}>
-                      {selected.from_avatar ? (
-                        <img src={selected.from_avatar} alt={selected.from_name} className="w-12 h-12 rounded-full object-cover hover:ring-2 hover:ring-blue-500 transition-all" />
-                      ) : (
-                        <DefaultAvatar className="w-12 h-12 hover:ring-2 hover:ring-blue-500 transition-all" iconClassName="w-6 h-6 text-gray-500" />
-                      )}
+                      <SecureAvatar src={selected.from_avatar} alt={selected.from_name} className="w-12 h-12 rounded-full object-cover transition-all hover:ring-2 hover:ring-blue-500" fallbackClassName="w-12 h-12 transition-all hover:ring-2 hover:ring-blue-500" iconClassName="w-6 h-6 text-gray-500" />
                     </Link>
                     <div className="flex-1">
                       <Link to={profilePath(selected.from_user_id)} className="text-lg font-semibold text-gray-900 hover:text-blue-600 transition-colors">

@@ -27,7 +27,7 @@ import {
   PartySelection,
 } from "../components/PartySelection";
 import { supabase } from "../utils/supabase";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { ContributionButton } from "../components/ContributionButton";
 import { formatConstituencyFull, normalizeConstituencyId } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -35,6 +35,7 @@ import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
 import { displayPersonName, nameInputPlaceholder } from "../utils/displayName";
 import { memberCodeFromUserId, uuidPattern } from "../utils/profileRoute";
 import { getCurrentUser } from "../utils/currentUser";
+import { randomStoragePath } from "../utils/privateStorage";
 
 type EditingSection = string | null;
 
@@ -436,13 +437,11 @@ export function StudentProfile() {
       return;
     }
     try {
-      const ext = f.name.split(".").pop();
-      const path = `${profile.user_id}/${Date.now()}.${ext}`;
-      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, f, { upsert: true });
+      const path = randomStoragePath(profile.user_id, f.name);
+      const { error: uploadError } = await supabase.storage.from("avatars").upload(path, f, { upsert: false });
       if (uploadError) throw uploadError;
-      const { data } = supabase.storage.from("avatars").getPublicUrl(path);
-      await saveProfile({ avatar_url: data.publicUrl } as any);
-      window.dispatchEvent(new CustomEvent("gavel:avatar-updated", { detail: { userId: profile.user_id, avatarUrl: data.publicUrl } }));
+      await saveProfile({ avatar_url: path } as any);
+      window.dispatchEvent(new CustomEvent("gavel:avatar-updated", { detail: { userId: profile.user_id, avatarUrl: path } }));
       setPhotoModalTab("center");
       setPhotoModalOpen(true);
       toast.success("Profile photo updated");
@@ -821,16 +820,7 @@ export function StudentProfile() {
                 disabled={!isMe}
                 className="relative rounded-full text-left disabled:cursor-default"
               >
-                {profile.avatar_url ? (
-                  <img
-                    src={profile.avatar_url}
-                    alt={profile.display_name || "Profile"}
-                    className="w-16 h-16 rounded-full object-cover"
-                    style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }}
-                  />
-                ) : (
-                  <DefaultAvatar className="w-16 h-16" iconClassName="w-8 h-8 text-gray-500" />
-                )}
+                <SecureAvatar src={profile.avatar_url} alt={profile.display_name || "Profile"} className="w-16 h-16 rounded-full object-cover" fallbackClassName="w-16 h-16" iconClassName="w-8 h-8 text-gray-500" style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }} />
                 {isMe && (
                   <span className="absolute -top-1 -right-1 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white shadow-sm transition-colors hover:bg-blue-700">
                     <Pencil className="w-3 h-3" />
@@ -1356,7 +1346,7 @@ export function StudentProfile() {
                     }}
                     className="relative mx-auto h-72 w-full touch-none overflow-hidden rounded-lg border border-gray-200 bg-gray-100"
                   >
-                    {profile.avatar_url && <img src={profile.avatar_url} alt="Profile preview" className="absolute inset-0 h-full w-full object-cover" style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }} draggable={false} />}
+                    {profile.avatar_url && <SecureAvatar src={profile.avatar_url} alt="Profile preview" className="absolute inset-0 h-full w-full object-cover" fallbackClassName="absolute inset-0 h-full w-full" style={{ objectPosition: `${avatarPosition.x}% ${avatarPosition.y}%` }} draggable={false} />}
                     <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,transparent_0_95px,rgba(17,24,39,0.48)_96px)]" />
                     <div className="pointer-events-none absolute left-1/2 top-1/2 h-48 w-48 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_0_0_1px_rgba(17,24,39,0.25)]" />
                   </div>

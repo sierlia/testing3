@@ -1,3 +1,5 @@
+import { storagePathFromUrl } from "./privateStorage";
+
 const allowedTags = new Set([
   "a",
   "blockquote",
@@ -56,7 +58,11 @@ export function sanitizeHtml(html: string | null | undefined) {
           element.removeAttribute(attr.name);
           continue;
         }
-        if (name === "href" && !isSafeUrl(attr.value)) element.removeAttribute(attr.name);
+        if (name === "href") {
+          const pdfPath = storagePathFromUrl(attr.value, "simulation-pdfs");
+          if (pdfPath) element.setAttribute(attr.name, `#/storage-file?bucket=simulation-pdfs&path=${encodeURIComponent(pdfPath)}`);
+          else if (!isSafeUrl(attr.value)) element.removeAttribute(attr.name);
+        }
         if (name === "style") {
           const cleaned = cleanStyle(attr.value);
           if (cleaned) element.setAttribute("style", cleaned);

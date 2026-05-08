@@ -36,7 +36,6 @@ export function TeacherCaucusManagement() {
   };
 
   const confirmAppointment = () => {
-    console.log("Appointing chair:", selectedChair);
     alert(`${members.find(m => m.id === selectedChair)?.name} has been appointed as committee chair!`);
     setShowConfirmModal(false);
     setSelectedChair(null);

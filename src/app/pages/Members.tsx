@@ -4,7 +4,7 @@ import { Search } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
@@ -273,11 +273,7 @@ export function Members() {
               }`}
             >
               <div className="flex items-start gap-4 mb-4">
-                {member.avatar_url ? (
-                  <img src={member.avatar_url} alt={member.display_name ?? "Member"} className="w-16 h-16 rounded-full object-cover flex-shrink-0" />
-                ) : (
-                  <DefaultAvatar className="w-16 h-16 flex-shrink-0" iconClassName="w-8 h-8 text-gray-500" />
-                )}
+                <SecureAvatar src={member.avatar_url} alt={member.display_name ?? "Member"} className="w-16 h-16 rounded-full object-cover flex-shrink-0" fallbackClassName="w-16 h-16 flex-shrink-0" iconClassName="w-8 h-8 text-gray-500" />
                 <div className="flex-1 min-w-0">
                   <h3 className={`mb-1 truncate font-semibold ${member.role === "teacher" ? "text-green-800" : "text-gray-900"}`}>
                     {member.display_name ?? "Member"}

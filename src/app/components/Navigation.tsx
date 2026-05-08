@@ -5,9 +5,9 @@ import { toast } from "sonner";
 import { NotificationBadge } from "./NotificationBadge";
 import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
-import { DefaultAvatar } from "./DefaultAvatar";
 import { profilePath } from "../utils/profileRoute";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
+import { SecureAvatar } from "./SecureAvatar";
 
 type TeacherClass = { id: string; name: string };
 
@@ -692,11 +692,7 @@ export function Navigation() {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="w-8 h-8 rounded-full flex items-center justify-center hover:ring-2 hover:ring-blue-500 transition-all overflow-hidden"
               >
-                {avatarUrl ? (
-                  <img src={avatarUrl} alt="Profile" className="w-8 h-8 object-cover" />
-                ) : (
-                  <DefaultAvatar className="w-8 h-8" iconClassName="w-4 h-4 text-gray-500" />
-                )}
+                <SecureAvatar src={avatarUrl} alt="Profile" className="w-8 h-8 object-cover" fallbackClassName="w-8 h-8" iconClassName="w-4 h-4 text-gray-500" />
               </button>
               
               {userMenuOpen && user && (

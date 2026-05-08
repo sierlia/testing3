@@ -66,7 +66,6 @@ export function OnboardingPage() {
   };
 
   const handleSubmit = () => {
-    console.log("Submitting onboarding data:", formData);
     alert("Your selections have been submitted and locked!");
     // Here you would typically send data to a backend
   };

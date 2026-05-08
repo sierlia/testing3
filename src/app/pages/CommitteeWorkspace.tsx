@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { postCommitteeProgress, proposeBillForCommitteeVote } from "../services/bills";
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
@@ -586,15 +586,7 @@ export function CommitteeWorkspace() {
                                 data-tooltip={u.name}
                                 style={{ ["--presence-color" as any]: u.color }}
                               >
-                                {u.avatar_url ? (
-                                  <img
-                                    src={u.avatar_url}
-                                    className="w-8 h-8 rounded-full object-cover border-2"
-                                    style={{ borderColor: u.color }}
-                                  />
-                                ) : (
-                                  <DefaultAvatar className="w-8 h-8 border-2" style={{ borderColor: u.color }} />
-                                )}
+                                <SecureAvatar src={u.avatar_url} alt={u.name} className="w-8 h-8 rounded-full border-2 object-cover" fallbackClassName="w-8 h-8 border-2" iconClassName="w-4 h-4 text-gray-500" style={{ borderColor: u.color }} />
                               </Link>
                             ))}
                           </div>

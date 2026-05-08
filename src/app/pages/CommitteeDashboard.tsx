@@ -7,7 +7,7 @@ import { supabase } from "../utils/supabase";
 import { GraduationCap, LogOut, MoreHorizontal, Users, Send, Pencil, Save, X, UserPlus, Trash2, UserX } from "lucide-react";
 import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { formatConstituency } from "../utils/constituency";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "../components/CommitteeTabs";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -1304,11 +1304,7 @@ export function CommitteeDashboard() {
             <div className="space-y-3">
               {visibleMembers.map((m) => (
                 <div key={m.user_id} className="relative flex items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
-                  {m.profile?.avatar_url ? (
-                    <img src={m.profile.avatar_url} className="w-10 h-10 rounded-full object-cover" />
-                  ) : (
-                    <DefaultAvatar className="w-10 h-10" iconClassName="w-5 h-5 text-gray-500" />
-                  )}
+                  <SecureAvatar src={m.profile?.avatar_url} alt={m.profile?.display_name ?? "Member"} className="w-10 h-10 rounded-full object-cover" fallbackClassName="w-10 h-10" iconClassName="w-5 h-5 text-gray-500" />
                     <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">
                       <Link to={profilePath(m.user_id)} className={m.profile?.role === "teacher" ? "text-green-700 hover:underline" : m.role !== "member" ? "text-purple-700 hover:underline" : "text-blue-600 hover:underline"}>

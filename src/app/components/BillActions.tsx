@@ -40,12 +40,10 @@ export function BillActions({ bill, userRole, currentUserId }: BillActionsProps)
   ];
 
   const handleAssignCommittee = () => {
-    console.log("Assigning to committee:", selectedCommittee);
     alert(`Bill assigned to ${selectedCommittee}`);
   };
 
   const handleOverrideStatus = () => {
-    console.log("Overriding status to:", selectedStatus);
     alert(`Status changed to ${selectedStatus}`);
   };
 

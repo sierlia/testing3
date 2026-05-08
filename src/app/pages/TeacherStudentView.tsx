@@ -118,7 +118,7 @@ export function TeacherStudentView() {
       confirmLabel: "Delete",
       danger: true,
       onConfirm: () => {
-        console.log("Deleting comment:", commentId);
+        void commentId;
         alert("Comment deleted");
       },
     });
@@ -130,7 +130,7 @@ export function TeacherStudentView() {
       message: "Send a warning to this student about this comment?",
       confirmLabel: "Send warning",
       onConfirm: () => {
-        console.log("Warning student about comment:", commentId);
+        void commentId;
         alert("Warning sent to student");
       },
     });

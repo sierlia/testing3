@@ -41,8 +41,7 @@ export function Elections() {
     { id: "4", name: "Bob Smith", party: "Republican Party" },
   ];
 
-  const handleVote = (role: PartyRole | 'speaker', candidateId: string) => {
-    console.log(`Voting for ${role}:`, candidateId);
+  const handleVote = (role: PartyRole | 'speaker', _candidateId: string) => {
     if (role === 'leader') setHasVotedLeader(true);
     if (role === 'whip') setHasVotedWhip(true);
     if (role === 'speaker') setHasVotedSpeaker(true);

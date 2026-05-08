@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router";
 import { CheckCircle, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { CommitteeTabs } from "../components/CommitteeTabs";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
@@ -311,7 +311,7 @@ export function CommitteeLeadership() {
         {candidates.map((member) => (
           <div key={`${position}:${member.user_id}`} className="flex items-center justify-between rounded-md border border-gray-200 p-3">
             <div className="flex min-w-0 items-center gap-3">
-              {member.profile?.avatar_url ? <img src={member.profile.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
+              <SecureAvatar src={member.profile?.avatar_url} alt={member.profile?.display_name ?? "Member"} className="h-10 w-10 rounded-full object-cover" fallbackClassName="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />
               <div className="min-w-0">
                 <Link to={profilePath(member.user_id)} className="truncate text-sm font-medium text-blue-600 hover:underline">{member.profile?.display_name ?? "Member"}</Link>
                 <div className="text-xs text-gray-500">{memberDescriptor(member)}</div>

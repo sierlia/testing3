@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router";
 import { DollarSign, LogOut, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
-import { DefaultAvatar } from "../components/DefaultAvatar";
+import { SecureAvatar } from "../components/SecureAvatar";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 import { profilePath } from "../utils/profileRoute";
@@ -132,7 +132,7 @@ export function LobbyistGroupDetail() {
             <div className="grid gap-3 sm:grid-cols-2">
               {members.map((member) => (
                 <Link key={member.user_id} to={profilePath(member.user_id)} className="flex items-center gap-3 rounded-md border border-gray-200 p-3 hover:bg-gray-50">
-                  {member.avatar_url ? <img src={member.avatar_url} className="h-10 w-10 rounded-full object-cover" /> : <DefaultAvatar className="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />}
+                  <SecureAvatar src={member.avatar_url} alt={member.display_name ?? "Member"} className="h-10 w-10 rounded-full object-cover" fallbackClassName="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />
                   <span className={member.role === "teacher" ? "text-sm font-medium text-green-700" : "text-sm font-medium text-blue-600"}>{member.display_name ?? "Member"}</span>
                 </Link>
               ))}
