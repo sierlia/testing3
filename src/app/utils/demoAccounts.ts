@@ -23,11 +23,13 @@ function setDemoLaunchProgress(progress: number) {
 export async function switchDemoAccount(key: DemoAccountKey, options?: { confetti?: boolean; preserveLocation?: boolean }) {
   const currentPath = currentRoutePath();
   const launchDemo = Boolean(options?.confetti);
+  const launchId = launchDemo ? `${Date.now()}:${Math.random().toString(36).slice(2)}` : "";
 
   window.localStorage.setItem("gavel:demoActive", "1");
   if (launchDemo) {
     window.localStorage.setItem("gavel:demoOpenedAt", String(Date.now()));
-    window.localStorage.setItem("gavel:demoConfetti", "1");
+    window.localStorage.setItem("gavel:demoLaunchId", launchId);
+    window.localStorage.setItem("gavel:demoConfettiLaunchId", launchId);
     window.localStorage.setItem("gavel:demoCenter", "1");
     window.localStorage.setItem("gavel:demoLaunchOverlay", "1");
     window.localStorage.setItem("gavel:demoLaunchLoading", "1");
@@ -68,7 +70,8 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     if (launchDemo) {
       window.localStorage.removeItem("gavel:demoActive");
       window.localStorage.removeItem("gavel:demoOpenedAt");
-      window.localStorage.removeItem("gavel:demoConfetti");
+      window.localStorage.removeItem("gavel:demoLaunchId");
+      window.localStorage.removeItem("gavel:demoConfettiLaunchId");
       window.localStorage.removeItem("gavel:demoCenter");
       window.localStorage.removeItem("gavel:demoLaunchOverlay");
       window.localStorage.removeItem("gavel:demoLaunchLoading");

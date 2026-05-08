@@ -37,6 +37,7 @@ export function DemoAccountSwitcher() {
   const dragHintTimerRef = useRef<number | null>(null);
   const launchCompletionTimerRef = useRef<number | null>(null);
   const overlayFadeTimerRef = useRef<number | null>(null);
+  const playedLaunchIdRef = useRef<string | null>(null);
 
   const centerButton = () => {
     const centered = {
@@ -67,8 +68,11 @@ export function DemoAccountSwitcher() {
   };
 
   const playLaunchEffectsIfNeeded = () => {
-    if (window.localStorage.getItem("gavel:demoConfetti") !== "1") return;
-    window.localStorage.removeItem("gavel:demoConfetti");
+    const launchId = window.localStorage.getItem("gavel:demoConfettiLaunchId");
+    if (!launchId || playedLaunchIdRef.current === launchId) return;
+    playedLaunchIdRef.current = launchId;
+    window.localStorage.removeItem("gavel:demoConfettiLaunchId");
+    window.localStorage.removeItem("gavel:demoLaunchId");
     if (window.localStorage.getItem("gavel:demoCenter") === "1") {
       window.localStorage.removeItem("gavel:demoCenter");
       centerButton();
@@ -125,7 +129,7 @@ export function DemoAccountSwitcher() {
     };
     const completeLaunch = () => {
       if (window.localStorage.getItem("gavel:demoActive") !== "1") return;
-      if (window.localStorage.getItem("gavel:demoLaunchLoading") !== "1" && window.localStorage.getItem("gavel:demoConfetti") !== "1") return;
+      if (window.localStorage.getItem("gavel:demoLaunchLoading") !== "1" && !window.localStorage.getItem("gavel:demoConfettiLaunchId")) return;
       if (launchCompletionTimerRef.current) window.clearTimeout(launchCompletionTimerRef.current);
       setDemoActive(true);
       setOpen(false);
@@ -173,7 +177,7 @@ export function DemoAccountSwitcher() {
     window.addEventListener("gavel:dashboard-ready", completeLaunch);
     if (
       window.localStorage.getItem("gavel:demoActive") === "1" &&
-      (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" || window.localStorage.getItem("gavel:demoConfetti") === "1")
+      (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" || window.localStorage.getItem("gavel:demoConfettiLaunchId"))
     ) {
       onDemoOpened();
     }

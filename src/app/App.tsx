@@ -50,12 +50,12 @@ function AppRouterGate() {
     window.location.hash = `/signin?redirect=${encodeURIComponent(target)}`;
   }, [demoAuthSwitching, hash, isPublic, loading, user]);
 
-  if (loading || demoAuthSwitching) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 text-gray-600">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Gavel className="h-5 w-5 text-blue-600" />
-          {demoAuthSwitching ? "Switching demo user..." : "Loading..."}
+          Loading...
         </div>
       </div>
     );

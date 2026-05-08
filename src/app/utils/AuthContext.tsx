@@ -40,7 +40,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const isExpectedDemoSwitch =
         window.localStorage.getItem("gavel:demoAuthSwitch") === "1" ||
         (window.localStorage.getItem("gavel:demoActive") === "1" &&
-          (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" || window.localStorage.getItem("gavel:demoConfetti") === "1"));
+          (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" || Boolean(window.localStorage.getItem("gavel:demoConfettiLaunchId"))));
       if (event === "SIGNED_OUT" && hadSessionRef.current && !expectedSignOutRef.current && !isExpectedDemoSwitch) {
         setSessionExpired(true);
       }
@@ -60,7 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
     window.localStorage.removeItem("gavel:demoActive");
     window.localStorage.removeItem("gavel:demoOpenedAt");
-    window.localStorage.removeItem("gavel:demoConfetti");
+    window.localStorage.removeItem("gavel:demoLaunchId");
+    window.localStorage.removeItem("gavel:demoConfettiLaunchId");
     window.localStorage.removeItem("gavel:demoCenter");
     window.localStorage.removeItem("gavel:demoLaunchOverlay");
     window.localStorage.removeItem("gavel:demoLaunchLoading");
