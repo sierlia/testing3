@@ -6,18 +6,17 @@ import {
   BarChart3,
   CheckCircle2,
   ClipboardCheck,
-  Download,
   Gavel,
   GraduationCap,
   Mail,
   Megaphone,
   MousePointer2,
+  NotebookText,
   Search,
   Settings2,
   ShieldCheck,
   Users,
   Vote,
-  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 
@@ -485,97 +484,69 @@ function SiteMotionStyles() {
   );
 }
 
-function MetricCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="text-2xl font-black text-slate-950">{value}</div>
-      <div className="mt-1 text-sm text-slate-500">{label}</div>
-    </div>
-  );
-}
-
-type TeacherTool = {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  detail: string;
-};
-
-const teacherTools: TeacherTool[] = [
-  {
-    icon: ClipboardCheck,
-    title: "Assignments",
-    description: "Create bill, letter, report, speech, and participation assignments.",
-    detail: "deadlines",
-  },
-  {
-    icon: CheckCircle2,
-    title: "Rubrics",
-    description: "Attach criteria to each assignment and keep review evidence in one place.",
-    detail: "criteria",
-  },
-  {
-    icon: GraduationCap,
-    title: "Auto-grading",
-    description: "Use teacher-created criteria to score drafts, reports, speeches, and profiles.",
-    detail: "scoring",
-  },
-  {
-    icon: Users,
-    title: "Roster exports",
-    description: "Track custom columns, hide fields, reorder data, and export clean spreadsheets.",
-    detail: "roster",
-  },
-  {
-    icon: Vote,
-    title: "Records",
-    description: "Save votes, committee reports, newsletters, contributions, and teacher-added records.",
-    detail: "archive",
-  },
-  {
-    icon: Download,
-    title: "Exports and SIS sync",
-    description: "Export grades and participation, then sync selected scores to Synergy SIS.",
-    detail: "grades",
-  },
-];
-
 function TeacherToolsShowcase() {
+  const gradingCards = [
+    {
+      icon: BarChart3,
+      tone: "bg-blue-600",
+      title: "Detailed dashboards",
+      description: "Access class and student information in one click, so clicks do not multiply for every student.",
+    },
+    {
+      icon: ClipboardCheck,
+      tone: "bg-emerald-600",
+      title: "Assignments & automated rubrics",
+      description:
+        "Create assignments with resources, grade manually with feedback, or set requirements like Write 2 Bills for Gavel to track.",
+    },
+    {
+      icon: GraduationCap,
+      tone: "bg-amber-600",
+      title: "SIS syncing",
+      description: "Sync grades automatically to Synergy SIS, Schoology, and PowerSchool.",
+    },
+    {
+      icon: Vote,
+      tone: "bg-rose-600",
+      title: "Comprehensive activity tracking",
+      description: "Track all simulation activity from bills and votes to letters, records, and organization work.",
+    },
+    {
+      icon: NotebookText,
+      tone: "bg-slate-950",
+      title: "See all teacher documentation",
+      description: "Open the help center for documentation covering every teacher tool in Gavel.",
+    },
+  ];
+
   return (
-    <section id="grading" className="border-y border-neutral-200 bg-white py-20">
+    <section id="grading" className="py-20">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <div className="mx-auto max-w-3xl text-center">
+          <div className="max-w-3xl">
             <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Built for grading</h2>
-            <p className="mt-4 text-lg leading-8 text-slate-600">
-              Turn simulation activity into organized evidence for review, export, and grading.
-            </p>
           </div>
         </Reveal>
 
         <Reveal delay={120}>
-          <div className="mt-12 grid gap-5 lg:grid-cols-2">
-            <div className="rounded-[1rem] bg-[#f3f1ed] p-7">
-              <div className="flex h-11 w-11 items-center justify-center rounded-md bg-blue-600 text-white">
-                <ClipboardCheck className="h-5 w-5" />
-              </div>
-              <h3 className="mt-6 text-2xl font-black text-slate-950">Assignments</h3>
-              <p className="mt-3 text-base leading-7 text-slate-600">
-                Create graded work for bills, reports, speeches, letters, profiles, and participation. Rubrics stay tied
-                to the assignment, and selected scores can sync to Synergy SIS when the teacher is ready.
-              </p>
-            </div>
-
-            <div className="rounded-[1rem] bg-[#f3f1ed] p-7">
-              <div className="flex h-11 w-11 items-center justify-center rounded-md bg-blue-600 text-white">
-                <BarChart3 className="h-5 w-5" />
-              </div>
-              <h3 className="mt-6 text-2xl font-black text-slate-950">Tracking</h3>
-              <p className="mt-3 text-base leading-7 text-slate-600">
-                Full activity tracking shows simulation and student progress in one place, so teachers can check the class
-                at a glance instead of opening every student record one at a time.
-              </p>
-            </div>
+          <div className="mt-10 grid gap-4 lg:grid-cols-5">
+            {gradingCards.map((card) => {
+              const Icon = card.icon;
+              return (
+                <Link
+                  key={card.title}
+                  to="/help"
+                  className="group flex min-h-72 flex-col rounded-[1.25rem] bg-white p-5 shadow-[0_16px_60px_rgba(15,23,42,0.08)] transition hover:-translate-y-1"
+                >
+                  <div className={`flex h-11 w-11 items-center justify-center rounded-full text-white ${card.tone}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <h3 className="mt-6 text-xl font-black leading-tight text-slate-950">{card.title}</h3>
+                  <p className="mt-3 text-sm leading-6 text-slate-600">{card.description}</p>
+                  <ArrowRight className="mt-auto h-5 w-5 text-slate-400 transition group-hover:translate-x-1 group-hover:text-blue-600" />
+                </Link>
+              );
+            })}
           </div>
         </Reveal>
       </div>
@@ -583,127 +554,87 @@ function TeacherToolsShowcase() {
   );
 }
 
-function TeacherConsoleVisual() {
-  return (
-    <div className="relative rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Teacher console</div>
-          <div className="mt-1 text-lg font-black text-slate-950">Assignments, grading, exports</div>
-        </div>
-        <button className="flex items-center gap-2 rounded-full bg-slate-950 px-3 py-2 text-xs font-bold text-white">
-          <Download className="h-3.5 w-3.5" />
-          Export
-        </button>
-      </div>
-
-      <div className="mt-4 grid gap-3 sm:grid-cols-3">
-        <MetricCard label="Rubrics ready" value="14" />
-        <MetricCard label="Bills to review" value="8" />
-        <MetricCard label="Grades synced" value="92%" />
-      </div>
-
-      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_0.8fr]">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-black text-slate-950">
-            <ClipboardCheck className="h-4 w-4 text-blue-600" />
-            Rubric criteria
-          </div>
-          <div className="mt-3 space-y-2">
-            {["Bill text cites constitutional authority", "Committee report includes evidence", "Floor speech responds to opposition"].map(
-              (criterion, index) => (
-                <div
-                  key={criterion}
-                  className={`gavel-step-focus flex items-center justify-between rounded-xl border px-3 py-2 text-sm ${
-                    index === 1 ? "" : "border-slate-200 bg-white"
-                  }`}
-                  style={{ animationDelay: `${index * 300}ms` }}
-                >
-                  <span className="text-slate-700">{criterion}</span>
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                </div>
-              ),
-            )}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
-          <div className="flex items-center gap-2 text-sm font-black text-slate-950">
-            <GraduationCap className="h-4 w-4 text-blue-700" />
-            Synergy SIS
-          </div>
-          <div className="mt-3 text-sm text-slate-600">Auto-grade against teacher criteria, then sync scores when ready.</div>
-          <div className="mt-5 h-3 overflow-hidden rounded-full bg-white">
-            <div className="gavel-progress-fill h-full rounded-full bg-blue-600" />
-          </div>
-          <div className="mt-4 rounded-xl bg-white p-3 text-xs font-semibold text-slate-600">
-            Last export: period 3, participation and bill draft rubrics
-          </div>
-        </div>
-      </div>
-
-      <div className="gavel-small-cursor absolute left-6 top-6 h-7 w-6 bg-slate-950 shadow-lg" />
-    </div>
-  );
-}
-
 const billTimelineStages = [
   {
-    label: "Draft",
-    title: "Bill drafted",
-    body: "Drafts can be written in the composer or uploaded as PDFs, depending on teacher settings.",
-    meta: "H.R. 31 - Local Food Security Act",
+    label: "Introduced",
+    title: "Bill introduced",
+    body: "The bill is filed, labeled, tied to a sponsor, and added to the class bill list.",
   },
   {
-    label: "Cosponsor",
-    title: "Support tracked",
-    body: "Cosponsors attach to the bill automatically, so support is visible before referral.",
-    meta: "5 cosponsors",
+    label: "Referred",
+    title: "Committee referral",
+    body: "The teacher or authorized member sends the bill to one or more committees for review.",
   },
   {
-    label: "Committee",
-    title: "Committee work opens",
-    body: "The bill can be referred to one or more committees, revised live, and reported back.",
-    meta: "Energy and Commerce",
+    label: "Revised and discussed in committee",
+    title: "Committee work",
+    body: "Committee members revise text, discuss changes, write reports, and vote on whether to report the bill.",
   },
   {
-    label: "Floor",
-    title: "Floor debate begins",
-    body: "Teachers manage the calendar, speakers, live screen-share controls, and vote timing.",
-    meta: "For and against speakers",
+    label: "Calendared",
+    title: "Calendar placement",
+    body: "The bill moves onto the calendar so speakers can prepare and floor time can be managed.",
   },
   {
-    label: "Record",
-    title: "Record generated",
-    body: "Votes, reports, newsletters, and final status stay searchable for grading.",
-    meta: "Archived with vote counts",
+    label: "Debated and voted on floor",
+    title: "Floor action",
+    body: "The class debates, votes, and generates a record teachers can use for grading and reflection.",
   },
 ];
 
 function BillTimelineSection() {
+  const sectionRef = useRef<HTMLElement | null>(null);
   const [activeStage, setActiveStage] = useState(0);
+  const [started, setStarted] = useState(false);
 
   useEffect(() => {
-    const id = window.setInterval(() => {
-      setActiveStage((stage) => (stage + 1) % billTimelineStages.length);
-    }, 2400);
+    const node = sectionRef.current;
+    if (!node) return;
 
-    return () => window.clearInterval(id);
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setStarted(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.35 },
+    );
+
+    observer.observe(node);
+    return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    if (!started || activeStage >= billTimelineStages.length - 1) return;
+
+    const id = window.setTimeout(() => {
+      setActiveStage((stage) => Math.min(stage + 1, billTimelineStages.length - 1));
+    }, 3600);
+
+    return () => window.clearTimeout(id);
+  }, [activeStage, started]);
+
   return (
-    <section id="bill-timeline" className="bg-[#fbfaf8] py-24">
+    <section ref={sectionRef} id="bill-timeline" className="py-24">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.55fr_0.45fr] lg:px-8">
         <Reveal>
           <div>
-            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Complete bill tracking</h2>
-            <p className="mt-4 text-lg leading-8 text-slate-600">
-              A condensed timeline shows where a bill is, what happened, and what comes next.
-            </p>
+            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Complete legislative process</h2>
             <div className="mt-8 rounded-[1rem] bg-white p-5 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
               <div className="font-mono text-sm font-black text-blue-700">H.R. 31</div>
               <div className="mt-1 text-2xl font-black text-slate-950">Local Food Security Act</div>
               <div className="mt-1 text-sm text-slate-500">Sponsored by Rep. Elena Park</div>
+              <p className="mt-4 text-sm leading-6 text-slate-600">
+                Example text: To expand school food donation partnerships and reduce waste while supporting local food banks.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-bold text-blue-700">
+                {["Rep. Morgan Lee", "Rep. Ava Patel", "Rep. Jordan Miles"].map((name) => (
+                  <span key={name} className="rounded-full bg-blue-50 px-3 py-1.5">
+                    {name}
+                  </span>
+                ))}
+              </div>
             </div>
           </div>
         </Reveal>
@@ -719,8 +650,10 @@ function BillTimelineSection() {
                     <button
                       key={stage.label}
                       type="button"
-                      onClick={() => setActiveStage(index)}
-                      className="relative grid w-full grid-cols-[1.5rem_1fr] gap-4 rounded-md px-1 py-2 text-left transition hover:bg-[#fbfaf8]"
+                      onClick={() => setActiveStage((stageIndex) => Math.max(stageIndex, index))}
+                      className={`relative grid w-full grid-cols-[1.5rem_1fr] gap-4 rounded-md px-1 py-2 text-left transition ${
+                        index > activeStage ? "cursor-pointer hover:bg-[#fbfaf8]" : "cursor-default"
+                      }`}
                     >
                       <span
                         className={`relative z-10 mt-1 h-3 w-3 rounded-full ring-4 ring-white transition ${
@@ -805,6 +738,9 @@ const organizationItems = [
       "The money layer is optional, so it can be removed for simpler courses.",
     ],
   },
+];
+
+const messagingItems = [
   {
     label: "Message boards",
     title: "Boards keep announcements in context.",
@@ -827,49 +763,66 @@ const organizationItems = [
       "The inbox supports direct political communication without leaving Gavel.",
     ],
   },
+  {
+    label: "Committee editing",
+    title: "Live editing keeps discussion productive.",
+    body: "Committee work can include live collaborative editing when a meeting is open.",
+    icon: ClipboardCheck,
+    details: [
+      "Teachers control when committee editing is available.",
+      "Revision, discussion, and reporting stay connected to the bill.",
+      "Committees can work online while still supporting in-person debate.",
+    ],
+  },
 ];
 
-function OrganizationExplorerSection() {
+type ExplorerItem = (typeof organizationItems)[number] | (typeof messagingItems)[number];
+
+function ListDetailShowcase({
+  id,
+  title,
+  items,
+}: {
+  id: string;
+  title: string;
+  items: ExplorerItem[];
+}) {
   const [activeItem, setActiveItem] = useState(0);
   const cycleMs = 5200;
 
   useEffect(() => {
     const id = window.setInterval(() => {
-      setActiveItem((item) => (item + 1) % organizationItems.length);
+      setActiveItem((item) => (item + 1) % items.length);
     }, cycleMs);
 
     return () => window.clearInterval(id);
-  }, []);
+  }, [items.length]);
 
-  const active = organizationItems[activeItem];
+  const active = items[activeItem];
   const Icon = active.icon;
 
   return (
-    <section id="organizations" className="bg-white py-24">
+    <section id={id} className="py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
           <div className="mx-auto max-w-3xl text-center">
-            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Organizations and messaging</h2>
-            <p className="mt-4 text-lg leading-8 text-slate-600">
-              Parties, committees, caucuses, media groups, lobbyists, message boards, live committee editing, and dear
-              colleague letters all stay in the same classroom system.
-            </p>
+            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">{title}</h2>
           </div>
         </Reveal>
 
         <Reveal delay={120}>
-          <div className="mt-12 grid min-h-[32rem] overflow-hidden rounded-[1rem] bg-[#fbfaf8] shadow-[0_16px_60px_rgba(15,23,42,0.08)] lg:grid-cols-[0.42fr_0.58fr]">
-            <div className="border-b border-neutral-200 bg-white lg:border-b-0 lg:border-r">
-              {organizationItems.map((item, index) => {
+          <div className="mt-12 grid min-h-[32rem] overflow-hidden rounded-[1.25rem] bg-white shadow-[0_16px_60px_rgba(15,23,42,0.08)] lg:grid-cols-[0.42fr_0.58fr]">
+            <div className="bg-white py-4 lg:border-r lg:border-neutral-200">
+              {items.map((item, index) => {
                 const ItemIcon = item.icon;
                 return (
                   <button
                     key={item.label}
                     type="button"
                     onClick={() => setActiveItem(index)}
-                    className={`relative flex w-full items-center gap-3 border-b border-neutral-200 px-6 py-5 text-left transition last:border-b-0 ${
+                    className={`relative mx-4 flex w-[calc(100%-2rem)] items-center gap-3 border-b border-neutral-200 px-3 py-5 text-left transition last:border-b-0 ${
                       activeItem === index
-                        ? "bg-blue-50 text-blue-700"
+                        ? "text-blue-700"
                         : "bg-white text-slate-700 hover:bg-neutral-50 hover:text-slate-950"
                     }`}
                   >
@@ -887,13 +840,10 @@ function OrganizationExplorerSection() {
               })}
             </div>
 
-            <div className="p-8 lg:p-10">
+            <div className="bg-white p-8 lg:p-10">
               <div className="flex items-start justify-between gap-6">
                 <div className="flex h-12 w-12 items-center justify-center rounded-md bg-blue-600 text-white">
                   <Icon className="h-6 w-6" />
-                </div>
-                <div className="rounded-full bg-white px-3 py-1.5 text-xs font-black text-slate-600 shadow-sm">
-                  {Math.round(cycleMs / 1000)} sec
                 </div>
               </div>
               <h3 className="mt-6 text-4xl font-black tracking-tight text-slate-950">{active.title}</h3>
@@ -949,34 +899,6 @@ function SettingsVisual() {
   );
 }
 
-function FeatureText({
-  eyebrow,
-  title,
-  children,
-  points,
-}: {
-  eyebrow: string;
-  title: string;
-  children: ReactNode;
-  points: string[];
-}) {
-  return (
-    <div>
-      <div className="text-sm font-black uppercase tracking-[0.18em] text-blue-600">{eyebrow}</div>
-      <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{title}</h2>
-      <div className="mt-4 text-lg leading-8 text-slate-600">{children}</div>
-      <div className="mt-6 space-y-3">
-        {points.map((point) => (
-          <div key={point} className="flex items-start gap-3 text-slate-700">
-            <CheckCircle2 className="mt-1 h-5 w-5 flex-none text-emerald-600" />
-            <span>{point}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export function LandingPage() {
   return (
     <div className="min-h-screen bg-white text-slate-950">
@@ -1024,9 +946,11 @@ export function LandingPage() {
 
         <BillTimelineSection />
 
-        <OrganizationExplorerSection />
+        <ListDetailShowcase id="organizations" title="Organizations" items={organizationItems} />
 
-        <section id="customization" className="bg-[#fbfaf8] py-24">
+        <ListDetailShowcase id="messaging" title="Messaging" items={messagingItems} />
+
+        <section id="customization" className="py-24">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
             <Reveal className="lg:order-2">
               <SettingsVisual />
@@ -1034,18 +958,18 @@ export function LandingPage() {
             <Reveal className="lg:order-1" delay={120}>
               <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Highly customizable</h2>
               <p className="mt-4 text-lg leading-8 text-slate-600">
-                Teachers can raise or lower complexity for middle school, high school, college, civics, government,
-                history, or debate courses while choosing how closely the process mirrors Congress.
+                Adjust time, complexity, and realism so the same simulation can fit a short unit, a semester project, or a
+                full-year course for middle school, high school, college, civics, government, history, or debate.
               </p>
               <div className="mt-7 grid gap-3 sm:grid-cols-2">
                 {[
-                  [Settings2, "Feature levels and presets"],
-                  [Users, "Age and course flexibility"],
-                  [Megaphone, "Realistic or streamlined procedure"],
-                  [BadgeDollarSign, "Optional money and lobbying"],
+                  [Settings2, "Duration: single unit to full year"],
+                  [Users, "Complexity: middle school to college"],
+                  [Megaphone, "Realism: authentic or streamlined"],
+                  [BadgeDollarSign, "Optional layers: money, lobbying, media"],
                 ].map(([Icon, label]) => (
-                  <div key={String(label)} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <Icon className="h-5 w-5 text-slate-800" />
+                  <div key={String(label)} className="flex items-center gap-3 rounded-[1rem] bg-white p-4 shadow-[0_10px_40px_rgba(15,23,42,0.06)]">
+                    <Icon className="h-5 w-5 text-blue-600" />
                     <span className="font-bold text-slate-700">{label}</span>
                   </div>
                 ))}
