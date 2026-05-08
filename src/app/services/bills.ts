@@ -18,7 +18,7 @@ export async function fetchBillsForCurrentClass() {
 
   const { data, error } = await supabase
     .from('bill_display')
-    .select('id, hr_label, title, status, created_at, legislative_text, supporting_text, author_user_id, bill_number, class_id')
+    .select('id, hr_label, title, status, created_at, author_user_id, bill_number, class_id')
     .eq('class_id', classId)
     .neq('status', 'draft')
     .order('bill_number', { ascending: true });
@@ -109,7 +109,7 @@ export async function fetchMyBillsForCurrentClass() {
 
   const { data, error } = await supabase
     .from('bill_display')
-    .select('id, hr_label, title, status, created_at, legislative_text, supporting_text, author_user_id, bill_number, class_id')
+    .select('id, hr_label, title, status, created_at, author_user_id, bill_number, class_id')
     .eq('class_id', classId)
     .eq('author_user_id', me)
     .order('created_at', { ascending: false });
@@ -132,7 +132,7 @@ export async function fetchMyCosponsoredBillsForCurrentClass() {
 
   const { data, error } = await supabase
     .from('bill_cosponsors')
-    .select('created_at,bills!inner(id,title,bill_number,status,class_id,created_at,legislative_text,supporting_text,author_user_id)')
+    .select('created_at,bills!inner(id,title,bill_number,status,class_id,created_at,author_user_id)')
     .eq('user_id', me)
     .eq('bills.class_id', classId)
     .order('created_at', { ascending: false });
@@ -143,6 +143,21 @@ export async function fetchMyCosponsoredBillsForCurrentClass() {
     hr_label: `H.R. ${row.bills.bill_number}`,
     cosponsored_at: row.created_at,
   })) as BillRecord[];
+}
+
+export async function fetchBillPreviewText(billId: string) {
+  const { classId } = await getCurrentProfileClass();
+  const { data, error } = await supabase
+    .from('bill_display')
+    .select('id,legislative_text,supporting_text')
+    .eq('id', billId)
+    .eq('class_id', classId)
+    .maybeSingle();
+  if (error) throw error;
+  return {
+    legislativeText: (data as any)?.legislative_text ?? '<p><em>No legislative text</em></p>',
+    supportingText: (data as any)?.supporting_text ?? '',
+  };
 }
 
 export async function updateBillDraftForCurrentClass(
@@ -354,7 +369,7 @@ export async function fetchReportedBillsForTeacherCalendar() {
   const [{ data: bills, error: bErr }, { data: calendar, error: cErr }, { data: referrals }] = await Promise.all([
     supabase
       .from('bill_display')
-      .select('id,hr_label,title,status,created_at,legislative_text,supporting_text,author_user_id,bill_number,class_id')
+      .select('id,hr_label,title,status,created_at,author_user_id,bill_number,class_id')
       .eq('class_id', classId)
       .in('status', ['reported', 'calendared', 'floor']),
     supabase.from('bill_calendar').select('id,bill_id,scheduled_at,duration_minutes,published').eq('class_id', classId),

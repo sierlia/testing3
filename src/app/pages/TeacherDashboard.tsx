@@ -68,15 +68,21 @@ export function TeacherDashboard() {
         }
         const classRows = Array.from(classMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-        const normalized = await Promise.all((classRows ?? []).map(async (c) => {
-          const { count } = await supabase
-            .from('class_memberships')
-            .select('*', { count: 'exact', head: true })
-            .eq('class_id', c.id)
-            .eq('role', 'student')
-            .eq('status', 'approved');
-          return { ...c, student_count: count ?? 0 };
-        }));
+        const normalizedIds = (classRows ?? []).map((c) => c.id).filter(Boolean);
+        const { data: studentMemberships } = normalizedIds.length
+          ? await supabase
+              .from('class_memberships')
+              .select('class_id')
+              .in('class_id', normalizedIds)
+              .eq('role', 'student')
+              .eq('status', 'approved')
+          : ({ data: [] } as any);
+        const studentCounts = new Map<string, number>();
+        for (const row of studentMemberships ?? []) {
+          const id = (row as any).class_id as string;
+          studentCounts.set(id, (studentCounts.get(id) ?? 0) + 1);
+        }
+        const normalized = (classRows ?? []).map((c) => ({ ...c, student_count: studentCounts.get(c.id) ?? 0 }));
         setClasses(normalized as any);
       }
     } catch {
