@@ -301,6 +301,22 @@ export async function toggleCosponsor(billId: string, shouldCosponsor: boolean) 
   }
 }
 
+export async function deleteBillForCurrentClass(billId: string) {
+  const { classId, profile } = await getCurrentProfileClass();
+  if ((profile as any)?.role !== 'teacher') throw new Error('Only teachers can delete bills');
+
+  const { data, error } = await supabase
+    .from('bills')
+    .delete()
+    .eq('id', billId)
+    .eq('class_id', classId)
+    .select('id')
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) throw new Error('Bill not found or you do not have permission to delete it');
+  return data as { id: string };
+}
+
 export async function getCurrentProfileClass() {
   const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');

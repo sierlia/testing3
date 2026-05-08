@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { AlertCircle, ArrowLeft, BookOpen, Check, Circle, Clock, FileText, Search, UserPlus, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, BookOpen, Check, Circle, Clock, FileText, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { generateHTML } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import * as Y from "yjs";
@@ -8,7 +8,7 @@ import { yXmlFragmentToProsemirrorJSON } from "y-prosemirror";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { DeleteHighlight, EditHighlight, LinkMark, TextAlignment, UnderlineMark } from "../components/CollaborativeBillEditor";
-import { fetchBillDetail, toggleCosponsor } from "../services/bills";
+import { deleteBillForCurrentClass, fetchBillDetail, toggleCosponsor } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
 import { displayPersonName } from "../utils/displayName";
@@ -213,6 +213,8 @@ export function BillDetail() {
   const [cosponsorSort, setCosponsorSort] = useState<"newest" | "oldest" | "name">("newest");
   const [trackerOverrideDraft, setTrackerOverrideDraft] = useState<TrackerOverrideDraft | null>(null);
   const [trackerOverrideSaving, setTrackerOverrideSaving] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -558,6 +560,21 @@ export function BillDetail() {
     }
   };
 
+  const handleDeleteBill = async () => {
+    if (userRole !== "teacher" || !bill || deletePending) return;
+    setDeletePending(true);
+    try {
+      await deleteBillForCurrentClass(bill.id);
+      toast.success("Bill deleted");
+      navigate("/bills");
+    } catch (e: any) {
+      toast.error(e.message || "Could not delete bill");
+    } finally {
+      setDeletePending(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
   if (loading || !bill) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -602,10 +619,22 @@ export function BillDetail() {
       <Navigation />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <button type="button" onClick={handleBack} className="mb-4 inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
-          <ArrowLeft className="h-4 w-4" />
-          Back
-        </button>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <button type="button" onClick={handleBack} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </button>
+          {userRole === "teacher" && (
+            <button
+              type="button"
+              onClick={() => setDeleteDialogOpen(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-700 shadow-sm transition-colors hover:bg-red-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              Delete bill
+            </button>
+          )}
+        </div>
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
           <div className="mb-2 flex flex-wrap items-center gap-3">
             <span className="font-mono text-lg font-bold text-gray-900">{bill.hr_label}</span>
@@ -844,6 +873,43 @@ export function BillDetail() {
                 className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               >
                 {trackerOverrideSaving ? "Updating" : "Confirm update"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {deleteDialogOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+            <div className="px-5 pt-4">
+              <h2 className="text-lg font-semibold text-gray-900">Delete bill?</h2>
+            </div>
+            <div className="space-y-4 px-5 py-4">
+              <p className="text-sm text-gray-600">
+                This will permanently delete {bill.hr_label} - {bill.title}.
+              </p>
+              <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                Cosponsors, committee referrals, committee documents, votes, calendar entries, floor sessions, speaker
+                signups, and teacher override records for this bill will also be removed.
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-5 py-4">
+              <button
+                type="button"
+                onClick={() => setDeleteDialogOpen(false)}
+                disabled={deletePending}
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100 disabled:opacity-60"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDeleteBill()}
+                disabled={deletePending}
+                className="inline-flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-60"
+              >
+                <Trash2 className="h-4 w-4" />
+                {deletePending ? "Deleting" : "Delete bill"}
               </button>
             </div>
           </div>
