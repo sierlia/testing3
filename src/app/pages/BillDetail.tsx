@@ -886,11 +886,11 @@ export function BillDetail() {
             </div>
             <div className="space-y-4 px-5 py-4">
               <p className="text-sm text-gray-600">
-                This will permanently delete {bill.hr_label} - {bill.title}.
+                This will remove {bill.hr_label} - {bill.title} from the simulation.
               </p>
               <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-900">
-                Cosponsors, committee referrals, committee documents, votes, calendar entries, floor sessions, speaker
-                signups, and teacher override records for this bill will also be removed.
+                This cannot be undone from the site. When hard deletion is available on the database, related bill
+                records are removed with it.
               </div>
             </div>
             <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-5 py-4">

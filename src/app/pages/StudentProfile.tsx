@@ -219,7 +219,8 @@ export function StudentProfile() {
       let authoredQuery = supabase
         .from("bill_display")
         .select("id,hr_label,title,status,class_id")
-        .eq("author_user_id", uid);
+        .eq("author_user_id", uid)
+        .neq("status", "deleted");
       if (pr.class_id) authoredQuery = authoredQuery.eq("class_id", pr.class_id);
       if (uid !== currentUserId) authoredQuery = authoredQuery.neq("status", "draft");
       const { data: ba } = await authoredQuery.order("bill_number");
@@ -228,7 +229,8 @@ export function StudentProfile() {
       let cosponsoredQuery = supabase
         .from("bill_cosponsors")
         .select("bill_id,bills!inner(id,title,bill_number,status,class_id)")
-        .eq("user_id", uid);
+        .eq("user_id", uid)
+        .neq("bills.status", "deleted");
       if (pr.class_id) cosponsoredQuery = cosponsoredQuery.eq("bills.class_id", pr.class_id);
       const { data: bc } = await cosponsoredQuery;
       setBillsCosponsored(
@@ -297,12 +299,14 @@ export function StudentProfile() {
 
       let committeeVotesQuery = supabase
         .from("bill_committee_votes")
-        .select("bill_id,committee_id,vote,created_at,bills(id,hr_label,title),committees(id,name)")
-        .eq("user_id", uid);
+        .select("bill_id,committee_id,vote,created_at,bills!inner(id,hr_label,title,status),committees(id,name)")
+        .eq("user_id", uid)
+        .neq("bills.status", "deleted");
       let floorVotesQuery = supabase
         .from("bill_floor_votes")
-        .select("session_id,bill_id,vote,created_at,bills(id,hr_label,title)")
-        .eq("user_id", uid);
+        .select("session_id,bill_id,vote,created_at,bills!inner(id,hr_label,title,status)")
+        .eq("user_id", uid)
+        .neq("bills.status", "deleted");
       if (pr.class_id) {
         committeeVotesQuery = committeeVotesQuery.eq("class_id", pr.class_id);
         floorVotesQuery = floorVotesQuery.eq("class_id", pr.class_id);

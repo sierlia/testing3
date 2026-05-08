@@ -212,7 +212,7 @@ export function TeacherBillSorting() {
 
         const [{ data: committeeRows, error: cErr }, { data: billRows, error: bErr }, { data: referralRows, error: rErr }] = await Promise.all([
           supabase.from("committees").select("id,name").eq("class_id", cid).order("created_at", { ascending: true }),
-          supabase.from("bill_display").select("id,hr_label,title,legislative_text").eq("class_id", cid).neq("status", "draft").order("bill_number", { ascending: true }),
+          supabase.from("bill_display").select("id,hr_label,title,legislative_text").eq("class_id", cid).neq("status", "draft").neq("status", "deleted").order("bill_number", { ascending: true }),
           supabase.from("bill_referrals").select("bill_id,committee_id,subcommittee_id").eq("class_id", cid),
         ]);
         if (cErr) throw cErr;

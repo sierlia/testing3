@@ -384,19 +384,21 @@ export function RecordsPage() {
       supabase.from("dear_colleague_letters").select("id,sender_user_id,subject,body,created_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase
         .from("committee_bill_docs")
-        .select("bill_id,committee_id,committee_report_submitted_at,bills(id,hr_label,title),committees(id,name)")
+        .select("bill_id,committee_id,committee_report_submitted_at,bills!inner(id,hr_label,title,status),committees(id,name)")
         .eq("class_id", activeClassId)
+        .neq("bills.status", "deleted")
         .not("committee_report_submitted_at", "is", null)
         .order("committee_report_submitted_at", { ascending: false }),
       supabase
         .from("committee_bill_docs")
-        .select("bill_id,committee_id,committee_vote_finalized_at,bills(id,hr_label,title),committees(id,name)")
+        .select("bill_id,committee_id,committee_vote_finalized_at,bills!inner(id,hr_label,title,status),committees(id,name)")
         .eq("class_id", activeClassId)
+        .neq("bills.status", "deleted")
         .not("committee_vote_finalized_at", "is", null)
         .order("committee_vote_finalized_at", { ascending: false }),
       supabase.from("bill_committee_votes").select("bill_id,committee_id,user_id,vote").eq("class_id", activeClassId),
       supabase.from("committee_members").select("committee_id,user_id"),
-      supabase.from("bill_floor_sessions").select("id,bill_id,results_posted_at,closed_at,posted_result,bills(id,hr_label,title)").eq("class_id", activeClassId).not("results_posted_at", "is", null),
+      supabase.from("bill_floor_sessions").select("id,bill_id,results_posted_at,closed_at,posted_result,bills!inner(id,hr_label,title,status)").eq("class_id", activeClassId).neq("bills.status", "deleted").not("results_posted_at", "is", null),
       supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", activeClassId),
       supabase.from("lobbyist_group_members").select("group_id,lobbyist_groups(id,name)").eq("user_id", uid),
       supabase.from("lobbyist_contributions").select("id,group_id,from_user_id,recipient_type,recipient_id,amount,note,created_at,lobbyist_groups(name)").eq("class_id", activeClassId).order("created_at", { ascending: false }),
@@ -643,16 +645,17 @@ export function RecordsPage() {
       .maybeSingle();
     const since = (last as any)?.created_at ?? "1970-01-01T00:00:00.000Z";
     const [{ data: cosponsors }, { data: bills }, { data: reports }, { data: votes }, { data: meetings }, { data: referrals }, { data: adBids }] = await Promise.all([
-      supabase.from("bill_cosponsors").select("bill_id,created_at,bills(id,hr_label,title)").eq("class_id", classId).gt("created_at", since),
-      supabase.from("bill_display").select("id,hr_label,title,status,created_at,author_user_id").eq("class_id", classId).gte("created_at", since),
+      supabase.from("bill_cosponsors").select("bill_id,created_at,bills!inner(id,hr_label,title,status)").eq("class_id", classId).neq("bills.status", "deleted").gt("created_at", since),
+      supabase.from("bill_display").select("id,hr_label,title,status,created_at,author_user_id").eq("class_id", classId).neq("status", "deleted").gte("created_at", since),
       supabase
         .from("committee_bill_docs")
-        .select("bill_id,committee_id,committee_report_submitted_at,bills(id,hr_label,title),committees(id,name)")
+        .select("bill_id,committee_id,committee_report_submitted_at,bills!inner(id,hr_label,title,status),committees(id,name)")
         .eq("class_id", classId)
+        .neq("bills.status", "deleted")
         .gt("committee_report_submitted_at", since),
       supabase.from("bill_committee_votes").select("bill_id,committee_id,vote").eq("class_id", classId),
       supabase.from("committee_meetings").select("committee_id,started_at,ended_at,committees(name)").eq("class_id", classId).gt("started_at", since).order("started_at", { ascending: true }),
-      supabase.from("bill_referrals").select("bill_id,committee_id,referred_at,bills(id,hr_label,title),committees(id,name)").eq("class_id", classId).gt("referred_at", since).order("referred_at", { ascending: true }),
+      supabase.from("bill_referrals").select("bill_id,committee_id,referred_at,bills!inner(id,hr_label,title,status),committees(id,name)").eq("class_id", classId).neq("bills.status", "deleted").gt("referred_at", since).order("referred_at", { ascending: true }),
       supabase.from("newsletter_ad_bids").select("id,bidder_user_id,message,amount,created_at,status,lobbyist_groups(name)").eq("class_id", classId).gt("created_at", since).order("amount", { ascending: false }),
     ]);
     const cosponsorCounts = new Map<string, any>();

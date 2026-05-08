@@ -186,8 +186,9 @@ export function ClassManagePage() {
         supabase
           .from("bills")
           .select("id,author_user_id,hr_label,title,bill_number,status")
-          .eq("class_id", classId),
-        supabase.from("bill_cosponsors").select("user_id,bill_id,bills(id,hr_label,title)").eq("class_id", classId),
+          .eq("class_id", classId)
+          .neq("status", "deleted"),
+        supabase.from("bill_cosponsors").select("user_id,bill_id,bills!inner(id,hr_label,title,status)").eq("class_id", classId).neq("bills.status", "deleted"),
         supabase.from("dear_colleague_letters").select("id,author_user_id").eq("class_id", classId),
         supabase.from("committee_members").select("user_id,role,committees(id,name)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
         supabase.from("caucus_members").select("user_id,role,caucuses(id,title)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),

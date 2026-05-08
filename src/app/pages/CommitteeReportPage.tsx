@@ -29,6 +29,7 @@ export function CommitteeReportPage() {
           .from("bill_display")
           .select("id,hr_label,title,status")
           .eq("id", billId)
+          .neq("status", "deleted")
           .maybeSingle();
         if (bErr) throw bErr;
         setBill((billRow as any) ?? null);

@@ -21,6 +21,7 @@ export async function fetchBillsForCurrentClass() {
     .select('id, hr_label, title, status, created_at, legislative_text, supporting_text, author_user_id, bill_number, class_id')
     .eq('class_id', classId)
     .neq('status', 'draft')
+    .neq('status', 'deleted')
     .order('bill_number', { ascending: true });
   if (error) throw error;
 
@@ -112,6 +113,7 @@ export async function fetchMyBillsForCurrentClass() {
     .select('id, hr_label, title, status, created_at, author_user_id, bill_number, class_id')
     .eq('class_id', classId)
     .eq('author_user_id', me)
+    .neq('status', 'deleted')
     .order('created_at', { ascending: false });
   if (error) throw error;
   return (data ?? []) as BillRecord[];
@@ -135,6 +137,7 @@ export async function fetchMyCosponsoredBillsForCurrentClass() {
     .select('created_at,bills!inner(id,title,bill_number,status,class_id,created_at,author_user_id)')
     .eq('user_id', me)
     .eq('bills.class_id', classId)
+    .neq('bills.status', 'deleted')
     .order('created_at', { ascending: false });
   if (error) throw error;
 
@@ -192,6 +195,7 @@ export async function fetchBillDetail(billId: string) {
     .select('id, hr_label, bill_number, title, status, created_at, legislative_text, supporting_text, author_user_id, class_id')
     .eq('id', billId)
     .eq('class_id', classId)
+    .neq('status', 'deleted')
     .single();
   if (bErr) throw bErr;
 
@@ -302,13 +306,23 @@ export async function toggleCosponsor(billId: string, shouldCosponsor: boolean) 
 }
 
 export async function deleteBillForCurrentClass(billId: string) {
-  const { profile } = await getCurrentProfileClass();
+  const { classId, profile } = await getCurrentProfileClass();
   if ((profile as any)?.role !== 'teacher') throw new Error('Only teachers can delete bills');
 
   const { data, error } = await supabase.rpc('delete_bill_for_teacher', { target_bill: billId } as any);
-  if (error) throw error;
-  if (!data) throw new Error('Bill could not be deleted');
-  return { id: data as string };
+  if (error && (error as any).code !== 'PGRST202' && !String(error.message ?? '').includes('delete_bill_for_teacher')) throw error;
+  if (!error && data) return { id: data as string };
+
+  const { data: softDeleted, error: fallbackError } = await supabase
+    .from('bills')
+    .update({ status: 'deleted' } as any)
+    .eq('id', billId)
+    .eq('class_id', classId)
+    .select('id')
+    .maybeSingle();
+  if (fallbackError) throw fallbackError;
+  if (!softDeleted) throw new Error('Bill not found or you do not have permission to delete it');
+  return softDeleted as { id: string };
 }
 
 export async function getCurrentProfileClass() {
@@ -338,7 +352,8 @@ export async function fetchCalendaredBillsForCurrentClass() {
   const { data: bills, error: billError } = await supabase
     .from('bill_display')
     .select('id,hr_label,title,status,author_user_id,class_id,created_at,legislative_text,supporting_text,bill_number')
-    .in('id', billIds.length ? billIds : ['00000000-0000-0000-0000-000000000000']);
+    .in('id', billIds.length ? billIds : ['00000000-0000-0000-0000-000000000000'])
+    .neq('status', 'deleted');
   if (billError) throw billError;
   const billMap = new Map((bills ?? []).map((b: any) => [b.id, b]));
   const authorIds = Array.from(new Set((bills ?? []).map((b: any) => b.author_user_id).filter(Boolean)));
