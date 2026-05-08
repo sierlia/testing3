@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, PlusCircle, Users } from "lucide-react";
+import { ClipboardList, FileText, PlusCircle, Users } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 
@@ -8,6 +8,7 @@ type QuickOrgLink = { id: string; name: string };
 export function QuickLinks({ classId }: { classId?: string }) {
   const [committees, setCommittees] = useState<QuickOrgLink[]>([]);
   const [caucuses, setCaucuses] = useState<QuickOrgLink[]>([]);
+  const [role, setRole] = useState<"teacher" | "student">("student");
 
   useEffect(() => {
     let cancelled = false;
@@ -24,6 +25,7 @@ export function QuickLinks({ classId }: { classId?: string }) {
         .maybeSingle();
       const targetClassId = classId ?? ((profile as any)?.class_id as string | undefined);
       if (!targetClassId) return;
+      setRole((profile as any)?.role === "teacher" ? "teacher" : "student");
 
       if ((profile as any)?.role === "teacher") {
         const [{ data: committeeRows }, { data: caucusRows }] = await Promise.all([
@@ -103,6 +105,15 @@ export function QuickLinks({ classId }: { classId?: string }) {
             <PlusCircle className="w-5 h-5" />
           </div>
           <span className="font-medium">Create Bill</span>
+        </Link>
+        <Link
+          to={role === "teacher" ? "/teacher/assignments" : "/assignments"}
+          className="flex items-center gap-3 rounded-md border border-transparent px-4 py-3 text-base font-medium text-gray-700 transition-colors hover:border-gray-200 hover:bg-gray-50 hover:text-gray-900"
+        >
+          <div className="text-blue-600">
+            <ClipboardList className="h-5 w-5" />
+          </div>
+          <span className="font-medium">Assignments</span>
         </Link>
         {section("Committees", <FileText className="h-4 w-4" />, committees, (id) => `/committees/${id}`)}
         {section("Caucuses", <Users className="h-4 w-4" />, caucuses, (id) => `/caucuses/${id}`)}

@@ -34,6 +34,7 @@ import { CalendarScheduling } from "./pages/CalendarScheduling";
 import { LetterView } from "./pages/LetterView";
 import { Members } from "./pages/Members";
 import { TeacherDeadlines } from "./pages/TeacherDeadlines";
+import { AssignmentsPage } from "./pages/AssignmentsPage";
 import { DearColleagueInbox } from "./pages/DearColleagueInbox";
 import { CreateDearColleagueLetter } from "./pages/CreateDearColleagueLetter";
 import { Notifications } from "./pages/Notifications";
@@ -122,6 +123,10 @@ export const router = createHashRouter([
   {
     path: "/members/:id",
     Component: StudentProfile,
+  },
+  {
+    path: "/assignments",
+    Component: AssignmentsPage,
   },
   {
     path: "/records",
@@ -285,6 +290,10 @@ export const router = createHashRouter([
   },
   {
     path: "/teacher/deadlines",
+    Component: TeacherDeadlines,
+  },
+  {
+    path: "/teacher/assignments",
     Component: TeacherDeadlines,
   },
   {

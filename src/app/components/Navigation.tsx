@@ -1,4 +1,4 @@
-import { ChevronDown, CircleHelp, DollarSign, Gavel, LogOut, Settings, User, Mail, Plus, Layers, X } from "lucide-react";
+import { ChevronDown, CircleHelp, ClipboardList, DollarSign, Gavel, LogOut, Settings, User, Mail, Plus, Layers, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -438,6 +438,7 @@ export function Navigation() {
                         currentPath.startsWith('/notifications') || currentPath.startsWith('/members') ||
                         currentPath.startsWith('/parties') || currentPath.startsWith('/committees') ||
                         currentPath.startsWith('/settings') ||
+                        currentPath.startsWith('/assignments') ||
                         currentPath === '/elections' || currentPath === '/floor-session' || currentPath === '/floor' ||
                         currentPath === '/calendar' || currentPath.startsWith('/profile') ||
                         currentPath === '/resources' || currentPath.startsWith('/tess-');
@@ -522,6 +523,16 @@ export function Navigation() {
                 className={navItemClass(isActivePath(["/records", "/newsletters"]))}
               >
                 Records
+              </Link>
+
+              <Link
+                to={user?.user_metadata?.role === "teacher" ? "/teacher/assignments" : "/assignments"}
+                className={navItemClass(isActivePath(["/assignments", "/teacher/assignments", "/teacher/deadlines"]))}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <ClipboardList className="h-4 w-4" />
+                  Assignments
+                </span>
               </Link>
 
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>

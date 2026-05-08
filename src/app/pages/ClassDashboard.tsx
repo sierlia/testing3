@@ -553,10 +553,10 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Upcoming Events & Deadlines</CardTitle>
+                    <CardTitle>Upcoming Events & Assignments</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button onClick={() => navigate("/teacher/deadlines?add=1")}><Plus className="mr-2 h-4 w-4" />Add Deadline</Button>
+                    <Button onClick={() => navigate("/teacher/assignments?add=1")}><Plus className="mr-2 h-4 w-4" />Add Assignment</Button>
                   </div>
                 </div>
               </CardHeader>
@@ -625,7 +625,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                   )}
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <Button variant="outline" onClick={() => navigate("/teacher/deadlines")}>Manage deadlines</Button>
+                  <Button variant="outline" onClick={() => navigate("/teacher/assignments")}>Manage assignments</Button>
                   <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
                 </div>
               </CardContent>
