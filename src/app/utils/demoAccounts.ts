@@ -55,8 +55,9 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
 
     const defaultTarget = "/dashboard";
     const isPublicRoute = ["/", "/signin", "/signup", "/about"].includes(currentPath);
+    const studentDashboardOnlyRoute = currentPath === "/classes" || currentPath.startsWith("/classes?");
     const incompatibleRoleRoute =
-      (credentials.role === "student" && currentPath.startsWith("/teacher/")) ||
+      (credentials.role === "student" && (currentPath.startsWith("/teacher/") || studentDashboardOnlyRoute)) ||
       (credentials.role === "teacher" && currentPath.startsWith("/class/"));
     const target = options?.preserveLocation && !isPublicRoute && !incompatibleRoleRoute ? currentPath : defaultTarget;
     window.location.hash = target;

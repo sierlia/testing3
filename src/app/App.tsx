@@ -42,19 +42,20 @@ function AppRouterGate() {
 
   const path = currentHashPath();
   const isPublic = isPublicPath(path);
+  const demoAuthSwitching = window.localStorage.getItem("gavel:demoAuthSwitch") === "1";
 
   useEffect(() => {
-    if (loading || user || isPublic) return;
+    if (loading || user || isPublic || demoAuthSwitching) return;
     const target = hash.startsWith("/") ? hash : `/${hash}`;
     window.location.hash = `/signin?redirect=${encodeURIComponent(target)}`;
-  }, [hash, isPublic, loading, user]);
+  }, [demoAuthSwitching, hash, isPublic, loading, user]);
 
-  if (loading) {
+  if (loading || demoAuthSwitching) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 text-gray-600">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Gavel className="h-5 w-5 text-blue-600" />
-          Loading...
+          {demoAuthSwitching ? "Switching demo user..." : "Loading..."}
         </div>
       </div>
     );
