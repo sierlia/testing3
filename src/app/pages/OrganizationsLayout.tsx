@@ -16,16 +16,16 @@ export function OrganizationsLayout({ active, children }: { active: "parties" | 
       </div>
 
       <div className="grid gap-4 md:grid-cols-[180px_1fr]">
-        <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm">
-          <div className="flex gap-2 md:flex-col">
+        <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm md:min-h-[232px]">
+          <div className="flex gap-2 md:min-h-[216px] md:flex-col">
             <Tab to="/parties" active={active === "parties"}>Parties</Tab>
             <Tab to="/committees" active={active === "committees"}>Committees</Tab>
             <Tab to="/caucuses" active={active === "caucuses"}>Caucuses</Tab>
-            <div className="mx-1 h-px bg-gray-300 md:mx-0 md:my-1 md:h-px" aria-hidden="true" />
+            <div className="mx-1 h-px w-8 shrink-0 self-center bg-gray-300 md:mx-auto md:my-1 md:h-px md:w-20" aria-hidden="true" />
             <Tab to="/lobbyists" active={active === "lobbyists"}>Lobbyists</Tab>
           </div>
         </div>
-        <div className="min-w-0">
+        <div className="min-h-[640px] min-w-0">
           {children}
         </div>
       </div>

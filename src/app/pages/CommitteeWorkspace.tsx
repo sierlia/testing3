@@ -8,11 +8,11 @@ import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { SecureAvatar } from "../components/SecureAvatar";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { postCommitteeProgress, proposeBillForCommitteeVote } from "../services/bills";
-import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 import { formatConstituency } from "../utils/constituency";
 import { profilePath } from "../utils/profileRoute";
 import { getCurrentUser } from "../utils/currentUser";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
+import { committeeDisplayName } from "../utils/committeeNames";
 
 type BillRow = {
   id: string;
@@ -457,13 +457,10 @@ export function CommitteeWorkspace() {
       <Navigation />
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeName}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeDisplayName(committeeName)}</h1>
         </div>
         <div className="mb-6">
           <CommitteeTabs committeeId={committeeId} active="review" />
-        </div>
-        <div className="mb-6">
-          <SubcommitteeRolesPanel committeeId={committeeId} compact />
         </div>
         {!loading && bills.length > 0 && (
           <div className={`mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3 text-sm shadow-sm ${activeMeeting ? "border-blue-200 bg-blue-50 text-blue-900" : "border-gray-200 bg-white text-gray-700"}`}>

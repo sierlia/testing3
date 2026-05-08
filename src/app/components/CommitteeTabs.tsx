@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 
-type TabId = "dashboard" | "review" | "vote" | "election" | "letters";
+type TabId = "dashboard" | "review" | "vote" | "election" | "letters" | "subcommittees";
 
 type CountedTabId = "dashboard" | "review" | "vote";
 type Counts = Record<CountedTabId, number>;
@@ -200,6 +200,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     { id: "vote" as const, label: "Vote", to: `/committee/${committeeId}/vote` },
     { id: "election" as const, label: "Election", to: `/committee/${committeeId}/leadership` },
     { id: "letters" as const, label: "Letters", to: `/committees/${committeeId}?tab=letters` },
+    { id: "subcommittees" as const, label: "Subcommittees", to: `/committees/${committeeId}?tab=subcommittees` },
   ].filter((tab) => {
     if (access.isTeacher || access.isMember) return true;
     if (tab.id === "dashboard") return access.dashboardAccess;
@@ -221,7 +222,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
           }`}
         >
           {tab.label}
-          {tab.id !== "election" && tab.id !== "letters" && (
+          {(tab.id === "dashboard" || tab.id === "review" || tab.id === "vote") && (
             <>
               <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
                 {counts[tab.id]}

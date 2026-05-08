@@ -51,11 +51,97 @@ export type AssignmentTask = {
 };
 
 export const PROVIDERS: Array<{ id: AssignmentProvider; label: string; description: string }> = [
-  { id: "synergy", label: "Synergy SIS", description: "Prepare returned grades for a Synergy gradebook column." },
-  { id: "schoology", label: "Schoology", description: "Prepare assignment scores for a Schoology course." },
-  { id: "powerschool", label: "PowerSchool", description: "Prepare returned grades for PowerSchool gradebook sync." },
-  { id: "google_classroom", label: "Google Classroom", description: "Prepare submissions and scores for Classroom coursework." },
+  { id: "synergy", label: "Synergy SIS", description: "Queue OneRoster-style grade passback records for a Synergy section and line item." },
+  { id: "schoology", label: "Schoology", description: "Queue scores for a Schoology section assignment." },
+  { id: "powerschool", label: "PowerSchool", description: "Queue OneRoster-style grade passback records for a PowerSchool section and line item." },
+  { id: "google_classroom", label: "Google Classroom", description: "Queue grades for a Classroom course work item." },
 ];
+
+export type IntegrationField = {
+  key: string;
+  label: string;
+  placeholder: string;
+  description?: string;
+  secret?: boolean;
+  type?: "text" | "select";
+  options?: Array<{ value: string; label: string }>;
+};
+
+export const PROVIDER_INTEGRATION_FIELDS: Record<AssignmentProvider, IntegrationField[]> = {
+  synergy: [
+    { key: "apiVersion", label: "OneRoster version", placeholder: "Choose version", type: "select", options: [
+      { value: "v1p2", label: "OneRoster 1.2 gradebook" },
+      { value: "v1p1", label: "OneRoster 1.1 gradebook" },
+    ] },
+    { key: "baseUrl", label: "Synergy OneRoster base URL", placeholder: "https://district.edupoint.com/ims/oneroster/v1p1", description: "District-specific OneRoster base URL for Synergy." },
+    { key: "tokenUrl", label: "OAuth token URL", placeholder: "https://district.edupoint.com/oauth/token", description: "Token endpoint supplied by the district or Synergy administrator." },
+    { key: "clientId", label: "Client ID", placeholder: "Synergy client ID" },
+    { key: "clientSecretName", label: "Client secret name", placeholder: "SUPABASE_SECRET_SYNERGY_CLIENT_SECRET", secret: true, description: "Store the actual secret in Supabase Edge Function secrets, not in this form." },
+    { key: "classSourcedId", label: "Class sourcedId", placeholder: "OneRoster class sourcedId" },
+    { key: "lineItemSourcedId", label: "Line item sourcedId", placeholder: "OneRoster lineItem sourcedId" },
+    { key: "academicSessionSourcedId", label: "Academic session sourcedId", placeholder: "Optional grading period/session sourcedId" },
+    { key: "resultWriteMode", label: "Result write mode", placeholder: "Choose write mode", type: "select", options: [
+      { value: "post_lineitem_results", label: "POST lineItems/{sourcedId}/results" },
+      { value: "put_result", label: "PUT results/{resultSourcedId}" },
+      { value: "post_class_session_results", label: "POST class/session results" },
+    ] },
+    { key: "studentIdSource", label: "Student identifier", placeholder: "Choose identifier", type: "select", options: [
+      { value: "email", label: "Student email" },
+      { value: "sourcedId", label: "OneRoster sourcedId" },
+      { value: "username", label: "Username" },
+    ] },
+  ],
+  schoology: [
+    { key: "apiBaseUrl", label: "Schoology API base URL", placeholder: "https://api.schoology.com/v1" },
+    { key: "sectionId", label: "Section ID", placeholder: "Schoology section ID" },
+    { key: "assignmentId", label: "Assignment ID", placeholder: "Schoology assignment ID" },
+    { key: "consumerKey", label: "Consumer key", placeholder: "Schoology app consumer key" },
+    { key: "consumerSecretName", label: "Consumer secret name", placeholder: "SUPABASE_SECRET_SCHOOLOGY_CONSUMER_SECRET", secret: true, description: "Store the actual consumer secret in Supabase Edge Function secrets." },
+    { key: "enrollmentIdSource", label: "Enrollment identifier", placeholder: "Choose identifier", description: "Schoology grade writes use enrollment_id plus assignment_id.", type: "select", options: [
+      { value: "schoology_enrollment_id", label: "Schoology enrollment ID" },
+      { value: "email", label: "Student email" },
+      { value: "username", label: "Username" },
+    ] },
+  ],
+  powerschool: [
+    { key: "apiVersion", label: "OneRoster version", placeholder: "Choose version", type: "select", options: [
+      { value: "v1p2", label: "OneRoster 1.2 gradebook" },
+      { value: "v1p1", label: "OneRoster 1.1 gradebook" },
+    ] },
+    { key: "baseUrl", label: "PowerSchool OneRoster base URL", placeholder: "https://district.powerschool.com/ims/oneroster/v1p1" },
+    { key: "tokenUrl", label: "OAuth token URL", placeholder: "https://district.powerschool.com/oauth/access_token" },
+    { key: "clientId", label: "Client ID", placeholder: "PowerSchool client ID" },
+    { key: "clientSecretName", label: "Client secret name", placeholder: "SUPABASE_SECRET_POWERSCHOOL_CLIENT_SECRET", secret: true, description: "Store the actual secret in Supabase Edge Function secrets." },
+    { key: "sectionSourcedId", label: "Class sourcedId", placeholder: "OneRoster class sourcedId" },
+    { key: "lineItemSourcedId", label: "Line item sourcedId", placeholder: "OneRoster lineItem sourcedId" },
+    { key: "academicSessionSourcedId", label: "Academic session sourcedId", placeholder: "Optional grading period/session sourcedId" },
+    { key: "resultWriteMode", label: "Result write mode", placeholder: "Choose write mode", type: "select", options: [
+      { value: "post_lineitem_results", label: "POST lineItems/{sourcedId}/results" },
+      { value: "put_result", label: "PUT results/{resultSourcedId}" },
+      { value: "post_class_session_results", label: "POST class/session results" },
+    ] },
+    { key: "studentIdSource", label: "Student identifier", placeholder: "Choose identifier", type: "select", options: [
+      { value: "sourcedId", label: "OneRoster sourcedId" },
+      { value: "email", label: "Student email" },
+      { value: "username", label: "Username" },
+    ] },
+  ],
+  google_classroom: [
+    { key: "courseId", label: "Course ID", placeholder: "Google Classroom courseId" },
+    { key: "courseWorkId", label: "Course work ID", placeholder: "Google Classroom courseWorkId" },
+    { key: "teacherOAuthSecretName", label: "Teacher OAuth secret name", placeholder: "SUPABASE_SECRET_GOOGLE_CLASSROOM_REFRESH_TOKEN", secret: true, description: "Store refresh/access handling server-side in Supabase secrets." },
+    { key: "gradeField", label: "Grade field", placeholder: "Choose grade field", type: "select", options: [
+      { value: "assignedGrade", label: "assignedGrade" },
+      { value: "draftGrade", label: "draftGrade" },
+      { value: "draftGrade,assignedGrade", label: "draftGrade and assignedGrade" },
+    ] },
+    { key: "studentSubmissionIdSource", label: "Student submission identifier", placeholder: "Choose identifier", description: "Classroom grade writes patch studentSubmissions using courseId, courseWorkId, and submission id.", type: "select", options: [
+      { value: "student_submission_id", label: "Stored student submission ID" },
+      { value: "google_user_id", label: "Google user ID" },
+      { value: "email", label: "Student email" },
+    ] },
+  ],
+};
 
 export const AUTO_CRITERIA_OPTIONS: Array<{
   id: string;

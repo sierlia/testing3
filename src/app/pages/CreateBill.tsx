@@ -317,7 +317,6 @@ function MarkdownEnabledEditor({
         <div className="inline-flex rounded-md border border-gray-300 overflow-hidden">
           {[
             { key: "default" as const, icon: Pencil, label: "Default" },
-            { key: "markdown" as const, icon: FileText, label: "Markdown" },
             { key: "preview" as const, icon: Eye, label: "Preview" },
           ].map(({ key, icon: Icon, label: modeLabel }) => (
             <button
@@ -350,10 +349,11 @@ function MarkdownEnabledEditor({
               ref={quillRef}
               theme="snow"
               value={htmlValue}
-              onChange={onHtmlChange}
+              onChange={(value) => onHtmlChange(value.replace(/<img[^>]*>/gi, ""))}
               placeholder={placeholder}
               className={`bill-default-editor ${minHeightClass}`}
-              modules={{ toolbar: false }}
+              formats={["header", "bold", "italic", "underline", "link", "list", "align"]}
+              modules={{ toolbar: false, clipboard: { matchVisual: false } }}
             />
           </>
         )}

@@ -103,13 +103,24 @@ export function SubcommitteeRolesPanel({ committeeId, compact = false, allowMemb
     }
   };
 
-  if (!subcommittees.length) return null;
+  if (!subcommittees.length) {
+    if (compact) return null;
+    return (
+      <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+        <div className="mb-2 flex items-center gap-2">
+          <Users className="h-4 w-4 text-blue-600" />
+          <h2 className="text-sm font-semibold text-gray-900">Subcommittees</h2>
+        </div>
+        <div className="text-sm text-gray-500">No subcommittees have been created yet.</div>
+      </div>
+    );
+  }
 
   return (
     <div className={`rounded-lg border border-gray-200 bg-white ${compact ? "p-3" : "p-4"} shadow-sm`}>
       <div className="mb-3 flex items-center gap-2">
         <Users className="h-4 w-4 text-blue-600" />
-        <h2 className="text-sm font-semibold text-gray-900">Subcommittee roles</h2>
+        <h2 className="text-sm font-semibold text-gray-900">Subcommittees</h2>
       </div>
       <div className="space-y-2">
         {subcommittees.map((subcommittee) => {

@@ -15,6 +15,7 @@ import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
 import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
+import { committeeDisplayName } from "../utils/committeeNames";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type Subcommittee = { id: string; committee_id: string; class_id: string; name: string; description: string | null; created_at: string };
@@ -127,7 +128,8 @@ export function CommitteeDashboard() {
   const canPostAnnouncements = isLeader || isTeacher;
   const canViewDashboard = Boolean(myRole) || isTeacher || paidAccess.has("dashboard");
   const canComment = Boolean(myRole) || isTeacher;
-  const activePanel = searchParams.get("tab") === "letters" ? "letters" : "dashboard";
+  const requestedPanel = searchParams.get("tab");
+  const activePanel = requestedPanel === "letters" || requestedPanel === "subcommittees" ? requestedPanel : "dashboard";
 
   const selectedAnnouncement = useMemo(
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
@@ -200,6 +202,17 @@ export function CommitteeDashboard() {
           setMoneySettings(settings?.money ?? {});
           nextAllowSelfJoin = !!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join";
           setCommitteeCapacity(Number(settings?.committees?.capacities?.[committeeId] ?? settings?.committees?.capacitiesByName?.[(c as any).name] ?? 0));
+          if ((prof as any)?.role === "teacher" && settings?.committees?.subcommitteesEnabled) {
+            const configuredRows = ((settings?.committees?.enabledSubcommittees ?? []) as string[])
+              .filter((key) => key.startsWith(`${(c as any).name}::`))
+              .map((key) => ({
+                committee_id: committeeId,
+                class_id: (c as any).class_id,
+                name: key.split("::").slice(1).join("::"),
+                description: "",
+              }));
+            if (configuredRows.length) await supabase.from("subcommittees").upsert(configuredRows as any, { onConflict: "committee_id,name" });
+          }
         }
         setAllowSelfJoin(nextAllowSelfJoin);
         const { data: subRows } = await supabase
@@ -1026,7 +1039,7 @@ export function CommitteeDashboard() {
               </div>
             ) : (
               <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-bold text-gray-900 mb-1">{committee.name}</h1>
+                <h1 className="text-3xl font-bold text-gray-900 mb-1">{committeeDisplayName(committee.name)}</h1>
                 {isTeacher && <button type="button" onClick={() => setEditingName(true)} className="rounded-md p-2 text-gray-500 hover:bg-gray-100"><Pencil className="h-5 w-5" /></button>}
               </div>
             )}
@@ -1067,6 +1080,8 @@ export function CommitteeDashboard() {
           <div className="space-y-6">
             {activePanel === "letters" ? (
               <OrganizationLettersInbox organizationType="committee" organizationId={committeeId} organizationName={committee?.name ?? "committee"} memberIds={members.map((member) => member.user_id)} />
+            ) : activePanel === "subcommittees" ? (
+              <SubcommitteeRolesPanel committeeId={committeeId} allowMemberRoleSelection />
             ) : (
             <>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -1081,6 +1096,7 @@ export function CommitteeDashboard() {
                     </button>
                   )}
                   <div className="min-w-0 flex-1 border-l border-gray-300 pl-3 text-right">
+                    <div className="mb-1 text-left text-xs font-semibold text-gray-700">Subcommittees</div>
                     {(isLeader || isTeacher) && (
                       <div className="ml-auto flex max-w-[16rem] gap-1.5">
                         <input
@@ -1089,7 +1105,7 @@ export function CommitteeDashboard() {
                           onKeyDown={(event) => {
                             if (event.key === "Enter") void addSubcommittee();
                           }}
-                          placeholder="Subcommittee"
+                          placeholder="New subcommittee name"
                           className="min-w-0 flex-1 rounded-md border border-gray-300 px-2 py-1 text-xs outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <button type="button" onClick={() => void addSubcommittee()} disabled={!newSubcommitteeName.trim()} className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50">
@@ -1282,8 +1298,6 @@ export function CommitteeDashboard() {
           </div>
 
           <div className="self-start bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <SubcommitteeRolesPanel committeeId={committeeId} compact />
-            <div className={subcommittees.length ? "mt-6" : ""}>
             <div className="flex items-center gap-2 mb-4">
               <Users className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">Members ({committeeCapacity > 0 ? `${members.length}/${committeeCapacity}` : members.length})</h2>
@@ -1360,7 +1374,6 @@ export function CommitteeDashboard() {
                 </div>
               ))}
               {visibleMembers.length === 0 && <div className="text-sm text-gray-500">No members found.</div>}
-            </div>
             </div>
           </div>
         </div>

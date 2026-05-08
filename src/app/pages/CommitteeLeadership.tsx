@@ -7,8 +7,8 @@ import { SecureAvatar } from "../components/SecureAvatar";
 import { CommitteeTabs } from "../components/CommitteeTabs";
 import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
-import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 import { profilePath } from "../utils/profileRoute";
+import { committeeDisplayName } from "../utils/committeeNames";
 
 type Member = {
   user_id: string;
@@ -344,7 +344,7 @@ export function CommitteeLeadership() {
         ) : (
           <>
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <h1 className="text-3xl font-bold text-gray-900">{committee.name}</h1>
+              <h1 className="text-3xl font-bold text-gray-900">{committeeDisplayName(committee.name)}</h1>
               {isTeacher && (
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
@@ -363,7 +363,6 @@ export function CommitteeLeadership() {
               )}
             </div>
             <CommitteeTabs committeeId={committeeId} active="election" />
-            <SubcommitteeRolesPanel committeeId={committeeId} compact allowMemberRoleSelection />
 
             {electionPanel("chair", "Chair Election", chairCandidates)}
             {majorityParty && electionPanel("ranking_member", "Ranking Member Election", rankingCandidates)}

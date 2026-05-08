@@ -26,6 +26,7 @@ import {
   normalizeAssignment,
   normalizeCriteria,
   normalizeRubric,
+  PROVIDER_INTEGRATION_FIELDS,
   PROVIDERS,
   RubricItem,
   autoCriteriaLabel,
@@ -63,6 +64,7 @@ type IntegrationRow = {
   external_gradebook_id: string;
   sync_mode: "manual" | "auto_returned";
   status: string;
+  settings: Record<string, string>;
 };
 
 function displayPartyName(name: string) {
@@ -81,6 +83,16 @@ function providerLabel(provider: AssignmentProvider) {
   return PROVIDERS.find((item) => item.id === provider)?.label ?? provider;
 }
 
+function externalCourseIdFor(row: IntegrationRow) {
+  const settings = row.settings ?? {};
+  return String(settings.courseId || settings.sectionId || settings.classSourcedId || settings.sectionSourcedId || row.external_course_id || "");
+}
+
+function externalGradebookIdFor(row: IntegrationRow) {
+  const settings = row.settings ?? {};
+  return String(settings.courseWorkId || settings.assignmentId || settings.lineItemSourcedId || row.external_gradebook_id || "");
+}
+
 function blankIntegrations(): IntegrationRow[] {
   return PROVIDERS.map((provider) => ({
     provider: provider.id,
@@ -89,6 +101,7 @@ function blankIntegrations(): IntegrationRow[] {
     external_gradebook_id: "",
     sync_mode: "manual",
     status: "not_connected",
+    settings: {},
   }));
 }
 
@@ -151,7 +164,7 @@ export function TeacherDeadlines() {
         supabase.from("parties").select("id,name").eq("class_id", activeClassId).order("name"),
         supabase.from("committees").select("id,name").eq("class_id", activeClassId).order("name"),
         supabase.from("caucuses").select("id,title").eq("class_id", activeClassId).order("title"),
-        supabase.from("grade_integrations").select("id,provider,enabled,external_course_id,external_gradebook_id,sync_mode,status").eq("class_id", activeClassId),
+        supabase.from("grade_integrations").select("id,provider,enabled,external_course_id,external_gradebook_id,sync_mode,status,settings").eq("class_id", activeClassId),
       ]);
       if (tErr) throw tErr;
       const normalizedTasks = ((tRows ?? []) as any[]).map(normalizeAssignment);
@@ -173,6 +186,7 @@ export function TeacherDeadlines() {
                 external_gradebook_id: saved.external_gradebook_id ?? "",
                 sync_mode: saved.sync_mode ?? "manual",
                 status: saved.status ?? "not_connected",
+                settings: saved.settings && typeof saved.settings === "object" ? saved.settings : {},
               }
             : row;
         }),
@@ -358,15 +372,16 @@ export function TeacherDeadlines() {
             class_id: classId,
             provider: row.provider,
             enabled: row.enabled,
-            external_course_id: row.external_course_id.trim(),
-            external_gradebook_id: row.external_gradebook_id.trim(),
+            external_course_id: externalCourseIdFor(row).trim(),
+            external_gradebook_id: externalGradebookIdFor(row).trim(),
             sync_mode: row.sync_mode,
             status: row.enabled ? "configured" : "disabled",
+            settings: row.settings ?? {},
             updated_by: uid,
           } as any,
           { onConflict: "class_id,provider" },
         )
-        .select("id,provider,enabled,external_course_id,external_gradebook_id,sync_mode,status")
+        .select("id,provider,enabled,external_course_id,external_gradebook_id,sync_mode,status,settings")
         .single();
       if (error) throw error;
       updateIntegration(row.provider, data as IntegrationRow);
@@ -473,8 +488,9 @@ export function TeacherDeadlines() {
         message: `${returned.length} returned grade${returned.length === 1 ? "" : "s"} queued from Gavel.`,
         payload: {
           assignment: { id: selectedAssignment.id, title: selectedAssignment.title, points_possible: selectedAssignment.points_possible },
-          external_course_id: provider.external_course_id,
-          external_gradebook_id: provider.external_gradebook_id,
+          external_course_id: externalCourseIdFor(provider),
+          external_gradebook_id: externalGradebookIdFor(provider),
+          integration_settings: provider.settings ?? {},
           grades: returned.map((submission) => ({
             student_user_id: submission.student_user_id,
             score: submission.manual_score ?? autoScoreTotal(submission.auto_scores),
@@ -613,6 +629,7 @@ export function TeacherDeadlines() {
               <div className="space-y-4">
                 {integrations.map((row) => {
                   const provider = PROVIDERS.find((item) => item.id === row.provider)!;
+                  const fields = PROVIDER_INTEGRATION_FIELDS[row.provider] ?? [];
                   return (
                     <div key={row.provider} className="rounded-md border border-gray-200 p-3">
                       <label className="flex cursor-pointer items-start gap-3">
@@ -628,18 +645,34 @@ export function TeacherDeadlines() {
                         </span>
                       </label>
                       <div className="mt-3 grid gap-2">
-                        <input
-                          value={row.external_course_id}
-                          onChange={(event) => updateIntegration(row.provider, { external_course_id: event.target.value })}
-                          placeholder="Course or section ID"
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <input
-                          value={row.external_gradebook_id}
-                          onChange={(event) => updateIntegration(row.provider, { external_gradebook_id: event.target.value })}
-                          placeholder="Gradebook column ID"
-                          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                        {fields.map((field) => (
+                          <label key={field.key} className="block">
+                            <span className="mb-1 block text-xs font-semibold text-gray-700">
+                              {field.label}
+                              {field.secret ? " (secret reference)" : ""}
+                            </span>
+                            {field.type === "select" ? (
+                              <select
+                                value={row.settings?.[field.key] ?? ""}
+                                onChange={(event) => updateIntegration(row.provider, { settings: { ...(row.settings ?? {}), [field.key]: event.target.value } })}
+                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                              >
+                                <option value="">{field.placeholder}</option>
+                                {(field.options ?? []).map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <input
+                                value={row.settings?.[field.key] ?? ""}
+                                onChange={(event) => updateIntegration(row.provider, { settings: { ...(row.settings ?? {}), [field.key]: event.target.value } })}
+                                placeholder={field.placeholder}
+                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                            )}
+                            {field.description ? <span className="mt-1 block text-xs leading-4 text-gray-500">{field.description}</span> : null}
+                          </label>
+                        ))}
                         <select
                           value={row.sync_mode}
                           onChange={(event) => updateIntegration(row.provider, { sync_mode: event.target.value as IntegrationRow["sync_mode"] })}

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { committeeDisplayName } from "../utils/committeeNames";
 
 type CommitteeRow = { id: string; name: string; description: string | null; created_at: string };
 type SubcommitteeRow = { id: string; committee_id: string; name: string };
@@ -107,19 +108,23 @@ export function CommitteesHome() {
           .order("created_at", { ascending: true });
         if (error) throw error;
 
-        const enabled = ((cls as any)?.settings?.committees?.enabled ?? []) as string[];
+        const configuredCommittees = ((cls as any)?.settings?.committees?.enabled ?? []) as string[];
+        const subcommitteeParents = (((cls as any)?.settings?.committees?.enabledSubcommittees ?? []) as string[]).map((key) => key.split("::")[0]).filter(Boolean);
+        const enabled = Array.from(new Set([...configuredCommittees, ...subcommitteeParents]));
         let finalRows = (rows ?? []) as any[];
-        if (((profile as any)?.role === "teacher") && finalRows.length === 0 && enabled.length > 0) {
+        if (((profile as any)?.role === "teacher") && enabled.length > 0) {
+          const existingNames = new Set(finalRows.map((committee) => committee.name));
+          const missing = enabled.filter((name) => !existingNames.has(name));
+          if (missing.length) {
           const { data: seeded, error: sErr } = await supabase
-            .from("committees")
-            .insert(enabled.map((name) => ({ class_id: classId, name, description: "" })))
-            .select("id,name,description,created_at");
+              .from("committees")
+              .insert(missing.map((name) => ({ class_id: classId, name, description: "" })))
+              .select("id,name,description,created_at");
           if (sErr) throw sErr;
-          finalRows = (seeded ?? []) as any[];
-          setCommittees(finalRows as any);
-        } else {
-          setCommittees(finalRows as any);
+            finalRows = [...finalRows, ...((seeded ?? []) as any[])];
+          }
         }
+        setCommittees(finalRows as any);
 
         const ids = finalRows.map((r) => r.id);
         if ((profile as any)?.role === "teacher" && s?.committees?.subcommitteesEnabled) {
@@ -406,7 +411,7 @@ export function CommitteesHome() {
                     className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""}`}
                   >
                     <div className="min-w-0">
-                      <div className="font-semibold text-gray-900 truncate">{c.name}</div>
+                      <div className="font-semibold text-gray-900 truncate">{committeeDisplayName(c.name)}</div>
                       {c.description ? <div className="text-sm text-gray-600 mt-1 line-clamp-2">{c.description}</div> : null}
                       <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
                         <Users className="w-3.5 h-3.5" />

@@ -23,6 +23,14 @@ const subcommitteeLabels = Object.fromEntries(subcommitteeOptions.map((key) => {
 }));
 const sortedSubcommitteeOptions = [...subcommitteeOptions].sort((a, b) => subcommitteeLabels[a].localeCompare(subcommitteeLabels[b]));
 
+function parentCommitteeFromSubcommitteeKey(key: string) {
+  return key.split("::")[0] ?? "";
+}
+
+function committeesWithSubcommitteeParents(committees: string[], subcommittees: string[]) {
+  return Array.from(new Set([...committees, ...subcommittees.map(parentCommitteeFromSubcommitteeKey).filter(Boolean)]));
+}
+
 const tabs: Array<{ id: TabId; label: string; icon: any }> = [
   { id: "quick", label: "Quick Setup", icon: Clock3 },
   { id: "general", label: "General", icon: Settings },
@@ -710,6 +718,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   }, [authorityOpen, billSubmissionOpen, profileEditingOpen]);
 
   const syncPartiesAndCommittees = async (classId: string) => {
+    const enabledCommittees = committeesWithSubcommitteeParents(settings.enabledCommittees, settings.enabledSubcommittees);
     if (settings.allowedParties.length) {
       await supabase.from("parties").upsert(
         settings.allowedParties.map((name) => ({ class_id: classId, name, platform: "", color: defaultPartyColor(name), approved: true })),
@@ -718,9 +727,9 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     }
     const { data: existing } = await supabase.from("committees").select("id,name").eq("class_id", classId);
     const existingNames = new Set((existing ?? []).map((c: any) => c.name));
-    const toInsert = settings.enabledCommittees.filter((name) => !existingNames.has(name)).map((name) => ({ class_id: classId, name, description: "" }));
+    const toInsert = enabledCommittees.filter((name) => !existingNames.has(name)).map((name) => ({ class_id: classId, name, description: "" }));
     if (toInsert.length) await supabase.from("committees").insert(toInsert);
-    const { data: committeeRows } = await supabase.from("committees").select("id,name").eq("class_id", classId).in("name", settings.enabledCommittees.length ? settings.enabledCommittees : [""]);
+    const { data: committeeRows } = await supabase.from("committees").select("id,name").eq("class_id", classId).in("name", enabledCommittees.length ? enabledCommittees : [""]);
     const subcommitteeRows = (committeeRows ?? []).flatMap((committee: any) =>
       (settings.committeeSubcommitteesEnabled ? (houseCommitteeSubcommittees[committee.name] ?? []) : [])
         .filter((name) => settings.enabledSubcommittees.includes(`${committee.name}::${name}`))
@@ -739,6 +748,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const handleSave = async () => {
     if (!activeClassId) return toast.error("Open a class first");
     try {
+      const enabledCommittees = committeesWithSubcommitteeParents(settings.enabledCommittees, settings.enabledSubcommittees);
       const { data: cls, error: clsErr } = await supabase.from("classes").select("settings").eq("id", activeClassId).maybeSingle();
       if (clsErr) throw clsErr;
       const existing = ((cls as any)?.settings ?? {}) as any;
@@ -756,7 +766,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               },
               committees: {
                 ...(existing?.committees ?? {}),
-                enabled: settings.enabledCommittees,
+                enabled: enabledCommittees,
                 subcommitteesEnabled: settings.committeeSubcommitteesEnabled,
                 enabledSubcommittees: settings.enabledSubcommittees,
                 capacitiesByName: settings.committeeCapacitiesByName,
@@ -800,7 +810,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               },
               committees: {
                 ...(existing?.committees ?? {}),
-                enabled: settings.enabledCommittees,
+                enabled: enabledCommittees,
                 subcommitteesEnabled: settings.committeeSubcommitteesEnabled,
                 enabledSubcommittees: settings.enabledSubcommittees,
                 capacitiesByName: settings.committeeCapacitiesByName,
@@ -1746,9 +1756,15 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                       options={allCommittees}
                       capacities={settings.committeeCapacitiesByName}
                       onCapacityChange={(name, value) => setSettings({ committeeCapacitiesByName: { ...settings.committeeCapacitiesByName, [name]: value } })}
-                      onToggle={(committee) => setSettings({ enabledCommittees: settings.enabledCommittees.includes(committee) ? settings.enabledCommittees.filter((c) => c !== committee) : [...settings.enabledCommittees, committee] })}
+                      onToggle={(committee) => {
+                        const enabled = settings.enabledCommittees.includes(committee);
+                        setSettings({
+                          enabledCommittees: enabled ? settings.enabledCommittees.filter((c) => c !== committee) : [...settings.enabledCommittees, committee],
+                          enabledSubcommittees: enabled ? settings.enabledSubcommittees.filter((key) => parentCommitteeFromSubcommitteeKey(key) !== committee) : settings.enabledSubcommittees,
+                        });
+                      }}
                       onSelectAll={() => setSettings({ enabledCommittees: [...allCommittees] })}
-                      onDeselectAll={() => setSettings({ enabledCommittees: [] })}
+                      onDeselectAll={() => setSettings({ enabledCommittees: [], enabledSubcommittees: [] })}
                     />
                   </div>
                 }
@@ -1766,8 +1782,15 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                         options={sortedSubcommitteeOptions}
                         labels={subcommitteeLabels}
                         disabled={!settings.committeeSubcommitteesEnabled}
-                        onToggle={(subcommittee) => setSettings({ enabledSubcommittees: settings.enabledSubcommittees.includes(subcommittee) ? settings.enabledSubcommittees.filter((item) => item !== subcommittee) : [...settings.enabledSubcommittees, subcommittee] })}
-                        onSelectAll={() => setSettings({ enabledSubcommittees: [...sortedSubcommitteeOptions] })}
+                        onToggle={(subcommittee) => {
+                          const enabled = settings.enabledSubcommittees.includes(subcommittee);
+                          const nextSubcommittees = enabled ? settings.enabledSubcommittees.filter((item) => item !== subcommittee) : [...settings.enabledSubcommittees, subcommittee];
+                          setSettings({
+                            enabledSubcommittees: nextSubcommittees,
+                            enabledCommittees: committeesWithSubcommitteeParents(settings.enabledCommittees, nextSubcommittees),
+                          });
+                        }}
+                        onSelectAll={() => setSettings({ enabledSubcommittees: [...sortedSubcommitteeOptions], enabledCommittees: committeesWithSubcommitteeParents(settings.enabledCommittees, sortedSubcommitteeOptions) })}
                         onDeselectAll={() => setSettings({ enabledSubcommittees: [] })}
                       />
                     </div>
