@@ -78,21 +78,21 @@ function Reveal({
 
 export function PublicNav({ active = "home" }: PublicNavProps) {
   const navLinkClass = (key: "home" | "contact") =>
-    `rounded-full px-3 py-2 text-sm font-semibold transition ${
-      active === key ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
+    `px-2 py-2 text-sm font-semibold transition ${
+      active === key ? "text-slate-950" : "text-slate-600 hover:text-slate-950"
     }`;
 
   return (
-    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
+    <header className="sticky top-0 z-50 border-b border-neutral-200 bg-[#fbfaf8]/95 backdrop-blur">
       <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:px-6 md:grid-cols-[1fr_auto_1fr] lg:px-8">
         <Link to="/" className="flex items-center gap-2 justify-self-start">
-          <span className="grid h-10 w-10 place-items-center rounded-xl bg-slate-950 text-white shadow-sm">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-950 text-white shadow-sm">
             <Gavel className="h-5 w-5" aria-hidden="true" />
           </span>
-          <span className="text-lg font-black tracking-tight text-slate-950">Gavel</span>
+          <span className="text-lg font-bold tracking-tight text-slate-950">Gavel</span>
         </Link>
 
-        <nav className="order-3 col-span-2 flex w-full items-center justify-center gap-2 border-t border-slate-100 pt-3 md:order-none md:col-span-1 md:w-auto md:border-t-0 md:pt-0">
+        <nav className="order-3 col-span-2 flex w-full items-center justify-center gap-5 border-t border-neutral-200 pt-3 md:order-none md:col-span-1 md:w-auto md:border-t-0 md:pt-0">
           <Link to="/" className={navLinkClass("home")}>
             Home
           </Link>
@@ -102,7 +102,7 @@ export function PublicNav({ active = "home" }: PublicNavProps) {
           <button
             type="button"
             onClick={startDemo}
-            className="rounded-full px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-950"
+            className="px-2 py-2 text-sm font-semibold text-slate-600 transition hover:text-slate-950"
           >
             Open Demo
           </button>
@@ -111,13 +111,13 @@ export function PublicNav({ active = "home" }: PublicNavProps) {
         <div className="flex items-center gap-2 justify-self-end">
           <Link
             to="/signin"
-            className="rounded-full px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+            className="rounded-md px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-neutral-100 hover:text-slate-950"
           >
             Log in
           </Link>
           <Link
             to="/signup"
-            className="rounded-full bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700"
+            className="rounded-md bg-slate-950 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-slate-800"
           >
             Sign up
           </Link>
@@ -129,16 +129,16 @@ export function PublicNav({ active = "home" }: PublicNavProps) {
 
 function HeroScene() {
   return (
-    <div className="pointer-events-none relative mx-auto mt-12 hidden w-full max-w-[42rem] overflow-hidden rounded-[2rem] border border-slate-200 bg-white/92 p-4 shadow-2xl shadow-slate-300/50 lg:block">
+    <div className="pointer-events-none relative mx-auto mt-12 hidden w-full max-w-5xl overflow-hidden rounded-[1.25rem] border border-neutral-200 bg-white p-4 shadow-[0_24px_80px_rgba(15,23,42,0.12)] lg:block">
       <div className="flex items-center justify-between border-b border-slate-200 pb-3">
         <div>
-          <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Teacher view</div>
+          <div className="text-xs font-bold uppercase tracking-[0.18em] text-slate-500">Teacher view</div>
           <div className="mt-1 text-lg font-black text-slate-950">Dashboard</div>
         </div>
         <div className="flex gap-2 text-xs font-semibold text-slate-500">
-          <span className="rounded-full bg-slate-100 px-3 py-1.5">Roster</span>
-          <span className="rounded-full bg-blue-600 px-3 py-1.5 text-white">Settings</span>
-          <span className="rounded-full bg-slate-100 px-3 py-1.5">Records</span>
+          <span className="rounded-md bg-neutral-100 px-3 py-1.5">Roster</span>
+          <span className="rounded-md bg-slate-950 px-3 py-1.5 text-white">Settings</span>
+          <span className="rounded-md bg-neutral-100 px-3 py-1.5">Records</span>
         </div>
       </div>
 
@@ -164,7 +164,7 @@ function HeroScene() {
               <div
                 key={number}
                 className={`gavel-bill-row rounded-xl border p-3 ${
-                  index === 0 ? "gavel-hero-bill-row border-blue-200 bg-blue-50/70" : "border-slate-200 bg-slate-50"
+                  index === 0 ? "gavel-hero-bill-row border-neutral-300 bg-neutral-100" : "border-slate-200 bg-slate-50"
                 }`}
                 style={{ animationDelay: `${index * 240}ms` }}
               >
@@ -177,12 +177,12 @@ function HeroScene() {
                   </div>
                   <div className="flex flex-col items-end gap-2">
                     {index === 0 ? (
-                      <span className="gavel-hero-refer-button relative whitespace-nowrap rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                      <span className="gavel-hero-refer-button relative whitespace-nowrap rounded-md bg-slate-950 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
                         Refer
-                        <span className="gavel-button-click-one pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500" />
+                        <span className="gavel-button-click-one pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-900" />
                       </span>
                     ) : null}
-                    <span className="whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-blue-700 shadow-sm">
+                    <span className="whitespace-nowrap rounded-md bg-white px-2.5 py-1 text-[11px] font-bold text-slate-700 shadow-sm">
                       {status}
                     </span>
                   </div>
@@ -199,7 +199,7 @@ function HeroScene() {
                 <div className="text-sm font-black">Floor vote</div>
                 <div className="text-xs text-slate-300">Live count for screen share</div>
               </div>
-              <Vote className="h-5 w-5 text-blue-300" />
+              <Vote className="h-5 w-5 text-neutral-300" />
             </div>
             <div className="mt-5 grid h-28 grid-cols-3 items-end gap-3">
               <div className="gavel-vote-bar h-[72%] rounded-t-xl bg-emerald-400" />
@@ -213,7 +213,7 @@ function HeroScene() {
             </div>
             <button className="gavel-hero-live-button relative mt-4 w-full rounded-full bg-white px-3 py-2 text-xs font-black text-slate-950">
               Show live count
-              <span className="gavel-button-click-two pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500" />
+              <span className="gavel-button-click-two pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-900" />
             </button>
           </div>
 
@@ -229,19 +229,19 @@ function HeroScene() {
               </div>
               <div className="flex items-center justify-between rounded-lg bg-white px-3 py-2">
                 <span>Synergy SIS sync</span>
-                <span className="font-bold text-blue-700">ready</span>
+                <span className="font-bold text-slate-700">ready</span>
               </div>
             </div>
             <button className="gavel-hero-sync-button relative mt-3 w-full rounded-full bg-amber-600 px-3 py-2 text-xs font-black text-white">
               Sync grades
-              <span className="gavel-button-click-three pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500" />
+              <span className="gavel-button-click-three pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-slate-900" />
             </button>
           </div>
         </div>
       </div>
 
       <div className="relative mt-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div className="gavel-route-fill absolute left-4 top-1/2 h-1 -translate-y-1/2 rounded-full bg-blue-500" />
+        <div className="gavel-route-fill absolute left-4 top-1/2 h-1 -translate-y-1/2 rounded-full bg-slate-950" />
         <div className="relative grid grid-cols-5 gap-3 text-center text-[11px] font-bold text-slate-700">
           {["Drafted", "Committee", "Reported", "Floor", "Records"].map((stage, index) => (
             <span
@@ -254,7 +254,7 @@ function HeroScene() {
             </span>
           ))}
         </div>
-        <div className="gavel-hero-stage-popup pointer-events-none absolute left-[19%] top-[-2.35rem] rounded-lg border border-blue-200 bg-white px-3 py-2 text-[11px] font-bold text-blue-700 shadow-lg">
+        <div className="gavel-hero-stage-popup pointer-events-none absolute left-[19%] top-[-2.35rem] rounded-lg border border-neutral-200 bg-white px-3 py-2 text-[11px] font-bold text-slate-800 shadow-lg">
           Referred to committee
         </div>
       </div>
@@ -304,12 +304,12 @@ function SiteMotionStyles() {
 
       @keyframes gavelHeroBillRow {
         0%, 100% { transform: translateX(0); border-color: #bfdbfe; background: rgba(239, 246, 255, 0.7); }
-        18%, 32% { transform: translateX(8px); border-color: #2563eb; background: #dbeafe; }
+        18%, 32% { transform: translateX(8px); border-color: #0f172a; background: #f5f5f4; }
       }
 
       @keyframes gavelHeroStage {
         0%, 16%, 36%, 100% { transform: translateY(0) scale(1); background: #ffffff; color: #334155; border-color: #e2e8f0; }
-        20%, 32% { transform: translateY(-2px) scale(1.05); background: #2563eb; color: #ffffff; border-color: #2563eb; }
+        20%, 32% { transform: translateY(-2px) scale(1.05); background: #0f172a; color: #ffffff; border-color: #0f172a; }
       }
 
       @keyframes gavelHeroFloorStage {
@@ -329,7 +329,7 @@ function SiteMotionStyles() {
 
       @keyframes gavelHeroLiveButton {
         0%, 38%, 60%, 100% { transform: translateY(0); background: #ffffff; color: #0f172a; }
-        43%, 56% { transform: translateY(-1px) scale(1.04); background: #bfdbfe; color: #1d4ed8; }
+        43%, 56% { transform: translateY(-1px) scale(1.04); background: #f5f5f4; color: #0f172a; }
       }
 
       @keyframes gavelHeroSyncButton {
@@ -541,18 +541,18 @@ const teacherTools: TeacherTool[] = [
 
 function TeacherToolsShowcase() {
   return (
-    <section id="grading" className="border-y border-slate-200 bg-slate-50 py-16">
-      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.72fr_1.28fr] lg:px-8">
+    <section id="grading" className="border-y border-neutral-200 bg-white py-20">
+      <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.7fr_1.3fr] lg:px-8">
         <Reveal>
-          <h2 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Built for grading</h2>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Built for grading</h2>
           <p className="mt-4 text-lg leading-8 text-slate-600">
             Assignments, rubrics, records, roster data, exports, and SIS sync stay connected to classroom work.
           </p>
         </Reveal>
 
         <Reveal delay={120}>
-          <div className="relative overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/70">
-            <div className="absolute bottom-6 left-[2.35rem] top-6 w-px bg-slate-200" />
+          <div className="relative overflow-hidden rounded-[1rem] border border-neutral-200 bg-[#fbfaf8] p-5 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
+            <div className="absolute bottom-6 left-[2.35rem] top-6 w-px bg-neutral-200" />
             <ol className="relative space-y-1">
               {teacherTools.map((tool, index) => {
                 const Icon = tool.icon;
@@ -561,7 +561,7 @@ function TeacherToolsShowcase() {
                     key={tool.title}
                     className="grid grid-cols-[3.2rem_1fr_auto] items-center gap-3 border-b border-slate-100 py-3 last:border-b-0"
                   >
-                    <div className="relative z-10 grid h-10 w-10 place-items-center rounded-full border border-slate-200 bg-white text-blue-600 shadow-sm">
+                    <div className="relative z-10 grid h-10 w-10 place-items-center rounded-md border border-neutral-200 bg-white text-slate-900 shadow-sm">
                       <Icon className="h-5 w-5" />
                     </div>
                     <div>
@@ -570,7 +570,7 @@ function TeacherToolsShowcase() {
                     </div>
                     <span
                       className={`hidden rounded-full px-3 py-1.5 text-xs font-black sm:inline-flex ${
-                        index === 1 || index === 5 ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-600"
+                        index === 1 || index === 5 ? "bg-slate-950 text-white" : "bg-neutral-100 text-slate-600"
                       }`}
                     >
                       {tool.detail}
@@ -698,11 +698,11 @@ function BillTimelineSection() {
   const progress = `${4 + (activeStage / (billTimelineStages.length - 1)) * 92}%`;
 
   return (
-    <section id="bill-timeline" className="bg-white py-24">
+    <section id="bill-timeline" className="bg-[#fbfaf8] py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
-          <div className="max-w-3xl">
-            <h2 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Complete bill tracking</h2>
+          <div className="mx-auto max-w-3xl text-center">
+            <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Complete bill tracking</h2>
             <p className="mt-4 text-lg leading-8 text-slate-600">
               Follow a bill from draft to record without rebuilding the timeline by hand.
             </p>
@@ -713,11 +713,11 @@ function BillTimelineSection() {
           <div className="mt-14">
             <div className="flex items-start justify-between gap-6">
               <div>
-                <div className="font-mono text-sm font-black text-blue-700">H.R. 31</div>
+                <div className="font-mono text-sm font-black text-slate-700">H.R. 31</div>
                 <div className="mt-1 text-2xl font-black text-slate-950">Local Food Security Act</div>
                 <div className="mt-1 text-sm text-slate-500">Sponsored by Rep. Elena Park</div>
               </div>
-              <div className="hidden rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 sm:block">
+              <div className="hidden rounded-md bg-white px-4 py-2 text-sm font-black text-slate-700 ring-1 ring-neutral-200 sm:block">
                 Teacher-visible status
               </div>
             </div>
@@ -725,7 +725,7 @@ function BillTimelineSection() {
             <div className="relative mt-12 pb-32 pt-10">
               <div className="absolute left-0 right-0 top-[4.3rem] h-1 rounded-full bg-slate-200" />
               <div
-                className="absolute left-0 top-[4.3rem] h-1 rounded-full bg-blue-600 transition-all duration-700 ease-out"
+                className="absolute left-0 top-[4.3rem] h-1 rounded-full bg-slate-950 transition-all duration-700 ease-out"
                 style={{ width: progress }}
               />
               <div
@@ -743,13 +743,13 @@ function BillTimelineSection() {
                     onClick={() => setActiveStage(index)}
                     className={`group flex min-h-24 flex-col items-center justify-start rounded-2xl border bg-white px-3 py-4 text-center shadow-sm transition ${
                       activeStage === index
-                        ? "border-blue-500 text-blue-700 shadow-blue-100"
-                        : "border-slate-200 text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                        ? "border-slate-950 text-slate-950 shadow-neutral-200"
+                        : "border-neutral-200 text-slate-600 hover:border-slate-400 hover:text-slate-950"
                     }`}
                   >
                     <span
                       className={`grid h-8 w-8 place-items-center rounded-full text-xs font-black ${
-                        activeStage === index ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500 group-hover:bg-blue-50"
+                        activeStage === index ? "bg-slate-950 text-white" : "bg-neutral-100 text-slate-500 group-hover:bg-neutral-200"
                       }`}
                     >
                       {index + 1}
@@ -759,8 +759,8 @@ function BillTimelineSection() {
                 ))}
               </div>
 
-              <div className="absolute bottom-0 left-0 right-0 mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/80">
-                <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">{active.meta}</div>
+              <div className="absolute bottom-0 left-0 right-0 mx-auto max-w-2xl rounded-[1rem] border border-neutral-200 bg-white p-5 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-slate-500">{active.meta}</div>
                 <h3 className="mt-2 text-2xl font-black text-slate-950">{active.title}</h3>
                 <p className="mt-2 text-base leading-7 text-slate-600">{active.body}</p>
               </div>
@@ -868,10 +868,10 @@ function OrganizationExplorerSection() {
   const Icon = active.icon;
 
   return (
-    <section id="organizations" className="bg-slate-50 py-24">
+    <section id="organizations" className="bg-white py-24">
       <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.68fr_1.32fr] lg:px-8">
         <Reveal>
-          <h2 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Organizations and messaging</h2>
+          <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Organizations and messaging</h2>
           <p className="mt-4 text-lg leading-8 text-slate-600">
             Parties, committees, caucuses, media groups, lobbyists, message boards, live committee editing, and dear
             colleague letters all stay in the same classroom system.
@@ -880,7 +880,7 @@ function OrganizationExplorerSection() {
 
         <Reveal delay={120}>
           <div className="grid gap-5 lg:grid-cols-[0.74fr_1.26fr]">
-            <div className="overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/70">
+            <div className="overflow-hidden rounded-[1rem] border border-neutral-200 bg-white shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
               {organizationItems.map((item, index) => {
                 const ItemIcon = item.icon;
                 return (
@@ -890,8 +890,8 @@ function OrganizationExplorerSection() {
                     onClick={() => setActiveItem(index)}
                     className={`relative flex w-full items-center gap-3 border-b border-slate-100 px-5 py-4 text-left transition last:border-b-0 ${
                       activeItem === index
-                        ? "bg-blue-50 text-blue-700"
-                        : "bg-white text-slate-700 hover:bg-slate-50 hover:text-blue-700"
+                        ? "bg-neutral-100 text-slate-950"
+                        : "bg-white text-slate-700 hover:bg-neutral-50 hover:text-slate-950"
                     }`}
                   >
                     <ItemIcon className="h-5 w-5 flex-none" />
@@ -899,7 +899,7 @@ function OrganizationExplorerSection() {
                     {activeItem === index ? (
                       <span
                         key={activeItem}
-                        className="gavel-org-progress absolute bottom-0 left-0 h-1 bg-blue-600"
+                        className="gavel-org-progress absolute bottom-0 left-0 h-1 bg-slate-950"
                         style={{ animationDuration: `${cycleMs}ms` }}
                       />
                     ) : null}
@@ -908,9 +908,9 @@ function OrganizationExplorerSection() {
               })}
             </div>
 
-            <div className="min-h-[31rem] rounded-[1.75rem] border border-slate-200 bg-white p-7 shadow-xl shadow-slate-200/70">
+            <div className="min-h-[31rem] rounded-[1rem] border border-neutral-200 bg-[#fbfaf8] p-7 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
               <div className="flex items-start justify-between gap-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white">
+                <div className="flex h-12 w-12 items-center justify-center rounded-md bg-slate-950 text-white">
                   <Icon className="h-6 w-6" />
                 </div>
                 <div className="rounded-full bg-slate-100 px-3 py-1.5 text-xs font-black text-slate-600">
@@ -937,14 +937,14 @@ function OrganizationExplorerSection() {
 
 function SettingsVisual() {
   return (
-    <div className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
-      <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] text-blue-600">
+    <div className="rounded-[1rem] border border-neutral-200 bg-white p-4 shadow-[0_16px_60px_rgba(15,23,42,0.08)]">
+      <div className="flex items-center gap-2 text-sm font-black uppercase tracking-[0.16em] text-slate-500">
         <Settings2 className="h-4 w-4" />
         Simulation settings
       </div>
       <div className="mt-4 space-y-3">
         {[
-          ["Virtual features", "Enable all tools", "bg-blue-600 text-white"],
+          ["Virtual features", "Enable all tools", "bg-slate-950 text-white"],
           ["Committees", "Enabled, with subcommittees", "bg-white text-slate-700"],
           ["Speaker lists", "Request approval required", "bg-white text-slate-700"],
           ["Lobbyist groups", "Money system enabled", "bg-white text-slate-700"],
@@ -962,7 +962,7 @@ function SettingsVisual() {
       </div>
       <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
         <div className="flex items-center gap-2 text-sm font-black text-slate-950">
-          <ShieldCheck className="h-4 w-4 text-emerald-700" />
+          <ShieldCheck className="h-4 w-4 text-slate-700" />
           Realistic when you need it, simplified when class time is tight
         </div>
       </div>
@@ -1004,22 +1004,22 @@ export function LandingPage() {
       <SiteMotionStyles />
       <PublicNav active="home" />
 
-      <main>
-        <section className="relative isolate overflow-hidden bg-[linear-gradient(115deg,#f8fafc_0%,#eef2ff_50%,#f8fafc_100%)]">
+      <main className="bg-[#fbfaf8]">
+        <section className="relative isolate overflow-hidden bg-[#fbfaf8]">
           <div className="relative z-10 mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
             <div className="mx-auto max-w-3xl text-center">
               <Reveal>
-                <h1 className="text-4xl font-semibold tracking-tight text-slate-950 sm:text-5xl">
+                <h1 className="text-5xl font-black tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
                   Mock Congress, from first bill to final grade.
                 </h1>
-                <p className="mx-auto mt-5 max-w-2xl text-lg leading-8 text-slate-700">
+                <p className="mx-auto mt-5 max-w-2xl text-xl leading-8 text-slate-700">
                   Centralize bills, cosponsors, committee edits, floor debate, organizations, letters, records, rubrics,
                   exports, and Synergy sync in one teacher-run workspace.
                 </p>
                 <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
                   <Link
                     to="/signup"
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-base font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-6 py-3 text-base font-black text-white shadow-sm transition hover:bg-slate-800"
                   >
                     Create a free simulation
                     <ArrowRight className="h-5 w-5" />
@@ -1027,7 +1027,7 @@ export function LandingPage() {
                   <button
                     type="button"
                     onClick={startDemo}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-6 py-3 text-base font-black text-slate-950 shadow-sm transition hover:bg-slate-50"
+                    className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-6 py-3 text-base font-black text-slate-950 shadow-sm transition hover:bg-neutral-50"
                   >
                     <MousePointer2 className="h-5 w-5" />
                     Open Demo
@@ -1041,19 +1041,32 @@ export function LandingPage() {
           </div>
         </section>
 
+        <section className="border-y border-neutral-200 bg-white py-10">
+          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+            <p className="text-sm font-bold text-slate-500">Replace scattered class tools with one workspace for</p>
+            <div className="mt-5 flex flex-wrap justify-center gap-3 text-sm font-semibold text-slate-700">
+              {["Google Docs", "spreadsheets", "email", "LMS assignments", "grade exports", "class discussion"].map((tool) => (
+                <span key={tool} className="rounded-md border border-neutral-200 bg-[#fbfaf8] px-3 py-2">
+                  {tool}
+                </span>
+              ))}
+            </div>
+          </div>
+        </section>
+
         <TeacherToolsShowcase />
 
         <BillTimelineSection />
 
         <OrganizationExplorerSection />
 
-        <section id="customization" className="bg-white py-24">
+        <section id="customization" className="bg-[#fbfaf8] py-24">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
             <Reveal className="lg:order-2">
               <SettingsVisual />
             </Reveal>
             <Reveal className="lg:order-1" delay={120}>
-              <h2 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Highly customizable</h2>
+              <h2 className="text-4xl font-bold tracking-tight text-slate-950 sm:text-5xl">Highly customizable</h2>
               <p className="mt-4 text-lg leading-8 text-slate-600">
                 Teachers can raise or lower complexity for middle school, high school, college, civics, government,
                 history, or debate courses while choosing how closely the process mirrors Congress.
@@ -1066,7 +1079,7 @@ export function LandingPage() {
                   [BadgeDollarSign, "Optional money and lobbying"],
                 ].map(([Icon, label]) => (
                   <div key={String(label)} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <Icon className="h-5 w-5 text-blue-600" />
+                    <Icon className="h-5 w-5 text-slate-800" />
                     <span className="font-bold text-slate-700">{label}</span>
                   </div>
                 ))}
@@ -1078,7 +1091,7 @@ export function LandingPage() {
         <section className="py-24">
           <div className="mx-auto max-w-5xl px-4 text-center sm:px-6 lg:px-8">
             <Reveal>
-              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 text-white shadow-lg shadow-blue-200">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-950 text-white shadow-lg shadow-neutral-200">
                 <Gavel className="h-7 w-7" />
               </div>
               <h2 className="mt-6 text-4xl font-black tracking-tight text-slate-950">
@@ -1090,7 +1103,7 @@ export function LandingPage() {
               <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
                 <Link
                   to="/signup"
-                  className="inline-flex items-center justify-center gap-2 rounded-full bg-blue-600 px-6 py-3 text-base font-black text-white shadow-lg shadow-blue-200 transition hover:bg-blue-700"
+                  className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-6 py-3 text-base font-black text-white shadow-sm transition hover:bg-slate-800"
                 >
                   Sign up free
                   <ArrowRight className="h-5 w-5" />
@@ -1098,7 +1111,7 @@ export function LandingPage() {
                 <button
                   type="button"
                   onClick={startDemo}
-                  className="inline-flex items-center justify-center gap-2 rounded-full border border-slate-300 bg-white px-6 py-3 text-base font-black text-slate-950 shadow-sm transition hover:bg-slate-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-md border border-neutral-300 bg-white px-6 py-3 text-base font-black text-slate-950 shadow-sm transition hover:bg-neutral-50"
                 >
                   Open Demo
                 </button>
@@ -1108,11 +1121,11 @@ export function LandingPage() {
         </section>
       </main>
 
-      <footer className="border-t border-slate-200 bg-slate-50">
+      <footer className="border-t border-neutral-200 bg-[#fbfaf8]">
         <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 text-sm sm:px-6 md:grid-cols-[1.3fr_1fr_1fr_1fr] lg:px-8">
           <div>
             <div className="flex items-center gap-2 font-black text-slate-950">
-              <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-white">
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-slate-950 text-white">
                 <Gavel className="h-4 w-4" />
               </span>
               Gavel
