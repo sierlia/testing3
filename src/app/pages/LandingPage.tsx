@@ -138,7 +138,7 @@ function HeroScene() {
           <div className="flex items-center justify-between border-b border-slate-200 pb-3">
             <div>
               <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Teacher view</div>
-              <div className="mt-1 text-xl font-black text-slate-950">Capitol Hill Simulation</div>
+              <div className="mt-1 text-lg font-black text-slate-950">Dashboard</div>
             </div>
             <div className="flex gap-2 text-xs font-semibold text-slate-500">
               <span className="rounded-full bg-slate-100 px-3 py-1.5">Roster</span>
@@ -182,8 +182,9 @@ function HeroScene() {
                       </div>
                       <div className="flex flex-col items-end gap-2">
                         {index === 0 ? (
-                          <span className="gavel-hero-refer-button whitespace-nowrap rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
+                          <span className="gavel-hero-refer-button relative whitespace-nowrap rounded-full bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white shadow-sm">
                             Refer
+                            <span className="gavel-button-click-one pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500" />
                           </span>
                         ) : null}
                         <span className="whitespace-nowrap rounded-full bg-white px-2.5 py-1 text-[11px] font-bold text-blue-700 shadow-sm">
@@ -215,6 +216,10 @@ function HeroScene() {
                   <span>Nay</span>
                   <span>Present</span>
                 </div>
+                <button className="gavel-hero-live-button relative mt-4 w-full rounded-full bg-white px-3 py-2 text-xs font-black text-slate-950">
+                  Show live count
+                  <span className="gavel-button-click-two pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500" />
+                </button>
               </div>
 
               <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
@@ -232,6 +237,10 @@ function HeroScene() {
                     <span className="font-bold text-blue-700">ready</span>
                   </div>
                 </div>
+                <button className="gavel-hero-sync-button relative mt-3 w-full rounded-full bg-amber-600 px-3 py-2 text-xs font-black text-white">
+                  Sync grades
+                  <span className="gavel-button-click-three pointer-events-none absolute left-1/2 top-1/2 h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-blue-500" />
+                </button>
               </div>
             </div>
           </div>
@@ -257,9 +266,6 @@ function HeroScene() {
         </div>
 
         <MousePointer2 className="gavel-action-cursor absolute left-0 top-0 h-5 w-5 fill-slate-950 text-slate-950 drop-shadow-lg" />
-        <span className="gavel-click-pulse gavel-click-one absolute h-7 w-7 rounded-full border-2 border-blue-500" />
-        <span className="gavel-click-pulse gavel-click-two absolute h-7 w-7 rounded-full border-2 border-blue-500" />
-        <span className="gavel-click-pulse gavel-click-three absolute h-7 w-7 rounded-full border-2 border-blue-500" />
       </div>
     </div>
   );
@@ -271,24 +277,24 @@ function SiteMotionStyles() {
       @keyframes gavelCursorPath {
         0%, 8% { transform: translate(0, 0); opacity: 0; }
         12%, 28% { transform: translate(362px, 185px); opacity: 1; }
-        40%, 56% { transform: translate(205px, 458px); opacity: 1; }
-        68%, 84% { transform: translate(562px, 145px); opacity: 1; }
+        40%, 56% { transform: translate(520px, 298px); opacity: 1; }
+        68%, 84% { transform: translate(520px, 478px); opacity: 1; }
         94%, 100% { transform: translate(610px, 255px); opacity: 0; }
       }
 
       @keyframes gavelClickOne {
-        0%, 11%, 19%, 100% { opacity: 0; transform: scale(0.55); }
-        13%, 17% { opacity: 1; transform: scale(1.25); }
+        0%, 11%, 19%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
+        13%, 17% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
       }
 
       @keyframes gavelClickTwo {
-        0%, 42%, 50%, 100% { opacity: 0; transform: scale(0.55); }
-        44%, 48% { opacity: 1; transform: scale(1.25); }
+        0%, 42%, 50%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
+        44%, 48% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
       }
 
       @keyframes gavelClickThree {
-        0%, 70%, 78%, 100% { opacity: 0; transform: scale(0.55); }
-        72%, 76% { opacity: 1; transform: scale(1.25); }
+        0%, 70%, 78%, 100% { opacity: 0; transform: translate(-50%, -50%) scale(0.55); }
+        72%, 76% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); }
       }
 
       @keyframes gavelRouteFill {
@@ -309,23 +315,33 @@ function SiteMotionStyles() {
       }
 
       @keyframes gavelHeroStage {
-        0%, 36%, 63%, 100% { transform: translateY(0) scale(1); background: #ffffff; color: #334155; border-color: #e2e8f0; }
-        43%, 56% { transform: translateY(-2px) scale(1.05); background: #2563eb; color: #ffffff; border-color: #2563eb; }
+        0%, 16%, 36%, 100% { transform: translateY(0) scale(1); background: #ffffff; color: #334155; border-color: #e2e8f0; }
+        20%, 32% { transform: translateY(-2px) scale(1.05); background: #2563eb; color: #ffffff; border-color: #2563eb; }
       }
 
       @keyframes gavelHeroFloorStage {
-        0%, 64%, 90%, 100% { transform: translateY(0) scale(1); background: #ffffff; color: #334155; border-color: #e2e8f0; }
-        70%, 83% { transform: translateY(-2px) scale(1.05); background: #0f172a; color: #ffffff; border-color: #0f172a; }
+        0%, 38%, 60%, 100% { transform: translateY(0) scale(1); background: #ffffff; color: #334155; border-color: #e2e8f0; }
+        43%, 56% { transform: translateY(-2px) scale(1.05); background: #0f172a; color: #ffffff; border-color: #0f172a; }
       }
 
       @keyframes gavelHeroStagePopup {
-        0%, 38%, 60%, 100% { opacity: 0; transform: translateY(8px) scale(0.96); }
-        43%, 55% { opacity: 1; transform: translateY(0) scale(1); }
+        0%, 17%, 36%, 100% { opacity: 0; transform: translateY(8px) scale(0.96); }
+        21%, 32% { opacity: 1; transform: translateY(0) scale(1); }
       }
 
       @keyframes gavelHeroVoteCard {
-        0%, 64%, 88%, 100% { transform: scale(1); box-shadow: none; }
-        70%, 83% { transform: scale(1.025); box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18); }
+        0%, 38%, 60%, 100% { transform: scale(1); box-shadow: none; }
+        43%, 56% { transform: scale(1.025); box-shadow: 0 0 0 4px rgba(96, 165, 250, 0.18); }
+      }
+
+      @keyframes gavelHeroLiveButton {
+        0%, 38%, 60%, 100% { transform: translateY(0); background: #ffffff; color: #0f172a; }
+        43%, 56% { transform: translateY(-1px) scale(1.04); background: #bfdbfe; color: #1d4ed8; }
+      }
+
+      @keyframes gavelHeroSyncButton {
+        0%, 64%, 88%, 100% { transform: translateY(0); background: #d97706; }
+        70%, 83% { transform: translateY(-1px) scale(1.04); background: #15803d; }
       }
 
       @keyframes gavelVoteBar {
@@ -407,9 +423,9 @@ function SiteMotionStyles() {
       }
 
       .gavel-action-cursor { animation: gavelCursorPath 9s ease-in-out infinite; }
-      .gavel-click-one { left: 349px; top: 172px; animation: gavelClickOne 9s ease-out infinite; }
-      .gavel-click-two { left: 192px; top: 445px; animation: gavelClickTwo 9s ease-out infinite; }
-      .gavel-click-three { left: 549px; top: 132px; animation: gavelClickThree 9s ease-out infinite; }
+      .gavel-button-click-one { animation: gavelClickOne 9s ease-out infinite; }
+      .gavel-button-click-two { animation: gavelClickTwo 9s ease-out infinite; }
+      .gavel-button-click-three { animation: gavelClickThree 9s ease-out infinite; }
       .gavel-route-fill { animation: gavelRouteFill 9s ease-in-out infinite; }
       .gavel-vote-bar { animation: gavelVoteBar 4s ease-in-out infinite; }
       .gavel-bill-row:first-child { animation: gavelBillAttention 9s ease-in-out infinite; }
@@ -419,6 +435,8 @@ function SiteMotionStyles() {
       .gavel-hero-stage-floor { animation: gavelHeroFloorStage 9s ease-in-out infinite; }
       .gavel-hero-stage-popup { animation: gavelHeroStagePopup 9s ease-in-out infinite; }
       .gavel-hero-vote-card { animation: gavelHeroVoteCard 9s ease-in-out infinite; }
+      .gavel-hero-live-button { animation: gavelHeroLiveButton 9s ease-in-out infinite; }
+      .gavel-hero-sync-button { animation: gavelHeroSyncButton 9s ease-in-out infinite; }
       .gavel-progress-fill { animation: gavelProgress 5s ease-in-out infinite alternate; }
       .gavel-step-focus { animation: gavelStepFocus 6s ease-in-out infinite; }
       .gavel-tab-cycle { animation: gavelTabCycle 7s ease-in-out infinite; }
@@ -435,6 +453,9 @@ function SiteMotionStyles() {
         .gavel-action-cursor,
         .gavel-small-cursor,
         .gavel-click-pulse,
+        .gavel-button-click-one,
+        .gavel-button-click-two,
+        .gavel-button-click-three,
         .gavel-route-fill,
         .gavel-vote-bar,
         .gavel-bill-row,
@@ -444,6 +465,8 @@ function SiteMotionStyles() {
         .gavel-hero-stage-floor,
         .gavel-hero-stage-popup,
         .gavel-hero-vote-card,
+        .gavel-hero-live-button,
+        .gavel-hero-sync-button,
         .gavel-progress-fill,
         .gavel-step-focus,
         .gavel-tab-cycle,
@@ -481,53 +504,52 @@ const teacherTools: TeacherTool[] = [
   {
     icon: ClipboardCheck,
     title: "Assignments",
-    description: "Create work tied to bills, letters, reports, floor speeches, and participation.",
-    detail: "due dates",
+    description: "Create bill, letter, report, speech, and participation assignments.",
+    detail: "deadlines",
   },
   {
     icon: CheckCircle2,
-    title: "Rubrics and auto-grading",
-    description: "Score submissions against teacher criteria while keeping review and overrides available.",
+    title: "Rubrics",
+    description: "Attach criteria to each assignment and keep review evidence in one place.",
     detail: "criteria",
   },
   {
-    icon: Users,
-    title: "Roster tools",
-    description: "Import students, reorder columns, hide fields, add custom columns, and export clean sheets.",
-    detail: "columns",
+    icon: GraduationCap,
+    title: "Auto-grading",
+    description: "Use teacher-created criteria to score drafts, reports, speeches, and profiles.",
+    detail: "scoring",
   },
   {
-    icon: Settings2,
-    title: "Simulation rules",
-    description: "Adjust realism, committee rules, speaker lists, organizations, profiles, and money systems.",
-    detail: "settings",
+    icon: Users,
+    title: "Roster exports",
+    description: "Track custom columns, hide fields, reorder data, and export clean spreadsheets.",
+    detail: "roster",
   },
   {
     icon: Vote,
-    title: "Floor and vote controls",
-    description: "Run screen-share views, speaker queues, live vote counts, and final vote records.",
-    detail: "floor",
+    title: "Records",
+    description: "Save votes, committee reports, newsletters, contributions, and teacher-added records.",
+    detail: "archive",
   },
   {
     icon: Download,
     title: "Exports and SIS sync",
-    description: "Export participation and grades, then sync selected scores to Synergy SIS.",
+    description: "Export grades and participation, then sync selected scores to Synergy SIS.",
     detail: "grades",
   },
 ];
 
 function TeacherToolsShowcase() {
   return (
-    <section className="border-y border-slate-200 bg-slate-50 py-16">
+    <section id="grading" className="border-y border-slate-200 bg-slate-50 py-16">
       <div className="mx-auto grid max-w-7xl items-center gap-10 px-4 sm:px-6 lg:grid-cols-[0.72fr_1.28fr] lg:px-8">
         <Reveal>
-          <div className="text-sm font-black uppercase tracking-[0.18em] text-blue-600">Teacher tools</div>
+          <div className="text-sm font-black uppercase tracking-[0.18em] text-blue-600">Built for efficient grading</div>
           <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
-            Everything teachers usually juggle is listed, trackable, and ready to export.
+            Grade the simulation without rebuilding the evidence trail later.
           </h2>
           <p className="mt-4 text-lg leading-8 text-slate-600">
-            Gavel keeps the teacher view practical: setup, grading, roster management, records, exports, and live floor
-            controls live together instead of across disconnected files.
+            Assignments, rubrics, records, roster data, exports, and SIS sync stay connected to classroom work.
           </p>
         </Reveal>
 
@@ -631,157 +653,246 @@ function TeacherConsoleVisual() {
   );
 }
 
-function BillFlowVisual() {
-  const stages = [
-    { label: "Draft", x: "5%", popupClass: "gavel-bill-popup-draft", note: "Bill created", detail: "H.R. 31 enters the docket." },
-    {
-      label: "Cosponsor",
-      x: "27%",
-      popupClass: "gavel-bill-popup-cosponsor",
-      note: "Support grows",
-      detail: "Five members add their names.",
-    },
-    {
-      label: "Committee",
-      x: "50%",
-      popupClass: "gavel-bill-popup-committee",
-      note: "Referred",
-      detail: "Energy and Commerce starts markup.",
-    },
-    { label: "Floor", x: "72%", popupClass: "gavel-bill-popup-floor", note: "Calendared", detail: "Speakers sign up for debate." },
-    { label: "Record", x: "94%", popupClass: "gavel-bill-popup-record", note: "Finalized", detail: "Vote report is saved to records." },
-  ];
+const billTimelineStages = [
+  {
+    label: "Draft",
+    title: "Bill drafted",
+    body: "Drafts can be written in the composer or uploaded as PDFs, depending on teacher settings.",
+    meta: "H.R. 31 - Local Food Security Act",
+  },
+  {
+    label: "Cosponsor",
+    title: "Support tracked",
+    body: "Cosponsors attach to the bill automatically, so support is visible before referral.",
+    meta: "5 cosponsors",
+  },
+  {
+    label: "Committee",
+    title: "Committee work opens",
+    body: "The bill can be referred to one or more committees, revised live, and reported back.",
+    meta: "Energy and Commerce",
+  },
+  {
+    label: "Floor",
+    title: "Floor debate begins",
+    body: "Teachers manage the calendar, speakers, live screen-share controls, and vote timing.",
+    meta: "For and against speakers",
+  },
+  {
+    label: "Record",
+    title: "Record generated",
+    body: "Votes, reports, newsletters, and final status stay searchable for grading.",
+    meta: "Archived with vote counts",
+  },
+];
+
+function BillTimelineSection() {
+  const [activeStage, setActiveStage] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setActiveStage((stage) => (stage + 1) % billTimelineStages.length);
+    }, 3200);
+
+    return () => window.clearInterval(id);
+  }, []);
+
+  const active = billTimelineStages[activeStage];
+  const progress = `${4 + (activeStage / (billTimelineStages.length - 1)) * 92}%`;
 
   return (
-    <div className="relative overflow-hidden rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">Student workflow</div>
-          <div className="mt-1 text-lg font-black text-slate-950">Bill draft to floor action</div>
-        </div>
-        <div className="flex items-center gap-2 rounded-full border border-slate-200 px-3 py-2 text-sm text-slate-500">
-          <Search className="h-4 w-4" />
-          Search legislation
-        </div>
-      </div>
-
-      <div className="mt-5 rounded-2xl border border-slate-200 bg-slate-50 p-4">
-        <div className="flex items-start justify-between gap-4 rounded-xl bg-white p-4">
-          <div>
-            <div className="font-mono text-sm font-black text-blue-700">H.R. 31</div>
-            <div className="mt-1 text-lg font-black text-slate-950">Local Food Security Act</div>
-            <div className="mt-1 text-sm text-slate-500">Sponsored by Rep. Elena Park</div>
+    <section id="bill-timeline" className="bg-white py-24">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+        <Reveal>
+          <div className="max-w-3xl">
+            <div className="text-sm font-black uppercase tracking-[0.18em] text-blue-600">Complete bill tracking</div>
+            <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+              A bill's full path stays visible.
+            </h2>
+            <p className="mt-4 text-lg leading-8 text-slate-600">
+              Gavel tracks drafting, support, committee work, floor action, and records without asking teachers to
+              rebuild the timeline by hand.
+            </p>
           </div>
-          <span className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-black text-emerald-700">tracked live</span>
-        </div>
+        </Reveal>
 
-        <div className="relative mt-6 min-h-[18rem] overflow-hidden rounded-2xl bg-white p-5">
-          <div className="absolute left-5 right-5 top-[7.35rem] h-1 rounded-full bg-slate-200" />
-          <div className="gavel-bill-timeline-fill absolute left-5 top-[7.35rem] h-1 rounded-full bg-blue-600" />
-          <div className="gavel-bill-token absolute top-[6.45rem] z-20 -translate-x-1/2 rounded-full bg-slate-950 px-3 py-2 text-xs font-black text-white shadow-lg">
-            H.R. 31
-          </div>
+        <Reveal delay={120}>
+          <div className="mt-14">
+            <div className="flex items-start justify-between gap-6">
+              <div>
+                <div className="font-mono text-sm font-black text-blue-700">H.R. 31</div>
+                <div className="mt-1 text-2xl font-black text-slate-950">Local Food Security Act</div>
+                <div className="mt-1 text-sm text-slate-500">Sponsored by Rep. Elena Park</div>
+              </div>
+              <div className="hidden rounded-full bg-emerald-50 px-4 py-2 text-sm font-black text-emerald-700 sm:block">
+                Teacher-visible status
+              </div>
+            </div>
 
-          {stages.map((stage, index) => (
-            <div key={stage.label}>
+            <div className="relative mt-12 pb-32 pt-10">
+              <div className="absolute left-0 right-0 top-[4.3rem] h-1 rounded-full bg-slate-200" />
               <div
-                className="absolute top-[6.95rem] z-10 h-4 w-4 -translate-x-1/2 rounded-full border-4 border-white bg-blue-600 shadow"
-                style={{ left: stage.x }}
+                className="absolute left-0 top-[4.3rem] h-1 rounded-full bg-blue-600 transition-all duration-700 ease-out"
+                style={{ width: progress }}
               />
               <div
-                className="absolute top-[8.75rem] -translate-x-1/2 text-center text-[11px] font-black uppercase tracking-wide text-slate-500"
-                style={{ left: stage.x }}
+                className="absolute top-[3.45rem] z-20 -translate-x-1/2 rounded-full bg-slate-950 px-3 py-2 text-xs font-black text-white shadow-lg transition-all duration-700 ease-out"
+                style={{ left: progress }}
               >
-                {stage.label}
+                H.R. 31
               </div>
-              <div
-                className={`${stage.popupClass} absolute top-0 w-44 rounded-xl border border-slate-200 bg-white p-3 text-left shadow-xl ${
-                  index === 0 ? "left-0" : index === stages.length - 1 ? "right-0" : "-translate-x-1/2"
-                }`}
-                style={index === 0 || index === stages.length - 1 ? undefined : { left: stage.x }}
-              >
-                <div className="text-xs font-black text-blue-700">{stage.note}</div>
-                <div className="mt-1 text-xs leading-5 text-slate-600">{stage.detail}</div>
-              </div>
-            </div>
-          ))}
 
-          <div className="absolute bottom-5 left-5 right-5 grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl bg-slate-50 p-3">
-              <div className="text-xs font-black text-slate-950">Committee editor</div>
-              <div className="mt-1 text-xs text-slate-500">Markup opens during meetings.</div>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-3">
-              <div className="text-xs font-black text-slate-950">Speaker list</div>
-              <div className="mt-1 text-xs text-slate-500">For and against speakers queue.</div>
-            </div>
-            <div className="rounded-xl bg-slate-50 p-3">
-              <div className="text-xs font-black text-slate-950">Vote record</div>
-              <div className="mt-1 text-xs text-slate-500">Member votes are archived.</div>
+              <div className="relative z-10 grid grid-cols-2 gap-3 sm:grid-cols-5">
+                {billTimelineStages.map((stage, index) => (
+                  <button
+                    key={stage.label}
+                    type="button"
+                    onClick={() => setActiveStage(index)}
+                    className={`group flex min-h-24 flex-col items-center justify-start rounded-2xl border bg-white px-3 py-4 text-center shadow-sm transition ${
+                      activeStage === index
+                        ? "border-blue-500 text-blue-700 shadow-blue-100"
+                        : "border-slate-200 text-slate-600 hover:border-blue-200 hover:text-blue-700"
+                    }`}
+                  >
+                    <span
+                      className={`grid h-8 w-8 place-items-center rounded-full text-xs font-black ${
+                        activeStage === index ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500 group-hover:bg-blue-50"
+                      }`}
+                    >
+                      {index + 1}
+                    </span>
+                    <span className="mt-2 text-sm font-black">{stage.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="absolute bottom-0 left-0 right-0 mx-auto max-w-2xl rounded-2xl border border-slate-200 bg-white p-5 shadow-xl shadow-slate-200/80">
+                <div className="text-xs font-black uppercase tracking-[0.16em] text-blue-600">{active.meta}</div>
+                <h3 className="mt-2 text-2xl font-black text-slate-950">{active.title}</h3>
+                <p className="mt-2 text-base leading-7 text-slate-600">{active.body}</p>
+              </div>
             </div>
           </div>
-        </div>
+        </Reveal>
       </div>
-    </div>
+    </section>
   );
 }
 
-function OrganizationVisual() {
-  const orgs = [
-    ["Parties", "leadership, platforms, whips"],
-    ["Committees", "chairs, reports, meetings"],
-    ["Caucuses", "coalitions and issue groups"],
-    ["Media groups", "letters and announcements"],
-    ["Lobbyists", "money, access, records"],
-  ];
+const organizationItems = [
+  {
+    label: "Parties",
+    title: "Parties organize coalitions.",
+    body: "Teachers can enable party membership, leadership, elections, platforms, and announcement boards.",
+    icon: Users,
+  },
+  {
+    label: "Committees",
+    title: "Committees handle the substantive work.",
+    body: "Committee pages include membership, roles, reports, vote tools, and live collaborative editing when meetings are open.",
+    icon: Gavel,
+  },
+  {
+    label: "Caucuses",
+    title: "Caucuses create issue-based pressure.",
+    body: "Teachers can allow issue-based coalitions while controlling creation and join rules.",
+    icon: Megaphone,
+  },
+  {
+    label: "Media groups",
+    title: "Media groups add narrative pressure.",
+    body: "Media organizations can publish messages and shape the public side of the simulation.",
+    icon: Mail,
+  },
+  {
+    label: "Lobbyists",
+    title: "Lobbyists add optional money and access.",
+    body: "When enabled, lobbyist groups can track spending, contributions, and paid committee access.",
+    icon: BadgeDollarSign,
+  },
+  {
+    label: "Message boards",
+    title: "Boards keep announcements in context.",
+    body: "Organization announcements and comments stay attached to the relevant group instead of scattered elsewhere.",
+    icon: Megaphone,
+  },
+  {
+    label: "Dear colleague letters",
+    title: "Letters keep persuasion inside the site.",
+    body: "Built-in inboxes support cosponsor requests, strategy messages, and member contact.",
+    icon: Mail,
+  },
+];
+
+function OrganizationExplorerSection() {
+  const [activeItem, setActiveItem] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setActiveItem((item) => (item + 1) % organizationItems.length);
+    }, 3600);
+
+    return () => window.clearInterval(id);
+  }, []);
+
+  const active = organizationItems[activeItem];
+  const Icon = active.icon;
 
   return (
-    <div className="rounded-[1.75rem] border border-slate-200 bg-white p-4 shadow-xl shadow-slate-200/70">
-      <div className="flex flex-wrap items-center gap-2">
-        {orgs.map(([title], index) => (
-          <span
-            key={title}
-            className={`rounded-full border border-slate-200 px-3 py-2 text-xs font-bold ${
-              index === 1 ? "gavel-tab-cycle" : "bg-white text-slate-600"
-            }`}
-          >
-            {title}
-          </span>
-        ))}
-      </div>
+    <section id="organizations" className="bg-slate-50 py-24">
+      <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-[0.86fr_1.14fr] lg:px-8">
+        <Reveal>
+          <div className="text-sm font-black uppercase tracking-[0.18em] text-blue-600">Communication and organizations</div>
+          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+            Give the simulation structure without scattering communication.
+          </h2>
+          <p className="mt-4 text-lg leading-8 text-slate-600">
+            Parties, committees, caucuses, media groups, lobbyists, message boards, live committee editing, and dear
+            colleague letters all stay in the same classroom system.
+          </p>
+        </Reveal>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_0.9fr]">
-        <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="text-lg font-black text-slate-950">Energy and Commerce</div>
-              <div className="mt-1 text-sm text-slate-500">Chair: Rep. Morgan Lee</div>
+        <Reveal delay={120}>
+          <div className="grid gap-5 lg:grid-cols-[0.72fr_1fr]">
+            <div className="space-y-2">
+              {organizationItems.map((item, index) => {
+                const ItemIcon = item.icon;
+                return (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => setActiveItem(index)}
+                    className={`flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition ${
+                      activeItem === index
+                        ? "border-blue-500 bg-white text-blue-700 shadow-lg shadow-blue-100"
+                        : "border-slate-200 bg-white/70 text-slate-700 hover:border-blue-200 hover:bg-white"
+                    }`}
+                  >
+                    <ItemIcon className="h-5 w-5 flex-none" />
+                    <span className="text-sm font-black">{item.label}</span>
+                  </button>
+                );
+              })}
             </div>
-            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-bold text-slate-600">18/22 members</span>
-          </div>
-          <div className="mt-4 grid gap-2 text-sm text-slate-600">
-            <div className="rounded-xl bg-white p-3">Subcommittees: Health, Energy, Oversight</div>
-            <div className="rounded-xl bg-white p-3">Announcement board visible to members</div>
-            <div className="rounded-xl bg-white p-3">Leadership election opens Friday</div>
-          </div>
-        </div>
 
-        <div className="rounded-2xl border border-slate-200 bg-white p-4">
-          <div className="flex items-center gap-2 text-sm font-black text-slate-950">
-            <Mail className="h-4 w-4 text-blue-600" />
-            Dear colleague letters
-          </div>
-          <div className="mt-3 space-y-2">
-            {["Request for cosponsors", "Committee hearing notice", "Caucus floor strategy"].map((item) => (
-              <div key={item} className="flex items-center justify-between rounded-xl bg-slate-50 px-3 py-2 text-sm">
-                <span className="text-slate-700">{item}</span>
-                <ArrowRight className="h-4 w-4 text-slate-400" />
+            <div className="min-h-[24rem] rounded-[1.75rem] border border-slate-200 bg-white p-6 shadow-xl shadow-slate-200/70">
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-blue-600 text-white">
+                <Icon className="h-6 w-6" />
               </div>
-            ))}
+              <h3 className="mt-6 text-3xl font-black tracking-tight text-slate-950">{active.title}</h3>
+              <p className="mt-4 text-lg leading-8 text-slate-600">{active.body}</p>
+              <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                {["Membership", "Leadership", "Announcements", "Elections"].map((label) => (
+                  <div key={label} className="rounded-xl bg-slate-50 px-4 py-3 text-sm font-bold text-slate-700">
+                    {label}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        </div>
+        </Reveal>
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -860,17 +971,12 @@ export function LandingPage() {
           <div className="relative z-10 mx-auto flex min-h-[84vh] max-w-7xl items-center px-4 py-20 sm:px-6 lg:px-8">
             <div className="max-w-3xl">
               <Reveal>
-                <div className="inline-flex items-center gap-2 rounded-full border border-blue-200 bg-white/80 px-4 py-2 text-sm font-bold text-blue-700 shadow-sm">
-                  <Gavel className="h-4 w-4" />
-                  Free Mock Congress simulations with no class limits
-                </div>
-                <h1 className="mt-7 max-w-4xl text-5xl font-black tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
-                  Gavel keeps Mock Congress organized from first bill to final grade.
+                <h1 className="max-w-4xl text-5xl font-black tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
+                  Organize <span className="text-blue-600">Mock Congress</span>, from first bill to final grade.
                 </h1>
                 <p className="mt-6 max-w-2xl text-xl leading-8 text-slate-700">
-                  Centralize the work teachers usually track across documents, spreadsheets, email, and class discussion.
-                  Students draft bills, build support, revise in committee, debate on the floor, and leave a record that is
-                  easy to review, export, and grade.
+                  Centralize bills, cosponsors, committee edits, floor debate, organizations, letters, records, rubrics,
+                  exports, and Synergy sync in one teacher-run workspace.
                 </p>
                 <div className="mt-9 flex flex-col gap-3 sm:flex-row">
                   <Link
@@ -889,13 +995,6 @@ export function LandingPage() {
                     Open Demo
                   </button>
                 </div>
-                <div className="mt-8 grid max-w-2xl gap-3 sm:grid-cols-3">
-                  {["No simulation limits", "Teacher view built for grading", "Realistic or class-friendly rules"].map((item) => (
-                    <div key={item} className="rounded-2xl border border-slate-200 bg-white/80 px-4 py-3 text-sm font-bold text-slate-700 shadow-sm">
-                      {item}
-                    </div>
-                  ))}
-                </div>
               </Reveal>
             </div>
           </div>
@@ -903,73 +1002,11 @@ export function LandingPage() {
 
         <TeacherToolsShowcase />
 
-        <section className="py-24">
-          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-            <Reveal>
-              <TeacherConsoleVisual />
-            </Reveal>
-            <Reveal delay={120}>
-              <FeatureText
-                eyebrow="Teacher operations"
-                title="A complete control room for grading and running the simulation."
-                points={[
-                  "Create assignments, attach rubrics, auto-grade against teacher criteria, and export what happened.",
-                  "Roster tools support custom columns, imports, hidden columns, and spreadsheet exports.",
-                  "Grade data can sync to Synergy SIS so the online record connects to the gradebook.",
-                ]}
-              >
-                Gavel is built to save time during a long simulation. Teachers can see the class status, manage settings,
-                review submissions, generate records, and keep grading evidence in one place.
-              </FeatureText>
-            </Reveal>
-          </div>
-        </section>
+        <BillTimelineSection />
 
-        <section className="bg-slate-50 py-24">
-          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-            <Reveal className="lg:order-2">
-              <BillFlowVisual />
-            </Reveal>
-            <Reveal className="lg:order-1" delay={120}>
-              <FeatureText
-                eyebrow="Legislation"
-                title="Students move bills through a process that feels like Congress."
-                points={[
-                  "Bills can be cosponsored, referred to one or more committees, revised live, reported, calendared, and debated.",
-                  "Committee members can work in shared editors when meetings are open.",
-                  "Records preserve votes, reports, newsletters, contributions, and teacher-created entries.",
-                ]}
-              >
-                The workflow maps to real congressional patterns, while settings let teachers choose exactly how much
-                structure, automation, and simplification their class needs.
-              </FeatureText>
-            </Reveal>
-          </div>
-        </section>
+        <OrganizationExplorerSection />
 
-        <section className="py-24">
-          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
-            <Reveal>
-              <OrganizationVisual />
-            </Reveal>
-            <Reveal delay={120}>
-              <FeatureText
-                eyebrow="Student engagement"
-                title="The social side of Congress is part of the system."
-                points={[
-                  "Organizations have membership, leadership, announcement boards, roles, elections, and inboxes.",
-                  "Parties, committees, caucuses, media groups, and lobbyist groups create real relationship tensions.",
-                  "Students contact each other through dear colleague letters instead of scattered external messages.",
-                ]}
-              >
-                Gavel gives students reasons to negotiate, persuade, join coalitions, and respond to institutional pressure,
-                without making the teacher manually coordinate every interaction.
-              </FeatureText>
-            </Reveal>
-          </div>
-        </section>
-
-        <section className="bg-slate-950 py-24 text-white">
+        <section id="customization" className="bg-slate-950 py-24 text-white">
           <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:grid-cols-2 lg:px-8">
             <Reveal className="lg:order-2">
               <SettingsVisual />
@@ -977,18 +1014,18 @@ export function LandingPage() {
             <Reveal className="lg:order-1" delay={120}>
               <div className="text-sm font-black uppercase tracking-[0.18em] text-blue-300">Customization</div>
               <h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">
-                Run a realistic simulation or choose quality-of-life settings that make class easier.
+                Scale the simulation from one unit to a full year.
               </h2>
               <p className="mt-4 text-lg leading-8 text-slate-300">
-                Teachers can enable or disable full sections, choose assignment modes, control speaker lists, manage
-                committee rules, turn money systems on, and decide whether students use editors or upload PDFs.
+                Teachers can raise or lower complexity for middle school, high school, college, civics, government,
+                history, or debate courses while choosing how closely the process mirrors Congress.
               </p>
               <div className="mt-7 grid gap-3 sm:grid-cols-2">
                 {[
-                  [Settings2, "Flexible rule presets"],
-                  [Users, "Membership and leadership controls"],
-                  [Megaphone, "Floor debate and screen share tools"],
-                  [BadgeDollarSign, "Optional lobbyist and campaign money"],
+                  [Settings2, "Feature levels and presets"],
+                  [Users, "Age and course flexibility"],
+                  [Megaphone, "Realistic or streamlined procedure"],
+                  [BadgeDollarSign, "Optional money and lobbying"],
                 ].map(([Icon, label]) => (
                   <div key={String(label)} className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/5 p-4">
                     <Icon className="h-5 w-5 text-blue-300" />
@@ -1007,10 +1044,10 @@ export function LandingPage() {
                 <Gavel className="h-7 w-7" />
               </div>
               <h2 className="mt-6 text-4xl font-black tracking-tight text-slate-950">
-                Start a full Mock Congress simulation without paying for seats, classes, or usage.
+                Start a teacher-run Mock Congress simulation for free.
               </h2>
               <p className="mx-auto mt-4 max-w-3xl text-lg leading-8 text-slate-600">
-                Create a free simulation, open the demo, or sign in to continue managing your class.
+                Set up a class, choose the rules, and keep the work organized from draft to grade.
               </p>
               <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
                 <Link
@@ -1034,21 +1071,69 @@ export function LandingPage() {
       </main>
 
       <footer className="border-t border-slate-200 bg-slate-50">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-8 text-sm text-slate-500 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
-          <div className="flex items-center gap-2 font-bold text-slate-700">
-            <Gavel className="h-4 w-4" />
-            Gavel
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 text-sm sm:px-6 md:grid-cols-[1.3fr_1fr_1fr_1fr] lg:px-8">
+          <div>
+            <div className="flex items-center gap-2 font-black text-slate-950">
+              <span className="grid h-9 w-9 place-items-center rounded-xl bg-slate-950 text-white">
+                <Gavel className="h-4 w-4" />
+              </span>
+              Gavel
+            </div>
+            <p className="mt-4 max-w-sm leading-6 text-slate-600">
+              Customizable Mock Congress software for teachers who need bills, organizations, records, and grading in one
+              place.
+            </p>
           </div>
-          <div className="flex flex-wrap gap-4">
-            <Link to="/about" className="hover:text-slate-950">
-              Contact
-            </Link>
-            <Link to="/signin" className="hover:text-slate-950">
-              Log in
-            </Link>
-            <Link to="/signup" className="hover:text-slate-950">
-              Sign up
-            </Link>
+
+          <div>
+            <div className="font-black text-slate-950">Product</div>
+            <div className="mt-4 grid gap-3 text-slate-600">
+              <a href="#grading" className="hover:text-slate-950">
+                Grading
+              </a>
+              <a href="#bill-timeline" className="hover:text-slate-950">
+                Bill timeline
+              </a>
+              <a href="#organizations" className="hover:text-slate-950">
+                Organizations
+              </a>
+              <a href="#customization" className="hover:text-slate-950">
+                Customization
+              </a>
+            </div>
+          </div>
+
+          <div>
+            <div className="font-black text-slate-950">Account</div>
+            <div className="mt-4 grid gap-3 text-slate-600">
+              <Link to="/signin" className="hover:text-slate-950">
+                Log in
+              </Link>
+              <Link to="/signup" className="hover:text-slate-950">
+                Sign up
+              </Link>
+              <button type="button" onClick={startDemo} className="text-left hover:text-slate-950">
+                Open Demo
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div className="font-black text-slate-950">Support</div>
+            <div className="mt-4 grid gap-3 text-slate-600">
+              <Link to="/about" className="hover:text-slate-950">
+                Contact
+              </Link>
+              <span>Privacy policy</span>
+              <span>Terms</span>
+              <span>Accessibility</span>
+            </div>
+          </div>
+        </div>
+        <div className="border-t border-slate-200">
+          <div className="mx-auto flex max-w-7xl flex-col gap-2 px-4 py-5 text-xs text-slate-500 sm:px-6 md:flex-row md:items-center md:justify-between lg:px-8">
+            <span>Gavel for Mock Congress simulations.</span>
+            <span>Built for classroom use.</span>
           </div>
         </div>
       </footer>
