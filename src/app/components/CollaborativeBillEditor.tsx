@@ -551,7 +551,6 @@ export function CollaborativeBillEditor({
   useEffect(() => {
     let mounted = true;
     const setup = async () => {
-      didInitRef.current = false;
       hydratedFromSnapshotRef.current = false;
       lastSeededInitialHtmlRef.current = null;
       setReady(false);
