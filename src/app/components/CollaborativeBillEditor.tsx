@@ -538,7 +538,7 @@ export function CollaborativeBillEditor({
   const ydocRef = useRef<Y.Doc | null>(null);
   const providerRef = useRef<YjsSupabaseProvider | null>(null);
   const awarenessRef = useRef<Awareness | null>(null);
-  const didInitRef = useRef(false);
+  const lastSeededInitialHtmlRef = useRef<string | null>(null);
   const suppressAttributionRef = useRef(false);
   const deleteDirectionRef = useRef<"backward" | "forward" | null>(null);
   const selectionDirectionRef = useRef<"backward" | "forward" | null>(null);
@@ -553,6 +553,7 @@ export function CollaborativeBillEditor({
     const setup = async () => {
       didInitRef.current = false;
       hydratedFromSnapshotRef.current = false;
+      lastSeededInitialHtmlRef.current = null;
       setReady(false);
       setCollabStatus("connecting");
 
@@ -607,9 +608,15 @@ export function CollaborativeBillEditor({
       providerRef.current = provider;
     };
     void setup();
+    const fallbackTimer = window.setTimeout(() => {
+      if (!mounted || providerRef.current?.getSubscribed()) return;
+      setCollabStatus("fallback");
+      setReady(true);
+    }, 3500);
 
     return () => {
       mounted = false;
+      window.clearTimeout(fallbackTimer);
       providerRef.current?.destroy();
       providerRef.current = null;
       setEditor((prev) => {
@@ -753,18 +760,21 @@ export function CollaborativeBillEditor({
 
   useEffect(() => {
     if (!editor) return;
-    if (didInitRef.current) return;
-    didInitRef.current = true;
+    const sourceHtml = initialHtml || "<p></p>";
+    if (lastSeededInitialHtmlRef.current === sourceHtml) return;
 
     const seedIfEmpty = () => {
       if (editor.isDestroyed) return;
       const fragment = ydocRef.current?.getXmlFragment("default");
       const fragmentText = fragment?.toString().replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").trim() ?? "";
-      if (fragmentText) return;
-      if (editor.getText().trim() !== "") return;
+      if (fragmentText || editor.getText().trim() !== "") {
+        lastSeededInitialHtmlRef.current = sourceHtml;
+        return;
+      }
       suppressAttributionRef.current = true;
       try {
-        editor.commands.setContent(initialHtml || "<p></p>", false);
+        editor.commands.setContent(sourceHtml, false);
+        lastSeededInitialHtmlRef.current = sourceHtml;
       } finally {
         suppressAttributionRef.current = false;
       }

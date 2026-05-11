@@ -823,15 +823,9 @@ export function CommitteeWorkspace() {
               </Link>
               {bill.status === "committee_vote" && <span className="rounded bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">Voting</span>}
             </div>
-            <Link
-              to={`/bills/${bill.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(event) => event.stopPropagation()}
-              className="block text-sm text-gray-700 line-clamp-2 hover:text-blue-700 hover:underline"
-            >
+            <div className="block text-sm text-gray-700 line-clamp-2">
               {bill.title}
-            </Link>
+            </div>
             <div className="mt-1 text-xs text-gray-500">
               Sponsor:{" "}
               <Link to={profilePath(bill.sponsorId)} onClick={(event) => event.stopPropagation()} className="text-blue-600 hover:underline">
@@ -920,7 +914,7 @@ export function CommitteeWorkspace() {
                     <div className="flex items-start justify-between gap-4 flex-wrap">
                       <div>
                         <Link to={`/bills/${selected.id}`} target="_blank" rel="noopener noreferrer" className="font-mono text-sm font-semibold text-blue-700 hover:underline">{selected.number}</Link>
-                        <Link to={`/bills/${selected.id}`} target="_blank" rel="noopener noreferrer" className="block text-xl font-bold text-gray-900 mt-1 hover:text-blue-700 hover:underline">{selected.title}</Link>
+                        <h2 className="block text-xl font-bold text-gray-900 mt-1">{selected.title}</h2>
                         <div className="text-sm text-gray-600 mt-1">
                           Sponsor: <Link to={profilePath(selected.sponsorId)} className="text-blue-600 hover:underline">{selected.sponsor}</Link> {sponsorDescriptor(selected)}
                         </div>

@@ -672,24 +672,26 @@ export function TeacherDeadlines() {
       <Navigation />
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Assignments</h1>
-          <p className="mt-1 text-gray-600">Create assignments, attach rubrics, auto-grade simulation work, and return feedback.</p>
+        <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900">Assignments</h1>
+            <p className="mt-1 text-gray-600">Create assignments, attach rubrics, auto-grade simulation work, and return feedback.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowIntegrations(true)}
+            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <Settings2 className="h-4 w-4" />
+            Gradebook integrations
+          </button>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
           <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
             <div className="flex items-center justify-between gap-3 border-b border-gray-200 px-4 py-3">
-              <h2 className="text-base font-semibold text-gray-900">Tasks</h2>
+              <h2 className="text-base font-semibold text-gray-900">Assignments</h2>
               <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowIntegrations(true)}
-                  className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  <Settings2 className="h-4 w-4" />
-                  Gradebook integrations
-                </button>
                 <button
                   onClick={openCreateModal}
                   className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"

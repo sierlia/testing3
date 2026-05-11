@@ -4,7 +4,9 @@ import { InfoTooltip } from "../components/InfoTooltip";
 import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
 
-export function OrganizationsLayout({ active, children }: { active: "parties" | "committees" | "caucuses" | "lobbyists"; children: ReactNode }) {
+type OrganizationTab = "parties" | "committees" | "caucuses" | "lobbyists" | "members";
+
+export function OrganizationsLayout({ active, children }: { active: OrganizationTab; children: ReactNode }) {
   const { user } = useAuth();
   const [visibility, setVisibility] = useState({ parties: true, committees: true, caucuses: true, lobbyists: false });
 
@@ -33,7 +35,8 @@ export function OrganizationsLayout({ active, children }: { active: "parties" | 
       visibility.committees ? { to: "/committees", key: "committees" as const, label: "Committees" } : null,
       visibility.caucuses ? { to: "/caucuses", key: "caucuses" as const, label: "Caucuses" } : null,
       visibility.lobbyists ? { to: "/lobbyists", key: "lobbyists" as const, label: "Lobbyists" } : null,
-    ].filter(Boolean) as Array<{ to: string; key: typeof active; label: string }>,
+      { to: "/members", key: "members" as const, label: "Members" },
+    ].filter(Boolean) as Array<{ to: string; key: OrganizationTab; label: string }>,
     [visibility],
   );
 

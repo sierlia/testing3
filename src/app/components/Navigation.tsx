@@ -501,6 +501,7 @@ export function Navigation() {
     orgVisibility.committees ? { to: "/committees", label: "Committees", active: isActivePath(["/committees", "/committee"]) } : null,
     orgVisibility.caucuses ? { to: "/caucuses", label: "Caucuses", active: isActivePath(["/caucuses"]) } : null,
     orgVisibility.lobbyists ? { to: "/lobbyists", label: "Lobbyists", active: isActivePath(["/lobbyists"]) } : null,
+    { to: "/members", label: "Members", active: isActivePath(["/members"]) },
   ].filter(Boolean) as Array<{ to: string; label: string; active: boolean }>;
   const primaryOrganizationPath = organizationLinks[0]?.to ?? "/organizations";
 
@@ -575,7 +576,7 @@ export function Navigation() {
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                 <button
                   onClick={() => navigate(primaryOrganizationPath)}
-                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/lobbyists", "/committee"]))}
+                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/lobbyists", "/committee", "/members"]))}
                 >
                   Organizations
                   <ChevronDown
@@ -595,13 +596,6 @@ export function Navigation() {
                   </div>
                 )}
               </div>
-
-              <Link
-                to="/members"
-                className={navItemClass(isActivePath(["/members"]))}
-              >
-                Members
-              </Link>
 
               <div className="relative" onMouseEnter={openFloor} onMouseLeave={closeFloorSoon}>
                 <button
