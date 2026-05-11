@@ -15,6 +15,8 @@ import {
   autoScoreTotal,
   rubricTotal,
 } from "../services/assignments";
+import { useAuth } from "../utils/AuthContext";
+import { TeacherDeadlines } from "./TeacherDeadlines";
 
 type SubmissionRow = {
   id: string;
@@ -43,6 +45,20 @@ function scoreText(task: AssignmentTask, submission?: SubmissionRow) {
 }
 
 export function AssignmentsPage() {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="mx-auto max-w-7xl px-4 py-8 text-sm text-gray-600 sm:px-6 lg:px-8">Loading assignments...</main>
+      </div>
+    );
+  }
+  if ((user?.user_metadata as any)?.role === "teacher") return <TeacherDeadlines />;
+  return <StudentAssignmentsPage />;
+}
+
+function StudentAssignmentsPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [classId, setClassId] = useState<string | null>(null);

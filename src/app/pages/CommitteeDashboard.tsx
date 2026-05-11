@@ -1095,10 +1095,10 @@ export function CommitteeDashboard() {
                       <Pencil className="w-4 h-4" />
                     </button>
                   )}
-                  <div className="min-w-0 flex-1 border-l border-gray-300 pl-3 text-right">
-                    <div className="mb-1 text-left text-xs font-semibold text-gray-700">Subcommittees</div>
+                  <div className="ml-auto w-full max-w-[16rem] border-l border-gray-300 pl-3 text-left">
+                    <div className="mb-1 text-xs font-semibold text-gray-700">Subcommittees</div>
                     {(isLeader || isTeacher) && (
-                      <div className="ml-auto flex max-w-[16rem] gap-1.5">
+                      <div className="flex gap-1.5">
                         <input
                           value={newSubcommitteeName}
                           onChange={(event) => setNewSubcommitteeName(event.target.value)}
@@ -1114,15 +1114,16 @@ export function CommitteeDashboard() {
                       </div>
                     )}
                     {subcommittees.length ? (
-                      <ul className="mt-2 list-disc space-y-0.5 pl-5 text-left text-xs text-gray-600">
-                        {subcommittees.map((subcommittee) => (
-                          <li key={subcommittee.id}>
+                      <div className="mt-2 text-xs text-gray-600">
+                        {subcommittees.map((subcommittee, index) => (
+                          <span key={subcommittee.id}>
                             <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="text-left enabled:hover:text-red-600 disabled:cursor-default">
                               {subcommittee.name}{(isLeader || isTeacher) ? " x" : ""}
                             </button>
-                          </li>
+                            {index < subcommittees.length - 1 ? ", " : ""}
+                          </span>
                         ))}
-                      </ul>
+                      </div>
                     ) : null}
                   </div>
                 </div>

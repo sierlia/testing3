@@ -228,6 +228,8 @@ export async function fetchBillDetail(billId: string) {
     .from('bill_referrals')
     .select('committee_id,referred_at,committees(name)')
     .eq('bill_id', billId)
+    .order('referred_at', { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   const referralCommitteeId = (referral as any)?.committee_id as string | undefined;

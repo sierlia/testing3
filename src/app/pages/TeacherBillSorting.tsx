@@ -191,6 +191,7 @@ export function TeacherBillSorting() {
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [subcommitteeReferralsAvailable, setSubcommitteeReferralsAvailable] = useState(true);
 
   useEffect(() => {
     const load = async () => {
@@ -210,21 +211,35 @@ export function TeacherBillSorting() {
           return;
         }
 
-        const [{ data: committeeRows, error: cErr }, { data: billRows, error: bErr }, { data: referralRows, error: rErr }] = await Promise.all([
+        const [{ data: committeeRows, error: cErr }, { data: billRows, error: bErr }] = await Promise.all([
           supabase.from("committees").select("id,name").eq("class_id", cid).order("created_at", { ascending: true }),
           supabase.from("bill_display").select("id,hr_label,title,legislative_text").eq("class_id", cid).neq("status", "draft").neq("status", "deleted").order("bill_number", { ascending: true }),
-          supabase.from("bill_referrals").select("bill_id,committee_id,subcommittee_id").eq("class_id", cid),
         ]);
         if (cErr) throw cErr;
         if (bErr) throw bErr;
+        let nextSubcommitteeReferralsAvailable = true;
+        let { data: referralRows, error: rErr } = await supabase.from("bill_referrals").select("bill_id,committee_id,subcommittee_id").eq("class_id", cid);
+        if (rErr && String(rErr.message ?? "").toLowerCase().includes("subcommittee_id")) {
+          const fallback = await supabase.from("bill_referrals").select("bill_id,committee_id").eq("class_id", cid);
+          referralRows = fallback.data;
+          rErr = fallback.error;
+          nextSubcommitteeReferralsAvailable = false;
+        }
+        setSubcommitteeReferralsAvailable(nextSubcommitteeReferralsAvailable);
         if (rErr) throw rErr;
 
         const committeeList = (committeeRows ?? []) as Committee[];
         const committeeIds = committeeList.map((committee) => committee.id);
-        const { data: subRows, error: sErr } = committeeIds.length
-          ? await supabase.from("subcommittees").select("id,committee_id,name").in("committee_id", committeeIds).order("name", { ascending: true })
-          : ({ data: [], error: null } as any);
-        if (sErr) throw sErr;
+        let subRows: any[] = [];
+        if (nextSubcommitteeReferralsAvailable && committeeIds.length) {
+          const { data, error: sErr } = await supabase.from("subcommittees").select("id,committee_id,name").in("committee_id", committeeIds).order("name", { ascending: true });
+          if (sErr) {
+            nextSubcommitteeReferralsAvailable = false;
+            setSubcommitteeReferralsAvailable(false);
+          } else {
+            subRows = data ?? [];
+          }
+        }
 
         const referralMap = new Map<string, string[]>();
         for (const row of referralRows ?? []) {
@@ -239,7 +254,7 @@ export function TeacherBillSorting() {
           assignedTargets: referralMap.get(b.id) ?? [],
         }));
         setCommittees(committeeList);
-        setSubcommittees((subRows ?? []) as Subcommittee[]);
+        setSubcommittees(nextSubcommitteeReferralsAvailable ? subRows as Subcommittee[] : []);
         setBills(nextBills);
         setInitialAssignments(Object.fromEntries(nextBills.map((bill) => [bill.id, [...bill.assignedTargets]])));
       } catch (e: any) {
@@ -291,17 +306,18 @@ export function TeacherBillSorting() {
       for (const bill of changedBills) {
         const { error: deleteError } = await supabase.from("bill_referrals").delete().eq("class_id", classId).eq("bill_id", bill.id);
         if (deleteError) throw deleteError;
-        const rows = bill.assignedTargets.map((targetId) => {
+      const rows = bill.assignedTargets.map((targetId) => {
           const target = targets.get(targetId);
           if (!target) return null;
-          return {
+          const row: Record<string, any> = {
             bill_id: bill.id,
             class_id: classId,
             committee_id: target.committeeId,
-            subcommittee_id: target.subcommitteeId,
             referred_by: uid,
             referred_at: now,
           };
+          if (subcommitteeReferralsAvailable) row.subcommittee_id = target.subcommitteeId;
+          return row;
         }).filter(Boolean);
         if (rows.length) {
           const { error: insertError } = await supabase.from("bill_referrals").insert(rows as any);

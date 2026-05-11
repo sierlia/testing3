@@ -1,4 +1,4 @@
-import { ChevronDown, CircleHelp, ClipboardList, DollarSign, Gavel, LogOut, Settings, User, Mail, Plus, Layers, X } from "lucide-react";
+import { ChevronDown, CircleHelp, DollarSign, Gavel, LogOut, Settings, User, Mail, Plus, Layers, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -525,20 +525,10 @@ export function Navigation() {
                 Records
               </Link>
 
-              <Link
-                to={user?.user_metadata?.role === "teacher" ? "/teacher/assignments" : "/assignments"}
-                className={navItemClass(isActivePath(["/assignments", "/teacher/assignments", "/teacher/deadlines"]))}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  <ClipboardList className="h-4 w-4" />
-                  Assignments
-                </span>
-              </Link>
-
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                 <button
                   onClick={() => navigate("/parties")}
-                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/lobbyists", "/committee"]))}
+                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/lobbyists", "/committee", "/members"]))}
                 >
                   Organizations
                   <ChevronDown
@@ -548,6 +538,12 @@ export function Navigation() {
 
                 {organizationsOpen && (
                   <div className="absolute top-full left-0 mt-0 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
+                    <Link
+                      to="/members"
+                      className={dropdownItemClass(isActivePath(["/members"]))}
+                    >
+                      Members
+                    </Link>
                     <Link
                       to="/parties"
                       className={dropdownItemClass(isActivePath(["/parties"]))}
@@ -576,12 +572,6 @@ export function Navigation() {
                 )}
               </div>
 
-              <Link
-                to="/members"
-                className={navItemClass(isActivePath(["/members"]))}
-              >
-                Members
-              </Link>
               <div className="relative" onMouseEnter={openFloor} onMouseLeave={closeFloorSoon}>
                 <button
                   onClick={() => navigate("/floor")}
@@ -601,6 +591,13 @@ export function Navigation() {
                   </div>
                 )}
               </div>
+
+              <Link
+                to="/assignments"
+                className={navItemClass(isActivePath(["/assignments", "/teacher/assignments", "/teacher/deadlines"]))}
+              >
+                Assignments
+              </Link>
             </div>
           </div>
 

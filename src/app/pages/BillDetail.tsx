@@ -439,13 +439,16 @@ export function BillDetail() {
 
   const upsertTeacherReferral = async (committeeId: string) => {
     if (!bill) return null;
-    const { error: referralError } = await supabase.from("bill_referrals").upsert(
+    const { error: deleteError } = await supabase.from("bill_referrals").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
+    if (deleteError) throw deleteError;
+    const { error: referralError } = await supabase.from("bill_referrals").insert(
       {
         bill_id: bill.id,
         class_id: bill.class_id,
         committee_id: committeeId,
+        referred_by: currentUserId,
+        referred_at: new Date().toISOString(),
       } as any,
-      { onConflict: "bill_id" },
     );
     if (referralError) throw referralError;
     const { error: billError } = await supabase.from("bills").update({ status: "in_committee" } as any).eq("id", bill.id).eq("class_id", bill.class_id);

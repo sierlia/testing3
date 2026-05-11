@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { Check, Circle, Clock, ExternalLink, Eye, FileText, Plus, Search } from "lucide-react";
+import { Check, Circle, Clock, ExternalLink, Eye, FileText, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BillPreviewPanel } from "../components/BillPreviewPanel";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { CompactPager } from "../components/CompactPager";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { fetchBillsForCurrentClass } from "../services/bills";
+import { deleteBillForCurrentClass, fetchBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 import { useAuth } from "../utils/AuthContext";
 import { formatConstituency } from "../utils/constituency";
@@ -158,6 +160,9 @@ export function TessBills() {
   const [sortBy, setSortBy] = useState<SortKey>("number");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [openBillMenuId, setOpenBillMenuId] = useState<string | null>(null);
+  const [deletingBillId, setDeletingBillId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const searchKey = searchParams.toString();
 
   useEffect(() => {
@@ -232,6 +237,13 @@ export function TessBills() {
     setPage(1);
   }, [filters, pageSize, searchQuery, sortBy]);
 
+  useEffect(() => {
+    if (!openBillMenuId) return;
+    const close = () => setOpenBillMenuId(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [openBillMenuId]);
+
   const totalPages = Math.max(1, Math.ceil(filteredBills.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageBills = filteredBills.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -249,6 +261,29 @@ export function TessBills() {
       return;
     }
     setSelectedBill(bill);
+  };
+
+  const requestDeleteBill = (bill: BillView) => {
+    setOpenBillMenuId(null);
+    setConfirmDialog({
+      title: "Delete bill?",
+      message: `${bill.number}: ${bill.title} will be removed from the legislation list.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        setDeletingBillId(bill.id);
+        try {
+          await deleteBillForCurrentClass(bill.id);
+          setAllBills((current) => current.filter((item) => item.id !== bill.id));
+          setSelectedBill((current) => current?.id === bill.id ? allBills.find((item) => item.id !== bill.id) ?? null : current);
+          toast.success("Bill deleted");
+        } catch (error: any) {
+          toast.error(error.message || "Could not delete bill");
+        } finally {
+          setDeletingBillId(null);
+        }
+      },
+    });
   };
 
   return (
@@ -385,6 +420,37 @@ export function TessBills() {
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-2 text-gray-400">
                           {rowMode === "preview" ? <FileText className="h-4 w-4" /> : <ExternalLink className="h-4 w-4" />}
+                          {isTeacher ? (
+                            <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setOpenBillMenuId((current) => current === bill.id ? null : bill.id);
+                                }}
+                                className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                                aria-label={`Actions for ${bill.number}`}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </button>
+                              {openBillMenuId === bill.id && (
+                                <div className="absolute right-0 top-full z-30 mt-1 w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      requestDeleteBill(bill);
+                                    }}
+                                    disabled={deletingBillId === bill.id}
+                                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                    Delete
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ) : null}
                         </div>
                       </div>
                     </div>
@@ -411,6 +477,7 @@ export function TessBills() {
           )}
         </div>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }
