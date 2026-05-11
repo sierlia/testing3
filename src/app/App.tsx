@@ -33,6 +33,7 @@ function AppToaster() {
 function AppRouterGate() {
   const { user, loading, sessionExpired, clearSessionExpired } = useAuth();
   const [hash, setHash] = useState(window.location.hash.replace(/^#/, "") || "/");
+  const [demoAuthSwitching, setDemoAuthSwitching] = useState(() => window.localStorage.getItem("gavel:demoAuthSwitch") === "1");
 
   useEffect(() => {
     const update = () => setHash(window.location.hash.replace(/^#/, "") || "/");
@@ -40,9 +41,18 @@ function AppRouterGate() {
     return () => window.removeEventListener("hashchange", update);
   }, []);
 
+  useEffect(() => {
+    const update = () => setDemoAuthSwitching(window.localStorage.getItem("gavel:demoAuthSwitch") === "1");
+    window.addEventListener("storage", update);
+    window.addEventListener("gavel:demo-auth-switch-start", update);
+    return () => {
+      window.removeEventListener("storage", update);
+      window.removeEventListener("gavel:demo-auth-switch-start", update);
+    };
+  }, []);
+
   const path = currentHashPath();
   const isPublic = isPublicPath(path);
-  const demoAuthSwitching = window.localStorage.getItem("gavel:demoAuthSwitch") === "1";
 
   useEffect(() => {
     if (loading || user || isPublic || demoAuthSwitching) return;
@@ -86,6 +96,9 @@ function AppRouterGate() {
   }
 
   if (!user && !isPublic) {
+    if (demoAuthSwitching) {
+      return <div className="min-h-screen bg-gray-50" />;
+    }
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 p-4">
         <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white p-6 text-center shadow-sm">

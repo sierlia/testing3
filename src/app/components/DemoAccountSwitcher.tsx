@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { User } from "lucide-react";
+import { Settings } from "lucide-react";
 import { toast } from "sonner";
 import { demoAccounts, DemoAccountKey, switchDemoAccount } from "../utils/demoAccounts";
 import { useAuth } from "../utils/AuthContext";
@@ -280,6 +280,8 @@ export function DemoAccountSwitcher() {
   const selectAccount = async (key: DemoAccountKey) => {
     setBusyKey(key);
     try {
+      window.localStorage.setItem("gavel:demoAuthSwitch", "1");
+      window.dispatchEvent(new CustomEvent("gavel:demo-auth-switch-start"));
       await switchDemoAccount(key, { preserveLocation: true });
       setOpen(false);
       window.location.reload();
@@ -343,7 +345,7 @@ export function DemoAccountSwitcher() {
           }}
           className="inline-flex items-center gap-2 rounded-full px-4 py-3 text-sm font-semibold text-white outline-none ring-0 hover:bg-blue-700 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 disabled:cursor-default disabled:hover:bg-blue-600"
         >
-          <User className="h-4 w-4" />
+          <Settings className="h-4 w-4" />
           Demo
         </button>
         </div>

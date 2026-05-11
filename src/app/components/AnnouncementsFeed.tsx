@@ -65,7 +65,7 @@ export function AnnouncementsFeed({ announcements }: AnnouncementsFeedProps) {
                       {announcement.author}
                     </span>
                     <span className="text-sm text-gray-500">
-                      • {announcement.role}
+                      | {announcement.role}
                     </span>
                   </div>
                   <p className="text-gray-700 whitespace-pre-wrap">

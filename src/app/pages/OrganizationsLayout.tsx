@@ -1,8 +1,42 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { InfoTooltip } from "../components/InfoTooltip";
+import { useAuth } from "../utils/AuthContext";
+import { supabase } from "../utils/supabase";
 
 export function OrganizationsLayout({ active, children }: { active: "parties" | "committees" | "caucuses" | "lobbyists"; children: ReactNode }) {
+  const { user } = useAuth();
+  const [visibility, setVisibility] = useState({ parties: true, committees: true, caucuses: true, lobbyists: false });
+
+  useEffect(() => {
+    const load = async () => {
+      if (!user?.id) return;
+      const { data: profile } = await supabase.from("profiles").select("class_id").eq("user_id", user.id).maybeSingle();
+      const classId = (profile as any)?.class_id;
+      if (!classId) return;
+      const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
+      const organizations = (cls as any)?.settings?.organizations ?? {};
+      const enabled = organizations.enabled !== false;
+      setVisibility({
+        parties: enabled && organizations.enableParties !== false,
+        committees: enabled && organizations.enableCommittees !== false,
+        caucuses: enabled && organizations.enableCaucuses !== false,
+        lobbyists: enabled && organizations.enableLobbyists === true,
+      });
+    };
+    void load();
+  }, [user?.id]);
+
+  const tabs = useMemo(
+    () => [
+      visibility.parties ? { to: "/parties", key: "parties" as const, label: "Parties" } : null,
+      visibility.committees ? { to: "/committees", key: "committees" as const, label: "Committees" } : null,
+      visibility.caucuses ? { to: "/caucuses", key: "caucuses" as const, label: "Caucuses" } : null,
+      visibility.lobbyists ? { to: "/lobbyists", key: "lobbyists" as const, label: "Lobbyists" } : null,
+    ].filter(Boolean) as Array<{ to: string; key: typeof active; label: string }>,
+    [visibility],
+  );
+
   return (
     <div className="space-y-4">
       <div>
@@ -18,11 +52,11 @@ export function OrganizationsLayout({ active, children }: { active: "parties" | 
       <div className="grid gap-4 md:grid-cols-[180px_1fr]">
         <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm md:min-h-[232px]">
           <div className="flex gap-2 md:min-h-[216px] md:flex-col">
-            <Tab to="/parties" active={active === "parties"}>Parties</Tab>
-            <Tab to="/committees" active={active === "committees"}>Committees</Tab>
-            <Tab to="/caucuses" active={active === "caucuses"}>Caucuses</Tab>
-            <div className="mx-1 h-px w-8 shrink-0 self-center bg-gray-300 md:mx-auto md:my-1 md:h-px md:w-20" aria-hidden="true" />
-            <Tab to="/lobbyists" active={active === "lobbyists"}>Lobbyists</Tab>
+            {tabs.map((tab) => (
+              <Tab key={tab.key} to={tab.to} active={active === tab.key}>
+                {tab.label}
+              </Tab>
+            ))}
           </div>
         </div>
         <div className="min-h-[640px] min-w-0">

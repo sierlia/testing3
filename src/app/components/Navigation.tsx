@@ -9,6 +9,19 @@ import { profilePath } from "../utils/profileRoute";
 import { SecureAvatar } from "./SecureAvatar";
 
 type TeacherClass = { id: string; name: string };
+type OrgVisibility = { parties: boolean; committees: boolean; caucuses: boolean; lobbyists: boolean };
+const defaultOrgVisibility: OrgVisibility = { parties: true, committees: true, caucuses: true, lobbyists: false };
+
+function orgVisibilityFromSettings(settings: any): OrgVisibility {
+  const organizations = settings?.organizations ?? {};
+  const organizationsEnabled = organizations.enabled !== false;
+  return {
+    parties: organizationsEnabled && organizations.enableParties !== false,
+    committees: organizationsEnabled && organizations.enableCommittees !== false,
+    caucuses: organizationsEnabled && organizations.enableCaucuses !== false,
+    lobbyists: organizationsEnabled && organizations.enableLobbyists === true,
+  };
+}
 
 function readTeacherClasses(userId: string): TeacherClass[] {
   try {
@@ -89,6 +102,7 @@ export function Navigation() {
   const [teacherClasses, setTeacherClasses] = useState<TeacherClass[]>([]);
   const [unreadLetters, setUnreadLetters] = useState(0);
   const [money, setMoney] = useState<{ enabled: boolean; balance: number }>(() => (user?.id ? readCachedMoney(user.id) : { enabled: false, balance: 0 }));
+  const [orgVisibility, setOrgVisibility] = useState<OrgVisibility>(defaultOrgVisibility);
   const classMenuRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const moneyMenuRef = useRef<HTMLDivElement | null>(null);
@@ -126,6 +140,7 @@ export function Navigation() {
         setActiveClassName("");
         setTeacherClasses([]);
         setMoney({ enabled: false, balance: 0 });
+        setOrgVisibility(defaultOrgVisibility);
         return;
       }
       setMoney(readCachedMoney(user.id));
@@ -151,6 +166,7 @@ export function Navigation() {
       if (classId) {
         const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
         const settings = (cls as any)?.settings ?? {};
+        setOrgVisibility(orgVisibilityFromSettings(settings));
         if (settings?.money?.enabled) {
           const [{ data: sent }, { data: received }] = await Promise.all([
             supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("from_user_id", user.id),
@@ -166,6 +182,8 @@ export function Navigation() {
           setMoney(nextMoney);
           cacheMoney(user.id, nextMoney);
         }
+      } else {
+        setOrgVisibility(defaultOrgVisibility);
       }
       if ((user.user_metadata as any)?.role === "teacher") {
         const [{ data: ownedClasses }, { data: membershipRows }] = await Promise.all([
@@ -478,6 +496,13 @@ export function Navigation() {
       : activeClassId
         ? "/dashboard"
         : "/settings/classes";
+  const organizationLinks = [
+    orgVisibility.parties ? { to: "/parties", label: "Parties", active: isActivePath(["/parties"]) } : null,
+    orgVisibility.committees ? { to: "/committees", label: "Committees", active: isActivePath(["/committees", "/committee"]) } : null,
+    orgVisibility.caucuses ? { to: "/caucuses", label: "Caucuses", active: isActivePath(["/caucuses"]) } : null,
+    orgVisibility.lobbyists ? { to: "/lobbyists", label: "Lobbyists", active: isActivePath(["/lobbyists"]) } : null,
+  ].filter(Boolean) as Array<{ to: string; label: string; active: boolean }>;
+  const primaryOrganizationPath = organizationLinks[0]?.to ?? "/organizations";
 
   return (
     <>
@@ -549,7 +574,7 @@ export function Navigation() {
 
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                 <button
-                  onClick={() => navigate("/parties")}
+                  onClick={() => navigate(primaryOrganizationPath)}
                   className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/lobbyists", "/committee"]))}
                 >
                   Organizations
@@ -560,30 +585,13 @@ export function Navigation() {
 
                 {organizationsOpen && (
                   <div className="absolute top-full left-0 mt-0 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
-                    <Link
-                      to="/parties"
-                      className={dropdownItemClass(isActivePath(["/parties"]))}
-                    >
-                      Parties
-                    </Link>
-                    <Link
-                      to="/committees"
-                      className={dropdownItemClass(isActivePath(["/committees", "/committee"]))}
-                    >
-                      Committees
-                    </Link>
-                    <Link
-                      to="/caucuses"
-                      className={dropdownItemClass(isActivePath(["/caucuses"]))}
-                    >
-                      Caucuses
-                    </Link>
-                    <Link
-                      to="/lobbyists"
-                      className={dropdownItemClass(isActivePath(["/lobbyists"]))}
-                    >
-                      Lobbyists
-                    </Link>
+                    {organizationLinks.length ? organizationLinks.map((item) => (
+                      <Link key={item.to} to={item.to} className={dropdownItemClass(item.active)}>
+                        {item.label}
+                      </Link>
+                    )) : (
+                      <div className="px-4 py-2 text-sm text-gray-500">Organizations disabled</div>
+                    )}
                   </div>
                 )}
               </div>

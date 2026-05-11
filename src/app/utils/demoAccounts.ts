@@ -26,6 +26,8 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
   const launchId = launchDemo ? `${Date.now()}:${Math.random().toString(36).slice(2)}` : "";
 
   window.localStorage.setItem("gavel:demoActive", "1");
+  window.localStorage.setItem("gavel:demoAuthSwitch", "1");
+  window.dispatchEvent(new CustomEvent("gavel:demo-auth-switch-start"));
   if (launchDemo) {
     window.localStorage.setItem("gavel:demoOpenedAt", String(Date.now()));
     window.localStorage.setItem("gavel:demoLaunchId", launchId);
@@ -44,7 +46,6 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     if (!credentials?.email || !credentials?.password) throw new Error("Demo account is not configured.");
     if (launchDemo) setDemoLaunchProgress(25);
 
-    window.localStorage.setItem("gavel:demoAuthSwitch", "1");
     await supabase.auth.signOut();
     if (launchDemo) setDemoLaunchProgress(40);
     const { error: signInError } = await supabase.auth.signInWithPassword({

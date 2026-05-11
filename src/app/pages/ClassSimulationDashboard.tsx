@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, Pin } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { AnnouncementsFeed } from "../components/AnnouncementsFeed";
 import { QuickLinks } from "../components/QuickLinks";
@@ -33,6 +33,9 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
   const [cosponsoredBills, setCosponsoredBills] = useState<BillRecord[]>([]);
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; bill_id: string; scheduled_at: string; duration_minutes: number; bill: BillRecord }>>([]);
   const [deadlineItems, setDeadlineItems] = useState<Array<{ id: string; title: string; due_at: string; task_type: string }>>([]);
+  const [announcementDraft, setAnnouncementDraft] = useState("");
+  const [announcementPinned, setAnnouncementPinned] = useState(false);
+  const [postingAnnouncement, setPostingAnnouncement] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -107,7 +110,14 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
           caucusIds = (caucusMemberships ?? []).map((r: any) => r.caucus_id);
         }
 
-        const [cAnn, mAnn, taskRows] = await Promise.all([
+        const [classAnn, cAnn, mAnn, taskRows] = await Promise.all([
+          supabase
+            .from("class_announcements")
+            .select("id,author_user_id,body,is_pinned,created_at")
+            .eq("class_id", classId)
+            .order("is_pinned", { ascending: false })
+            .order("created_at", { ascending: false })
+            .limit(10),
           caucusIds.length
             ? supabase
                 .from("caucus_announcements")
@@ -133,6 +143,7 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
         ]);
 
         const combined = [
+          ...(((classAnn as any).data ?? []) as any[]).map((a: any) => ({ ...a, _type: "class" as const })),
           ...((cAnn as any).data ?? []).map((a: any) => ({ ...a, _type: "caucus" as const })),
           ...((mAnn as any).data ?? []).map((a: any) => ({ ...a, _type: "committee" as const })),
           ...(((taskRows as any).data ?? []) as any[]).map((t: any) => ({ ...t, _type: "task" as const })),
@@ -165,7 +176,7 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
             id: a.id,
             author:
               authorMap.get(a._type === "task" ? a.created_by : a.author_user_id)?.display_name ?? "Unknown",
-            role: a._type === "task" ? "Teacher" : a._type === "committee" ? "Committee" : "Caucus",
+            role: a._type === "task" || a._type === "class" ? "Teacher" : a._type === "committee" ? "Committee" : "Caucus",
             content:
               a._type === "task"
                 ? `${a.task_type === "deadline" ? "Deadline" : "Assignment"}: ${a.title}${
@@ -173,13 +184,15 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
                   }\n\n${a.description || ""}`.trim()
                 : a.body,
             timestamp: new Date(a.created_at),
-            isPinned: a._type === "task",
+            isPinned: a._type === "class" ? Boolean(a.is_pinned) : false,
             href:
               a._type === "committee"
                 ? `/committees/${a.committee_id}?announcement=${a.id}`
                 : a._type === "caucus"
                   ? `/caucuses/${a.caucus_id}?announcement=${a.id}`
-                  : undefined,
+                  : a._type === "task" && a.task_type === "assignment"
+                    ? `/assignments/${a.id}`
+                    : undefined,
             isNew: new Date(a.created_at).getTime() > seenAt,
           })),
         );
@@ -222,9 +235,49 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
     return map;
   }, [calendarItems, deadlineItems]);
   const dashboardAnnouncements = useMemo(
-    () => [...announcements].sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime()).slice(0, 3),
+    () => [...announcements].sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return b.timestamp.getTime() - a.timestamp.getTime();
+    }).slice(0, 3),
     [announcements],
   );
+
+  const postClassAnnouncement = async () => {
+    if (!classId || !meId || !announcementDraft.trim()) return;
+    setPostingAnnouncement(true);
+    try {
+      const { data, error } = await supabase
+        .from("class_announcements")
+        .insert({
+          class_id: classId,
+          author_user_id: meId,
+          body: announcementDraft.trim(),
+          is_pinned: announcementPinned,
+        } as any)
+        .select("id,body,is_pinned,created_at")
+        .single();
+      if (error) throw error;
+      setAnnouncements((current) => [
+        {
+          id: (data as any).id,
+          author: profile?.display_name ?? "Teacher",
+          role: "Teacher",
+          content: (data as any).body,
+          timestamp: new Date((data as any).created_at),
+          isPinned: Boolean((data as any).is_pinned),
+        },
+        ...current,
+      ]);
+      setAnnouncementDraft("");
+      setAnnouncementPinned(false);
+      toast.success("Announcement posted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not post announcement");
+    } finally {
+      setPostingAnnouncement(false);
+    }
+  };
   const miniCalendarDays = useMemo(() => {
     const today = new Date();
     const start = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -261,6 +314,37 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2 space-y-6">
+            {profile?.role === "teacher" && (
+              <section className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <textarea
+                  value={announcementDraft}
+                  onChange={(event) => setAnnouncementDraft(event.target.value)}
+                  rows={3}
+                  placeholder="Post an announcement to the class"
+                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={announcementPinned}
+                      onChange={(event) => setAnnouncementPinned(event.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <Pin className="h-4 w-4 text-blue-600" />
+                    Pin announcement
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void postClassAnnouncement()}
+                    disabled={!announcementDraft.trim() || postingAnnouncement}
+                    className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {postingAnnouncement ? "Posting..." : "Post announcement"}
+                  </button>
+                </div>
+              </section>
+            )}
             <AnnouncementsFeed announcements={dashboardAnnouncements} />
 
             {profile?.role !== "teacher" && (

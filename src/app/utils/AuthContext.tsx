@@ -41,6 +41,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         window.localStorage.getItem("gavel:demoAuthSwitch") === "1" ||
         (window.localStorage.getItem("gavel:demoActive") === "1" &&
           (window.localStorage.getItem("gavel:demoLaunchLoading") === "1" || Boolean(window.localStorage.getItem("gavel:demoConfettiLaunchId"))));
+      if (event === "SIGNED_OUT" && isExpectedDemoSwitch) {
+        return;
+      }
       if (event === "SIGNED_OUT" && hadSessionRef.current && !expectedSignOutRef.current && !isExpectedDemoSwitch) {
         setSessionExpired(true);
       }

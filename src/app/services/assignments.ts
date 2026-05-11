@@ -1,8 +1,9 @@
 import { supabase } from "../utils/supabase";
 
-export type AudienceType = "all" | "caucus" | "party" | "committee";
+export type AudienceType = "all" | "caucus" | "party" | "committee" | "selected_students";
 export type TaskType = "deadline" | "assignment";
 export type AssignmentProvider = "synergy" | "schoology" | "powerschool" | "google_classroom";
+export type GradingMode = "manual" | "auto";
 
 export type RubricItem = {
   id: string;
@@ -43,7 +44,10 @@ export type AssignmentTask = {
   due_at: string | null;
   audience_type: AudienceType;
   audience_id: string | null;
+  audience_user_ids: string[];
   points_possible: number;
+  grading_mode: GradingMode;
+  manual_submission_required: boolean;
   rubric: RubricItem[];
   auto_criteria: AutoCriteriaConfig[];
   integration_targets: AssignmentProvider[];
@@ -157,7 +161,7 @@ export const AUTO_CRITERIA_OPTIONS: Array<{
     description: "Counts submitted, non-deleted bills authored by the student.",
     unit: "bills",
     defaultTarget: 2,
-    defaultPoints: 20,
+    defaultPoints: 5,
   },
   {
     id: "cosponsor_bills",
@@ -165,7 +169,7 @@ export const AUTO_CRITERIA_OPTIONS: Array<{
     description: "Counts bills the student has cosponsored.",
     unit: "cosponsorships",
     defaultTarget: 2,
-    defaultPoints: 10,
+    defaultPoints: 2,
   },
   {
     id: "complete_profile",
@@ -197,7 +201,7 @@ export const AUTO_CRITERIA_OPTIONS: Array<{
     description: "Counts committee memberships in the class.",
     unit: "committees",
     defaultTarget: 1,
-    defaultPoints: 10,
+    defaultPoints: 5,
   },
   {
     id: "join_caucus",
@@ -213,7 +217,7 @@ export const AUTO_CRITERIA_OPTIONS: Array<{
     description: "Counts Dear Colleague letters sent by the student.",
     unit: "letters",
     defaultTarget: 1,
-    defaultPoints: 10,
+    defaultPoints: 5,
   },
   {
     id: "cast_committee_votes",
@@ -221,7 +225,7 @@ export const AUTO_CRITERIA_OPTIONS: Array<{
     description: "Counts committee votes cast by the student.",
     unit: "votes",
     defaultTarget: 1,
-    defaultPoints: 10,
+    defaultPoints: 5,
   },
   {
     id: "cast_floor_votes",
@@ -229,7 +233,7 @@ export const AUTO_CRITERIA_OPTIONS: Array<{
     description: "Counts floor votes cast by the student.",
     unit: "votes",
     defaultTarget: 1,
-    defaultPoints: 10,
+    defaultPoints: 5,
   },
   {
     id: "submit_committee_preferences",
@@ -282,7 +286,10 @@ export function normalizeAssignment(row: any): AssignmentTask {
     due_at: row.due_at ?? null,
     audience_type: row.audience_type ?? "all",
     audience_id: row.audience_id ?? null,
+    audience_user_ids: Array.isArray(row.audience_user_ids) ? row.audience_user_ids.map(String).filter(Boolean) : [],
     points_possible: Number(row.points_possible ?? 100),
+    grading_mode: row.grading_mode === "auto" ? "auto" : "manual",
+    manual_submission_required: row.manual_submission_required !== false,
     rubric: normalizeRubric(row.rubric),
     auto_criteria: normalizeCriteria(row.auto_criteria),
     integration_targets: Array.isArray(row.integration_targets) ? row.integration_targets.filter((id: string) => PROVIDERS.some((provider) => provider.id === id)) : [],
@@ -426,7 +433,7 @@ export async function computeAutoCriteriaScores(classId: string, userId: string,
       const points = Math.max(0, Number(criterion.points) || 0);
       const value = Math.max(0, Number(values[criterion.id] ?? 0) || 0);
       const complete = value >= target;
-      const earned = Math.round(Math.min(value / target, 1) * points * 100) / 100;
+      const earned = Math.round(Math.min(value, target) * points * 100) / 100;
       const result: AutoCriteriaResult = {
         id: criterion.id,
         label: option?.label ?? criterion.id,

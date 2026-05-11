@@ -128,6 +128,10 @@ export const router = createHashRouter([
     Component: AssignmentsPage,
   },
   {
+    path: "/assignments/:assignmentId",
+    Component: AssignmentsPage,
+  },
+  {
     path: "/records",
     Component: RecordsPage,
   },
