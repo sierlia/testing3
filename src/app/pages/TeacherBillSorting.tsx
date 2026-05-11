@@ -97,7 +97,7 @@ function DropArea({
   const assigned = bills.filter((bill) => bill.assignedTargets.includes(target.id));
 
   return (
-    <div ref={drop} className={`rounded-md border p-2 transition-colors ${isOver ? "border-blue-500 bg-blue-50" : target.subcommittee ? "border-gray-200 bg-gray-50" : "border-gray-200 bg-white"}`}>
+    <div ref={drop} className={`min-w-0 overflow-hidden rounded-md border p-2 transition-colors ${isOver ? "border-blue-500 bg-blue-50" : target.subcommittee ? "border-gray-200 bg-gray-50" : "border-gray-200 bg-white"}`}>
       {children}
       {assigned.length > 0 && (
         <div className="mt-2 space-y-1.5">
@@ -128,25 +128,25 @@ function CommitteeDropZone({
   const committeeAssigned = bills.filter((bill) => bill.assignedTargets.some((targetId) => targets.get(targetId)?.committeeId === committee.id)).length;
 
   return (
-    <div className="rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
+    <div className="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
       <DropArea target={mainTarget} bills={bills} allBills={bills} onDrop={onDrop} onViewText={onViewText}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="truncate text-sm font-semibold text-gray-900">{committee.name}</h3>
+            <h3 className="break-words text-sm font-semibold text-gray-900">{committee.name}</h3>
             <p className="text-xs text-gray-500">{committeeAssigned} bill{committeeAssigned === 1 ? "" : "s"}</p>
           </div>
           <span className="rounded bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">Main</span>
         </div>
       </DropArea>
       {subcommittees.length > 0 && (
-        <div className="mt-2 grid gap-1.5">
+        <div className="mt-2 grid max-h-72 gap-1.5 overflow-y-auto pr-1">
           {subcommittees.map((subcommittee) => {
             const target = targets.get(subcommitteeTargetId(subcommittee.id));
             if (!target) return null;
             return (
               <DropArea key={subcommittee.id} target={target} bills={bills} allBills={bills} onDrop={onDrop} onViewText={onViewText}>
                 <div className="flex items-center justify-between gap-2">
-                  <div className="truncate text-xs font-medium text-gray-700">{subcommittee.name}</div>
+                  <div className="min-w-0 break-words text-xs font-medium text-gray-700">{subcommittee.name}</div>
                   <span className="text-[11px] text-gray-400">Sub</span>
                 </div>
               </DropArea>

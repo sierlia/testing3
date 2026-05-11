@@ -171,15 +171,15 @@ export function HelpPage() {
 
           <Section id="committees" title="Committee Work">
             <p>
-              Committee pages use persistent tabs for Dashboard, Review, Vote, and Election when the viewer is a committee member or teacher. Nonmembers see only the public committee dashboard.
+              Committee pages use persistent tabs for Dashboard, Markup, Election, Letters, and Subcommittees when the viewer is a committee member or teacher. Nonmembers see only the public committee dashboard unless access is purchased.
             </p>
             <FeatureList
               items={[
-                "Review is the workspace for referred bills. Members can open a bill, edit collaboratively, view edited, clean, and original text, and post progress.",
+                "Markup is the workspace for referred bills. Members can open a bill, edit collaboratively, and view edited, clean, and original text.",
                 "The live editor stores one shared edited document for the bill and committee so everyone sees the same current text.",
                 "Markup keeps formatting and tracks insertions, highlights, and strikeouts. Clean text removes markup and deleted text.",
-                "Any committee member can propose a reviewed bill for vote. Once proposed, editing is locked and the bill moves from Review to Vote.",
-                "Vote shows edited, clean, and original text, vote counts, real-time voting, and hoverable vote lists.",
+                "Any committee member can propose a reviewed bill for vote. Once proposed, editing is locked and voting appears in Markup.",
+                "Markup shows edited, clean, and original text, vote counts, real-time voting, and hoverable vote lists.",
                 "Committee reports are collaborative during the vote stage, can be popped out and resized, and become available from the bill page after submission.",
                 "Closing the vote prevents further votes. Finalizing sends approved bills toward calendaring and leaves rejected or tabled bills out of the calendar flow.",
               ]}

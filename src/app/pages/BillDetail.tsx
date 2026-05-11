@@ -439,6 +439,9 @@ export function BillDetail() {
 
   const upsertTeacherReferral = async (committeeId: string) => {
     if (!bill) return null;
+    const { data: rpcData, error: rpcError } = await supabase.rpc("teacher_set_bill_referral", { target_bill: bill.id, target_committee: committeeId } as any);
+    if (!rpcError) return (rpcData as string) ?? committeeId;
+    if ((rpcError as any).code !== "PGRST202" && !String(rpcError.message ?? "").includes("teacher_set_bill_referral")) throw rpcError;
     const { error: deleteError } = await supabase.from("bill_referrals").delete().eq("bill_id", bill.id).eq("class_id", bill.class_id);
     if (deleteError) throw deleteError;
     const { error: referralError } = await supabase.from("bill_referrals").insert(

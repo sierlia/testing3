@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { Search, Plus, Users, ArrowUpDown, Vote, LogOut, UserPlus, Pencil, Trash2 } from "lucide-react";
+import { Search, Plus, Users, ArrowUpDown, Vote, LogOut, UserPlus, Pencil, Trash2, MoreHorizontal } from "lucide-react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -43,6 +43,7 @@ export function TessCaucuses() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
   const [editingCaucus, setEditingCaucus] = useState<Caucus | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   const [caucuses, setCaucuses] = useState<Caucus[]>([]);
 
@@ -130,6 +131,13 @@ export function TessCaucuses() {
 
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const close = () => setOpenMenuId(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [openMenuId]);
 
   const filteredCaucuses = useMemo(
     () =>
@@ -429,7 +437,7 @@ export function TessCaucuses() {
                     </div>
                     <p className="text-sm text-gray-600 line-clamp-2">{caucus.description}</p>
                   </div>
-                  {role !== "teacher" && (
+                  {role && (
                     <button
                       onClick={(event) => {
                         event.stopPropagation();
@@ -444,29 +452,46 @@ export function TessCaucuses() {
                     </button>
                   )}
                   {role === "teacher" && (
-                    <div className="ml-2 flex gap-1">
+                    <div className="relative ml-2" onPointerDown={(event) => event.stopPropagation()}>
                       <button
                         type="button"
                         onClick={(event) => {
                           event.stopPropagation();
-                          setEditingCaucus(caucus);
+                          setOpenMenuId((current) => current === caucus.id ? null : caucus.id);
                         }}
                         className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                        aria-label="Edit caucus"
+                        aria-label="Caucus options"
                       >
-                        <Pencil className="h-4 w-4" />
+                        <MoreHorizontal className="h-4 w-4" />
                       </button>
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          deleteCaucus(caucus);
-                        }}
-                        className="rounded-md p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600"
-                        aria-label="Delete caucus"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </button>
+                      {openMenuId === caucus.id && (
+                        <div className="absolute right-0 top-full z-[120] mt-1 w-36 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOpenMenuId(null);
+                              setEditingCaucus(caucus);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50"
+                          >
+                            <Pencil className="h-4 w-4" />
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              setOpenMenuId(null);
+                              deleteCaucus(caucus);
+                            }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                            Delete
+                          </button>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

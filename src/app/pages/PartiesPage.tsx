@@ -1,7 +1,7 @@
 import { type CSSProperties, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
-import { Flag, LogOut, Pencil, Plus, Repeat2, Search, Trash2, UserPlus, Users, Vote } from "lucide-react";
+import { Flag, LogOut, MoreHorizontal, Pencil, Plus, Repeat2, Search, Trash2, UserPlus, Users, Vote } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { PartyCreateForm, NewParty, defaultPartyColor } from "../components/PartyCreateForm";
@@ -97,6 +97,7 @@ export function PartiesPage() {
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [partyNameError, setPartyNameError] = useState("");
   const [editingPartyId, setEditingPartyId] = useState<string | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     if (partiesPageCache) {
@@ -188,6 +189,13 @@ export function PartiesPage() {
     };
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!openMenuId) return;
+    const close = () => setOpenMenuId(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [openMenuId]);
 
   const allowStudentCreated = !!settings?.parties?.allowStudentCreated;
   const requireApproval = !!settings?.parties?.requireApproval;
@@ -484,7 +492,7 @@ export function PartiesPage() {
                             </div>
                           </div>
                         </div>
-                        {role !== "teacher" && (
+                        {role && (
                           <button
                             type="button"
                             onClick={(event) => {
@@ -501,32 +509,49 @@ export function PartiesPage() {
                           </button>
                         )}
                         {role === "teacher" && (
-                          <div className="flex gap-1">
+                          <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
                             <button
                               type="button"
                               onClick={(event) => {
                                 event.stopPropagation();
-                                setEditingPartyId(party.id);
-                                setDraft({ name: displayPartyName(party.name), platform: party.platform, color: party.color });
-                                setPartyNameError("");
-                                setNewPartyOpen(true);
+                                setOpenMenuId((current) => current === party.id ? null : party.id);
                               }}
                               className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                              aria-label="Edit party"
+                              aria-label="Party options"
                             >
-                              <Pencil className="h-4 w-4" />
+                              <MoreHorizontal className="h-4 w-4" />
                             </button>
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                deleteParty(party);
-                              }}
-                              className="rounded-md p-1.5 text-gray-500 hover:bg-red-50 hover:text-red-600"
-                              aria-label="Delete party"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </button>
+                            {openMenuId === party.id && (
+                              <div className="absolute right-0 top-full z-[120] mt-1 w-36 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setOpenMenuId(null);
+                                    setEditingPartyId(party.id);
+                                    setDraft({ name: displayPartyName(party.name), platform: party.platform, color: party.color });
+                                    setPartyNameError("");
+                                    setNewPartyOpen(true);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50"
+                                >
+                                  <Pencil className="h-4 w-4" />
+                                  Edit
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setOpenMenuId(null);
+                                    deleteParty(party);
+                                  }}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Delete
+                                </button>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>

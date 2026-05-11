@@ -34,7 +34,12 @@ function cleanStyle(value: string) {
   const allowed = value
     .split(";")
     .map((part) => part.trim())
-    .filter((part) => /^text-align:\s*(left|center|right)$/i.test(part));
+    .filter((part) =>
+      /^text-align:\s*(left|center|right)$/i.test(part)
+      || /^font-weight:\s*(bold|[1-9]00)$/i.test(part)
+      || /^font-style:\s*italic$/i.test(part)
+      || /^text-decoration(-line)?:\s*(underline|line-through)$/i.test(part)
+    );
   return allowed.join("; ");
 }
 

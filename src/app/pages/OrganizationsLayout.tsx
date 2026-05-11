@@ -2,7 +2,7 @@ import { ReactNode } from "react";
 import { Link } from "react-router";
 import { InfoTooltip } from "../components/InfoTooltip";
 
-export function OrganizationsLayout({ active, children }: { active: "parties" | "committees" | "caucuses" | "lobbyists"; children: ReactNode }) {
+export function OrganizationsLayout({ active, children }: { active: "parties" | "committees" | "caucuses" | "lobbyists" | "members"; children: ReactNode }) {
   return (
     <div className="space-y-4">
       <div>
@@ -23,6 +23,7 @@ export function OrganizationsLayout({ active, children }: { active: "parties" | 
             <Tab to="/caucuses" active={active === "caucuses"}>Caucuses</Tab>
             <div className="mx-1 h-px w-8 shrink-0 self-center bg-gray-300 md:mx-auto md:my-1 md:h-px md:w-20" aria-hidden="true" />
             <Tab to="/lobbyists" active={active === "lobbyists"}>Lobbyists</Tab>
+            <Tab to="/members" active={active === "members"}>Members</Tab>
           </div>
         </div>
         <div className="min-h-[640px] min-w-0">

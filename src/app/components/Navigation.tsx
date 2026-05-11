@@ -539,12 +539,6 @@ export function Navigation() {
                 {organizationsOpen && (
                   <div className="absolute top-full left-0 mt-0 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                     <Link
-                      to="/members"
-                      className={dropdownItemClass(isActivePath(["/members"]))}
-                    >
-                      Members
-                    </Link>
-                    <Link
                       to="/parties"
                       className={dropdownItemClass(isActivePath(["/parties"]))}
                     >
@@ -567,6 +561,12 @@ export function Navigation() {
                       className={dropdownItemClass(isActivePath(["/lobbyists"]))}
                     >
                       Lobbyists
+                    </Link>
+                    <Link
+                      to="/members"
+                      className={dropdownItemClass(isActivePath(["/members"]))}
+                    >
+                      Members
                     </Link>
                   </div>
                 )}

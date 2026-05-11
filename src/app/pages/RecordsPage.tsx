@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { DollarSign, Download, ExternalLink, Eye, FileText, Mail, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
+import { DollarSign, Download, ExternalLink, Eye, FileText, Mail, MoreHorizontal, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { InfoTooltip } from "../components/InfoTooltip";
@@ -11,6 +11,7 @@ import { getCurrentUser } from "../utils/currentUser";
 import { useAuth } from "../utils/AuthContext";
 import { formatConstituency } from "../utils/constituency";
 import { profilePath } from "../utils/profileRoute";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 
 type VoteChoice = "yea" | "nay" | "present" | "not_voted";
 type BaseRecordType = "letter" | "report" | "vote" | "newsletter" | "campaign_contribution";
@@ -32,6 +33,7 @@ type RecordItem = {
   votes?: VoteList;
   metadata?: any;
   generated?: boolean;
+  deletable?: boolean;
 };
 
 function FilterSelect({ value, onChange, children, className = "w-40" }: { value: string; onChange: (value: string) => void; children: ReactNode; className?: string }) {
@@ -235,7 +237,7 @@ function downloadNewsletterPdf(record: RecordItem) {
   URL.revokeObjectURL(url);
 }
 
-function RecordPreviewPanel({ record, canDeleteNewsletter = false, onDeleteNewsletter }: { record: RecordItem; canDeleteNewsletter?: boolean; onDeleteNewsletter?: (record: RecordItem) => void }) {
+function RecordPreviewPanel({ record }: { record: RecordItem }) {
   const Icon = recordIcon(record.type);
   const voteLists = record.votes;
   const newsletter = record.metadata?.newsletter;
@@ -288,12 +290,6 @@ function RecordPreviewPanel({ record, canDeleteNewsletter = false, onDeleteNewsl
             <button type="button" onClick={() => downloadNewsletterPdf(record)} className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50">
               <Download className="h-4 w-4" />
               Download PDF
-            </button>
-          )}
-          {newsletter && canDeleteNewsletter && (
-            <button type="button" onClick={() => onDeleteNewsletter?.(record)} className="flex w-full items-center justify-center gap-2 rounded-md border border-red-200 bg-white px-4 py-2 text-sm font-medium text-red-600 transition-colors hover:bg-red-50">
-              <Trash2 className="h-4 w-4" />
-              Delete Newsletter
             </button>
           )}
           <Link to={record.href} className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700">
@@ -359,6 +355,8 @@ export function RecordsPage() {
   const [recordDraft, setRecordDraft] = useState({ title: "", type: "record", body: "" });
   const [adBidDraft, setAdBidDraft] = useState({ message: "", amount: "0", lobbyistGroupId: "" });
   const [myLobbyistGroups, setMyLobbyistGroups] = useState<Array<{ id: string; name: string }>>([]);
+  const [openRecordMenuId, setOpenRecordMenuId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const userFilter = searchParams.get("user") ?? searchParams.get("author") ?? "";
 
   const loadRecords = async () => {
@@ -444,6 +442,7 @@ export function RecordsPage() {
         authorId: record.created_by,
         metadata: record.metadata,
         generated: record.generated,
+        deletable: true,
       })),
       ...((contributions ?? []) as any[]).map((contribution) => {
         const recipientName = contribution.recipient_type === "member" ? peopleById.get(contribution.recipient_id) ?? "Member" : typeLabel(contribution.recipient_type);
@@ -522,6 +521,13 @@ export function RecordsPage() {
   useEffect(() => {
     setPage(1);
   }, [query, sortBy, typeFilter, pageSize, userFilter]);
+
+  useEffect(() => {
+    if (!openRecordMenuId) return;
+    const close = () => setOpenRecordMenuId(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [openRecordMenuId]);
 
   const availableTypes = useMemo(() => Array.from(new Set([...builtInTypes, ...recordTypes, ...records.map((record) => record.type)])), [recordTypes, records]);
   const defaultRecordsView = !query.trim() && typeFilter === "all" && sortBy === "newest" && !userFilter;
@@ -619,17 +625,22 @@ export function RecordsPage() {
     await loadRecords();
   };
 
-  const deleteNewsletter = async (record: RecordItem) => {
-    if (!isTeacher || record.type !== "newsletter") return;
-    const newsletterId = record.id.replace(/^custom:/, "");
-    const { error } = await supabase.from("custom_records").delete().eq("id", newsletterId).eq("type", "newsletter");
-    if (error) {
-      toast.error(error.message || "Could not delete newsletter");
-      return;
-    }
-    toast.success("Newsletter deleted");
-    setSelectedRecord((current) => current?.id === record.id ? null : current);
-    await loadRecords();
+  const requestDeleteRecord = (record: RecordItem) => {
+    if (!isTeacher || !record.deletable || !record.id.startsWith("custom:")) return;
+    setConfirmDialog({
+      title: "Delete record?",
+      message: `${record.title} will be removed from Records.`,
+      confirmLabel: "Delete",
+      danger: true,
+      onConfirm: async () => {
+        const recordId = record.id.replace(/^custom:/, "");
+        const { error } = await supabase.from("custom_records").delete().eq("id", recordId);
+        if (error) throw error;
+        toast.success("Record deleted");
+        setSelectedRecord((current) => current?.id === record.id ? null : current);
+        await loadRecords();
+      },
+    });
   };
 
   const generateNewsletter = async () => {
@@ -870,6 +881,37 @@ export function RecordsPage() {
                             {record.body && <p className="mt-2 line-clamp-2 text-sm text-gray-600">{record.body}</p>}
                           </div>
                           <div className="flex flex-shrink-0 items-center gap-2 text-gray-400">
+                            {isTeacher && record.deletable && (
+                              <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                                <button
+                                  type="button"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    setOpenRecordMenuId((current) => current === record.id ? null : record.id);
+                                  }}
+                                  className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                                  aria-label="Record options"
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </button>
+                                {openRecordMenuId === record.id && (
+                                  <div className="absolute right-0 top-full z-[120] mt-1 w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        setOpenRecordMenuId(null);
+                                        requestDeleteRecord(record);
+                                      }}
+                                      className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Delete
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
                             {rowMode === "preview" ? <FileText className="h-4 w-4" /> : <ExternalLink className="h-4 w-4" />}
                           </div>
                         </div>
@@ -885,7 +927,7 @@ export function RecordsPage() {
           {rowMode === "preview" && (
             <div className="lg:col-span-1">
               <div className="sticky top-8">
-                {selectedRecord ? <RecordPreviewPanel record={selectedRecord} canDeleteNewsletter={isTeacher} onDeleteNewsletter={deleteNewsletter} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
+                {selectedRecord ? <RecordPreviewPanel record={selectedRecord} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
               </div>
             </div>
           )}
@@ -943,15 +985,13 @@ export function RecordsPage() {
           </div>
         </div>
       )}
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }
 
 export function NewsletterDetailPage() {
   const { id } = useParams();
-  const navigate = useNavigate();
-  const { user } = useAuth();
-  const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const [loading, setLoading] = useState(true);
   const [record, setRecord] = useState<RecordItem | null>(null);
 
@@ -986,17 +1026,6 @@ export function NewsletterDetailPage() {
     void load();
   }, [id]);
 
-  const deleteCurrentNewsletter = async () => {
-    if (!id || !isTeacher) return;
-    const { error } = await supabase.from("custom_records").delete().eq("id", id).eq("type", "newsletter");
-    if (error) {
-      toast.error(error.message || "Could not delete newsletter");
-      return;
-    }
-    toast.success("Newsletter deleted");
-    navigate("/records");
-  };
-
   const newsletter = record?.metadata?.newsletter;
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1016,12 +1045,6 @@ export function NewsletterDetailPage() {
                   <div className="mt-1 text-sm text-blue-100">{new Date(record.date).toLocaleString()}</div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  {isTeacher && (
-                    <button type="button" onClick={() => void deleteCurrentNewsletter()} className="inline-flex items-center gap-2 rounded-md bg-red-50 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-100">
-                      <Trash2 className="h-4 w-4" />
-                      Delete
-                    </button>
-                  )}
                   <button type="button" onClick={() => downloadNewsletterPdf(record)} className="inline-flex items-center gap-2 rounded-md bg-white px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50">
                     <Download className="h-4 w-4" />
                     Download PDF

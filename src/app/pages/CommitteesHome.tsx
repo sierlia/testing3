@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Navigation } from "../components/Navigation";
-import { ClipboardList, LogOut, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
+import { ClipboardList, LogOut, MoreHorizontal, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router";
@@ -46,6 +46,7 @@ export function CommitteesHome() {
   const [searchQuery, setSearchQuery] = useState(searchParams.get("q") ?? "");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [editingCommittee, setEditingCommittee] = useState<CommitteeRow | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
   useEffect(() => {
     if (committeesHomeCache) {
@@ -198,6 +199,13 @@ export function CommitteesHome() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!openMenuId) return;
+    const close = () => setOpenMenuId(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [openMenuId]);
+
   const items = useMemo(() => {
     const query = searchQuery.toLowerCase().trim();
     return committees
@@ -205,6 +213,7 @@ export function CommitteesHome() {
       .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0, capacity: Number(settings?.committees?.capacities?.[c.id] ?? settings?.committees?.capacitiesByName?.[c.name] ?? 0), subcommittees: subcommitteesByCommitteeId[c.id] ?? [], leadership: leadershipNames[c.id] ?? {} }));
   }, [committees, leadershipNames, memberCounts, memberNames, searchQuery, settings, subcommitteesByCommitteeId]);
   const canSelfJoin = role === "student" && (!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
+  const canUseJoinButton = role === "teacher" || canSelfJoin;
 
   const joinCommittee = async (committeeId: string) => {
     if (!meId || joinedCommitteeIds.has(committeeId)) return;
@@ -410,7 +419,7 @@ export function CommitteesHome() {
                     }}
                     className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""}`}
                   >
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="font-semibold text-gray-900 truncate">{committeeDisplayName(c.name)}</div>
                       {c.description ? <div className="text-sm text-gray-600 mt-1 line-clamp-2">{c.description}</div> : null}
                       <div className="text-xs text-gray-500 mt-2 flex items-center gap-2">
@@ -422,14 +431,12 @@ export function CommitteesHome() {
                         <div><span className="font-semibold text-gray-700">Ranking:</span> {c.leadership.ranking ?? "None"}</div>
                       </div>
                     </div>
-                    {c.subcommittees.length ? (
-                      <div className="hidden w-72 shrink-0 border-l border-gray-200 pl-4 text-xs text-gray-500 lg:block">
+                    <div className="hidden min-h-[3.75rem] w-80 shrink-0 border-l border-gray-200 pl-4 text-xs text-gray-500 lg:block">
                         <div className="mb-1 font-semibold text-gray-700">Subcommittees</div>
-                        <div className="line-clamp-5">{c.subcommittees.join(", ")}</div>
-                      </div>
-                    ) : null}
-                    <div className="flex items-center gap-2 shrink-0">
-                      {canSelfJoin && (
+                        <div className="line-clamp-3 break-words">{c.subcommittees.length ? c.subcommittees.join(", ") : "N/A"}</div>
+                    </div>
+                    <div className="flex w-44 shrink-0 items-center justify-end gap-2">
+                      {canUseJoinButton && (
                         <button
                           onClick={(event) => {
                             event.stopPropagation();
@@ -448,30 +455,47 @@ export function CommitteesHome() {
                         </button>
                       )}
                       {role === "teacher" && (
-                        <>
+                        <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
                           <button
                             type="button"
                             onClick={(event) => {
                               event.stopPropagation();
-                              setEditingCommittee(c);
+                              setOpenMenuId((current) => current === c.id ? null : c.id);
                             }}
                             className="rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
-                            aria-label="Edit committee"
+                            aria-label="Committee options"
                           >
-                            <Pencil className="h-4 w-4" />
+                            <MoreHorizontal className="h-4 w-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              deleteCommittee(c);
-                            }}
-                            className="rounded-md p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
-                            aria-label="Delete committee"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </>
+                          {openMenuId === c.id && (
+                            <div className="absolute right-0 top-full z-[120] mt-1 w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setOpenMenuId(null);
+                                  setEditingCommittee(c);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50"
+                              >
+                                <Pencil className="h-4 w-4" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  setOpenMenuId(null);
+                                  deleteCommittee(c);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>

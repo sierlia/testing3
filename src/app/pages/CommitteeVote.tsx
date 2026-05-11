@@ -592,7 +592,7 @@ export function CommitteeVote() {
                           <div className="flex flex-wrap items-center justify-end rounded-t-md border border-b-0 border-gray-200 bg-gray-50 px-2 py-2">
                             {textViewControls}
                           </div>
-                          <div className="prose max-w-none min-h-[420px] p-4 rounded-b-md border border-gray-200 bg-gray-50">
+                          <div className="prose prose-a:text-blue-700 prose-a:underline max-w-none min-h-[420px] p-4 rounded-b-md border border-gray-200 bg-gray-50">
                             <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(selected.legislativeHtml || "<p></p>") }} />
                           </div>
                         </div>

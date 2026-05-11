@@ -54,7 +54,6 @@ import { CommitteesHome } from "./pages/CommitteesHome";
 import { CommitteeDashboard } from "./pages/CommitteeDashboard";
 import { LobbyistGroups } from "./pages/LobbyistGroups";
 import { LobbyistGroupDetail } from "./pages/LobbyistGroupDetail";
-import { CommitteeVote } from "./pages/CommitteeVote";
 import { CommitteeReportPage } from "./pages/CommitteeReportPage";
 import { ClassSimulationDashboard } from "./pages/ClassSimulationDashboard";
 import { ClassActivityPage } from "./pages/ClassActivityPage";
@@ -178,7 +177,7 @@ export const router = createHashRouter([
   },
   {
     path: "/committee/:id/vote",
-    Component: CommitteeVote,
+    Component: CommitteeWorkspace,
   },
   {
     path: "/committee/:id/reports/:billId",

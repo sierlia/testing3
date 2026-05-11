@@ -196,8 +196,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
 
   const tabs = [
     { id: "dashboard" as const, label: "Dashboard", to: `/committees/${committeeId}` },
-    { id: "review" as const, label: "Review", to: `/committee/${committeeId}/workspace` },
-    { id: "vote" as const, label: "Vote", to: `/committee/${committeeId}/vote` },
+    { id: "review" as const, label: "Markup", to: `/committee/${committeeId}/workspace` },
     { id: "election" as const, label: "Election", to: `/committee/${committeeId}/leadership` },
     { id: "letters" as const, label: "Letters", to: `/committees/${committeeId}?tab=letters` },
     { id: "subcommittees" as const, label: "Subcommittees", to: `/committees/${committeeId}?tab=subcommittees` },
@@ -222,14 +221,14 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
           }`}
         >
           {tab.label}
-          {(tab.id === "dashboard" || tab.id === "review" || tab.id === "vote") && (
+          {(tab.id === "dashboard" || tab.id === "review") && (
             <>
               <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
-                {counts[tab.id]}
+                {tab.id === "review" ? counts.review + counts.vote : counts[tab.id]}
               </span>
-              {newCounts[tab.id] > 0 && (
+              {(tab.id === "review" ? newCounts.review + newCounts.vote : newCounts[tab.id]) > 0 && (
                 <span className={`rounded-full px-1.5 py-0.5 text-xs ${active === tab.id ? "bg-white text-blue-700" : "bg-blue-100 text-blue-700"}`}>
-                  {newCounts[tab.id]} new
+                  {tab.id === "review" ? newCounts.review + newCounts.vote : newCounts[tab.id]} new
                 </span>
               )}
             </>

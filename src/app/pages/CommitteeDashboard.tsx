@@ -1085,17 +1085,41 @@ export function CommitteeDashboard() {
             ) : (
             <>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-              <div className="mb-3 flex items-start justify-between gap-4">
-                <div>
+              <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_minmax(12rem,16rem)]">
+                <div className="min-w-0">
                   <h2 className="text-lg font-semibold text-gray-900">About</h2>
+                  {editingAbout ? (
+                    <div className="mt-2 space-y-3">
+                      <textarea value={aboutDraft} onChange={(e) => setAboutDraft(e.target.value)} rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
+                      <div className="flex items-center gap-2">
+                        <button onClick={() => void saveAbout()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium">
+                          <Save className="w-4 h-4" />
+                          Save
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingAbout(false);
+                            setAboutDraft(committee.description ?? "");
+                          }}
+                          className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900"
+                        >
+                          <X className="w-4 h-4" />
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="mt-1 text-gray-700 whitespace-pre-line">{committee.description || "No description yet."}</p>
+                  )}
                 </div>
-                <div className="flex max-w-sm flex-1 items-start justify-end gap-2">
+                <div className="mt-8 w-4">
                   {(isLeader || isTeacher) && !editingAbout && (
-                    <button onClick={() => setEditingAbout(true)} className="mt-1 text-blue-600 hover:text-blue-700 transition-colors">
+                    <button onClick={() => setEditingAbout(true)} className="text-blue-600 hover:text-blue-700 transition-colors" aria-label="Edit about">
                       <Pencil className="w-4 h-4" />
                     </button>
                   )}
-                  <div className="ml-auto w-full max-w-[16rem] border-l border-gray-300 pl-3 text-left">
+                </div>
+                <div className="border-l border-gray-300 pl-3 text-left">
                     <div className="mb-1 text-xs font-semibold text-gray-700">Subcommittees</div>
                     {(isLeader || isTeacher) && (
                       <div className="flex gap-1.5">
@@ -1117,40 +1141,17 @@ export function CommitteeDashboard() {
                       <div className="mt-2 text-xs text-gray-600">
                         {subcommittees.map((subcommittee, index) => (
                           <span key={subcommittee.id}>
-                            <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="text-left enabled:hover:text-red-600 disabled:cursor-default">
-                              {subcommittee.name}{(isLeader || isTeacher) ? " x" : ""}
+                            <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="text-left disabled:cursor-default">
+                              <span>{subcommittee.name}</span>
+                              {(isLeader || isTeacher) ? <span className="ml-1 font-semibold text-red-600">x</span> : null}
                             </button>
                             {index < subcommittees.length - 1 ? ", " : ""}
                           </span>
                         ))}
                       </div>
                     ) : null}
-                  </div>
                 </div>
               </div>
-              {editingAbout ? (
-                <div className="space-y-3">
-                  <textarea value={aboutDraft} onChange={(e) => setAboutDraft(e.target.value)} rows={4} className="w-full px-3 py-2 border border-gray-300 rounded-md" />
-                  <div className="flex items-center gap-2">
-                    <button onClick={() => void saveAbout()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium">
-                      <Save className="w-4 h-4" />
-                      Save
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingAbout(false);
-                        setAboutDraft(committee.description ?? "");
-                      }}
-                      className="flex items-center gap-2 px-4 py-2 text-gray-700 hover:text-gray-900"
-                    >
-                      <X className="w-4 h-4" />
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-gray-700 whitespace-pre-line">{committee.description || "No description yet."}</p>
-              )}
             </div>
 
             {canViewDashboard ? (
