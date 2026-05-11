@@ -115,6 +115,11 @@ export const DeleteHighlight = Mark.create({
         parseHTML: (element) => element.getAttribute("data-delete-color") ?? "#2563eb",
         renderHTML: () => ({}),
       },
+      deletionId: {
+        default: null,
+        parseHTML: (element) => element.getAttribute("data-delete-id"),
+        renderHTML: () => ({}),
+      },
     };
   },
 
@@ -126,6 +131,7 @@ export const DeleteHighlight = Mark.create({
     const authorId = mark.attrs.authorId || "";
     const authorName = String(mark.attrs.authorName || "").trim() || "Member";
     const color = mark.attrs.color || "#2563eb";
+    const deletionId = mark.attrs.deletionId || "";
     return [
       "span",
       {
@@ -133,6 +139,7 @@ export const DeleteHighlight = Mark.create({
         "data-delete-author-id": authorId,
         "data-delete-author": authorName,
         "data-delete-color": color,
+        "data-delete-id": deletionId,
         class: "committee-delete-highlight",
         style: `--edit-color:${color}; background-color: ${hexToRgba(color, 0.12)}; text-decoration-line: line-through; text-decoration-color: ${color}; text-decoration-thickness: 2px;`,
       },
@@ -224,7 +231,21 @@ function hasDeletedContent(doc: any, from: number, to: number) {
   return hasContent;
 }
 
+type MarkedTextRange = { from: number; to: number; color: string; attrs: any; text: string };
+type RestoreMenuState = MarkedTextRange & { x: number; y: number };
+
+function makeChangeId() {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+
+function normalizedRangeText(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function sameMarkAttrs(a: any, b: any) {
+  const aDeletionId = String(a?.deletionId ?? "");
+  const bDeletionId = String(b?.deletionId ?? "");
+  if (aDeletionId || bDeletionId) return Boolean(aDeletionId && bDeletionId && aDeletionId === bDeletionId);
   return (
     String(a?.authorId ?? "") === String(b?.authorId ?? "") &&
     String(a?.authorName ?? "") === String(b?.authorName ?? "") &&
@@ -232,9 +253,49 @@ function sameMarkAttrs(a: any, b: any) {
   );
 }
 
-function findMarkedTextRange(doc: any, pos: number, markType: any) {
+function rangeText(doc: any, from: number, to: number) {
+  return doc.textBetween(from, to, "\n", "\n");
+}
+
+function nearestRange(ranges: MarkedTextRange[], pos: number) {
+  return ranges.reduce<MarkedTextRange | null>((best, range) => {
+    if (!best) return range;
+    const rangeDistance = pos < range.from ? range.from - pos : pos > range.to ? pos - range.to : 0;
+    const bestDistance = pos < best.from ? best.from - pos : pos > best.to ? pos - best.to : 0;
+    return rangeDistance < bestDistance ? range : best;
+  }, null);
+}
+
+function collectMarkedTextRanges(doc: any, markType: any, attrs: any): MarkedTextRange[] {
+  const segments: Array<{ from: number; to: number }> = [];
+  const hasStableDeletionId = Boolean(attrs?.deletionId);
+  doc.descendants((node: any, nodePos: number) => {
+    if (!node.isText || !node.text) return true;
+    const mark = node.marks?.find((item: any) => item.type === markType && sameMarkAttrs(item.attrs, attrs));
+    if (!mark) return true;
+    segments.push({ from: nodePos, to: nodePos + node.nodeSize });
+    return true;
+  });
+
+  const merged: Array<{ from: number; to: number }> = [];
+  for (const segment of segments) {
+    const current = merged[merged.length - 1];
+    if (current && (hasStableDeletionId || segment.from <= current.to + 4)) current.to = segment.to;
+    else merged.push({ ...segment });
+  }
+
+  return merged.map((range) => ({
+    ...range,
+    attrs,
+    color: attrs?.color || "#2563eb",
+    text: rangeText(doc, range.from, range.to),
+  }));
+}
+
+function findMarkNearPosition(doc: any, pos: number, markType: any) {
   let clickedMark: any = null;
-  doc.nodesBetween(Math.max(0, pos - 1), Math.min(doc.content.size, pos + 1), (node: any) => {
+  const boundedPos = Math.max(0, Math.min(pos, doc.content.size));
+  doc.nodesBetween(Math.max(0, boundedPos - 2), Math.min(doc.content.size, boundedPos + 2), (node: any) => {
     const mark = node.marks?.find((item: any) => item.type === markType);
     if (mark) {
       clickedMark = mark;
@@ -242,25 +303,27 @@ function findMarkedTextRange(doc: any, pos: number, markType: any) {
     }
     return true;
   });
+  if (clickedMark) return clickedMark;
+  return doc.resolve(boundedPos).marks().find((item: any) => item.type === markType) ?? null;
+}
+
+function findMarkedTextRange(doc: any, pos: number, markType: any) {
+  const clickedMark = findMarkNearPosition(doc, pos, markType);
   if (!clickedMark) return null;
 
-  const ranges: Array<{ from: number; to: number }> = [];
-  doc.descendants((node: any, nodePos: number) => {
-    if (!node.isText || !node.text) return true;
-    const mark = node.marks?.find((item: any) => item.type === markType && sameMarkAttrs(item.attrs, clickedMark.attrs));
-    if (!mark) return true;
-    ranges.push({ from: nodePos, to: nodePos + node.nodeSize });
-    return true;
-  });
+  const ranges = collectMarkedTextRanges(doc, markType, clickedMark.attrs);
+  return ranges.find((range) => pos >= range.from - 1 && pos <= range.to + 1) ?? nearestRange(ranges, pos);
+}
 
-  const index = ranges.findIndex((range) => pos >= range.from - 1 && pos <= range.to + 1);
-  if (index < 0) return null;
-
-  let from = ranges[index].from;
-  let to = ranges[index].to;
-  for (let i = index - 1; i >= 0 && ranges[i].to >= from - 4; i -= 1) from = ranges[i].from;
-  for (let i = index + 1; i < ranges.length && ranges[i].from <= to + 4; i += 1) to = ranges[i].to;
-  return { from, to, color: clickedMark.attrs?.color || "#2563eb" };
+function resolveRestoreRange(doc: any, restore: RestoreMenuState, markType: any) {
+  const ranges = collectMarkedTextRanges(doc, markType, restore.attrs);
+  if (!ranges.length) return null;
+  const midpoint = Math.floor((restore.from + restore.to) / 2);
+  const overlapping = ranges.filter((range) => range.to >= restore.from && range.from <= restore.to);
+  const candidates = overlapping.length ? overlapping : ranges;
+  const targetText = normalizedRangeText(restore.text);
+  const exact = targetText ? candidates.find((range) => normalizedRangeText(range.text) === targetText) : null;
+  return exact ?? nearestRange(candidates, midpoint);
 }
 
 function domSelectionDirection(): "backward" | "forward" | null {
@@ -386,11 +449,6 @@ function createEditAttributionExtension({
               authorName: String(author.name || "").trim() || "Member",
               color: author.color,
             });
-            const deleteMark = deleteMarkType.create({
-              authorId: author.id,
-              authorName: String(author.name || "").trim() || "Member",
-              color: author.color,
-            });
             const tr = newState.tr;
             const max = newState.doc.content.size;
 
@@ -407,6 +465,12 @@ function createEditAttributionExtension({
               const insertAt = deletion.direction === "backward" && matchingInsert ? Math.min(matchingInsert.to, tr.doc.content.size) : from;
               tr.replaceRange(insertAt, insertAt, deletion.slice);
               const to = insertAt + deletion.slice.size;
+              const deleteMark = deleteMarkType.create({
+                authorId: author.id,
+                authorName: String(author.name || "").trim() || "Member",
+                color: author.color,
+                deletionId: makeChangeId(),
+              });
               tr.removeMark(insertAt, to, editMarkType);
               tr.addMark(insertAt, to, deleteMark);
               if (deletions.length === 1) {
@@ -546,7 +610,7 @@ export function CollaborativeBillEditor({
   const [editorError, setEditorError] = useState<string | null>(null);
   const hydratedFromSnapshotRef = useRef(false);
   const [collabStatus, setCollabStatus] = useState<"connecting" | "live" | "fallback">("connecting");
-  const [restoreMenu, setRestoreMenu] = useState<{ x: number; y: number; from: number; to: number; color: string } | null>(null);
+  const [restoreMenu, setRestoreMenu] = useState<RestoreMenuState | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -814,14 +878,30 @@ export function CollaborativeBillEditor({
       from: range.from,
       to: range.to,
       color: range.color || deleted.getAttribute("data-delete-color") || "#2563eb",
+      attrs: range.attrs,
+      text: range.text,
     });
   };
 
   const restoreDeletedText = () => {
     if (!editor || !restoreMenu) return;
-    const tr = editor.state.tr.removeMark(restoreMenu.from, restoreMenu.to, editor.state.schema.marks.deleteHighlight);
+    const markType = editor.state.schema.marks.deleteHighlight;
+    const range = resolveRestoreRange(editor.state.doc, restoreMenu, markType);
+    if (!range) {
+      setRestoreMenu(null);
+      return;
+    }
+
+    const from = Math.max(0, Math.min(range.from, editor.state.doc.content.size));
+    const to = Math.max(from, Math.min(range.to, editor.state.doc.content.size));
+    if (to <= from) {
+      setRestoreMenu(null);
+      return;
+    }
+
+    const tr = editor.state.tr.removeMark(from, to, markType);
     tr.setMeta("restoreDeleteHighlight", true);
-    tr.setSelection(TextSelection.create(tr.doc, restoreMenu.to));
+    tr.setSelection(TextSelection.create(tr.doc, Math.min(to, tr.doc.content.size)));
     editor.view.dispatch(tr.scrollIntoView());
     editor.view.focus();
     setRestoreMenu(null);
@@ -852,7 +932,10 @@ export function CollaborativeBillEditor({
         <div
           className="fixed z-50 rounded-lg border border-gray-200 bg-white p-1 shadow-lg"
           style={{ left: restoreMenu.x, top: restoreMenu.y, ["--restore-color" as any]: restoreMenu.color }}
-          onMouseDown={(event) => event.stopPropagation()}
+          onMouseDown={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
           onClick={(event) => event.stopPropagation()}
         >
           <button
