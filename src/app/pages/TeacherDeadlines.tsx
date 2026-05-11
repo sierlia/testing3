@@ -32,6 +32,7 @@ import {
   PROVIDERS,
   RubricItem,
   autoCriteriaLabel,
+  autoCriteriaTotal,
   autoScoreTotal,
   rubricTotal,
 } from "../services/assignments";
@@ -439,6 +440,7 @@ export function TeacherDeadlines() {
         toast.error("Choose at least one auto-graded rubric requirement");
         return;
       }
+      const pointsPossible = gradingMode === "auto" ? autoCriteriaTotal(normalizedCriteria) : Math.max(0, Number(newPointsPossible) || 0);
 
       const payload = {
         class_id: classId,
@@ -450,7 +452,7 @@ export function TeacherDeadlines() {
         title: newTitle.trim(),
         description: newDescription.trim(),
         due_at: dueAt,
-        points_possible: Math.max(0, Number(newPointsPossible) || 0),
+        points_possible: pointsPossible,
         grading_mode: gradingMode,
         manual_submission_required: manualSubmissionRequired,
         rubric: normalizedRubric,
@@ -1087,16 +1089,23 @@ export function TeacherDeadlines() {
                     <h3 className="font-semibold text-gray-900">Grading</h3>
                     <p className="text-sm text-gray-600">Choose whether this assignment is graded by a manual rubric or quantitative simulation requirements.</p>
                   </div>
-                  <label className="block">
-                    <span className="mb-1 block text-xs font-medium text-gray-600">Points possible</span>
-                    <input
-                      type="number"
-                      min="0"
-                      value={newPointsPossible}
-                      onChange={(event) => setNewPointsPossible(event.target.value)}
-                      className="w-32 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </label>
+                  {gradingMode === "manual" ? (
+                    <label className="block">
+                      <span className="mb-1 block text-xs font-medium text-gray-600">Points possible</span>
+                      <input
+                        type="number"
+                        min="0"
+                        value={newPointsPossible}
+                        onChange={(event) => setNewPointsPossible(event.target.value)}
+                        className="w-32 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </label>
+                  ) : (
+                    <div className="text-right text-sm text-gray-600">
+                      <span className="block text-xs font-medium text-gray-500">Total</span>
+                      <span className="font-semibold text-gray-900">{autoCriteriaTotal(normalizeCriteria(criteriaRows))} pts</span>
+                    </div>
+                  )}
                 </div>
                 <div className="mb-4 flex flex-wrap gap-2">
                   {(["manual", "auto"] as GradingMode[]).map((mode) => (
@@ -1165,7 +1174,10 @@ export function TeacherDeadlines() {
                   </>
                 ) : (
                   <>
-                    <h4 className="font-semibold text-gray-900">Auto-graded rubric requirements</h4>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <h4 className="font-semibold text-gray-900">Auto-graded rubric requirements</h4>
+                      <span className="text-sm font-medium text-gray-600">{autoCriteriaTotal(normalizeCriteria(criteriaRows))} pts</span>
+                    </div>
                     <p className="mt-1 text-sm text-gray-600">Set the number required and points earned for each completed item.</p>
                     <div className="mt-3 grid gap-3 md:grid-cols-2">
                       {AUTO_CRITERIA_OPTIONS.map((option) => {

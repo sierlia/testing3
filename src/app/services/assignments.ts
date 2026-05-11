@@ -277,7 +277,13 @@ export function normalizeCriteria(value: unknown): AutoCriteriaConfig[] {
     .filter((item) => AUTO_CRITERIA_OPTIONS.some((option) => option.id === item.id));
 }
 
+export function autoCriteriaTotal(criteria: AutoCriteriaConfig[]) {
+  return criteria.reduce((sum, item) => sum + Math.max(0, Number(item.target ?? 0) || 0) * Math.max(0, Number(item.points ?? 0) || 0), 0);
+}
+
 export function normalizeAssignment(row: any): AssignmentTask {
+  const gradingMode = row.grading_mode === "auto" ? "auto" : "manual";
+  const autoCriteria = normalizeCriteria(row.auto_criteria);
   return {
     id: row.id,
     task_type: row.task_type,
@@ -287,11 +293,11 @@ export function normalizeAssignment(row: any): AssignmentTask {
     audience_type: row.audience_type ?? "all",
     audience_id: row.audience_id ?? null,
     audience_user_ids: Array.isArray(row.audience_user_ids) ? row.audience_user_ids.map(String).filter(Boolean) : [],
-    points_possible: Number(row.points_possible ?? 100),
-    grading_mode: row.grading_mode === "auto" ? "auto" : "manual",
+    points_possible: gradingMode === "auto" ? autoCriteriaTotal(autoCriteria) : Number(row.points_possible ?? 100),
+    grading_mode: gradingMode,
     manual_submission_required: row.manual_submission_required !== false,
     rubric: normalizeRubric(row.rubric),
-    auto_criteria: normalizeCriteria(row.auto_criteria),
+    auto_criteria: autoCriteria,
     integration_targets: Array.isArray(row.integration_targets) ? row.integration_targets.filter((id: string) => PROVIDERS.some((provider) => provider.id === id)) : [],
     created_at: row.created_at,
   };
