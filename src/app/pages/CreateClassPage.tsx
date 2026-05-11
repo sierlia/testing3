@@ -69,14 +69,14 @@ export function CreateClassPage() {
         students: { requireJoinApproval: false },
       };
 
-      const { data: createdClass, error } = await supabase.from('classes').insert({
-        teacher_id: user.id,
-        name: formData.name.trim(),
+      const { data: createdClassId, error } = await supabase.rpc('create_class_for_teacher', {
+        class_name: formData.name.trim(),
         class_code: formData.classCode,
-        settings,
-      }).select('id').single();
+        class_settings: settings,
+      });
 
       if (error) throw error;
+      const createdClass = { id: createdClassId as string };
 
       // Ensure teacher profile exists and is set to this class
       await supabase.from('profiles').upsert({
