@@ -19,7 +19,7 @@ function orgVisibilityFromSettings(settings: any): OrgVisibility {
     parties: organizationsEnabled && organizations.enableParties !== false,
     committees: organizationsEnabled && organizations.enableCommittees !== false,
     caucuses: organizationsEnabled && organizations.enableCaucuses !== false,
-    lobbyists: organizationsEnabled && organizations.enableLobbyists === true,
+    lobbyists: organizationsEnabled && (organizations.enableLobbyists === true || settings?.lobbyists?.enabled === true),
   };
 }
 
@@ -510,6 +510,7 @@ export function Navigation() {
                         currentPath.startsWith('/committee') || currentPath.startsWith('/dear-colleague') ||
                         currentPath.startsWith('/notifications') || currentPath.startsWith('/members') ||
                         currentPath.startsWith('/parties') || currentPath.startsWith('/committees') ||
+                        currentPath.startsWith('/lobbyists') ||
                         currentPath.startsWith('/settings') ||
                         currentPath.startsWith('/assignments') ||
                         currentPath === '/elections' || currentPath === '/floor-session' || currentPath === '/floor' ||
@@ -529,11 +530,12 @@ export function Navigation() {
       : activeClassId
         ? "/dashboard"
         : "/settings/classes";
+  const showLobbyists = orgVisibility.lobbyists || isActivePath(["/lobbyists"]);
   const organizationLinks = [
     orgVisibility.parties ? { to: "/parties", label: "Parties", active: isActivePath(["/parties"]) } : null,
     orgVisibility.committees ? { to: "/committees", label: "Committees", active: isActivePath(["/committees", "/committee"]) } : null,
     orgVisibility.caucuses ? { to: "/caucuses", label: "Caucuses", active: isActivePath(["/caucuses"]) } : null,
-    orgVisibility.lobbyists ? { to: "/lobbyists", label: "Lobbyists", active: isActivePath(["/lobbyists"]) } : null,
+    showLobbyists ? { to: "/lobbyists", label: "Lobbyists", active: isActivePath(["/lobbyists"]) } : null,
     { to: "/members", label: "Members", active: isActivePath(["/members"]) },
   ].filter(Boolean) as Array<{ to: string; label: string; active: boolean }>;
   const primaryOrganizationPath = organizationLinks[0]?.to ?? "/organizations";
@@ -622,7 +624,7 @@ export function Navigation() {
                     {organizationLinks.length ? organizationLinks.map((item) => (
                       <div key={item.to}>
                         {item.label === "Lobbyists" || (item.label === "Members" && organizationLinks.some((link) => link.label === "Lobbyists")) ? (
-                          <div className="my-1 border-t border-gray-200" aria-hidden="true" />
+                          <div className="my-1 border-t border-gray-300" aria-hidden="true" />
                         ) : null}
                         <Link to={item.to} className={dropdownItemClass(item.active)}>
                           {item.label}

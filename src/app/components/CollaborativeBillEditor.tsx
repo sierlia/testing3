@@ -685,7 +685,7 @@ export function CollaborativeBillEditor({
       });
 
       setEditor(ed);
-      setCollabStatus("live");
+      setCollabStatus((status) => (providerRef.current?.getSubscribed() ? "live" : status === "fallback" ? "fallback" : "connecting"));
       return () => {
         ed.destroy();
         setEditor(null);

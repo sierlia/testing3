@@ -9,6 +9,17 @@ type OrgVisibility = { parties: boolean; committees: boolean; caucuses: boolean;
 const defaultVisibility: OrgVisibility = { parties: true, committees: true, caucuses: true, lobbyists: true };
 let lastVisibility: OrgVisibility = defaultVisibility;
 
+function visibilityFromSettings(settings: any): OrgVisibility {
+  const organizations = settings?.organizations ?? {};
+  const enabled = organizations.enabled !== false;
+  return {
+    parties: enabled && organizations.enableParties !== false,
+    committees: enabled && organizations.enableCommittees !== false,
+    caucuses: enabled && organizations.enableCaucuses !== false,
+    lobbyists: enabled && (organizations.enableLobbyists === true || settings?.lobbyists?.enabled === true),
+  };
+}
+
 function readCachedVisibility() {
   try {
     const parsed = JSON.parse(window.localStorage.getItem("gavel:orgVisibility:last") ?? "null");
@@ -47,14 +58,7 @@ export function OrganizationsLayout({ active, children }: { active: Organization
       const classId = (profile as any)?.class_id;
       if (!classId) return;
       const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
-      const organizations = (cls as any)?.settings?.organizations ?? {};
-      const enabled = organizations.enabled !== false;
-      const nextVisibility = {
-        parties: enabled && organizations.enableParties !== false,
-        committees: enabled && organizations.enableCommittees !== false,
-        caucuses: enabled && organizations.enableCaucuses !== false,
-        lobbyists: enabled && organizations.enableLobbyists === true,
-      };
+      const nextVisibility = visibilityFromSettings((cls as any)?.settings ?? {});
       setVisibility(nextVisibility);
       cacheVisibility(classId, nextVisibility);
     };
@@ -62,14 +66,17 @@ export function OrganizationsLayout({ active, children }: { active: Organization
   }, [user?.id]);
 
   const tabs = useMemo(
-    () => [
-      visibility.parties ? { to: "/parties", key: "parties" as const, label: "Parties" } : null,
-      visibility.committees ? { to: "/committees", key: "committees" as const, label: "Committees" } : null,
-      visibility.caucuses ? { to: "/caucuses", key: "caucuses" as const, label: "Caucuses" } : null,
-      visibility.lobbyists ? { to: "/lobbyists", key: "lobbyists" as const, label: "Lobbyists" } : null,
-      { to: "/members", key: "members" as const, label: "Members" },
-    ].filter(Boolean) as Array<{ to: string; key: OrganizationTab; label: string }>,
-    [visibility],
+    () => {
+      const showLobbyists = visibility.lobbyists || active === "lobbyists";
+      return [
+        visibility.parties ? { to: "/parties", key: "parties" as const, label: "Parties" } : null,
+        visibility.committees ? { to: "/committees", key: "committees" as const, label: "Committees" } : null,
+        visibility.caucuses ? { to: "/caucuses", key: "caucuses" as const, label: "Caucuses" } : null,
+        showLobbyists ? { to: "/lobbyists", key: "lobbyists" as const, label: "Lobbyists" } : null,
+        { to: "/members", key: "members" as const, label: "Members" },
+      ].filter(Boolean) as Array<{ to: string; key: OrganizationTab; label: string }>;
+    },
+    [active, visibility],
   );
 
   return (
@@ -106,7 +113,7 @@ export function OrganizationsLayout({ active, children }: { active: Organization
 }
 
 function Separator() {
-  return <div className="mx-1 h-px w-8 shrink-0 self-center bg-gray-200 md:mx-2 md:my-1 md:w-auto md:self-stretch" aria-hidden="true" />;
+  return <div className="mx-1 h-px w-8 shrink-0 self-center bg-gray-300 md:mx-2 md:my-1 md:w-auto md:self-stretch" aria-hidden="true" />;
 }
 
 function Tab({ to, active, children }: { to: string; active: boolean; children: ReactNode }) {

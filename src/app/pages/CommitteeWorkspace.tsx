@@ -261,6 +261,38 @@ export function CommitteeWorkspace() {
     void load();
   }, [committeeId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const refreshActiveMeeting = async () => {
+      const { data, error } = await supabase
+        .from("committee_meetings")
+        .select("id,started_at,started_by")
+        .eq("committee_id", committeeId)
+        .is("ended_at", null)
+        .order("started_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.warn("committee meeting refresh failed", error);
+        return;
+      }
+      setActiveMeeting((data as any) ?? null);
+    };
+
+    const channel = supabase
+      .channel(`committee-meetings:${committeeId}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "committee_meetings", filter: `committee_id=eq.${committeeId}` }, () => void refreshActiveMeeting())
+      .subscribe();
+
+    void refreshActiveMeeting();
+    return () => {
+      cancelled = true;
+      void supabase.removeChannel(channel);
+    };
+  }, [committeeId]);
+
   const selected = bills.find((b) => b.id === selectedBillId) ?? null;
   const selectedInVote = selected?.status === "committee_vote";
   const voteCounts = votes.reduce(
