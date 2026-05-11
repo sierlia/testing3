@@ -27,6 +27,12 @@ function money(value: number) {
   return `$${Math.max(0, Number(value ?? 0)).toLocaleString()}`;
 }
 
+function effectiveGroupStartingAmount(group: any, classSettings: any) {
+  const storedStartingAmount = Math.max(0, Number(group?.starting_amount ?? 0) || 0);
+  if (storedStartingAmount > 0) return storedStartingAmount;
+  return Math.max(0, Number(classSettings?.money?.startingAmount ?? 1000) || 0);
+}
+
 export function LobbyistGroupDetail() {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
@@ -34,6 +40,7 @@ export function LobbyistGroupDetail() {
   const activeTab = searchParams.get("tab") === "spending" ? "spending" : "dashboard";
   const [loading, setLoading] = useState(true);
   const [group, setGroup] = useState<any>(null);
+  const [classSettings, setClassSettings] = useState<any>({});
   const [members, setMembers] = useState<Member[]>([]);
   const [contributions, setContributions] = useState<Contribution[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -55,14 +62,16 @@ export function LobbyistGroupDetail() {
       const { data: g } = await supabase.from("lobbyist_groups").select("id,class_id,name,description,join_mode,starting_amount").eq("id", groupId).maybeSingle();
       setGroup(g as any);
       if (!g) return;
-      const [{ data: memberRows }, { data: profile }, { data: spending }, directory, { data: announcementRows }] = await Promise.all([
+      const [{ data: memberRows }, { data: profile }, { data: spending }, directory, { data: announcementRows }, { data: classRow }] = await Promise.all([
         supabase.from("lobbyist_group_members").select("user_id").eq("group_id", groupId),
         uid ? supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle() : ({ data: null } as any),
         supabase.from("lobbyist_contributions").select("id,recipient_type,recipient_id,from_user_id,amount,note,created_at").eq("group_id", groupId).order("created_at", { ascending: false }),
         supabase.rpc("class_directory", { target_class: (g as any).class_id } as any),
         supabase.from("lobbyist_group_announcements").select("id,author_user_id,body,created_at").eq("group_id", groupId).order("created_at", { ascending: false }),
+        supabase.from("classes").select("settings").eq("id", (g as any).class_id).maybeSingle(),
       ]);
 
+      setClassSettings((classRow as any)?.settings ?? {});
       setIsTeacher((profile as any)?.role === "teacher");
       const ids = (memberRows ?? []).map((row: any) => row.user_id);
       setIsMember(uid ? ids.includes(uid) : false);
@@ -122,6 +131,7 @@ export function LobbyistGroupDetail() {
   }, [memberPickerOpen, openMemberMenuId]);
 
   const totalSpent = useMemo(() => contributions.reduce((sum, row) => sum + Number(row.amount ?? 0), 0), [contributions]);
+  const totalMoney = useMemo(() => Math.max(0, effectiveGroupStartingAmount(group, classSettings) - totalSpent), [classSettings, group, totalSpent]);
   const selectedAnnouncement = announcements.find((announcement) => announcement.id === selectedAnnouncementId) ?? null;
   const canPostAnnouncements = isMember || isTeacher;
 
@@ -197,7 +207,7 @@ export function LobbyistGroupDetail() {
           <div>
             <h1 className="text-3xl font-bold text-gray-900">{group.name}</h1>
             <div className="mt-2 flex flex-wrap gap-2 text-sm">
-              <span className="rounded-md bg-green-50 px-3 py-1.5 font-semibold text-green-800">Total money: {money(Number(group.starting_amount ?? 0) - totalSpent)}</span>
+              <span className="rounded-md bg-green-50 px-3 py-1.5 font-semibold text-green-800">Total money: {money(totalMoney)}</span>
               <span className="rounded-md bg-blue-50 px-3 py-1.5 font-semibold text-blue-800">Contributed: {money(totalSpent)}</span>
             </div>
           </div>

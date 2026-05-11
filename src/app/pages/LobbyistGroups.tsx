@@ -9,6 +9,16 @@ import { getCurrentUser } from "../utils/currentUser";
 
 type LobbyistGroup = { id: string; class_id: string; name: string; description: string; join_mode: "free_join" | "teacher_assigned"; starting_amount: number; created_at: string; memberCount: number };
 
+function memberStartingAmount(settings: any) {
+  return Math.max(0, Number(settings?.money?.startingAmount ?? 1000) || 0);
+}
+
+function lobbyistGroupBalance(group: LobbyistGroup, settings: any, spent: number) {
+  const storedStartingAmount = Math.max(0, Number(group.starting_amount ?? 0) || 0);
+  const startingAmount = storedStartingAmount > 0 ? storedStartingAmount : memberStartingAmount(settings);
+  return Math.max(0, startingAmount - Number(spent ?? 0));
+}
+
 export function LobbyistGroups() {
   const navigate = useNavigate();
   const [groups, setGroups] = useState<LobbyistGroup[]>([]);
@@ -70,7 +80,7 @@ export function LobbyistGroups() {
       name: draft.name.trim(),
       description: draft.description.trim(),
       join_mode: settings?.lobbyists?.joinMode ?? "free_join",
-      starting_amount: Math.max(0, Number(settings?.lobbyists?.startingAmount ?? 1000) || 0),
+      starting_amount: memberStartingAmount(settings),
       created_by: uid ?? null,
     } as any);
     if (error) return toast.error(error.message || "Could not create lobbyist group");
@@ -129,7 +139,7 @@ export function LobbyistGroups() {
                         <Users className="h-3.5 w-3.5" />
                         {group.memberCount} members
                         <span className="text-gray-300">|</span>
-                        ${Math.max(0, Number(group.starting_amount ?? 0) - Number(spentByGroup[group.id] ?? 0)).toLocaleString()} total money
+                        ${lobbyistGroupBalance(group, settings, spentByGroup[group.id] ?? 0).toLocaleString()} total money
                       </div>
                     </div>
                   </div>

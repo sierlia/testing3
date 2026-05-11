@@ -201,13 +201,28 @@ export function Navigation() {
         setOrgVisibility(nextOrgVisibility);
         cacheOrgVisibility(classId, nextOrgVisibility);
         if (settings?.money?.enabled) {
-          const [{ data: sent }, { data: received }] = await Promise.all([
-            supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("from_user_id", user.id),
-            supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("recipient_type", "member").eq("recipient_id", user.id),
-          ]);
-          const spent = (sent ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
-          const incoming = (received ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
-          const nextMoney = { enabled: true, balance: Number(settings.money.startingAmount ?? 1000) - spent + incoming };
+          const { data: lobbyMemberships } = await supabase
+            .from("lobbyist_group_members")
+            .select("group_id,lobbyist_groups(id,name,starting_amount)")
+            .eq("user_id", user.id)
+            .limit(1);
+          const lobbyistGroup = ((lobbyMemberships ?? []) as any[]).map((row) => row.lobbyist_groups).filter(Boolean)[0] ?? null;
+          let nextMoney: { enabled: boolean; balance: number };
+          if (lobbyistGroup?.id) {
+            const { data: groupSpending } = await supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("group_id", lobbyistGroup.id);
+            const spent = (groupSpending ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
+            const memberStarting = Math.max(0, Number(settings.money.startingAmount ?? 1000) || 0);
+            const storedGroupStarting = Math.max(0, Number(lobbyistGroup.starting_amount ?? 0) || 0);
+            nextMoney = { enabled: true, balance: Math.max(0, (storedGroupStarting > 0 ? storedGroupStarting : memberStarting) - spent) };
+          } else {
+            const [{ data: sent }, { data: received }] = await Promise.all([
+              supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("from_user_id", user.id),
+              supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("recipient_type", "member").eq("recipient_id", user.id),
+            ]);
+            const spent = (sent ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
+            const incoming = (received ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
+            nextMoney = { enabled: true, balance: Math.max(0, Number(settings.money.startingAmount ?? 1000) - spent + incoming) };
+          }
           setMoney(nextMoney);
           cacheMoney(user.id, nextMoney);
         } else {

@@ -12,10 +12,9 @@ function roleLabel(role: SubcommitteeMember["role"]) {
   return "Member";
 }
 
-export function SubcommitteeRolesPanel({ committeeId, compact = false, allowMemberRoleSelection = false, embedded = false }: { committeeId: string; compact?: boolean; allowMemberRoleSelection?: boolean; embedded?: boolean }) {
+export function SubcommitteeRolesPanel({ committeeId, compact = false, embedded = false }: { committeeId: string; compact?: boolean; allowMemberRoleSelection?: boolean; embedded?: boolean }) {
   const [meId, setMeId] = useState<string | null>(null);
   const [isCommitteeMember, setIsCommitteeMember] = useState(false);
-  const [isLeader, setIsLeader] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
   const [subcommittees, setSubcommittees] = useState<Subcommittee[]>([]);
   const [memberships, setMemberships] = useState<SubcommitteeMember[]>([]);
@@ -34,7 +33,6 @@ export function SubcommitteeRolesPanel({ committeeId, compact = false, allowMemb
     setSubcommittees(subRows);
     setIsTeacher((profile as any)?.role === "teacher");
     setIsCommitteeMember(Boolean(myCommitteeMembership));
-    setIsLeader(["chair", "co_chair", "ranking_member"].includes((myCommitteeMembership as any)?.role));
     const ids = subRows.map((row) => row.id);
     const { data: memberRows } = ids.length
       ? await supabase.from("subcommittee_members").select("subcommittee_id,user_id,role").in("subcommittee_id", ids)
@@ -88,21 +86,6 @@ export function SubcommitteeRolesPanel({ committeeId, compact = false, allowMemb
     }
   };
 
-  const setRole = async (subcommittee: Subcommittee, userId: string, role: SubcommitteeMember["role"]) => {
-    if (!isLeader && !isTeacher) return;
-    try {
-      if (role !== "member" && (isLeader || isTeacher)) {
-        await supabase.from("subcommittee_members").update({ role: "member" } as any).eq("subcommittee_id", subcommittee.id).eq("role", role).neq("user_id", userId);
-      }
-      const { error } = await supabase.from("subcommittee_members").update({ role } as any).eq("subcommittee_id", subcommittee.id).eq("user_id", userId);
-      if (error) throw error;
-      await load();
-      toast.success("Subcommittee role updated");
-    } catch (error: any) {
-      toast.error(error.message || "Could not update subcommittee role");
-    }
-  };
-
   if (!subcommittees.length) {
     if (compact) return null;
     return (
@@ -138,13 +121,6 @@ export function SubcommitteeRolesPanel({ committeeId, compact = false, allowMemb
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
-                {joined && (isLeader || isTeacher || allowMemberRoleSelection) && meId && (
-                  <select value={myRow?.role ?? "member"} onChange={(event) => void setRole(subcommittee, meId, event.target.value as any)} className="h-8 rounded-md border border-gray-300 bg-white px-2 text-xs">
-                    <option value="member">Member</option>
-                    <option value="chair">Chair</option>
-                    <option value="ranking_member">Ranking</option>
-                  </select>
-                )}
                 {joined ? (
                   <button type="button" onClick={() => void leave(subcommittee)} disabled={busyId === subcommittee.id} className="rounded-md border border-red-200 bg-red-50 px-2 py-1 text-xs font-medium text-red-700 disabled:opacity-50">
                     Leave

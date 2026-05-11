@@ -41,6 +41,29 @@ function localDateTimeValue(iso?: string | null) {
   return local.toISOString().slice(0, 16);
 }
 
+async function fetchSpeakerSignups(classId: string): Promise<SpeakerSignup[]> {
+  const { data: signupRows, error } = await supabase
+    .from("bill_floor_speakers")
+    .select("bill_id,user_id,side,status,speaker_role")
+    .eq("class_id", classId);
+  if (error) throw error;
+
+  const userIds = Array.from(new Set(((signupRows ?? []) as any[]).map((row) => row.user_id).filter(Boolean)));
+  const { data: profiles } = userIds.length
+    ? await supabase.from("profiles").select("user_id,display_name").in("user_id", userIds)
+    : ({ data: [] } as any);
+  const namesById = new Map(((profiles ?? []) as any[]).map((profile) => [profile.user_id, profile.display_name ?? "Member"]));
+
+  return ((signupRows ?? []) as any[]).map((row) => ({
+    bill_id: row.bill_id,
+    user_id: row.user_id,
+    side: row.side,
+    status: row.status ?? "approved",
+    speaker_role: row.speaker_role ?? "speaker",
+    name: namesById.get(row.user_id) ?? "Member",
+  }));
+}
+
 export function CalendarScheduling() {
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
@@ -56,6 +79,7 @@ export function CalendarScheduling() {
   const [taskItems, setTaskItems] = useState<CalendarTask[]>([]);
   const [classId, setClassId] = useState<string | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
+  const [meName, setMeName] = useState("Member");
   const [speakerSignups, setSpeakerSignups] = useState<SpeakerSignup[]>([]);
   const [classSettings, setClassSettings] = useState<any>({});
 
@@ -66,6 +90,7 @@ export function CalendarScheduling() {
       setRole(profile.role ?? null);
       setClassId(classId);
       setMeId(userId);
+      setMeName(profile.display_name ?? "Member");
       const [{ data: tasks }, { data: cls }] = await Promise.all([
         supabase.from("class_tasks").select("id,title,task_type,due_at").eq("class_id", classId).not("due_at", "is", null).order("due_at", { ascending: true }),
         supabase.from("classes").select("settings").eq("id", classId).maybeSingle(),
@@ -84,11 +109,7 @@ export function CalendarScheduling() {
         setStudentItems(await fetchCalendaredBillsForCurrentClass());
       }
       try {
-        const { data: signupRows } = await supabase
-          .from("bill_floor_speakers")
-          .select("bill_id,user_id,side,status,speaker_role,profiles(display_name)")
-          .eq("class_id", classId);
-        setSpeakerSignups((signupRows ?? []).map((row: any) => ({ bill_id: row.bill_id, user_id: row.user_id, side: row.side, status: row.status ?? "approved", speaker_role: row.speaker_role ?? "speaker", name: row.profiles?.display_name ?? null })));
+        setSpeakerSignups(await fetchSpeakerSignups(classId));
       } catch {
         setSpeakerSignups([]);
       }
@@ -192,7 +213,7 @@ export function CalendarScheduling() {
     const existing = speakerSignups.find((row) => row.bill_id === billId && row.user_id === meId);
     const next = existing?.side === side
       ? speakerSignups.filter((row) => !(row.bill_id === billId && row.user_id === meId))
-      : [...speakerSignups.filter((row) => !(row.bill_id === billId && row.user_id === meId)), { bill_id: billId, user_id: meId, side, status }];
+      : [...speakerSignups.filter((row) => !(row.bill_id === billId && row.user_id === meId)), { bill_id: billId, user_id: meId, side, status, name: meName }];
     setSpeakerSignups(next);
     try {
       if (existing?.side === side) {

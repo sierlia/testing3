@@ -31,6 +31,34 @@ type SpeakerOptOutRow = { class_id: string; user_id: string };
 type FloorSpeakerRow = { bill_id: string; user_id: string; side: "for" | "against"; status: "pending" | "approved" | "rejected"; speaker_role: "speaker" | "opposition_leader"; name: string; party?: string | null; constituency?: string | null };
 type PreviousQuestionVoteRow = { bill_id: string; user_id: string; vote: "yea" | "nay" };
 
+async function fetchFloorSpeakersForClass(classId: string): Promise<FloorSpeakerRow[]> {
+  const { data: rows, error } = await supabase
+    .from("bill_floor_speakers")
+    .select("bill_id,user_id,side,status,speaker_role")
+    .eq("class_id", classId);
+  if (error) throw error;
+
+  const userIds = Array.from(new Set(((rows ?? []) as any[]).map((row) => row.user_id).filter(Boolean)));
+  const { data: profiles } = userIds.length
+    ? await supabase.from("profiles").select("user_id,display_name,party,constituency_name").in("user_id", userIds)
+    : ({ data: [] } as any);
+  const profilesById = new Map(((profiles ?? []) as any[]).map((profile) => [profile.user_id, profile]));
+
+  return ((rows ?? []) as any[]).map((row) => {
+    const profile = profilesById.get(row.user_id) as any;
+    return {
+      bill_id: row.bill_id,
+      user_id: row.user_id,
+      side: row.side,
+      status: row.status ?? "approved",
+      speaker_role: row.speaker_role ?? "speaker",
+      name: profile?.display_name ?? "Member",
+      party: profile?.party ?? null,
+      constituency: profile?.constituency_name ?? null,
+    };
+  });
+}
+
 function partyAbbr(party: string | null | undefined) {
   const normalized = String(party ?? "").toLowerCase();
   if (normalized.includes("democrat")) return "D";
@@ -88,7 +116,7 @@ export function FloorSession() {
         supabase.from("classes").select("settings").eq("id", current.classId).maybeSingle(),
         supabase.from("class_speaker_votes").select("class_id,voter_user_id,candidate_user_id").eq("class_id", current.classId),
         supabase.from("class_speaker_opt_outs").select("class_id,user_id").eq("class_id", current.classId),
-        supabase.from("bill_floor_speakers").select("bill_id,user_id,side,status,speaker_role,profiles(display_name,party,constituency_name)").eq("class_id", current.classId),
+        fetchFloorSpeakersForClass(current.classId),
         supabase.from("bill_previous_question_votes").select("bill_id,user_id,vote").eq("class_id", current.classId),
       ]);
       if (sessionRows.error) throw sessionRows.error;
@@ -103,7 +131,7 @@ export function FloorSession() {
       setStudentCount(students.length);
       setClassSettings((classRow.data as any)?.settings ?? {});
       setSpeakerCandidates(students.map((student) => ({ id: student.user_id, name: student.display_name ?? "Student", party: student.party, constituency: student.constituency_name })));
-      setFloorSpeakers(((floorSpeakerRows.data ?? []) as any[]).map((row) => ({ bill_id: row.bill_id, user_id: row.user_id, side: row.side, status: row.status ?? "approved", speaker_role: row.speaker_role ?? "speaker", name: row.profiles?.display_name ?? "Member", party: row.profiles?.party, constituency: row.profiles?.constituency_name })));
+      setFloorSpeakers(floorSpeakerRows);
       setPreviousQuestionVotes((previousQuestionRows.data ?? []) as any);
       const nextSpeakerVotes = (speakerVoteRows.data ?? []) as any[];
       setSpeakerVotes(nextSpeakerVotes);
@@ -190,6 +218,15 @@ export function FloorSession() {
             if (!nextRow) return prev;
             return [...prev.filter((row) => !(row.session_id === nextRow.session_id && row.user_id === nextRow.user_id)), nextRow];
           });
+        },
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "bill_floor_speakers", filter: `class_id=eq.${classId}` },
+        () => {
+          void fetchFloorSpeakersForClass(classId)
+            .then(setFloorSpeakers)
+            .catch((error) => toast.error(error.message || "Could not load floor speakers"));
         },
       )
       .subscribe();
