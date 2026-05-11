@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 
-type TabId = "dashboard" | "review" | "vote" | "election" | "letters" | "subcommittees";
+type TabId = "dashboard" | "review" | "vote" | "election" | "letters";
 
 type CountedTabId = "dashboard" | "review" | "vote";
 type Counts = Record<CountedTabId, number>;
@@ -199,7 +199,6 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     { id: "review" as const, label: "Markup", to: `/committee/${committeeId}/workspace` },
     { id: "election" as const, label: "Election", to: `/committee/${committeeId}/leadership` },
     { id: "letters" as const, label: "Letters", to: `/committees/${committeeId}?tab=letters` },
-    { id: "subcommittees" as const, label: "Subcommittees", to: `/committees/${committeeId}?tab=subcommittees` },
   ].filter((tab) => {
     if (access.isTeacher || access.isMember) return true;
     if (tab.id === "dashboard") return access.dashboardAccess;

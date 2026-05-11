@@ -129,7 +129,7 @@ export function CommitteeDashboard() {
   const canViewDashboard = Boolean(myRole) || isTeacher || paidAccess.has("dashboard");
   const canComment = Boolean(myRole) || isTeacher;
   const requestedPanel = searchParams.get("tab");
-  const activePanel = requestedPanel === "letters" || requestedPanel === "subcommittees" ? requestedPanel : "dashboard";
+  const activePanel = requestedPanel === "letters" ? requestedPanel : "dashboard";
 
   const selectedAnnouncement = useMemo(
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
@@ -1080,8 +1080,6 @@ export function CommitteeDashboard() {
           <div className="space-y-6">
             {activePanel === "letters" ? (
               <OrganizationLettersInbox organizationType="committee" organizationId={committeeId} organizationName={committee?.name ?? "committee"} memberIds={members.map((member) => member.user_id)} />
-            ) : activePanel === "subcommittees" ? (
-              <SubcommitteeRolesPanel committeeId={committeeId} allowMemberRoleSelection />
             ) : (
             <>
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -1119,7 +1117,7 @@ export function CommitteeDashboard() {
                     </button>
                   )}
                 </div>
-                <div className="border-l border-gray-300 pl-3 text-left">
+                <div className="max-h-64 overflow-y-auto border-l border-gray-300 pl-3 text-left">
                     <div className="mb-1 text-xs font-semibold text-gray-700">Subcommittees</div>
                     {(isLeader || isTeacher) && (
                       <div className="flex gap-1.5">
@@ -1137,19 +1135,25 @@ export function CommitteeDashboard() {
                         </button>
                       </div>
                     )}
-                    {subcommittees.length ? (
+                    {(allowSelfJoin || myRole || isTeacher) && subcommittees.length ? (
+                      <div className="mt-2">
+                        <SubcommitteeRolesPanel committeeId={committeeId} compact embedded allowMemberRoleSelection />
+                      </div>
+                    ) : subcommittees.length ? (
                       <div className="mt-2 text-xs text-gray-600">
                         {subcommittees.map((subcommittee, index) => (
                           <span key={subcommittee.id}>
-                            <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="text-left disabled:cursor-default">
+                            <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="inline-flex items-center gap-1 text-left disabled:cursor-default">
                               <span>{subcommittee.name}</span>
-                              {(isLeader || isTeacher) ? <span className="ml-1 font-semibold text-red-600">x</span> : null}
+                              {(isLeader || isTeacher) ? <X className="h-3 w-3 rounded-full text-red-600 hover:bg-red-50 hover:text-red-700" /> : null}
                             </button>
                             {index < subcommittees.length - 1 ? ", " : ""}
                           </span>
                         ))}
                       </div>
-                    ) : null}
+                    ) : (
+                      <div className="mt-2 text-xs text-gray-500">N/A</div>
+                    )}
                 </div>
               </div>
             </div>

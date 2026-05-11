@@ -238,6 +238,14 @@ export function TessBills() {
   }, [filters, pageSize, searchQuery, sortBy]);
 
   useEffect(() => {
+    if (!filteredBills.length) {
+      setSelectedBill(null);
+      return;
+    }
+    setSelectedBill((current) => (current && filteredBills.some((bill) => bill.id === current.id) ? current : filteredBills[0]));
+  }, [filteredBills]);
+
+  useEffect(() => {
     if (!openBillMenuId) return;
     const close = () => setOpenBillMenuId(null);
     document.addEventListener("pointerdown", close);

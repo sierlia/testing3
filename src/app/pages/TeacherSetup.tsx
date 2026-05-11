@@ -213,8 +213,6 @@ function CompactDefaultsDropdown({
   subtexts,
   labels,
   optionDetails,
-  capacities,
-  onCapacityChange,
   disabled = false,
 }: {
   title: string;
@@ -226,8 +224,6 @@ function CompactDefaultsDropdown({
   subtexts?: Record<string, string[]>;
   labels?: Record<string, string>;
   optionDetails?: Record<string, ReactNode>;
-  capacities?: Record<string, number>;
-  onCapacityChange?: (name: string, value: number) => void;
   disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
@@ -267,37 +263,31 @@ function CompactDefaultsDropdown({
             </div>
           </div>
           <div className="max-h-[24rem] overflow-y-auto pr-1">
-            {options.map((option) => {
+            {options.map((option, index) => {
               const checked = selected.includes(option);
-              const label = labels?.[option] ?? option;
+              const parent = option.includes("::") ? parentCommitteeFromSubcommitteeKey(option) : "";
+              const previousParent = index > 0 && options[index - 1].includes("::") ? parentCommitteeFromSubcommitteeKey(options[index - 1]) : "";
+              const rawLabel = labels?.[option] ?? option;
+              const label = parent ? rawLabel.split(": ").slice(1).join(": ") || rawLabel : rawLabel;
               const subtext = subtexts?.[option]?.join(", ");
               return (
-                <div key={option} className="flex items-start gap-2 rounded-md px-2 py-1 hover:bg-gray-50">
-                  <button
-                    type="button"
-                    onClick={() => onToggle(option)}
-                    className={`mt-0.5 h-4 w-4 rounded border ${checked ? "border-blue-600 bg-blue-600" : "border-gray-500 bg-white"}`}
-                    aria-label={`${checked ? "Disable" : "Enable"} ${label}`}
-                  >
-                    {checked && <Check className="h-3.5 w-3.5 text-white" />}
-                  </button>
-                  <button type="button" onClick={() => onToggle(option)} className="min-w-0 flex-1 text-left">
-                    <span className="block text-xs font-semibold leading-5 text-gray-900">{label}</span>
-                    {subtext ? <span className="block text-xs leading-4 text-gray-500">{subtext}</span> : null}
-                  </button>
-                  {optionDetails?.[option] ? <div className="mt-0.5 shrink-0">{optionDetails[option]}</div> : null}
-                  {onCapacityChange && checked && (
-                    <label className="flex shrink-0 items-center gap-1 text-xs text-gray-500">
-                      Cap
-                      <input
-                        type="number"
-                        min={1}
-                        value={capacities?.[option] ?? ""}
-                        onChange={(event) => onCapacityChange(option, Math.max(1, Number(event.target.value) || 1))}
-                        className="h-7 w-14 rounded-md border border-gray-300 px-2 text-xs outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </label>
-                  )}
+                <div key={option}>
+                  {parent && parent !== previousParent ? <div className="px-2 pb-1 pt-3 text-xs font-semibold uppercase tracking-wide text-gray-500">{parent}</div> : null}
+                  <div className="flex items-start gap-2 rounded-md px-2 py-1 hover:bg-gray-50">
+                    <button
+                      type="button"
+                      onClick={() => onToggle(option)}
+                      className={`mt-0.5 h-4 w-4 rounded border ${checked ? "border-blue-600 bg-blue-600" : "border-gray-500 bg-white"}`}
+                      aria-label={`${checked ? "Disable" : "Enable"} ${label}`}
+                    >
+                      {checked && <Check className="h-3.5 w-3.5 text-white" />}
+                    </button>
+                    <button type="button" onClick={() => onToggle(option)} className="min-w-0 flex-1 text-left">
+                      <span className="block text-xs font-semibold leading-5 text-gray-900">{label}</span>
+                      {subtext ? <span className="block text-xs leading-4 text-gray-500">{subtext}</span> : null}
+                    </button>
+                    {optionDetails?.[option] ? <div className="mt-0.5 shrink-0">{optionDetails[option]}</div> : null}
+                  </div>
                 </div>
               );
             })}
@@ -1531,7 +1521,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             </SettingSelect>} />
           </SettingsGroup>
           <SettingsGroup title="Money">
-            <Toggle checked={settings.moneyEnabled} onChange={(value) => setSettings({ moneyEnabled: value })} title="Enable money system" description="Show member balances and allow lobbyist contributions when enabled." />
+            <SettingRow
+              title="Money system"
+              description="Show member balances and allow lobbyist contributions when enabled."
+              control={enabledDisabledSelect(settings.moneyEnabled, (value) => setSettings({ moneyEnabled: value }))}
+            />
             <DisabledBlock disabled={!settings.moneyEnabled} tight>
               <SettingRow indent title="Starting balance" description="Amount each member starts with." control={<WordLimitInput label="" value={settings.startingMoney} max={100000} onChange={(value) => setSettings({ startingMoney: value })} />} />
               <SettingRow indent title="Committee dashboard access price" description="Amount lobbyists pay to see a committee dashboard." control={<WordLimitInput label="" value={settings.committeeDashboardAccessPrice} max={100000} onChange={(value) => setSettings({ committeeDashboardAccessPrice: value })} />} />
@@ -1588,14 +1582,23 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       );
     }
     if (activeTab === "bills") {
+      const billSubmissionSelectEnabled = settings.enableBills && settings.billSubmissionMode === "select";
       return (
         <div className="space-y-4">
           <DisabledBlock disabled={!settings.enableBills}>
-            <DisabledBlock disabled={settings.billSubmissionMode !== "select"} tight>
+            <div
+              className={`space-y-0.5 ${billSubmissionSelectEnabled ? "" : "opacity-45"}`}
+              onClick={() => {
+                if (!billSubmissionSelectEnabled) {
+                  setSettings({ enableBills: true, billSubmissionMode: "select", allowDrafts: true, studentCanCreateBills: true });
+                  setBillSubmissionOpen(true);
+                }
+              }}
+            >
               <SettingRow
                 indent
                 title="Students allowed to submit bills"
-                description="Only selected students can submit bill drafts."
+                description={billSubmissionSelectEnabled ? "Only selected students can submit bill drafts." : "This can be enabled in the Bills section dropdown."}
                 wide
                 control={
                   <div
@@ -1612,6 +1615,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                           key={student.id}
                           type="button"
                           onClick={() => removeBillSubmissionStudent(student.id)}
+                          disabled={!billSubmissionSelectEnabled}
                           className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200"
                         >
                           {student.name} x
@@ -1621,11 +1625,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                         value={billSubmissionSearch}
                         onChange={(event) => setBillSubmissionSearch(event.target.value)}
                         onFocus={() => setBillSubmissionOpen(true)}
+                        disabled={!billSubmissionSelectEnabled}
                         placeholder="Search students"
                         className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
                       />
                     </div>
-                    {billSubmissionOpen && (
+                    {billSubmissionOpen && billSubmissionSelectEnabled && (
                       <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
                         {billSubmissionCandidates.length ? (
                           billSubmissionCandidates.map((student) => (
@@ -1647,7 +1652,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
-            </DisabledBlock>
+            </div>
             <SettingRow indent title="Bill word limit" description="Maximum words allowed in bill text." control={<WordLimitInput label="" value={settings.billWordLimit} max={5000} onChange={(value) => setSettings({ billWordLimit: value })} />} />
             <SettingsGroup
               title="Cosponsorship"
@@ -1746,7 +1751,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             <DisabledBlock disabled={!settings.enableCommittees}>
               <SettingRow
                 title="Default committees"
-                description="Choose committees, seed their subcommittees, and set optional join capacities."
+                description="Choose committees and seed their subcommittees."
                 wide
                 control={
                   <div className="ml-auto w-[32rem] max-w-full">
@@ -1754,8 +1759,6 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                       title="Default committees"
                       selected={settings.enabledCommittees}
                       options={allCommittees}
-                      capacities={settings.committeeCapacitiesByName}
-                      onCapacityChange={(name, value) => setSettings({ committeeCapacitiesByName: { ...settings.committeeCapacitiesByName, [name]: value } })}
                       onToggle={(committee) => {
                         const enabled = settings.enabledCommittees.includes(committee);
                         setSettings({
@@ -1769,7 +1772,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </div>
                 }
               />
-              <div className={!settings.committeeSubcommitteesEnabled ? "pointer-events-none opacity-45" : ""}>
+              <div
+                className={!settings.committeeSubcommitteesEnabled ? "opacity-45" : ""}
+                onClick={() => {
+                  if (!settings.committeeSubcommitteesEnabled) setSettings({ enableCommittees: true, committeeSubcommitteesEnabled: true });
+                }}
+              >
                 <SettingRow
                   title="Default subcommittees"
                   description="Choose which subcommittees are created when subcommittees are enabled."
@@ -1939,28 +1947,35 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
       );
     }
     if (activeTab === "profiles") {
+      const profileSelectEnabled = settings.profilesEnabled && settings.profileEditingMode === "select";
       return (
-        <div className={`space-y-4 ${settings.profilesEnabled ? "" : "pointer-events-none opacity-45"}`}>
-          {(settings.profileEditingMode === "select" || settings.profileEditingMode === "all") && (
+        <div className={`space-y-4 ${settings.profilesEnabled ? "" : "opacity-45"}`}>
             <SettingRow
               title="Students allowed to edit profiles"
-              description={settings.profileEditingMode === "all" ? "All students can edit; select-student controls are shown for reference." : "Only selected students can edit their profile fields."}
+              description={profileSelectEnabled ? "Only selected students can edit their profile fields." : "This can be enabled in the Profiles section dropdown."}
               wide
               control={
                 <div
                   ref={profileEditingSearchRef}
-                  className={`relative ml-auto w-[32rem] max-w-full ${settings.profileEditingMode === "all" ? "pointer-events-none opacity-45" : ""}`}
+                  className={`relative ml-auto w-[32rem] max-w-full ${profileSelectEnabled ? "" : "opacity-45"}`}
                   onBlur={(event) => {
                     if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setProfileEditingOpen(false);
                   }}
+                  onClick={() => {
+                    if (!profileSelectEnabled) {
+                      setSettings({ profilesEnabled: true, profileEditingAllowed: true, profileEditingMode: "select" });
+                      setProfileEditingOpen(true);
+                    }
+                  }}
                 >
-                  <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => settings.profileEditingMode !== "all" && setProfileEditingOpen(true)}>
+                  <div className="flex min-h-11 flex-wrap items-center gap-2 rounded-md border border-gray-300 px-2 py-2 focus-within:ring-2 focus-within:ring-blue-500" onClick={() => profileSelectEnabled && setProfileEditingOpen(true)}>
                     <Search className="h-4 w-4 shrink-0 text-gray-400" />
                     {selectedProfileEditingStudents.map((student) => (
                       <button
                         key={student.id}
                         type="button"
                         onClick={() => removeProfileEditingStudent(student.id)}
+                        disabled={!profileSelectEnabled}
                         className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-700 hover:bg-gray-200"
                       >
                         {student.name} x
@@ -1970,12 +1985,12 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                         value={profileEditingSearch}
                         onChange={(event) => setProfileEditingSearch(event.target.value)}
                         onFocus={() => setProfileEditingOpen(true)}
-                        disabled={settings.profileEditingMode === "all"}
+                        disabled={!profileSelectEnabled}
                         placeholder="Search students"
                         className="min-w-40 flex-1 border-0 bg-transparent px-1 py-1 text-sm outline-none"
                       />
                   </div>
-                  {profileEditingOpen && settings.profileEditingMode !== "all" && (
+                  {profileEditingOpen && profileSelectEnabled && (
                     <div className="absolute left-0 right-0 top-full z-20 mt-2 max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-sm">
                       {profileEditingCandidates.length ? (
                         profileEditingCandidates.map((student) => (
@@ -1997,7 +2012,6 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 </div>
               }
             />
-          )}
           <ProfileLayoutEditor embedded />
         </div>
       );

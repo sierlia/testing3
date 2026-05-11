@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
-import { DollarSign, LogOut, Send, UserPlus, Users } from "lucide-react";
+import { DollarSign, LogOut, MoreHorizontal, Plus, Send, Trash2, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { SecureAvatar } from "../components/SecureAvatar";
@@ -43,7 +43,9 @@ export function LobbyistGroupDetail() {
   const [isMember, setIsMember] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [selectedCandidateId, setSelectedCandidateId] = useState("");
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [memberPickerOpen, setMemberPickerOpen] = useState(false);
+  const [openMemberMenuId, setOpenMemberMenuId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -84,7 +86,7 @@ export function LobbyistGroupDetail() {
         .filter((row) => row.role !== "teacher" && !memberSet.has(row.user_id))
         .map((row) => ({ user_id: row.user_id, display_name: row.display_name ?? "Member" }));
       setCandidates(nextCandidates);
-      setSelectedCandidateId((current) => current && nextCandidates.some((candidate) => candidate.user_id === current) ? current : nextCandidates[0]?.user_id ?? "");
+      setSelectedCandidateIds((current) => current.filter((id) => nextCandidates.some((candidate) => candidate.user_id === id)));
       setContributions(
         ((spending ?? []) as any[]).map((row) => ({
           ...row,
@@ -109,6 +111,16 @@ export function LobbyistGroupDetail() {
     void load();
   }, [groupId]);
 
+  useEffect(() => {
+    if (!memberPickerOpen && !openMemberMenuId) return;
+    const close = () => {
+      setMemberPickerOpen(false);
+      setOpenMemberMenuId(null);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [memberPickerOpen, openMemberMenuId]);
+
   const totalSpent = useMemo(() => contributions.reduce((sum, row) => sum + Number(row.amount ?? 0), 0), [contributions]);
   const selectedAnnouncement = announcements.find((announcement) => announcement.id === selectedAnnouncementId) ?? null;
   const canPostAnnouncements = isMember || isTeacher;
@@ -129,18 +141,30 @@ export function LobbyistGroupDetail() {
     await load();
   };
 
-  const assignMember = async () => {
-    if (!isTeacher || !selectedCandidateId) return;
-    const { data: existingLobbyist } = await supabase.from("lobbyist_group_members").select("group_id").eq("user_id", selectedCandidateId).limit(1);
-    if ((existingLobbyist ?? []).length) return toast.error("That member is already in a lobbyist group");
+  const assignMembers = async () => {
+    if (!isTeacher || !selectedCandidateIds.length) return;
+    const { data: existingLobbyist } = await supabase.from("lobbyist_group_members").select("user_id").in("user_id", selectedCandidateIds);
+    const existingIds = new Set(((existingLobbyist ?? []) as any[]).map((row) => row.user_id));
+    const ids = selectedCandidateIds.filter((candidateId) => !existingIds.has(candidateId));
+    if (!ids.length) return toast.error("Those members are already in a lobbyist group");
     await Promise.all([
-      supabase.from("profiles").update({ party: null } as any).eq("user_id", selectedCandidateId),
-      supabase.from("committee_members").delete().eq("user_id", selectedCandidateId),
-      supabase.from("caucus_members").delete().eq("user_id", selectedCandidateId),
+      supabase.from("profiles").update({ party: null } as any).in("user_id", ids),
+      supabase.from("committee_members").delete().in("user_id", ids),
+      supabase.from("caucus_members").delete().in("user_id", ids),
     ]);
-    const { error } = await supabase.from("lobbyist_group_members").insert({ group_id: groupId, user_id: selectedCandidateId, assigned_by_teacher: true } as any);
+    const { error } = await supabase.from("lobbyist_group_members").insert(ids.map((userId) => ({ group_id: groupId, user_id: userId, assigned_by_teacher: true })) as any);
     if (error) return toast.error(error.message || "Could not assign member");
+    setSelectedCandidateIds([]);
+    setMemberPickerOpen(false);
     await load();
+  };
+
+  const removeMember = async (userId: string) => {
+    if (!isTeacher) return;
+    const { error } = await supabase.from("lobbyist_group_members").delete().eq("group_id", groupId).eq("user_id", userId);
+    if (error) return toast.error(error.message || "Could not remove member");
+    setMembers((current) => current.filter((member) => member.user_id !== userId));
+    toast.success("Member removed");
   };
 
   const postAnnouncement = async () => {
@@ -286,24 +310,71 @@ export function LobbyistGroupDetail() {
           </div>
 
           <aside className="self-start rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-            <div className="mb-4 flex items-center gap-2">
-              <Users className="h-5 w-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Members ({members.length})</h2>
-            </div>
-            {isTeacher && (
-              <div className="mb-4 flex gap-2 rounded-md border border-gray-200 bg-gray-50 p-3">
-                <select value={selectedCandidateId} onChange={(event) => setSelectedCandidateId(event.target.value)} className="min-w-0 flex-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm">
-                  {candidates.length ? candidates.map((candidate) => <option key={candidate.user_id} value={candidate.user_id}>{candidate.display_name ?? "Member"}</option>) : <option value="">No available students</option>}
-                </select>
-                <button type="button" onClick={() => void assignMember()} disabled={!selectedCandidateId} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Assign</button>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-blue-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Members ({members.length})</h2>
               </div>
-            )}
+              {isTeacher && (
+                <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                  <button type="button" onClick={() => setMemberPickerOpen((open) => !open)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Add members">
+                    <Plus className="h-4 w-4" />
+                  </button>
+                  {memberPickerOpen && (
+                    <div className="absolute right-0 top-full z-[120] mt-2 w-72 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
+                      <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
+                        <div className="text-sm font-semibold text-gray-900">Add students</div>
+                        <button type="button" onClick={() => setMemberPickerOpen(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100"><X className="h-4 w-4" /></button>
+                      </div>
+                      <div className="max-h-72 overflow-y-auto p-2">
+                        {candidates.length ? candidates.map((candidate) => {
+                          const checked = selectedCandidateIds.includes(candidate.user_id);
+                          return (
+                            <button
+                              key={candidate.user_id}
+                              type="button"
+                              onClick={() => setSelectedCandidateIds((current) => checked ? current.filter((id) => id !== candidate.user_id) : [...current, candidate.user_id])}
+                              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-gray-50"
+                            >
+                              <span className={`h-4 w-4 rounded border ${checked ? "border-blue-600 bg-blue-600" : "border-gray-400 bg-white"}`} />
+                              <span className="truncate">{candidate.display_name ?? "Member"}</span>
+                            </button>
+                          );
+                        }) : <div className="px-3 py-6 text-center text-sm text-gray-500">No available students.</div>}
+                      </div>
+                      <div className="border-t border-gray-100 p-2">
+                        <button type="button" onClick={() => void assignMembers()} disabled={!selectedCandidateIds.length} className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                          Add selected
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
             <div className="space-y-3">
               {members.map((member) => (
-                <Link key={member.user_id} to={profilePath(member.user_id)} className="flex items-center gap-3 rounded-md px-2 py-2 hover:bg-gray-50">
-                  <SecureAvatar src={member.avatar_url} alt={member.display_name ?? "Member"} className="h-10 w-10 rounded-full object-cover" fallbackClassName="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />
-                  <span className={member.role === "teacher" ? "truncate text-sm font-medium text-green-700" : "truncate text-sm font-medium text-blue-600"}>{member.display_name ?? "Member"}</span>
-                </Link>
+                <div key={member.user_id} className="flex items-center gap-2 rounded-md px-2 py-2 hover:bg-gray-50">
+                  <Link to={profilePath(member.user_id)} className="flex min-w-0 flex-1 items-center gap-3">
+                    <SecureAvatar src={member.avatar_url} alt={member.display_name ?? "Member"} className="h-10 w-10 rounded-full object-cover" fallbackClassName="h-10 w-10" iconClassName="h-5 w-5 text-gray-500" />
+                    <span className={member.role === "teacher" ? "truncate text-sm font-medium text-green-700" : "truncate text-sm font-medium text-blue-600"}>{member.display_name ?? "Member"}</span>
+                  </Link>
+                  {isTeacher && (
+                    <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                      <button type="button" onClick={() => setOpenMemberMenuId((current) => current === member.user_id ? null : member.user_id)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Member options">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </button>
+                      {openMemberMenuId === member.user_id && (
+                        <div className="absolute right-0 top-full z-[120] mt-1 w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                          <button type="button" onClick={() => void removeMember(member.user_id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50">
+                            <Trash2 className="h-4 w-4" />
+                            Remove
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               ))}
               {!members.length && <div className="text-sm text-gray-500">No members yet.</div>}
             </div>

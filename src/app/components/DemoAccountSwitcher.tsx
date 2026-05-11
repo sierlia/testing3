@@ -4,17 +4,39 @@ import { toast } from "sonner";
 import { demoAccounts, DemoAccountKey, switchDemoAccount } from "../utils/demoAccounts";
 import { useAuth } from "../utils/AuthContext";
 
-const storageKey = "gavel:demoSwitcherPosition:v2";
+const storageKey = "gavel:demoSwitcherPosition:v3";
 const buttonSize = { width: 92, height: 52 };
+
+function clampPosition(position: { x: number; y: number }) {
+  return {
+    x: Math.min(window.innerWidth - buttonSize.width, Math.max(8, position.x)),
+    y: Math.min(window.innerHeight - buttonSize.height, Math.max(8, position.y)),
+  };
+}
 
 function readPosition() {
   try {
     const parsed = JSON.parse(window.localStorage.getItem(storageKey) ?? "null");
+    if (typeof parsed?.rx === "number" && typeof parsed?.ry === "number") {
+      return clampPosition({
+        x: parsed.rx * (window.innerWidth - buttonSize.width),
+        y: parsed.ry * (window.innerHeight - buttonSize.height),
+      });
+    }
     if (typeof parsed?.x === "number" && typeof parsed?.y === "number") return parsed as { x: number; y: number };
   } catch {
     // ignore
   }
   return null;
+}
+
+function savePosition(position: { x: number; y: number }) {
+  const availableWidth = Math.max(1, window.innerWidth - buttonSize.width);
+  const availableHeight = Math.max(1, window.innerHeight - buttonSize.height);
+  window.localStorage.setItem(storageKey, JSON.stringify({
+    rx: Math.min(1, Math.max(0, position.x / availableWidth)),
+    ry: Math.min(1, Math.max(0, position.y / availableHeight)),
+  }));
 }
 
 export function DemoAccountSwitcher() {
@@ -46,7 +68,7 @@ export function DemoAccountSwitcher() {
     };
     positionRef.current = centered;
     setPosition(centered);
-    window.localStorage.setItem(storageKey, JSON.stringify(centered));
+    savePosition(centered);
   };
 
   const hideDragHint = () => {
@@ -92,8 +114,9 @@ export function DemoAccountSwitcher() {
       return;
     }
     const initial = saved ?? { x: Math.max(16, window.innerWidth - 96), y: Math.max(16, window.innerHeight - 76) };
-    positionRef.current = initial;
-    setPosition(initial);
+    const clamped = clampPosition(initial);
+    positionRef.current = clamped;
+    setPosition(clamped);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -206,8 +229,8 @@ export function DemoAccountSwitcher() {
       const drag = dragRef.current;
       if (!drag) return;
       const next = {
-        x: Math.min(window.innerWidth - 96, Math.max(8, drag.baseX + event.clientX - drag.startX)),
-        y: Math.min(window.innerHeight - 64, Math.max(8, drag.baseY + event.clientY - drag.startY)),
+        x: Math.min(window.innerWidth - buttonSize.width, Math.max(8, drag.baseX + event.clientX - drag.startX)),
+        y: Math.min(window.innerHeight - buttonSize.height, Math.max(8, drag.baseY + event.clientY - drag.startY)),
       };
       const moved = Math.abs(event.clientX - drag.startX) > 4 || Math.abs(event.clientY - drag.startY) > 4;
       drag.moved = drag.moved || moved;
@@ -222,16 +245,24 @@ export function DemoAccountSwitcher() {
     };
     const onUp = () => {
       const current = positionRef.current;
-      if (current) window.localStorage.setItem(storageKey, JSON.stringify(current));
+      if (current) savePosition(current);
       window.setTimeout(() => {
         dragRef.current = null;
       }, 0);
     };
+    const onResize = () => {
+      const next = readPosition();
+      if (!next) return;
+      positionRef.current = next;
+      setPosition(next);
+    };
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("resize", onResize);
     return () => {
       window.removeEventListener("pointermove", onMove);
       window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("resize", onResize);
     };
   }, [launchLoading, launchOverlayVisible]);
 

@@ -213,7 +213,8 @@ export function CommitteesHome() {
       .map((c) => ({ ...c, memberCount: memberCounts[c.id] ?? 0, capacity: Number(settings?.committees?.capacities?.[c.id] ?? settings?.committees?.capacitiesByName?.[c.name] ?? 0), subcommittees: subcommitteesByCommitteeId[c.id] ?? [], leadership: leadershipNames[c.id] ?? {} }));
   }, [committees, leadershipNames, memberCounts, memberNames, searchQuery, settings, subcommitteesByCommitteeId]);
   const canSelfJoin = role === "student" && (!!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join");
-  const canUseJoinButton = role === "teacher" || canSelfJoin;
+  const sectionDisabled = settings?.organizations?.enabled === false || settings?.organizations?.enableCommittees === false;
+  const canUseJoinButton = !sectionDisabled && (role === "teacher" || canSelfJoin);
 
   const joinCommittee = async (committeeId: string) => {
     if (!meId || joinedCommitteeIds.has(committeeId)) return;
@@ -355,7 +356,7 @@ export function CommitteesHome() {
                     className="h-10 w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
-                {role === "teacher" && (
+                {role === "teacher" && !sectionDisabled && (
                   <button
                     type="button"
                     onClick={() => setEditingCommittee({ id: "new", name: "", description: "", created_at: new Date().toISOString() })}
@@ -380,26 +381,9 @@ export function CommitteesHome() {
                 </span>
               </button>
             )}
-            {role === "teacher" && editingCommittee && (
-              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                <div className="grid gap-3 md:grid-cols-[1fr_2fr_auto]">
-                  <input
-                    value={editingCommittee.name}
-                    onChange={(event) => setEditingCommittee({ ...editingCommittee, name: event.target.value })}
-                    className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="Committee name"
-                  />
-                  <input
-                    value={editingCommittee.description ?? ""}
-                    onChange={(event) => setEditingCommittee({ ...editingCommittee, description: event.target.value })}
-                    className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                    placeholder="About this committee"
-                  />
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => void saveCommitteeEdits()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Save</button>
-                    <button type="button" onClick={() => setEditingCommittee(null)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
-                  </div>
-                </div>
+            {sectionDisabled && (
+              <div className="rounded-md border border-gray-200 bg-gray-100 px-4 py-3 text-sm text-gray-600">
+                Committees have been disabled from settings.
               </div>
             )}
             {loading ? (
@@ -417,7 +401,7 @@ export function CommitteesHome() {
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") navigate(`/committees/${c.id}`);
                     }}
-                    className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""}`}
+                    className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""} ${sectionDisabled ? "pointer-events-none opacity-50 grayscale" : ""}`}
                   >
                     <div className="min-w-0 flex-1">
                       <div className="font-semibold text-gray-900 truncate">{committeeDisplayName(c.name)}</div>
@@ -505,6 +489,31 @@ export function CommitteesHome() {
           </div>
         </OrganizationsLayout>
       </main>
+      {role === "teacher" && editingCommittee && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-white p-5 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">{editingCommittee.id === "new" ? "Create committee" : "Edit committee"}</h2>
+            <div className="space-y-3">
+              <input
+                value={editingCommittee.name}
+                onChange={(event) => setEditingCommittee({ ...editingCommittee, name: event.target.value })}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Committee name"
+              />
+              <textarea
+                value={editingCommittee.description ?? ""}
+                onChange={(event) => setEditingCommittee({ ...editingCommittee, description: event.target.value })}
+                className="min-h-28 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="About this committee"
+              />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setEditingCommittee(null)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+                <button type="button" onClick={() => void saveCommitteeEdits()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );

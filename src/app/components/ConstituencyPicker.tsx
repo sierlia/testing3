@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, MapPin, Check, ExternalLink } from "lucide-react";
+import { Search, MapPin, Check } from "lucide-react";
 import { normalizeConstituencyId } from "../utils/constituency";
 
 export interface Constituency {
@@ -276,16 +276,6 @@ export function ConstituencyPicker({
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-2">
-                    <a
-                      href={constituency.wikipediaUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={(e) => e.stopPropagation()}
-                      className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-700 hover:underline"
-                    >
-                      Wikipedia
-                      <ExternalLink className="w-3 h-3" />
-                    </a>
                     {isSelected && (
                       <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
                         <Check className="w-4 h-4 text-white" />
@@ -303,6 +293,13 @@ export function ConstituencyPicker({
           })
         )}
       </div>
+      <p className="mt-3 text-xs text-gray-500">
+        District PVI and district reference data are sourced from{" "}
+        <a href="https://www.cookpolitical.com/cook-pvi/2025-partisan-voting-index/district-map-and-list" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+          The Cook Political Report 2025 Partisan Voting Index
+        </a>
+        .
+      </p>
     </div>
   );
 }

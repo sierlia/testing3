@@ -9,7 +9,6 @@ import { formatConstituency } from "../utils/constituency";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { profilePath } from "../utils/profileRoute";
-import { OrganizationsLayout } from "./OrganizationsLayout";
 
 type Member = {
   user_id: string;
@@ -200,7 +199,6 @@ export function Members() {
       <Navigation />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <OrganizationsLayout active="members">
         <div className="mb-8">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold text-gray-900">{loading ? "Members" : `Members (${memberCount})`}</h1>
@@ -324,7 +322,6 @@ export function Members() {
             No members found
           </div>
         )}
-        </OrganizationsLayout>
       </main>
     </div>
   );

@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite"
+    "dev": "vite",
+    "scrape:cook-pvi": "node scripts/scrape-cook-pvi.mjs",
+    "scrape:lobbyists": "node scripts/scrape-lobbyist-groups.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

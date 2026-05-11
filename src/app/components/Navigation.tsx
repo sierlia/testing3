@@ -6,7 +6,6 @@ import { NotificationBadge } from "./NotificationBadge";
 import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
 import { profilePath } from "../utils/profileRoute";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
 import { SecureAvatar } from "./SecureAvatar";
 
 type TeacherClass = { id: string; name: string };
@@ -52,6 +51,24 @@ function cacheAvatar(userId: string, avatarUrl: string | null) {
   }
 }
 
+function readCachedMoney(userId: string) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(`gavel:money:${userId}`) ?? "null");
+    if (typeof parsed?.enabled === "boolean" && typeof parsed?.balance === "number") return parsed as { enabled: boolean; balance: number };
+  } catch {
+    // ignore storage failures
+  }
+  return { enabled: false, balance: 0 };
+}
+
+function cacheMoney(userId: string, money: { enabled: boolean; balance: number }) {
+  try {
+    window.localStorage.setItem(`gavel:money:${userId}`, JSON.stringify(money));
+  } catch {
+    // ignore storage failures
+  }
+}
+
 export function Navigation() {
   const [organizationsOpen, setOrganizationsOpen] = useState(false);
   const [legislationOpen, setLegislationOpen] = useState(false);
@@ -71,7 +88,7 @@ export function Navigation() {
   const [activeClassName, setActiveClassName] = useState<string>("");
   const [teacherClasses, setTeacherClasses] = useState<TeacherClass[]>([]);
   const [unreadLetters, setUnreadLetters] = useState(0);
-  const [money, setMoney] = useState<{ enabled: boolean; balance: number }>({ enabled: false, balance: 0 });
+  const [money, setMoney] = useState<{ enabled: boolean; balance: number }>(() => (user?.id ? readCachedMoney(user.id) : { enabled: false, balance: 0 }));
   const classMenuRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const moneyMenuRef = useRef<HTMLDivElement | null>(null);
@@ -111,6 +128,7 @@ export function Navigation() {
         setMoney({ enabled: false, balance: 0 });
         return;
       }
+      setMoney(readCachedMoney(user.id));
       const cachedAvatar = readCachedAvatar(user.id);
       if (cachedAvatar) setAvatarUrl(cachedAvatar);
       const routeClassId = location.pathname.match(/^\/(?:teacher\/class|class)\/([^/]+)/)?.[1] ?? null;
@@ -140,9 +158,13 @@ export function Navigation() {
           ]);
           const spent = (sent ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
           const incoming = (received ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0);
-          setMoney({ enabled: true, balance: Number(settings.money.startingAmount ?? 1000) - spent + incoming });
+          const nextMoney = { enabled: true, balance: Number(settings.money.startingAmount ?? 1000) - spent + incoming };
+          setMoney(nextMoney);
+          cacheMoney(user.id, nextMoney);
         } else {
-          setMoney({ enabled: false, balance: 0 });
+          const nextMoney = { enabled: false, balance: 0 };
+          setMoney(nextMoney);
+          cacheMoney(user.id, nextMoney);
         }
       }
       if ((user.user_metadata as any)?.role === "teacher") {
@@ -366,7 +388,7 @@ export function Navigation() {
     const { error } = await supabase.from("newsletter_ad_bids").insert({
       class_id: activeClassId,
       bidder_user_id: user.id,
-      lobbyist_group_id: adBidDraft.lobbyistGroupId || null,
+      lobbyist_group_id: myLobbyistGroups[0]?.id ?? null,
       message: adBidDraft.message.trim(),
       amount: Math.max(0, Number(adBidDraft.amount) || 0),
     } as any);
@@ -528,7 +550,7 @@ export function Navigation() {
               <div className="relative" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                 <button
                   onClick={() => navigate("/parties")}
-                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/lobbyists", "/committee", "/members"]))}
+                  className={navButtonClass(isActivePath(["/parties", "/committees", "/caucuses", "/lobbyists", "/committee"]))}
                 >
                   Organizations
                   <ChevronDown
@@ -562,15 +584,16 @@ export function Navigation() {
                     >
                       Lobbyists
                     </Link>
-                    <Link
-                      to="/members"
-                      className={dropdownItemClass(isActivePath(["/members"]))}
-                    >
-                      Members
-                    </Link>
                   </div>
                 )}
               </div>
+
+              <Link
+                to="/members"
+                className={navItemClass(isActivePath(["/members"]))}
+              >
+                Members
+              </Link>
 
               <div className="relative" onMouseEnter={openFloor} onMouseLeave={closeFloorSoon}>
                 <button
@@ -798,15 +821,6 @@ export function Navigation() {
               </div>
             </div>
             <div className="space-y-4">
-              {myLobbyistGroups.length ? (
-                <Select value={adBidDraft.lobbyistGroupId || "self"} onValueChange={(value) => setAdBidDraft({ ...adBidDraft, lobbyistGroupId: value === "self" ? "" : value })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="z-[140]">
-                    <SelectItem value="self">Bid as yourself</SelectItem>
-                    {myLobbyistGroups.map((group) => <SelectItem key={group.id} value={group.id}>Bid as {group.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              ) : null}
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">Bid amount</span>
                 <span className="relative block">

@@ -42,6 +42,7 @@ export function TessCaucuses() {
   const [createDescription, setCreateDescription] = useState("");
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
+  const [settings, setSettings] = useState<any>({});
   const [editingCaucus, setEditingCaucus] = useState<Caucus | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
 
@@ -60,8 +61,12 @@ export function TessCaucuses() {
         const me = auth.user?.id;
         if (!me) return;
         if (auth.user?.user_metadata?.role === "teacher") setRole("teacher");
-        const { data: profile } = await supabase.from("profiles").select("role").eq("user_id", me).maybeSingle();
+        const { data: profile } = await supabase.from("profiles").select("role,class_id").eq("user_id", me).maybeSingle();
         setRole(((profile as any)?.role ?? null) as any);
+        if ((profile as any)?.class_id) {
+          const { data: cls } = await supabase.from("classes").select("settings").eq("id", (profile as any).class_id).maybeSingle();
+          setSettings((cls as any)?.settings ?? {});
+        }
 
         const { data: caucusRows, error: cErr } = await supabase
           .from("caucuses")
@@ -159,6 +164,7 @@ export function TessCaucuses() {
       return sortOrder === "asc" ? comparison : -comparison;
     });
   }, [filteredCaucuses, sortBy, sortOrder]);
+  const sectionDisabled = settings?.organizations?.enabled === false || settings?.organizations?.enableCaucuses === false;
   useEffect(() => {
     setPage(1);
   }, [pageSize, searchQuery, sortBy, sortOrder]);
@@ -310,69 +316,6 @@ export function TessCaucuses() {
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <OrganizationsLayout active="caucuses">
-        {showCreateForm && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">Create New Caucus</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Caucus Name *</label>
-                <input
-                  type="text"
-                  value={createName}
-                  onChange={(e) => setCreateName(e.target.value)}
-                  placeholder="e.g., Climate Action Caucus"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Description *</label>
-                <textarea
-                  value={createDescription}
-                  onChange={(e) => setCreateDescription(e.target.value)}
-                  placeholder="Describe the caucus purpose and goals..."
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                />
-              </div>
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
-                <button onClick={() => setShowCreateForm(false)} className="px-4 py-2 text-gray-700 hover:text-gray-900 transition-colors">
-                  Cancel
-                </button>
-                <button
-                  className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
-                  disabled={creating || !createName.trim() || !createDescription.trim()}
-                  onClick={handleCreate}
-                >
-                  {creating ? "Creating..." : "Create Caucus"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {role === "teacher" && editingCaucus && (
-          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-            <div className="grid gap-3 md:grid-cols-[1fr_2fr_auto]">
-              <input
-                value={editingCaucus.name}
-                onChange={(event) => setEditingCaucus({ ...editingCaucus, name: event.target.value })}
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                placeholder="Caucus name"
-              />
-              <input
-                value={editingCaucus.description}
-                onChange={(event) => setEditingCaucus({ ...editingCaucus, description: event.target.value })}
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                placeholder="About this caucus"
-              />
-              <div className="flex gap-2">
-                <button type="button" onClick={() => void saveCaucusEdits()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Save</button>
-                <button type="button" onClick={() => setEditingCaucus(null)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
-              </div>
-            </div>
-          </div>
-        )}
-
         <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
@@ -385,13 +328,13 @@ export function TessCaucuses() {
                 className="h-10 w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
-            <button
+            {!sectionDisabled && <button
               onClick={() => setShowCreateForm(!showCreateForm)}
               className="flex h-10 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
             >
               <Plus className="w-4 h-4" />
               Create Caucus
-            </button>
+            </button>}
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as any)}>
@@ -408,6 +351,11 @@ export function TessCaucuses() {
             </button>
           </div>
         </div>
+        {sectionDisabled && (
+          <div className="mb-4 rounded-md border border-gray-200 bg-gray-100 px-4 py-3 text-sm text-gray-600">
+            Caucuses have been disabled from settings.
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
           {loading ? (
@@ -424,7 +372,7 @@ export function TessCaucuses() {
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") navigate(`/tess-caucuses/${caucus.id}`);
                 }}
-                className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
+                className={`bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow ${sectionDisabled ? "pointer-events-none opacity-50 grayscale" : ""}`}
               >
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -525,6 +473,66 @@ export function TessCaucuses() {
         {!loading && sortedCaucuses.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={sortedCaucuses.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
         </OrganizationsLayout>
       </main>
+      {showCreateForm && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Create Caucus</h2>
+            <div className="space-y-4">
+              <input
+                type="text"
+                value={createName}
+                onChange={(e) => setCreateName(e.target.value)}
+                placeholder="Caucus name"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <textarea
+                value={createDescription}
+                onChange={(e) => setCreateDescription(e.target.value)}
+                placeholder="Describe the caucus purpose and goals..."
+                rows={5}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <div className="flex items-center justify-end gap-3 border-t border-gray-200 pt-4">
+                <button onClick={() => setShowCreateForm(false)} className="rounded-md px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+                  Cancel
+                </button>
+                <button
+                  className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                  disabled={creating || !createName.trim() || !createDescription.trim()}
+                  onClick={handleCreate}
+                >
+                  {creating ? "Creating..." : "Create Caucus"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {role === "teacher" && editingCaucus && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-white p-5 shadow-xl">
+            <h2 className="mb-4 text-lg font-semibold text-gray-900">Edit caucus</h2>
+            <div className="space-y-3">
+              <input
+                value={editingCaucus.name}
+                onChange={(event) => setEditingCaucus({ ...editingCaucus, name: event.target.value })}
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="Caucus name"
+              />
+              <textarea
+                value={editingCaucus.description}
+                onChange={(event) => setEditingCaucus({ ...editingCaucus, description: event.target.value })}
+                className="min-h-28 w-full rounded-md border border-gray-300 px-3 py-2 text-sm"
+                placeholder="About this caucus"
+              />
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setEditingCaucus(null)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+                <button type="button" onClick={() => void saveCaucusEdits()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );

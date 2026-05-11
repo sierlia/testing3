@@ -90,6 +90,7 @@ const defaultProfileSections: ProfileSectionRow[] = [
 ];
 
 const PROFILE_COLLAPSE_WORDS = 150;
+const COOK_PVI_SOURCE_URL = "https://www.cookpolitical.com/cook-pvi/2025-partisan-voting-index/district-map-and-list";
 
 function countWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -546,7 +547,7 @@ export function StudentProfile() {
     await saveProfile({
       constituency_name: c.id.toUpperCase(),
       constituency_cook_pvi: c.pvi,
-      constituency_url: c.wikipediaUrl,
+      constituency_url: COOK_PVI_SOURCE_URL,
     } as any);
     setShowConstituencyModal(false);
   };
@@ -887,8 +888,8 @@ export function StudentProfile() {
                     <div className="text-xs text-gray-500">
                       Cook PVI: {profile.constituency_cook_pvi || "N/A"}{" "}
                       {profile.constituency_url ? (
-                        <a href={profile.constituency_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-                          Wikipedia
+                        <a href={COOK_PVI_SOURCE_URL} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+                          Cook PVI source
                         </a>
                       ) : null}
                     </div>

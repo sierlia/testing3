@@ -60,6 +60,7 @@ export function LobbyistGroups() {
     const q = query.toLowerCase().trim();
     return groups.filter((group) => !q || group.name.toLowerCase().includes(q) || group.description.toLowerCase().includes(q));
   }, [groups, query]);
+  const sectionDisabled = settings?.organizations?.enabled === false || settings?.organizations?.enableLobbyists === false || settings?.lobbyists?.enabled === false;
 
   const createGroup = async () => {
     if (!classId || !draft.name.trim()) return;
@@ -90,7 +91,7 @@ export function LobbyistGroups() {
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search lobbyist groups..." className="h-10 w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                {role === "teacher" && (
+                {role === "teacher" && !sectionDisabled && (
                   <button type="button" onClick={() => setEditing(true)} className="inline-flex h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
                     <Plus className="h-4 w-4" />
                     Create group
@@ -112,14 +113,15 @@ export function LobbyistGroups() {
             )}
             {loading ? (
               <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">Loading lobbyist groups...</div>
-            ) : !settings?.lobbyists?.enabled && role !== "teacher" ? (
-              <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">Lobbyist groups are disabled.</div>
+            ) : sectionDisabled && !items.length ? (
+              <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">Lobbyist groups have been disabled from settings.</div>
             ) : items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No lobbyist groups yet.</div>
             ) : (
               <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                {sectionDisabled && <div className="border-b border-gray-200 bg-gray-100 px-4 py-3 text-sm text-gray-600">Lobbyist groups have been disabled from settings.</div>}
                 {items.map((group, index) => (
-                  <div key={group.id} role="button" tabIndex={0} onClick={() => navigate(`/lobbyists/${group.id}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") navigate(`/lobbyists/${group.id}`); }} className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""}`}>
+                  <div key={group.id} role="button" tabIndex={0} onClick={() => navigate(`/lobbyists/${group.id}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") navigate(`/lobbyists/${group.id}`); }} className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""} ${sectionDisabled ? "pointer-events-none opacity-50 grayscale" : ""}`}>
                     <div className="min-w-0">
                       <div className="truncate font-semibold text-gray-900">{group.name}</div>
                       {group.description ? <div className="mt-1 line-clamp-2 text-sm text-gray-600">{group.description}</div> : null}

@@ -355,6 +355,8 @@ export function RecordsPage() {
   const [recordDraft, setRecordDraft] = useState({ title: "", type: "record", body: "" });
   const [adBidDraft, setAdBidDraft] = useState({ message: "", amount: "0", lobbyistGroupId: "" });
   const [myLobbyistGroups, setMyLobbyistGroups] = useState<Array<{ id: string; name: string }>>([]);
+  const [peopleOptions, setPeopleOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [moneyEnabled, setMoneyEnabled] = useState(false);
   const [openRecordMenuId, setOpenRecordMenuId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const userFilter = searchParams.get("user") ?? searchParams.get("author") ?? "";
@@ -376,6 +378,7 @@ export function RecordsPage() {
     const { data: cls } = await supabase.from("classes").select("settings").eq("id", activeClassId).maybeSingle();
     const customTypes = (((cls as any)?.settings?.records?.types ?? ["record"]) as string[]).filter(Boolean);
     setRecordTypes(customTypes.length ? customTypes : ["record"]);
+    setMoneyEnabled(Boolean((cls as any)?.settings?.money?.enabled));
 
     const [{ data: customRecords }, { data: letters }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, { data: lobbyistMemberships }, { data: contributions }, directory] = await Promise.all([
       supabase.from("custom_records").select("id,type,title,body,created_by,generated,metadata,created_at,updated_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
@@ -404,7 +407,13 @@ export function RecordsPage() {
     ]);
     setMyLobbyistGroups(((lobbyistMemberships ?? []) as any[]).map((row) => row.lobbyist_groups).filter(Boolean));
 
-    const people = ((directory.data ?? []) as any[]).filter((person) => person.role !== "teacher");
+    const directoryRows = (directory.data ?? []) as any[];
+    const people = directoryRows.filter((person) => person.role !== "teacher");
+    setPeopleOptions(
+      directoryRows
+        .map((person) => ({ id: person.user_id, name: person.display_name ?? "Member" }))
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    );
     const peopleById = new Map(people.map((person) => [person.user_id, person.display_name ?? "Member"]));
     const senderIds = Array.from(new Set((letters ?? []).map((letter: any) => letter.sender_user_id).filter(Boolean)));
     const { data: profiles } = senderIds.length
@@ -554,6 +563,14 @@ export function RecordsPage() {
     return list;
   }, [defaultRecordsView, latestNewsletterId, query, records, sortBy, typeFilter, userFilter]);
 
+  useEffect(() => {
+    if (!filteredRecords.length) {
+      setSelectedRecord(null);
+      return;
+    }
+    setSelectedRecord((current) => (current && filteredRecords.some((record) => record.id === current.id) ? current : filteredRecords[0]));
+  }, [filteredRecords]);
+
   const totalPages = Math.max(1, Math.ceil(filteredRecords.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const pageRecords = filteredRecords.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -569,6 +586,10 @@ export function RecordsPage() {
   const setType = (value: string) => {
     setTypeFilter(value);
     updateParam("type", value, "all");
+  };
+
+  const setPerson = (value: string) => {
+    updateParam("user", value, "all");
   };
 
   const resetFilters = () => {
@@ -615,7 +636,7 @@ export function RecordsPage() {
     const { error } = await supabase.from("newsletter_ad_bids").insert({
       class_id: classId,
       bidder_user_id: currentUser?.id,
-      lobbyist_group_id: adBidDraft.lobbyistGroupId || null,
+      lobbyist_group_id: myLobbyistGroups[0]?.id ?? null,
       message: adBidDraft.message.trim(),
       amount: Math.max(0, Number(adBidDraft.amount) || 0),
     } as any);
@@ -793,7 +814,7 @@ export function RecordsPage() {
               </button>
             </div>
           )}
-          {!isTeacher && (
+          {!isTeacher && moneyEnabled && (
             <button type="button" onClick={() => setAdBidOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
               <DollarSign className="h-4 w-4" />
               Bid for newsletter ad
@@ -812,6 +833,10 @@ export function RecordsPage() {
                 <FilterSelect value={typeFilter} onChange={setType}>
                   <SelectItem value="all">All types</SelectItem>
                   {availableTypes.map((type) => <SelectItem key={type} value={type}>{typeLabel(type)}</SelectItem>)}
+                </FilterSelect>
+                <FilterSelect value={userFilter || "all"} onChange={setPerson}>
+                  <SelectItem value="all">All people</SelectItem>
+                  {peopleOptions.map((person) => <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>)}
                 </FilterSelect>
                 <FilterSelect value={sortBy} onChange={(value) => { setSortBy(value as SortKey); updateParam("sort", value, "newest"); }}>
                   <SelectItem value="newest">Sort: Newest</SelectItem>
@@ -966,15 +991,6 @@ export function RecordsPage() {
               <button type="button" onClick={() => setAdBidOpen(false)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100"><X className="h-4 w-4" /></button>
             </div>
             <div className="space-y-4 p-5">
-              {myLobbyistGroups.length ? (
-                <Select value={adBidDraft.lobbyistGroupId || "self"} onValueChange={(value) => setAdBidDraft({ ...adBidDraft, lobbyistGroupId: value === "self" ? "" : value })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="z-[140]">
-                    <SelectItem value="self">Bid as yourself</SelectItem>
-                    {myLobbyistGroups.map((group) => <SelectItem key={group.id} value={group.id}>Bid as {group.name}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              ) : null}
               <input value={adBidDraft.amount} onChange={(event) => setAdBidDraft({ ...adBidDraft, amount: event.target.value.replace(/[^\d]/g, "") })} placeholder="Bid amount" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               <textarea value={adBidDraft.message} onChange={(event) => setAdBidDraft({ ...adBidDraft, message: event.target.value })} rows={5} placeholder="Advertisement message for the next newsletter" className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>

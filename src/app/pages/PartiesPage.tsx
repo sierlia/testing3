@@ -200,6 +200,7 @@ export function PartiesPage() {
   const allowStudentCreated = !!settings?.parties?.allowStudentCreated;
   const requireApproval = !!settings?.parties?.requireApproval;
   const canCreate = role === "teacher" || allowStudentCreated;
+  const sectionDisabled = settings?.organizations?.enabled === false || settings?.organizations?.enableParties === false;
   const filteredParties = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return parties.filter((party) => {
@@ -413,7 +414,7 @@ export function PartiesPage() {
                   className="h-10 w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-              {canCreate && (
+              {canCreate && !sectionDisabled && (
                 <button
                   onClick={() => {
                     setEditingPartyId(null);
@@ -429,27 +430,9 @@ export function PartiesPage() {
               )}
             </div>
           </div>
-
-          {newPartyOpen && (
-            <div className="mb-6 bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
-              <h3 className="mb-4 text-lg font-semibold text-gray-900">{editingPartyId ? "Edit Party" : "Create Party"}</h3>
-              <PartyCreateForm
-                value={draft}
-                onChange={(next) => {
-                  setDraft(next);
-                  if (partyNameError && !hasDuplicatePartyName(next.name)) setPartyNameError("");
-                }}
-                onNameBlur={() => validatePartyName()}
-                onCancel={() => {
-                  setNewPartyOpen(false);
-                  setEditingPartyId(null);
-                  setPartyNameError("");
-                }}
-                onSubmit={editingPartyId ? savePartyEdits : createParty}
-                submitting={creating}
-                submitLabel={editingPartyId ? "Save Party" : "Create Party"}
-                nameError={partyNameError}
-              />
+          {sectionDisabled && (
+            <div className="mb-4 rounded-md border border-gray-200 bg-gray-100 px-4 py-3 text-sm text-gray-600">
+              Parties have been disabled from settings.
             </div>
           )}
 
@@ -474,11 +457,11 @@ export function PartiesPage() {
                       if (event.key === "Enter" || event.key === " ") navigate(`/parties/${party.id}`);
                     }}
                     style={{ "--party-color": party.color } as CSSProperties}
-                    className="group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:border-gray-300 hover:shadow-md"
+                    className={`group overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition hover:border-gray-300 hover:shadow-md ${sectionDisabled ? "pointer-events-none opacity-50 grayscale" : ""}`}
                   >
                     <div className="h-2" style={{ backgroundColor: party.color }} />
                     <div className="p-5">
-                      <div className="mb-4 flex items-start justify-between gap-4">
+                      <div className="mb-4 flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3">
                           <PartyIcon name={party.name} />
                           <div>
@@ -580,6 +563,30 @@ export function PartiesPage() {
           )}
         </OrganizationsLayout>
       </main>
+      {newPartyOpen && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl rounded-lg bg-white p-5 shadow-xl">
+            <h3 className="mb-4 text-lg font-semibold text-gray-900">{editingPartyId ? "Edit Party" : "Create Party"}</h3>
+            <PartyCreateForm
+              value={draft}
+              onChange={(next) => {
+                setDraft(next);
+                if (partyNameError && !hasDuplicatePartyName(next.name)) setPartyNameError("");
+              }}
+              onNameBlur={() => validatePartyName()}
+              onCancel={() => {
+                setNewPartyOpen(false);
+                setEditingPartyId(null);
+                setPartyNameError("");
+              }}
+              onSubmit={editingPartyId ? savePartyEdits : createParty}
+              submitting={creating}
+              submitLabel={editingPartyId ? "Save Party" : "Create Party"}
+              nameError={partyNameError}
+            />
+          </div>
+        </div>
+      )}
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );

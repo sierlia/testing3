@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { Mail, Send } from "lucide-react";
+import { Mail } from "lucide-react";
 import { supabase } from "../utils/supabase";
 
 type LetterRow = {
@@ -13,9 +13,6 @@ type LetterRow = {
 };
 
 export function OrganizationLettersInbox({
-  organizationType,
-  organizationId,
-  organizationName,
   memberIds,
 }: {
   organizationType: "party" | "committee" | "caucus";
@@ -67,13 +64,6 @@ export function OrganizationLettersInbox({
           <Mail className="h-5 w-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">Letters inbox</h2>
         </div>
-        <Link
-          to={`/dear-colleague/compose?toType=${organizationType}&to=${encodeURIComponent(organizationId)}`}
-          className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          <Send className="h-4 w-4" />
-          Write to {organizationName}
-        </Link>
       </div>
       {loading ? (
         <div className="text-sm text-gray-500">Loading letters...</div>

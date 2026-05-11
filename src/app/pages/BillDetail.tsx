@@ -14,6 +14,7 @@ import { formatConstituency } from "../utils/constituency";
 import { displayPersonName } from "../utils/displayName";
 import { profilePath } from "../utils/profileRoute";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
+import { committeeDisplayName } from "../utils/committeeNames";
 
 type TextTab = "revised" | "original" | "supporting";
 type TrackerStatus = "completed" | "current" | "upcoming";
@@ -273,6 +274,7 @@ export function BillDetail() {
   const showRevisedText = Boolean(committeePassed && referral?.committee_id && (committeeDoc?.ydoc_base64 || committeeDoc?.committee_markup_posted_at));
   const cosponsorshipMode = classSettings?.bills?.cosponsorshipMode ?? (classSettings?.bills?.cosponsorAfterCommitteeReport ? "after_report" : "always");
   const reportSubmitted = Boolean(committeeDoc?.committee_report_submitted_at);
+  const subcommitteeReports = Array.isArray(committeeDoc?.subcommittee_reports) ? committeeDoc.subcommittee_reports : [];
   const cosponsorAllowed = cosponsorshipMode === "always" || (cosponsorshipMode === "before_report" && !reportSubmitted) || (cosponsorshipMode === "after_report" && reportSubmitted);
   const showCosponsors = classSettings?.bills?.showCosponsors !== false;
   const cosponsorPartyOptions = useMemo(
@@ -307,7 +309,7 @@ export function BillDetail() {
 
   const actions = useMemo<BillAction[]>(() => {
     if (!bill) return [];
-    const committeeName = referral?.committee_name ?? "Committee";
+    const committeeName = committeeDisplayName(referral?.committee_name);
     const rows: BillAction[] = [{ label: "Introduced", date: bill.created_at }];
     if (referral?.referred_at) rows.push({ label: `Referred to ${committeeName}`, date: referral.referred_at });
     if (committeeDoc?.committee_markup_posted_at) rows.push({ label: `Marked up in ${committeeName}`, date: committeeDoc.committee_markup_posted_at });
@@ -554,7 +556,7 @@ export function BillDetail() {
         class_id: bill.class_id,
         actor_user_id: currentUserId,
         step: step.label,
-        note: step.label === "Referred" ? `Referred to ${committeeOptions.find((committee) => committee.id === committeeId)?.name ?? "selected committee"}` : null,
+        note: step.label === "Referred" ? `Referred to ${committeeDisplayName(committeeOptions.find((committee) => committee.id === committeeId)?.name ?? "selected committee")}` : null,
       } as any);
       await refreshBillState();
       setTrackerOverrideDraft(null);
@@ -664,10 +666,20 @@ export function BillDetail() {
             <div><span className="font-semibold text-gray-900">Committees:</span> {referral?.committee_name ?? "Not referred"}</div>
             <div>
               <span className="font-semibold text-gray-900">Committee reports:</span>{" "}
-              {referral?.committee_id && committeeDoc?.committee_report_submitted_at ? (
-                <Link to={`/committee/${referral.committee_id}/reports/${bill.id}`} className="font-medium text-blue-600 hover:underline">
-                  {referral.committee_name ?? "Committee"} Report
-                </Link>
+              {referral?.committee_id && (committeeDoc?.committee_report_submitted_at || subcommitteeReports.length) ? (
+                <span className="inline-flex flex-wrap gap-x-3 gap-y-1">
+                  {subcommitteeReports.map((report: any) => (
+                    <span key={report.subcommitteeId ?? report.subcommitteeName} className="text-gray-700">
+                      {report.subcommitteeName ?? "Subcommittee"} Report
+                      {report.votes ? <span className="text-gray-500"> ({report.votes.yea ?? 0}-{report.votes.nay ?? 0})</span> : null}
+                    </span>
+                  ))}
+                  {committeeDoc?.committee_report_submitted_at ? (
+                    <Link to={`/committee/${referral.committee_id}/reports/${bill.id}`} className="font-medium text-blue-600 hover:underline">
+                      {committeeDisplayName(referral.committee_name)} Report
+                    </Link>
+                  ) : null}
+                </span>
               ) : (
                 "Not submitted"
               )}

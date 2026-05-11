@@ -8,6 +8,7 @@ import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
 import { SecureAvatar } from "../components/SecureAvatar";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { closeCommitteeVote, finalizeCommitteeVote, postCommitteeProgress, proposeBillForCommitteeVote, submitCommitteeReport } from "../services/bills";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { formatConstituency } from "../utils/constituency";
 import { profilePath } from "../utils/profileRoute";
 import { getCurrentUser } from "../utils/currentUser";
@@ -123,6 +124,7 @@ export function CommitteeWorkspace() {
   const [reportSubmittedAt, setReportSubmittedAt] = useState<string | null>(null);
   const [voting, setVoting] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [reopening, setReopening] = useState(false);
   const [submittingReport, setSubmittingReport] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
   const [activeEditors, setActiveEditors] = useState<
@@ -402,6 +404,10 @@ export function CommitteeWorkspace() {
 
   const proposeSelectedBillForVote = async () => {
     if (!selected) return;
+    if (selected.subcommitteeId && !activeMeeting) {
+      toast.error("Open a committee meeting before starting a subcommittee vote");
+      return;
+    }
     setProposing(true);
     try {
       await proposeBillForCommitteeVote(selected.id);
@@ -499,6 +505,10 @@ export function CommitteeWorkspace() {
 
   const castCommitteeVote = async (vote: VoteChoice) => {
     if (!selected || !classId || !meId) return;
+    if (selected.subcommitteeId && !activeMeeting) {
+      toast.error("Voting is available only while a committee meeting is open");
+      return;
+    }
     if (voteClosedAt) {
       toast.error("Voting is closed");
       return;
@@ -542,6 +552,10 @@ export function CommitteeWorkspace() {
 
   const closeSelectedVote = async () => {
     if (!selected) return;
+    if (selected.subcommitteeId && !activeMeeting) {
+      toast.error("Open a committee meeting before closing a subcommittee vote");
+      return;
+    }
     setClosing(true);
     try {
       await closeCommitteeVote(selected.id, committeeId);
@@ -551,6 +565,29 @@ export function CommitteeWorkspace() {
       toast.error(error.message || "Could not close vote");
     } finally {
       setClosing(false);
+    }
+  };
+
+  const reopenSelectedVote = async () => {
+    if (!selected) return;
+    if (selected.subcommitteeId && !activeMeeting) {
+      toast.error("Open a committee meeting before reopening a subcommittee vote");
+      return;
+    }
+    setReopening(true);
+    try {
+      const { error } = await supabase
+        .from("committee_bill_docs")
+        .update({ committee_vote_closed_at: null } as any)
+        .eq("bill_id", selected.id)
+        .eq("committee_id", committeeId);
+      if (error) throw error;
+      setVoteClosedAt(null);
+      toast.success("Vote reopened");
+    } catch (error: any) {
+      toast.error(error.message || "Could not reopen vote");
+    } finally {
+      setReopening(false);
     }
   };
 
@@ -576,9 +613,32 @@ export function CommitteeWorkspace() {
     }
     setFinalizing(true);
     try {
+      const { data: existingDoc } = await supabase
+        .from("committee_bill_docs")
+        .select("subcommittee_reports")
+        .eq("bill_id", selected.id)
+        .eq("committee_id", committeeId)
+        .maybeSingle();
+      const existingReports = Array.isArray((existingDoc as any)?.subcommittee_reports) ? (existingDoc as any).subcommittee_reports : [];
+      const nextReports = [
+        ...existingReports.filter((report: any) => report?.subcommitteeId !== selected.subcommitteeId),
+        {
+          subcommitteeId: selected.subcommitteeId,
+          subcommitteeName: selected.subcommitteeName,
+          submittedAt: reportSubmittedAt,
+          voteClosedAt,
+          votes: { yea: voteCounts.yea, nay: voteCounts.nay, present: voteCounts.present },
+        },
+      ];
       await updateReferralSubcommittee(selected.id, null);
       const { error } = await supabase.from("bills").update({ status: "in_committee" } as any).eq("id", selected.id).eq("class_id", classId);
       if (error) throw error;
+      await supabase.from("bill_committee_votes").delete().eq("bill_id", selected.id).eq("committee_id", committeeId);
+      await supabase
+        .from("committee_bill_docs")
+        .update({ committee_vote_closed_at: null, committee_report_submitted_at: null, committee_vote_finalized_at: null, subcommittee_reports: nextReports } as any)
+        .eq("bill_id", selected.id)
+        .eq("committee_id", committeeId);
       setBills((prev) => {
         const next = prev.map((bill) => (bill.id === selected.id ? { ...bill, status: "in_committee", subcommitteeId: null, subcommitteeName: null } : bill));
         const cached = workspaceCache.get(committeeId);
@@ -867,16 +927,17 @@ export function CommitteeWorkspace() {
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-600">
                           <span>Subcommittee:</span>
                           {canReferSubcommittee && subcommittees.length ? (
-                            <select
-                              value={selected.subcommitteeId ?? ""}
-                              onChange={(event) => void updateReferralSubcommittee(selected.id, event.target.value || null)}
-                              className="h-7 rounded-md border border-gray-300 bg-white px-2 text-sm text-gray-700"
-                            >
-                              <option value="">Main committee</option>
-                              {subcommittees.map((subcommittee) => (
-                                <option key={subcommittee.id} value={subcommittee.id}>{subcommittee.name}</option>
-                              ))}
-                            </select>
+                            <Select value={selected.subcommitteeId ?? "main"} onValueChange={(value) => void updateReferralSubcommittee(selected.id, value === "main" ? null : value)}>
+                              <SelectTrigger className="h-8 w-52 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent className="z-[140]">
+                                <SelectItem value="main">Main committee</SelectItem>
+                                {subcommittees.map((subcommittee) => (
+                                  <SelectItem key={subcommittee.id} value={subcommittee.id}>{subcommittee.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           ) : (
                             <span>{selected.subcommitteeName ?? "Main committee"}</span>
                           )}
@@ -927,12 +988,22 @@ export function CommitteeWorkspace() {
                             <button
                               type="button"
                               onClick={() => void closeSelectedVote()}
-                              disabled={closing || Boolean(voteClosedAt)}
+                              disabled={closing || Boolean(voteClosedAt) || Boolean(selected.subcommitteeId && !activeMeeting)}
                               className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
                             >
                               <XCircle className="h-4 w-4" />
                               {closing ? "Closing" : voteClosedAt ? "Vote closed" : "Close vote"}
                             </button>
+                            {voteClosedAt && (
+                              <button
+                                type="button"
+                                onClick={() => void reopenSelectedVote()}
+                                disabled={reopening || Boolean(selected.subcommitteeId && !activeMeeting)}
+                                className="inline-flex items-center gap-2 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                              >
+                                {reopening ? "Reopening" : "Reopen vote"}
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={() => void submitReport()}
@@ -961,7 +1032,7 @@ export function CommitteeWorkspace() {
                               count={voteCounts[choice]}
                               names={namesForVote(votes, choice)}
                               active={myVote === choice}
-                              disabled={voting || Boolean(voteClosedAt)}
+                              disabled={voting || Boolean(voteClosedAt) || Boolean(selected.subcommitteeId && !activeMeeting)}
                               onVote={() => void castCommitteeVote(choice)}
                             />
                           ))}
