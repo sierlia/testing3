@@ -10,7 +10,7 @@ import { SecureAvatar } from "./SecureAvatar";
 
 type TeacherClass = { id: string; name: string };
 type OrgVisibility = { parties: boolean; committees: boolean; caucuses: boolean; lobbyists: boolean };
-const defaultOrgVisibility: OrgVisibility = { parties: true, committees: true, caucuses: true, lobbyists: false };
+const defaultOrgVisibility: OrgVisibility = { parties: true, committees: true, caucuses: true, lobbyists: true };
 
 function orgVisibilityFromSettings(settings: any): OrgVisibility {
   const organizations = settings?.organizations ?? {};
@@ -21,6 +21,36 @@ function orgVisibilityFromSettings(settings: any): OrgVisibility {
     caucuses: organizationsEnabled && organizations.enableCaucuses !== false,
     lobbyists: organizationsEnabled && organizations.enableLobbyists === true,
   };
+}
+
+function isOrgVisibility(value: any): value is OrgVisibility {
+  return (
+    typeof value?.parties === "boolean" &&
+    typeof value?.committees === "boolean" &&
+    typeof value?.caucuses === "boolean" &&
+    typeof value?.lobbyists === "boolean"
+  );
+}
+
+function readCachedOrgVisibility(classId?: string | null) {
+  try {
+    const specific = classId ? JSON.parse(window.localStorage.getItem(`gavel:orgVisibility:${classId}`) ?? "null") : null;
+    if (isOrgVisibility(specific)) return specific;
+    const last = JSON.parse(window.localStorage.getItem("gavel:orgVisibility:last") ?? "null");
+    if (isOrgVisibility(last)) return last;
+  } catch {
+    // ignore cache failures
+  }
+  return defaultOrgVisibility;
+}
+
+function cacheOrgVisibility(classId: string, visibility: OrgVisibility) {
+  try {
+    window.localStorage.setItem(`gavel:orgVisibility:${classId}`, JSON.stringify(visibility));
+    window.localStorage.setItem("gavel:orgVisibility:last", JSON.stringify(visibility));
+  } catch {
+    // ignore cache failures
+  }
 }
 
 function readTeacherClasses(userId: string): TeacherClass[] {
@@ -102,7 +132,7 @@ export function Navigation() {
   const [teacherClasses, setTeacherClasses] = useState<TeacherClass[]>([]);
   const [unreadLetters, setUnreadLetters] = useState(0);
   const [money, setMoney] = useState<{ enabled: boolean; balance: number }>(() => (user?.id ? readCachedMoney(user.id) : { enabled: false, balance: 0 }));
-  const [orgVisibility, setOrgVisibility] = useState<OrgVisibility>(defaultOrgVisibility);
+  const [orgVisibility, setOrgVisibility] = useState<OrgVisibility>(() => readCachedOrgVisibility());
   const classMenuRef = useRef<HTMLDivElement | null>(null);
   const userMenuRef = useRef<HTMLDivElement | null>(null);
   const moneyMenuRef = useRef<HTMLDivElement | null>(null);
@@ -164,9 +194,12 @@ export function Navigation() {
       cacheAvatar(user.id, nextAvatar);
       let classId = routeClassId ?? (data as any)?.class_id ?? null;
       if (classId) {
+        setOrgVisibility(readCachedOrgVisibility(classId));
         const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
         const settings = (cls as any)?.settings ?? {};
-        setOrgVisibility(orgVisibilityFromSettings(settings));
+        const nextOrgVisibility = orgVisibilityFromSettings(settings);
+        setOrgVisibility(nextOrgVisibility);
+        cacheOrgVisibility(classId, nextOrgVisibility);
         if (settings?.money?.enabled) {
           const [{ data: sent }, { data: received }] = await Promise.all([
             supabase.from("lobbyist_contributions").select("amount").eq("class_id", classId).eq("from_user_id", user.id),
@@ -587,9 +620,14 @@ export function Navigation() {
                 {organizationsOpen && (
                   <div className="absolute top-full left-0 mt-0 w-48 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openOrganizations} onMouseLeave={closeOrganizationsSoon}>
                     {organizationLinks.length ? organizationLinks.map((item) => (
-                      <Link key={item.to} to={item.to} className={dropdownItemClass(item.active)}>
-                        {item.label}
-                      </Link>
+                      <div key={item.to}>
+                        {item.label === "Lobbyists" || (item.label === "Members" && organizationLinks.some((link) => link.label === "Lobbyists")) ? (
+                          <div className="my-1 border-t border-gray-200" aria-hidden="true" />
+                        ) : null}
+                        <Link to={item.to} className={dropdownItemClass(item.active)}>
+                          {item.label}
+                        </Link>
+                      </div>
                     )) : (
                       <div className="px-4 py-2 text-sm text-gray-500">Organizations disabled</div>
                     )}

@@ -5,10 +5,40 @@ import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
 
 type OrganizationTab = "parties" | "committees" | "caucuses" | "lobbyists" | "members";
+type OrgVisibility = { parties: boolean; committees: boolean; caucuses: boolean; lobbyists: boolean };
+const defaultVisibility: OrgVisibility = { parties: true, committees: true, caucuses: true, lobbyists: true };
+let lastVisibility: OrgVisibility = defaultVisibility;
+
+function readCachedVisibility() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem("gavel:orgVisibility:last") ?? "null");
+    if (
+      typeof parsed?.parties === "boolean" &&
+      typeof parsed?.committees === "boolean" &&
+      typeof parsed?.caucuses === "boolean" &&
+      typeof parsed?.lobbyists === "boolean"
+    ) {
+      lastVisibility = parsed;
+    }
+  } catch {
+    // ignore cache failures
+  }
+  return lastVisibility;
+}
+
+function cacheVisibility(classId: string, visibility: OrgVisibility) {
+  lastVisibility = visibility;
+  try {
+    window.localStorage.setItem("gavel:orgVisibility:last", JSON.stringify(visibility));
+    window.localStorage.setItem(`gavel:orgVisibility:${classId}`, JSON.stringify(visibility));
+  } catch {
+    // ignore cache failures
+  }
+}
 
 export function OrganizationsLayout({ active, children }: { active: OrganizationTab; children: ReactNode }) {
   const { user } = useAuth();
-  const [visibility, setVisibility] = useState({ parties: true, committees: true, caucuses: true, lobbyists: false });
+  const [visibility, setVisibility] = useState<OrgVisibility>(() => readCachedVisibility());
 
   useEffect(() => {
     const load = async () => {
@@ -19,12 +49,14 @@ export function OrganizationsLayout({ active, children }: { active: Organization
       const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
       const organizations = (cls as any)?.settings?.organizations ?? {};
       const enabled = organizations.enabled !== false;
-      setVisibility({
+      const nextVisibility = {
         parties: enabled && organizations.enableParties !== false,
         committees: enabled && organizations.enableCommittees !== false,
         caucuses: enabled && organizations.enableCaucuses !== false,
         lobbyists: enabled && organizations.enableLobbyists === true,
-      });
+      };
+      setVisibility(nextVisibility);
+      cacheVisibility(classId, nextVisibility);
     };
     void load();
   }, [user?.id]);
@@ -56,9 +88,12 @@ export function OrganizationsLayout({ active, children }: { active: Organization
         <div className="rounded-lg border border-gray-200 bg-white p-2 shadow-sm md:min-h-[232px]">
           <div className="flex gap-2 md:min-h-[216px] md:flex-col">
             {tabs.map((tab) => (
-              <Tab key={tab.key} to={tab.to} active={active === tab.key}>
-                {tab.label}
-              </Tab>
+              <div key={tab.key} className="contents">
+                {tab.key === "lobbyists" || (tab.key === "members" && tabs.some((item) => item.key === "lobbyists")) ? <Separator /> : null}
+                <Tab to={tab.to} active={active === tab.key}>
+                  {tab.label}
+                </Tab>
+              </div>
             ))}
           </div>
         </div>
@@ -68,6 +103,10 @@ export function OrganizationsLayout({ active, children }: { active: Organization
       </div>
     </div>
   );
+}
+
+function Separator() {
+  return <div className="mx-1 h-px w-8 shrink-0 self-center bg-gray-200 md:mx-2 md:my-1 md:w-auto md:self-stretch" aria-hidden="true" />;
 }
 
 function Tab({ to, active, children }: { to: string; active: boolean; children: ReactNode }) {
