@@ -12,6 +12,7 @@ import { useAuth } from "../utils/AuthContext";
 import { formatConstituency } from "../utils/constituency";
 import { profilePath } from "../utils/profileRoute";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
+import { committeeDisplayName } from "../utils/committeeNames";
 
 type VoteChoice = "yea" | "nay" | "present" | "not_voted";
 type BaseRecordType = "letter" | "report" | "vote" | "newsletter" | "campaign_contribution";
@@ -52,6 +53,19 @@ const builtInTypes: BaseRecordType[] = ["letter", "report", "vote", "newsletter"
 
 function typeLabel(type: string) {
   return type.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function displayPartyName(name: string) {
+  const normalized = name.trim();
+  if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
+  if (/republican( party)?$/i.test(normalized)) return "Republican Party";
+  return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
+function displayContributionNote(note: string) {
+  if (/^dashboard access$/i.test(note.trim())) return "Message board access";
+  if (/^review access$/i.test(note.trim())) return "Markup area access";
+  return note;
 }
 
 function recordIcon(type: string) {
@@ -380,7 +394,7 @@ export function RecordsPage() {
     setRecordTypes(customTypes.length ? customTypes : ["record"]);
     setMoneyEnabled(Boolean((cls as any)?.settings?.money?.enabled));
 
-    const [{ data: customRecords }, { data: letters }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, { data: lobbyistMemberships }, { data: contributions }, directory] = await Promise.all([
+    const [{ data: customRecords }, { data: letters }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, { data: lobbyistMemberships }, { data: contributions }, { data: contributionCommittees }, { data: contributionParties }, { data: contributionCaucuses }, directory] = await Promise.all([
       supabase.from("custom_records").select("id,type,title,body,created_by,generated,metadata,created_at,updated_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase.from("dear_colleague_letters").select("id,sender_user_id,subject,body,created_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase
@@ -403,6 +417,9 @@ export function RecordsPage() {
       supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", activeClassId),
       supabase.from("lobbyist_group_members").select("group_id,lobbyist_groups(id,name)").eq("user_id", uid),
       supabase.from("lobbyist_contributions").select("id,group_id,from_user_id,recipient_type,recipient_id,amount,note,created_at,lobbyist_groups(name)").eq("class_id", activeClassId).order("created_at", { ascending: false }),
+      supabase.from("committees").select("id,name").eq("class_id", activeClassId),
+      supabase.from("parties").select("id,name").eq("class_id", activeClassId),
+      supabase.from("caucuses").select("id,title").eq("class_id", activeClassId),
       supabase.rpc("class_directory", { target_class: activeClassId } as any),
     ]);
     setMyLobbyistGroups(((lobbyistMemberships ?? []) as any[]).map((row) => row.lobbyist_groups).filter(Boolean));
@@ -420,6 +437,16 @@ export function RecordsPage() {
       ? await supabase.from("profiles").select("user_id,display_name").in("user_id", senderIds)
       : ({ data: [] } as any);
     const profileMap = new Map((profiles ?? []).map((row: any) => [row.user_id, row.display_name ?? "Member"]));
+    const committeeNames = new Map(((contributionCommittees ?? []) as any[]).map((committee) => [committee.id, committeeDisplayName(committee.name)]));
+    const partyNames = new Map(((contributionParties ?? []) as any[]).map((party) => [party.id, displayPartyName(party.name)]));
+    const caucusNames = new Map(((contributionCaucuses ?? []) as any[]).map((caucus) => [caucus.id, caucus.title ?? "Caucus"]));
+    const recipientNameFor = (contribution: any) => {
+      if (contribution.recipient_type === "member") return peopleById.get(contribution.recipient_id) ?? "Member";
+      if (contribution.recipient_type === "committee") return committeeNames.get(contribution.recipient_id) ?? "Committee";
+      if (contribution.recipient_type === "party") return partyNames.get(contribution.recipient_id) ?? "Party";
+      if (contribution.recipient_type === "caucus") return caucusNames.get(contribution.recipient_id) ?? "Caucus";
+      return typeLabel(contribution.recipient_type);
+    };
 
     const voteListsFor = (rows: any[], memberIds: string[]) => {
       const lists = emptyVotes();
@@ -454,7 +481,7 @@ export function RecordsPage() {
         deletable: true,
       })),
       ...((contributions ?? []) as any[]).map((contribution) => {
-        const recipientName = contribution.recipient_type === "member" ? peopleById.get(contribution.recipient_id) ?? "Member" : typeLabel(contribution.recipient_type);
+        const recipientName = recipientNameFor(contribution);
         const sourceName = contribution.lobbyist_groups?.name ?? peopleById.get(contribution.from_user_id) ?? "Lobbyist";
         return {
           id: `contribution:${contribution.id}`,
@@ -463,7 +490,7 @@ export function RecordsPage() {
           subtitle: `To ${recipientName}`,
           date: contribution.created_at,
           href: `/records?type=campaign_contribution&record=${contribution.id}`,
-          body: contribution.note || "Campaign contribution recorded.",
+          body: displayContributionNote(contribution.note || "Campaign contribution recorded."),
           authorId: contribution.from_user_id,
           voteUserIds: [contribution.from_user_id, contribution.recipient_type === "member" ? contribution.recipient_id : ""].filter(Boolean),
           metadata: { contribution },

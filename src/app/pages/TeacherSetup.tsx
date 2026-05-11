@@ -1528,8 +1528,8 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
             />
             <DisabledBlock disabled={!settings.moneyEnabled} tight>
               <SettingRow indent title="Starting balance" description="Amount each member starts with." control={<WordLimitInput label="" value={settings.startingMoney} max={100000} onChange={(value) => setSettings({ startingMoney: value })} />} />
-              <SettingRow indent title="Committee dashboard access price" description="Amount lobbyists pay to see a committee dashboard." control={<WordLimitInput label="" value={settings.committeeDashboardAccessPrice} max={100000} onChange={(value) => setSettings({ committeeDashboardAccessPrice: value })} />} />
-              <SettingRow indent title="Committee review access price" description="Amount lobbyists pay to view committee review without editing." control={<WordLimitInput label="" value={settings.committeeReviewAccessPrice} max={100000} onChange={(value) => setSettings({ committeeReviewAccessPrice: value })} />} />
+              <SettingRow indent title="Committee message board access price" description="Amount lobbyists pay to see a committee message board." control={<WordLimitInput label="" value={settings.committeeDashboardAccessPrice} max={100000} onChange={(value) => setSettings({ committeeDashboardAccessPrice: value })} />} />
+              <SettingRow indent title="Committee markup area access price" description="Amount lobbyists pay to view committee markup without editing." control={<WordLimitInput label="" value={settings.committeeReviewAccessPrice} max={100000} onChange={(value) => setSettings({ committeeReviewAccessPrice: value })} />} />
             </DisabledBlock>
           </SettingsGroup>
         </div>

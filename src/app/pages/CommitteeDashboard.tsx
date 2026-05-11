@@ -867,6 +867,7 @@ export function CommitteeDashboard() {
   const buyCommitteeAccess = async (accessType: "dashboard" | "review") => {
     if (!meId || !myLobbyGroupId || !committee) return;
     const amount = accessType === "dashboard" ? Number(moneySettings?.committeeDashboardAccessPrice ?? 100) : Number(moneySettings?.committeeReviewAccessPrice ?? 250);
+    const accessLabel = accessType === "dashboard" ? "Message board" : "Markup area";
     const { error } = await supabase.from("committee_paid_access").insert({
       committee_id: committeeId,
       user_id: meId,
@@ -882,7 +883,7 @@ export function CommitteeDashboard() {
       recipient_type: "committee",
       recipient_id: committeeId,
       amount,
-      note: `${accessType === "dashboard" ? "Dashboard" : "Review"} access`,
+      note: `${accessLabel} access`,
     } as any);
     setPaidAccess((current) => new Set(current).add(accessType));
     toast.success("Access granted");
@@ -1048,7 +1049,7 @@ export function CommitteeDashboard() {
             <ContributionButton recipientType="committee" recipientId={committee.id} recipientName={committee.name} />
             {myLobbyGroupId && moneySettings?.enabled && !paidAccess.has("review") && !myRole && !isTeacher && (
               <button type="button" onClick={() => void buyCommitteeAccess("review")} className="inline-flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-medium text-green-700 hover:bg-green-100">
-                Review access ${Number(moneySettings?.committeeReviewAccessPrice ?? 250).toLocaleString()}
+                Markup area access ${Number(moneySettings?.committeeReviewAccessPrice ?? 250).toLocaleString()}
               </button>
             )}
             {myRole && viewerRole !== "teacher" && (
@@ -1286,15 +1287,15 @@ export function CommitteeDashboard() {
             ) : (
               <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
                 <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
-                <p className="mt-2 text-sm text-gray-600">Announcement boards are available to committee members. Lobbyists can pay for dashboard access.</p>
+                <p className="mt-2 text-sm text-gray-600">Announcement boards are available to committee members. Lobbyists can pay for message board access.</p>
                 {myLobbyGroupId && moneySettings?.enabled && (
                   <button type="button" onClick={() => void buyCommitteeAccess("dashboard")} className="mt-4 rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700">
-                    Pay ${Number(moneySettings?.committeeDashboardAccessPrice ?? 100).toLocaleString()} for dashboard access
+                    Pay ${Number(moneySettings?.committeeDashboardAccessPrice ?? 100).toLocaleString()} for message board access
                   </button>
                 )}
                 {myLobbyGroupId && moneySettings?.enabled && !paidAccess.has("review") && (
                   <button type="button" onClick={() => void buyCommitteeAccess("review")} className="ml-2 mt-4 rounded-md border border-green-200 bg-green-50 px-4 py-2 text-sm font-medium text-green-700 hover:bg-green-100">
-                    Pay ${Number(moneySettings?.committeeReviewAccessPrice ?? 250).toLocaleString()} for review access
+                    Pay ${Number(moneySettings?.committeeReviewAccessPrice ?? 250).toLocaleString()} for markup area access
                   </button>
                 )}
               </div>

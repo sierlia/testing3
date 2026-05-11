@@ -7,6 +7,7 @@ import { SecureAvatar } from "../components/SecureAvatar";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 import { profilePath } from "../utils/profileRoute";
+import { committeeDisplayName } from "../utils/committeeNames";
 
 type Member = { user_id: string; display_name: string | null; avatar_url: string | null; role: string | null };
 type Contribution = {
@@ -31,6 +32,19 @@ function effectiveGroupStartingAmount(group: any, classSettings: any) {
   const storedStartingAmount = Math.max(0, Number(group?.starting_amount ?? 0) || 0);
   if (storedStartingAmount > 0) return storedStartingAmount;
   return Math.max(0, Number(classSettings?.money?.startingAmount ?? 1000) || 0);
+}
+
+function displayPartyName(name: string) {
+  const normalized = name.trim();
+  if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
+  if (/republican( party)?$/i.test(normalized)) return "Republican Party";
+  return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
+function displayAccessNote(note: string) {
+  if (/^dashboard access$/i.test(note.trim())) return "Message board access";
+  if (/^review access$/i.test(note.trim())) return "Markup area access";
+  return note;
 }
 
 export function LobbyistGroupDetail() {
@@ -62,13 +76,16 @@ export function LobbyistGroupDetail() {
       const { data: g } = await supabase.from("lobbyist_groups").select("id,class_id,name,description,join_mode,starting_amount").eq("id", groupId).maybeSingle();
       setGroup(g as any);
       if (!g) return;
-      const [{ data: memberRows }, { data: profile }, { data: spending }, directory, { data: announcementRows }, { data: classRow }] = await Promise.all([
+      const [{ data: memberRows }, { data: profile }, { data: spending }, directory, { data: announcementRows }, { data: classRow }, { data: committees }, { data: parties }, { data: caucuses }] = await Promise.all([
         supabase.from("lobbyist_group_members").select("user_id").eq("group_id", groupId),
         uid ? supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle() : ({ data: null } as any),
         supabase.from("lobbyist_contributions").select("id,recipient_type,recipient_id,from_user_id,amount,note,created_at").eq("group_id", groupId).order("created_at", { ascending: false }),
         supabase.rpc("class_directory", { target_class: (g as any).class_id } as any),
         supabase.from("lobbyist_group_announcements").select("id,author_user_id,body,created_at").eq("group_id", groupId).order("created_at", { ascending: false }),
         supabase.from("classes").select("settings").eq("id", (g as any).class_id).maybeSingle(),
+        supabase.from("committees").select("id,name").eq("class_id", (g as any).class_id),
+        supabase.from("parties").select("id,name").eq("class_id", (g as any).class_id),
+        supabase.from("caucuses").select("id,title").eq("class_id", (g as any).class_id),
       ]);
 
       setClassSettings((classRow as any)?.settings ?? {});
@@ -88,6 +105,16 @@ export function LobbyistGroupDetail() {
         ? await supabase.from("profiles").select("user_id,display_name,avatar_url,role").in("user_id", profileIds)
         : ({ data: [] } as any);
       const profileMap = new Map(((profiles ?? []) as Member[]).map((profile) => [profile.user_id, profile]));
+      const committeeNames = new Map(((committees ?? []) as any[]).map((committee) => [committee.id, committeeDisplayName(committee.name)]));
+      const partyNames = new Map(((parties ?? []) as any[]).map((party) => [party.id, displayPartyName(party.name)]));
+      const caucusNames = new Map(((caucuses ?? []) as any[]).map((caucus) => [caucus.id, caucus.title ?? "Caucus"]));
+      const recipientNameFor = (row: any) => {
+        if (row.recipient_type === "member") return profileMap.get(row.recipient_id)?.display_name ?? "Member";
+        if (row.recipient_type === "committee") return committeeNames.get(row.recipient_id) ?? "Committee";
+        if (row.recipient_type === "party") return partyNames.get(row.recipient_id) ?? "Party";
+        if (row.recipient_type === "caucus") return caucusNames.get(row.recipient_id) ?? "Caucus";
+        return "Recipient";
+      };
 
       setMembers(ids.map((userId: string) => profileMap.get(userId) ?? { user_id: userId, display_name: "Member", avatar_url: null, role: null }));
       const memberSet = new Set(ids);
@@ -100,7 +127,8 @@ export function LobbyistGroupDetail() {
         ((spending ?? []) as any[]).map((row) => ({
           ...row,
           contributorName: row.from_user_id ? profileMap.get(row.from_user_id)?.display_name ?? "Member" : (g as any).name,
-          recipientName: row.recipient_type === "member" ? profileMap.get(row.recipient_id)?.display_name ?? "Member" : `${row.recipient_type.replace(/_/g, " ")} ${String(row.recipient_id).slice(0, 8)}`,
+          recipientName: recipientNameFor(row),
+          note: displayAccessNote(row.note ?? ""),
         })),
       );
       const mappedAnnouncements = ((announcementRows ?? []) as any[]).map((row) => ({
