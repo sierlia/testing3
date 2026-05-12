@@ -1067,8 +1067,7 @@ export function LandingPage() {
                   Run Mock Congress from first bill to final grade.
                 </h1>
                 <p className="mt-5 max-w-3xl text-xl leading-8 text-slate-700">
-                  Centralize bills, cosponsors, committee edits, floor debate, organizations, letters, records, rubrics,
-                  exports, and Synergy sync in one teacher-run workspace.
+                  Centralize bills, cosponsors, committee edits, floor debate, organizations, letters, records, and assignments in one teacher-run workspace.
                 </p>
                 <div className="mt-8 flex flex-col gap-3 sm:flex-row">
                   <Link
