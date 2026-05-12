@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { ArrowDownAZ, ArrowUpAZ, DollarSign, Download, ExternalLink, Eye, FileText, Mail, MoreHorizontal, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
 import { toast } from "sonner";
@@ -19,6 +19,11 @@ type BaseRecordType = "letter" | "report" | "vote" | "newsletter" | "campaign_co
 type RowMode = "preview" | "open";
 type SortKey = "date" | "title" | "type";
 type SortDirection = "asc" | "desc";
+const RECORD_ROW_MODE_KEY = "gavel:records:row-mode";
+const RECORD_PREVIEW_SPLIT_KEY = "gavel:records:preview-split";
+const PREVIEW_SPLIT_MIN = 38;
+const PREVIEW_SPLIT_MAX = 90;
+const PREVIEW_SPLIT_CLOSE_AT = 92;
 type VoteList = Record<VoteChoice, Array<{ userId: string; name: string }>>;
 type NewsletterRow = { label: string; detail?: string; href?: string; sponsor?: string; sponsorHref?: string; transition?: string };
 
@@ -362,7 +367,15 @@ export function RecordsPage() {
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
   const [sortBy, setSortBy] = useState<SortKey>(initialSortParam === "title" || initialSortParam === "type" ? initialSortParam : "date");
   const [sortDirection, setSortDirection] = useState<SortDirection>(initialSortParam === "oldest" || searchParams.get("dir") === "asc" ? "asc" : "desc");
-  const [rowMode, setRowMode] = useState<RowMode>("preview");
+  const [rowMode, setRowMode] = useState<RowMode>(() => {
+    const saved = window.localStorage.getItem(RECORD_ROW_MODE_KEY);
+    return saved === "open" || saved === "preview" ? saved : "preview";
+  });
+  const [previewSplitPct, setPreviewSplitPct] = useState(() => {
+    const saved = Number(window.localStorage.getItem(RECORD_PREVIEW_SPLIT_KEY));
+    return Number.isFinite(saved) && saved >= PREVIEW_SPLIT_MIN && saved <= PREVIEW_SPLIT_MAX ? saved : 66;
+  });
+  const [draggingSplit, setDraggingSplit] = useState(false);
   const [selectedRecord, setSelectedRecord] = useState<RecordItem | null>(null);
   const [typeFilter, setTypeFilter] = useState(searchParams.get("type") ?? "all");
   const [page, setPage] = useState(1);
@@ -584,6 +597,42 @@ export function RecordsPage() {
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [openRecordMenuId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(RECORD_ROW_MODE_KEY, rowMode);
+  }, [rowMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(RECORD_PREVIEW_SPLIT_KEY, String(Math.round(previewSplitPct)));
+  }, [previewSplitPct]);
+
+  useEffect(() => {
+    if (!draggingSplit) return;
+    const onMove = (event: MouseEvent) => {
+      const container = document.getElementById("records-preview-split");
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const next = ((event.clientX - rect.left) / rect.width) * 100;
+      if (next >= PREVIEW_SPLIT_CLOSE_AT) {
+        setPreviewSplitPct(PREVIEW_SPLIT_MAX);
+        setRowMode("open");
+        return;
+      }
+      setRowMode("preview");
+      setPreviewSplitPct(Math.min(PREVIEW_SPLIT_MAX, Math.max(PREVIEW_SPLIT_MIN, next)));
+    };
+    const onUp = () => setDraggingSplit(false);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [draggingSplit]);
 
   const availableTypes = useMemo(() => Array.from(new Set([...builtInTypes, ...recordTypes, ...records.map((record) => record.type)])), [recordTypes, records]);
   const defaultRecordsView = !query.trim() && typeFilter === "all" && sortBy === "date" && sortDirection === "desc" && !userFilter;
@@ -921,8 +970,12 @@ export function RecordsPage() {
           </div>
         </div>
 
-        <div className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-3" : ""}`}>
-          <div className={rowMode === "preview" ? "lg:col-span-2" : ""}>
+        <div
+          id="records-preview-split"
+          className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-[var(--record-list-width)_2px_minmax(18rem,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_2px] lg:gap-3"}`}
+          style={{ "--record-list-width": `${previewSplitPct}%` } as CSSProperties}
+        >
+          <div>
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               {loading ? (
                 <div className="py-12 text-center text-gray-500">Loading records...</div>
@@ -1010,8 +1063,15 @@ export function RecordsPage() {
             {!loading && filteredRecords.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={filteredRecords.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
           </div>
 
+          <button
+            type="button"
+            onMouseDown={() => setDraggingSplit(true)}
+            className="hidden min-h-[24rem] cursor-col-resize bg-gray-300 transition-colors hover:bg-blue-400 active:bg-blue-500 lg:block"
+            aria-label={rowMode === "preview" ? "Resize records preview" : "Drag left to show records preview"}
+          />
+
           {rowMode === "preview" && (
-            <div className="lg:col-span-1">
+            <div>
               <div className="sticky top-8">
                 {selectedRecord ? <RecordPreviewPanel record={selectedRecord} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
               </div>

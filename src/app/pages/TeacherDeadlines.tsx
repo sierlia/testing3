@@ -801,68 +801,78 @@ export function TeacherDeadlines() {
             {selectedAssignment ? (
               <div className="overflow-hidden rounded-lg border border-gray-200 bg-white">
                 <div className="border-b border-gray-200 p-5">
-                  <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_auto]">
                     <div className="min-w-0">
-                      <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{selectedAssignment.grading_mode === "auto" ? "Auto-graded" : "Manual grading"}</span>
-                        <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{targetLabel(selectedAssignment)}</span>
-                      </div>
                       <h2 className="text-2xl font-semibold text-gray-900">{selectedAssignment.title}</h2>
-                      {selectedAssignment.description ? <p className="mt-2 whitespace-pre-line text-sm text-gray-700">{selectedAssignment.description}</p> : null}
+                      {selectedAssignment.description ? <p className="mt-2 max-w-3xl whitespace-pre-line text-sm leading-6 text-gray-700">{selectedAssignment.description}</p> : null}
                     </div>
-                    <div className="flex flex-col items-end gap-2 text-sm text-gray-600">
-                      <span className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4" />
-                        {formatDateTime(selectedAssignment.due_at)}
-                      </span>
-                      <span className="font-medium text-gray-900">{selectedAssignment.points_possible} points possible</span>
+                    <div className="flex flex-wrap items-start justify-start gap-2 xl:justify-end">
+                      <button
+                        type="button"
+                        onClick={() => void runAutoGrade()}
+                        disabled={autoBusy || !selectedAssignment.auto_criteria.length}
+                        className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${autoBusy ? "animate-spin" : ""}`} />
+                        Run auto-grading
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openSyncReview}
+                        disabled={!returnedSubmissions.length}
+                        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                      >
+                        <CloudUpload className="h-4 w-4" />
+                        Review sync ({returnedSubmissions.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => openEditModal(selectedAssignment)}
+                        className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                      >
+                        <Pencil className="h-4 w-4" />
+                        Edit
+                      </button>
                     </div>
                   </div>
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void runAutoGrade()}
-                      disabled={autoBusy || !selectedAssignment.auto_criteria.length}
-                      className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      <RefreshCw className={`h-4 w-4 ${autoBusy ? "animate-spin" : ""}`} />
-                      Run auto-grading
-                    </button>
-                    <button
-                      type="button"
-                      onClick={openSyncReview}
-                      disabled={!returnedSubmissions.length}
-                      className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-                    >
-                      <CloudUpload className="h-4 w-4" />
-                      Review sync ({returnedSubmissions.length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(selectedAssignment)}
-                      className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                    >
-                      <Pencil className="h-4 w-4" />
-                      Edit assignment
-                    </button>
+                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Due</div>
+                      <div className="mt-1 flex items-center gap-2 text-sm font-medium text-gray-900">
+                        <Calendar className="h-4 w-4 text-gray-500" />
+                        {formatDateTime(selectedAssignment.due_at)}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Assigned to</div>
+                      <div className="mt-1 text-sm font-medium text-gray-900">{targetLabel(selectedAssignment)}</div>
+                    </div>
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Grading</div>
+                      <div className="mt-1 text-sm font-medium text-gray-900">{selectedAssignment.grading_mode === "auto" ? "Auto-graded rubric" : "Manual rubric"}</div>
+                    </div>
+                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
+                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Points</div>
+                      <div className="mt-1 text-sm font-medium text-gray-900">{selectedAssignment.points_possible} possible</div>
+                    </div>
                   </div>
                 </div>
 
-                <div className="border-b border-gray-200 px-5 pt-4">
-                  <div className="flex gap-2">
+                <div className="border-b border-gray-200 px-5 py-3">
+                  <div className="inline-flex rounded-md border border-gray-200 bg-gray-50 p-1">
                     <button
                       type="button"
                       onClick={() => setAssignmentReviewTab("submissions")}
-                      className={`rounded-t-md px-3 py-2 text-sm font-medium ${assignmentReviewTab === "submissions" ? "border border-b-white border-gray-200 bg-white text-blue-700" : "text-gray-600 hover:text-gray-900"}`}
+                      className={`rounded px-3 py-1.5 text-sm font-medium ${assignmentReviewTab === "submissions" ? "bg-white text-blue-700 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
                     >
                       Student submissions
                     </button>
                     <button
                       type="button"
                       onClick={() => setAssignmentReviewTab("rubric")}
-                      className={`rounded-t-md px-3 py-2 text-sm font-medium ${assignmentReviewTab === "rubric" ? "border border-b-white border-gray-200 bg-white text-blue-700" : "text-gray-600 hover:text-gray-900"}`}
+                      className={`rounded px-3 py-1.5 text-sm font-medium ${assignmentReviewTab === "rubric" ? "bg-white text-blue-700 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
                     >
-                      Auto-graded rubric
+                      Rubric
                     </button>
                   </div>
                 </div>
@@ -1023,7 +1033,8 @@ export function TeacherDeadlines() {
             </div>
 
             <div className="grid gap-6 overflow-y-auto p-6 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,0.95fr)]">
-              <div className="space-y-5">
+              <section className="space-y-5 rounded-lg border border-gray-200 p-4">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Assignment details</h3>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
                 <input
@@ -1154,7 +1165,7 @@ export function TeacherDeadlines() {
                 />
               </label>
 
-              </div>
+              </section>
 
               <section className="rounded-lg border border-gray-200 p-4">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

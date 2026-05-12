@@ -604,21 +604,9 @@ export function BillDetail() {
         ]
       : committeeOptions;
   const handleBack = () => {
-    const lastPath = window.sessionStorage.getItem("gavel:lastPath") ?? "";
-    if (lastPath.startsWith("/floor") || lastPath.startsWith("/calendar")) {
-      navigate(lastPath);
+    if (window.history.length > 1) {
+      navigate(-1);
       return;
-    }
-    try {
-      const referrer = document.referrer ? new URL(document.referrer) : null;
-      const referrerHashPath = referrer?.hash?.replace(/^#/, "") ?? "";
-      const referrerPath = referrerHashPath || referrer?.pathname || "";
-      if (referrer?.origin === window.location.origin && (referrerPath.startsWith("/floor") || referrerPath.startsWith("/calendar"))) {
-        navigate(-1);
-        return;
-      }
-    } catch {
-      // Fall back to the bill list when referrer parsing is unavailable.
     }
     navigate("/bills");
   };

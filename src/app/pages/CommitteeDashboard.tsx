@@ -1180,17 +1180,9 @@ export function CommitteeDashboard() {
                         <SubcommitteeRolesPanel committeeId={committeeId} compact embedded allowMemberRoleSelection />
                       </div>
                     ) : subcommittees.length ? (
-                      <div className="mt-2 flex flex-wrap gap-x-1 gap-y-1 text-xs text-gray-600">
-                        {subcommittees.map((subcommittee, index) => (
-                          <span key={subcommittee.id} className="inline-flex max-w-full items-center gap-1 break-words">
-                            <button type="button" onClick={() => void deleteSubcommittee(subcommittee.id)} disabled={!(isLeader || isTeacher)} className="inline-flex items-center gap-1 text-left disabled:cursor-default">
-                              <span className="break-words">{subcommittee.name}</span>
-                              {(isLeader || isTeacher) ? <X className="h-3 w-3 rounded-full text-red-600 hover:bg-red-50 hover:text-red-700" /> : null}
-                            </button>
-                            {index < subcommittees.length - 1 ? ", " : ""}
-                          </span>
-                        ))}
-                      </div>
+                      <p className="mt-2 whitespace-normal break-words text-xs leading-5 text-gray-600">
+                        {subcommittees.map((subcommittee) => subcommittee.name).join(", ")}
+                      </p>
                     ) : (
                       <div className="mt-2 text-xs text-gray-500">N/A</div>
                     )}

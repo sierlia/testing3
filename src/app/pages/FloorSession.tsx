@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
-import { Check, ExternalLink, MessageSquare, Minus, MonitorUp, Pencil, Plus, Search, Send, Trash2, Trophy, Vote, X } from "lucide-react";
+import { Check, ChevronDown, ExternalLink, MessageSquare, Minus, MonitorUp, Pencil, Plus, Search, Send, Trash2, Trophy, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../services/bills";
@@ -39,7 +39,7 @@ type DiscussionComment = { id: string; post_id: string; discussion_id: string; c
 type DiscussionReaction = { id: string; post_id: string; class_id: string; user_id: string; emoji: "thumbs_up" };
 
 const DISCUSSION_REACTIONS: Array<{ id: DiscussionReaction["emoji"]; label: string }> = [
-  { id: "thumbs_up", label: "Thumbs up" },
+  { id: "thumbs_up", label: "👍" },
 ];
 
 async function fetchFloorSpeakersForClass(classId: string): Promise<FloorSpeakerRow[]> {
@@ -116,7 +116,7 @@ export function FloorSession() {
   const [discussionComments, setDiscussionComments] = useState<DiscussionComment[]>([]);
   const [discussionReactions, setDiscussionReactions] = useState<DiscussionReaction[]>([]);
   const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null);
-  const [newDiscussionOpen, setNewDiscussionOpen] = useState(false);
+  const [creatingDiscussion, setCreatingDiscussion] = useState(false);
   const [newDiscussionTitle, setNewDiscussionTitle] = useState("");
   const [newDiscussionPrompt, setNewDiscussionPrompt] = useState("");
   const [newDiscussionPost, setNewDiscussionPost] = useState("");
@@ -126,6 +126,10 @@ export function FloorSession() {
   const [editingDiscussionId, setEditingDiscussionId] = useState<string | null>(null);
   const [editingDiscussionTitle, setEditingDiscussionTitle] = useState("");
   const [editingDiscussionPrompt, setEditingDiscussionPrompt] = useState("");
+  const [discussionMenuOpen, setDiscussionMenuOpen] = useState(false);
+  const [draggingDiscussionId, setDraggingDiscussionId] = useState<string | null>(null);
+  const [discussionDragTarget, setDiscussionDragTarget] = useState<{ visibility: NonNullable<DiscussionArea["visibility"]>; index: number } | null>(null);
+  const discussionMenuRef = useRef<HTMLDivElement | null>(null);
 
   const loadDiscussions = async (targetClassId: string) => {
     const { data: areaRows, error: areaError } = await supabase
@@ -214,6 +218,15 @@ export function FloorSession() {
   useEffect(() => {
     void load();
   }, []);
+
+  useEffect(() => {
+    if (!discussionMenuOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!discussionMenuRef.current?.contains(event.target as Node)) setDiscussionMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [discussionMenuOpen]);
 
   useEffect(() => {
     if (!classId) return;
@@ -389,6 +402,7 @@ export function FloorSession() {
     return winner && speakerVoteCount(winner.id) > 0 ? winner : null;
   }, [speakerCandidates, speakerVotes, speakerOptOuts]);
   const visibleDiscussionAreas = useMemo(() => discussionAreas.filter((area) => role === "teacher" || area.visibility !== "invisible"), [discussionAreas, role]);
+  const liveDiscussion = visibleDiscussionAreas.find((area) => area.visibility === "live" || area.is_active) ?? null;
   const selectedDiscussion = visibleDiscussionAreas.find((area) => area.id === selectedDiscussionId) ?? visibleDiscussionAreas.find((area) => area.visibility === "live" || area.is_active) ?? visibleDiscussionAreas[0] ?? null;
   const selectedDiscussionCanPost = Boolean(selectedDiscussion && (selectedDiscussion.visibility === "live" || selectedDiscussion.is_active));
   const discussionSections = useMemo<Array<{ id: NonNullable<DiscussionArea["visibility"]>; label: string }>>(
@@ -446,7 +460,7 @@ export function FloorSession() {
       const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
       if (error) throw error;
       setClassSettings(nextSettings);
-      toast.success(`Floor set to ${mode === "election" ? "Speaker election" : mode === "discussion" ? "discussion" : "calendared bills"}`);
+      toast.success(`Floor set to ${mode === "election" ? "Speaker election" : mode === "discussion" ? "discussion" : "bills"}`);
     } catch (e: any) {
       toast.error(e.message || "Could not update floor mode");
     } finally {
@@ -455,7 +469,7 @@ export function FloorSession() {
   };
 
   const confirmFloorMode = (mode: FloorMode) => {
-    const label = mode === "election" ? "Speaker Election" : mode === "discussion" ? "Discussion" : "Calendared Bills";
+    const label = mode === "election" ? "Speaker Election" : mode === "discussion" ? "Discussion" : "Bills";
     setConfirmDialog({
       title: `Switch floor to ${label}?`,
       message: `Students will see the ${label.toLowerCase()} area on the floor page.`,
@@ -734,7 +748,7 @@ export function FloorSession() {
       if (error) throw error;
       setNewDiscussionTitle("");
       setNewDiscussionPrompt("");
-      setNewDiscussionOpen(false);
+      setCreatingDiscussion(false);
       setSelectedDiscussionId((data as any)?.id ?? null);
       await loadDiscussions(classId);
       toast.success("Discussion area created");
@@ -760,6 +774,13 @@ export function FloorSession() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const showDiscussionOnFloor = async (discussionId: string) => {
+    setSelectedDiscussionId(discussionId);
+    setDiscussionMenuOpen(false);
+    await activateDiscussionArea(discussionId);
+    await setFloorMode("discussion");
   };
 
   const updateDiscussionVisibility = async (discussionId: string, visibility: DiscussionArea["visibility"]) => {
@@ -878,6 +899,20 @@ export function FloorSession() {
     return `${author.display_name ?? "Member"} (Rep.-${partyAbbr(author.party)}-${formatConstituency(author.constituency_name) || "N/A"})`;
   };
 
+  const beginCreateDiscussion = () => {
+    setCreatingDiscussion(true);
+    setSelectedDiscussionId(null);
+    setEditingDiscussionId(null);
+    setNewDiscussionTitle("");
+    setNewDiscussionPrompt("");
+  };
+
+  const selectDiscussion = (discussionId: string) => {
+    setCreatingDiscussion(false);
+    setEditingDiscussionId(null);
+    setSelectedDiscussionId(discussionId);
+  };
+
   const discussionBoard = (
     <div className="grid gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
       <aside className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
@@ -887,62 +922,78 @@ export function FloorSession() {
             <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Discussion Areas</h2>
           </div>
           {role === "teacher" && (
-            <button type="button" onClick={() => setNewDiscussionOpen((open) => !open)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Create discussion area">
+            <button type="button" onClick={beginCreateDiscussion} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Create discussion area">
               <Plus className="h-4 w-4" />
             </button>
           )}
         </div>
-        {newDiscussionOpen && role === "teacher" && (
-          <div className="mb-4 space-y-2 rounded-md border border-blue-100 bg-blue-50 p-3">
-            <input
-              value={newDiscussionTitle}
-              onChange={(event) => setNewDiscussionTitle(event.target.value)}
-              placeholder="Discussion title"
-              className="w-full rounded-md border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <textarea
-              value={newDiscussionPrompt}
-              onChange={(event) => setNewDiscussionPrompt(event.target.value)}
-              placeholder="Prompt or directions"
-              rows={3}
-              className="w-full resize-none rounded-md border border-blue-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <button type="button" onClick={() => void createDiscussionArea()} disabled={busy || !newDiscussionTitle.trim()} className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-              Create
-            </button>
-          </div>
-        )}
         <div className="space-y-4">
           {discussionSections.map((section) => {
             const areas = discussionAreasByVisibility[section.id];
+            const endTargeted = draggingDiscussionId && discussionDragTarget?.visibility === section.id && discussionDragTarget.index === areas.length;
             return (
               <div
                 key={section.id}
                 onDragOver={(event) => {
-                  if (role === "teacher") event.preventDefault();
+                  if (role !== "teacher") return;
+                  event.preventDefault();
+                  setDiscussionDragTarget({ visibility: section.id, index: areas.length });
                 }}
                 onDrop={(event) => {
                   if (role !== "teacher") return;
                   event.preventDefault();
-                  const discussionId = event.dataTransfer.getData("text/plain");
+                  const discussionId = event.dataTransfer.getData("text/plain") || draggingDiscussionId;
                   if (discussionId) void updateDiscussionVisibility(discussionId, section.id);
+                  setDraggingDiscussionId(null);
+                  setDiscussionDragTarget(null);
                 }}
               >
                 <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">{section.label}</div>
-                <div className="min-h-10 space-y-2 rounded-md border border-dashed border-gray-200 p-1.5">
-                  {areas.length ? areas.map((area) => (
-                    <button
-                      key={area.id}
-                      type="button"
-                      draggable={role === "teacher"}
-                      onDragStart={(event) => event.dataTransfer.setData("text/plain", area.id)}
-                      onClick={() => setSelectedDiscussionId(area.id)}
-                      className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedDiscussion?.id === area.id ? "border-blue-300 bg-blue-50 text-blue-900" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
-                    >
-                      <span className="block truncate font-semibold">{area.title}</span>
-                      <span className="mt-1 block text-xs text-gray-500">{new Date(area.created_at).toLocaleDateString()}</span>
-                    </button>
-                  )) : <div className="px-2 py-2 text-xs text-gray-400">{role === "teacher" ? "Drag discussions here." : "None"}</div>}
+                <div className="min-h-8 space-y-1">
+                  {areas.length ? areas.map((area, index) => {
+                    const targetedBefore = draggingDiscussionId && discussionDragTarget?.visibility === section.id && discussionDragTarget.index === index;
+                    return (
+                      <div key={area.id}>
+                        {targetedBefore ? <div className="my-1 h-0.5 bg-blue-500" /> : null}
+                        <button
+                          type="button"
+                          draggable={role === "teacher"}
+                          onDragStart={(event) => {
+                            setDraggingDiscussionId(area.id);
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData("text/plain", area.id);
+                          }}
+                          onDragOver={(event) => {
+                            if (role !== "teacher") return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const rect = event.currentTarget.getBoundingClientRect();
+                            const nextIndex = event.clientY > rect.top + rect.height / 2 ? index + 1 : index;
+                            setDiscussionDragTarget({ visibility: section.id, index: nextIndex });
+                          }}
+                          onDragEnd={() => {
+                            setDraggingDiscussionId(null);
+                            setDiscussionDragTarget(null);
+                          }}
+                          onDrop={(event) => {
+                            if (role !== "teacher") return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const discussionId = event.dataTransfer.getData("text/plain") || draggingDiscussionId;
+                            if (discussionId) void updateDiscussionVisibility(discussionId, section.id);
+                            setDraggingDiscussionId(null);
+                            setDiscussionDragTarget(null);
+                          }}
+                          onClick={() => selectDiscussion(area.id)}
+                          className={`w-full px-2 py-1.5 text-left text-sm transition-colors ${selectedDiscussion?.id === area.id && !creatingDiscussion ? "border-l-2 border-blue-600 bg-blue-50 pl-2 text-blue-900" : "text-gray-700 hover:bg-gray-50"} ${draggingDiscussionId === area.id ? "opacity-50" : ""}`}
+                        >
+                          <span className="block font-semibold">{area.title}</span>
+                          <span className="mt-0.5 block text-xs text-gray-500">{new Date(area.created_at).toLocaleDateString()}</span>
+                        </button>
+                      </div>
+                    );
+                  }) : <div className="px-2 py-2 text-xs text-gray-400">None</div>}
+                  {endTargeted ? <div className="my-1 h-0.5 bg-blue-500" /> : null}
                 </div>
               </div>
             );
@@ -950,7 +1001,35 @@ export function FloorSession() {
         </div>
       </aside>
       <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-        {selectedDiscussion ? (
+        {creatingDiscussion && role === "teacher" ? (
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900">New discussion</h2>
+              <p className="mt-1 text-sm text-gray-600">Name the floor discussion and add the directions students should see.</p>
+            </div>
+            <input
+              value={newDiscussionTitle}
+              onChange={(event) => setNewDiscussionTitle(event.target.value)}
+              placeholder="Discussion title"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <textarea
+              value={newDiscussionPrompt}
+              onChange={(event) => setNewDiscussionPrompt(event.target.value)}
+              placeholder="Prompt or directions"
+              rows={5}
+              className="w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <div className="flex gap-2">
+              <button type="button" onClick={() => void createDiscussionArea()} disabled={busy || !newDiscussionTitle.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                Create discussion
+              </button>
+              <button type="button" onClick={() => setCreatingDiscussion(false)} className="rounded-md px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
+                Cancel
+              </button>
+            </div>
+          </div>
+        ) : selectedDiscussion ? (
           <>
             <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
               {editingDiscussionId === selectedDiscussion.id ? (
@@ -992,7 +1071,7 @@ export function FloorSession() {
                     Edit
                   </button>
                   {!selectedDiscussionCanPost && (
-                    <button type="button" onClick={() => void activateDiscussionArea(selectedDiscussion.id)} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                    <button type="button" onClick={() => void showDiscussionOnFloor(selectedDiscussion.id)} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
                       Make live
                     </button>
                   )}
@@ -1129,8 +1208,7 @@ export function FloorSession() {
               <div className="inline-flex overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 {([
                   ["election", "Speaker Election"],
-                  ["bills", "Calendared Bills"],
-                  ["discussion", "Discussion"],
+                  ["bills", "Bills"],
                 ] as Array<[FloorMode, string]>).map(([mode, label], index) => (
                   <button
                     key={mode}
@@ -1142,6 +1220,34 @@ export function FloorSession() {
                     {label}
                   </button>
                 ))}
+                <div className="relative border-l border-gray-200" ref={discussionMenuRef}>
+                  <button
+                    type="button"
+                    onClick={() => setDiscussionMenuOpen((open) => !open)}
+                    disabled={busy}
+                    className={`flex h-full items-center gap-2 px-5 py-2 text-sm font-semibold ${floorMode === "discussion" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"} disabled:opacity-80`}
+                  >
+                    <span>Discussion: {liveDiscussion?.title ?? "Choose"}</span>
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                  {discussionMenuOpen && (
+                    <div className="absolute right-0 top-full z-40 mt-2 max-h-72 w-72 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 text-left shadow-lg">
+                      {visibleDiscussionAreas.length ? visibleDiscussionAreas.map((area) => (
+                        <button
+                          key={area.id}
+                          type="button"
+                          onClick={() => void showDiscussionOnFloor(area.id)}
+                          className={`block w-full px-3 py-2 text-left text-sm ${liveDiscussion?.id === area.id ? "bg-blue-50 text-blue-800" : "text-gray-700 hover:bg-gray-50"}`}
+                        >
+                          <span className="block font-medium">{area.title}</span>
+                          <span className="block text-xs text-gray-500">{area.visibility === "live" || area.is_active ? "Current live discussion" : area.visibility === "invisible" ? "Invisible" : "Archive"}</span>
+                        </button>
+                      )) : (
+                        <div className="px-3 py-2 text-sm text-gray-500">No discussions yet.</div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

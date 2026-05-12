@@ -20,6 +20,9 @@ type SortKey = "number" | "date" | "title" | "sponsor" | "status" | "cosponsors"
 type SortDirection = "asc" | "desc";
 const BILL_ROW_MODE_KEY = "gavel:bills:row-mode";
 const BILL_PREVIEW_SPLIT_KEY = "gavel:bills:preview-split";
+const PREVIEW_SPLIT_MIN = 38;
+const PREVIEW_SPLIT_MAX = 90;
+const PREVIEW_SPLIT_CLOSE_AT = 92;
 
 interface BillView {
   id: string;
@@ -170,7 +173,7 @@ export function TessBills() {
   });
   const [previewSplitPct, setPreviewSplitPct] = useState(() => {
     const saved = Number(window.localStorage.getItem(BILL_PREVIEW_SPLIT_KEY));
-    return Number.isFinite(saved) && saved >= 45 && saved <= 78 ? saved : 66;
+    return Number.isFinite(saved) && saved >= PREVIEW_SPLIT_MIN && saved <= PREVIEW_SPLIT_MAX ? saved : 66;
   });
   const [draggingSplit, setDraggingSplit] = useState(false);
   const [filters, setFilters] = useState({
@@ -289,7 +292,13 @@ export function TessBills() {
       if (!container) return;
       const rect = container.getBoundingClientRect();
       const next = ((event.clientX - rect.left) / rect.width) * 100;
-      setPreviewSplitPct(Math.min(78, Math.max(45, next)));
+      if (next >= PREVIEW_SPLIT_CLOSE_AT) {
+        setPreviewSplitPct(PREVIEW_SPLIT_MAX);
+        setRowMode("open");
+        return;
+      }
+      setRowMode("preview");
+      setPreviewSplitPct(Math.min(PREVIEW_SPLIT_MAX, Math.max(PREVIEW_SPLIT_MIN, next)));
     };
     const onUp = () => setDraggingSplit(false);
     document.body.style.cursor = "col-resize";
@@ -440,8 +449,8 @@ export function TessBills() {
 
         <div
           id="bills-preview-split"
-          className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_0.5rem_minmax(18rem,1fr)] lg:gap-3" : ""}`}
-          style={rowMode === "preview" ? ({ "--bill-list-width": `${previewSplitPct}%` } as CSSProperties) : undefined}
+          className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_2px_minmax(18rem,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_2px] lg:gap-3"}`}
+          style={{ "--bill-list-width": `${previewSplitPct}%` } as CSSProperties}
         >
           <div>
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
@@ -535,14 +544,12 @@ export function TessBills() {
             {!loading && filteredBills.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={filteredBills.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
           </div>
 
-          {rowMode === "preview" && (
-            <button
-              type="button"
-              onMouseDown={() => setDraggingSplit(true)}
-              className="hidden cursor-col-resize rounded-full bg-gray-200 transition-colors hover:bg-blue-300 active:bg-blue-400 lg:block"
-              aria-label="Resize bill preview"
-            />
-          )}
+          <button
+            type="button"
+            onMouseDown={() => setDraggingSplit(true)}
+            className="hidden min-h-[24rem] cursor-col-resize bg-gray-300 transition-colors hover:bg-blue-400 active:bg-blue-500 lg:block"
+            aria-label={rowMode === "preview" ? "Resize bill preview" : "Drag left to show bill preview"}
+          />
 
           {rowMode === "preview" && (
             <div>

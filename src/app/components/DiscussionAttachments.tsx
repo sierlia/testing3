@@ -135,13 +135,13 @@ export function AttachmentPicker({
         {value.length ? `${value.length} attached` : "Attach"}
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-[150] mt-2 w-80 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
+        <div className="absolute bottom-full left-0 z-[150] mb-2 w-[28rem] max-w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
           <div className="border-b border-gray-200 p-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search legislation or records..." className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
-            <div className="mt-2 grid grid-cols-2 rounded-md bg-gray-100 p-1 text-xs font-medium">
+            <div className="mt-2 grid grid-cols-2 rounded-md bg-gray-100 p-1 text-sm font-medium">
               <button type="button" onClick={() => setTab("legislation")} className={`rounded px-2 py-1.5 ${tab === "legislation" ? "bg-white text-blue-700 shadow-sm" : "text-gray-600"}`}>Legislation</button>
               <button type="button" onClick={() => setTab("records")} className={`rounded px-2 py-1.5 ${tab === "records" ? "bg-white text-blue-700 shadow-sm" : "text-gray-600"}`}>Records</button>
             </div>
@@ -153,8 +153,7 @@ export function AttachmentPicker({
                 <button key={`${item.type}:${item.id}`} type="button" onClick={() => toggle(item)} className={`flex w-full items-start gap-2 rounded-md px-2 py-2 text-left text-sm ${selected ? "bg-blue-50 text-blue-800" : "hover:bg-gray-50"}`}>
                   <FileText className="mt-0.5 h-4 w-4 flex-shrink-0 text-gray-500" />
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium">{item.label}</span>
-                    {item.description ? <span className="block truncate text-xs text-gray-500">{item.description}</span> : null}
+                    <span className="block whitespace-normal break-words font-medium leading-5">{item.label}</span>
                   </span>
                   {selected ? <X className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" /> : null}
                 </button>

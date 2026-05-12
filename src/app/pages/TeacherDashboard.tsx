@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
-import { Plus, Users, Copy, Check, Search } from 'lucide-react';
+import { Plus, Users, Copy, Check, Search, GripVertical } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 import { Navigation } from '../components/Navigation';
@@ -16,6 +16,22 @@ interface ClassData {
   invite_status?: "approved" | "invited" | "pending";
 }
 
+const CLASS_REORDER_ENABLED_KEY = "gavel:teacher-classes:reorder-enabled";
+const CLASS_ORDER_KEY = "gavel:teacher-classes:manual-order";
+
+function createdDesc(a: ClassData, b: ClassData) {
+  return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+}
+
+function savedClassOrder() {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(CLASS_ORDER_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((id) => typeof id === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
 export function TeacherDashboard() {
   const navigate = useNavigate();
   const [classes, setClasses] = useState<ClassData[]>([]);
@@ -23,10 +39,31 @@ export function TeacherDashboard() {
   const [userName, setUserName] = useState('');
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [reorderEnabled, setReorderEnabled] = useState(() => window.localStorage.getItem(CLASS_REORDER_ENABLED_KEY) === "true");
+  const [draggedClassId, setDraggedClassId] = useState<string | null>(null);
+  const [dragOverClassId, setDragOverClassId] = useState<string | null>(null);
+  const [dragOverPosition, setDragOverPosition] = useState<"before" | "after">("before");
+
+  const applyClassOrder = (rows: ClassData[]) => {
+    if (!reorderEnabled) return [...rows].sort(createdDesc);
+    const order = savedClassOrder();
+    const index = new Map(order.map((id, orderIndex) => [id, orderIndex]));
+    return [...rows].sort((a, b) => {
+      const ai = index.has(a.id) ? index.get(a.id)! : Number.MAX_SAFE_INTEGER;
+      const bi = index.has(b.id) ? index.get(b.id)! : Number.MAX_SAFE_INTEGER;
+      return ai - bi || createdDesc(a, b);
+    });
+  };
 
   useEffect(() => {
     loadUserAndClasses();
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(CLASS_REORDER_ENABLED_KEY, String(reorderEnabled));
+    setClasses((current) => applyClassOrder(current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reorderEnabled]);
 
   const loadUserAndClasses = async () => {
     try {
@@ -66,7 +103,7 @@ export function TeacherDashboard() {
           const cls = membershipClassMap.get((row as any).class_id);
           if (cls) classMap.set(cls.id, { ...cls, invite_status: (row as any).status ?? "approved" });
         }
-        const classRows = Array.from(classMap.values()).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        const classRows = Array.from(classMap.values()).sort(createdDesc);
 
         const normalizedIds = (classRows ?? []).map((c) => c.id).filter(Boolean);
         const { data: studentMemberships } = normalizedIds.length
@@ -83,7 +120,7 @@ export function TeacherDashboard() {
           studentCounts.set(id, (studentCounts.get(id) ?? 0) + 1);
         }
         const normalized = (classRows ?? []).map((c) => ({ ...c, student_count: studentCounts.get(c.id) ?? 0 }));
-        setClasses(normalized as any);
+        setClasses(applyClassOrder(normalized as any));
       }
     } catch {
       toast.error('Error loading classes');
@@ -135,6 +172,20 @@ export function TeacherDashboard() {
     await loadUserAndClasses();
   };
 
+  const moveClass = (fromId: string, toId: string, position: "before" | "after") => {
+    setClasses((current) => {
+      const fromIndex = current.findIndex((item) => item.id === fromId);
+      const toIndex = current.findIndex((item) => item.id === toId);
+      if (fromIndex < 0 || toIndex < 0 || fromIndex === toIndex) return current;
+      const next = [...current];
+      const [item] = next.splice(fromIndex, 1);
+      const targetIndex = next.findIndex((classItem) => classItem.id === toId);
+      next.splice(position === "after" ? targetIndex + 1 : targetIndex, 0, item);
+      window.localStorage.setItem(CLASS_ORDER_KEY, JSON.stringify(next.map((classItem) => classItem.id)));
+      return next;
+    });
+  };
+
   const visibleClasses = classes.filter((classItem) => {
     const query = searchQuery.trim().toLowerCase();
     return !query || classItem.name.toLowerCase().includes(query) || classItem.class_code.toLowerCase().includes(query);
@@ -179,6 +230,19 @@ export function TeacherDashboard() {
                 className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            {classes.length > 1 && (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setReorderEnabled((current) => !current)}
+                  className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium ${reorderEnabled ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                >
+                  <GripVertical className="h-4 w-4" />
+                  {reorderEnabled ? "Class reordering enabled" : "Enable class reordering"}
+                </button>
+                <span className="text-xs text-gray-500">{reorderEnabled ? (searchQuery.trim() ? "Clear search to drag classes." : "Drag classes by their rows.") : "Uses the newest-created order until enabled."}</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -200,19 +264,52 @@ export function TeacherDashboard() {
           </Card>
         ) : (
           <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-            {visibleClasses.map((classItem) => (
-              <div
-                key={classItem.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => classItem.invite_status === 'approved' ? void openClass(classItem.id) : undefined}
-                onKeyDown={(event) => {
-                  if ((event.key === "Enter" || event.key === " ") && classItem.invite_status === 'approved') void openClass(classItem.id);
-                }}
-                className="flex w-full flex-col gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 hover:bg-gray-50 md:flex-row md:items-center md:justify-between"
-              >
+            {visibleClasses.map((classItem) => {
+              const canDrag = reorderEnabled && !searchQuery.trim();
+              const showDropLine = canDrag && draggedClassId && draggedClassId !== classItem.id && dragOverClassId === classItem.id;
+              return (
+              <div key={classItem.id} className="relative">
+                {showDropLine && dragOverPosition === "before" && <div className="absolute left-0 right-0 top-0 z-10 h-0.5 bg-blue-500" />}
+                <div
+                  role="button"
+                  tabIndex={0}
+                  draggable={canDrag}
+                  onDragStart={(event) => {
+                    if (!canDrag) return;
+                    setDraggedClassId(classItem.id);
+                    event.dataTransfer.effectAllowed = "move";
+                    event.dataTransfer.setData("text/plain", classItem.id);
+                  }}
+                  onDragOver={(event) => {
+                    if (!canDrag || !draggedClassId) return;
+                    event.preventDefault();
+                    const rect = event.currentTarget.getBoundingClientRect();
+                    setDragOverClassId(classItem.id);
+                    setDragOverPosition(event.clientY > rect.top + rect.height / 2 ? "after" : "before");
+                  }}
+                  onDragEnd={() => {
+                    setDraggedClassId(null);
+                    setDragOverClassId(null);
+                  }}
+                  onDrop={(event) => {
+                    if (!canDrag) return;
+                    event.preventDefault();
+                    const fromId = event.dataTransfer.getData("text/plain") || draggedClassId;
+                    if (fromId && fromId !== classItem.id) moveClass(fromId, classItem.id, dragOverPosition);
+                    setDraggedClassId(null);
+                    setDragOverClassId(null);
+                  }}
+                  onClick={() => classItem.invite_status === 'approved' ? void openClass(classItem.id) : undefined}
+                  onKeyDown={(event) => {
+                    if ((event.key === "Enter" || event.key === " ") && classItem.invite_status === 'approved') void openClass(classItem.id);
+                  }}
+                  className={`flex w-full flex-col gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 hover:bg-gray-50 md:flex-row md:items-center md:justify-between ${canDrag ? "cursor-grab active:cursor-grabbing" : ""} ${draggedClassId === classItem.id ? "opacity-50" : ""}`}
+                >
                 <div className="min-w-0">
-                  <h3 className="truncate text-lg font-semibold text-gray-900">{classItem.name}</h3>
+                  <div className="flex items-center gap-2">
+                    {canDrag && <GripVertical className="h-5 w-5 flex-shrink-0 text-gray-400" />}
+                    <h3 className="truncate text-lg font-semibold text-gray-900">{classItem.name}</h3>
+                  </div>
                   {classItem.invite_status !== 'approved' && <p className="mt-1 text-sm font-medium text-blue-700">Pending teacher invitation</p>}
                   <p className="text-sm text-gray-500">Created {new Date(classItem.created_at).toLocaleDateString()}</p>
                   <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
@@ -254,7 +351,10 @@ export function TeacherDashboard() {
                   </div>
                 </div>
               </div>
-            ))}
+                {showDropLine && dragOverPosition === "after" && <div className="absolute bottom-0 left-0 right-0 z-10 h-0.5 bg-blue-500" />}
+              </div>
+            );
+            })}
             {visibleClasses.length === 0 && <div className="p-8 text-center text-sm text-gray-500">No classes match your search.</div>}
           </div>
         )}

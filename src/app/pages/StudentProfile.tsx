@@ -62,7 +62,7 @@ type ProfileRow = {
   class_id?: string | null;
 };
 
-type ProfileSectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters" | "votes_cast" | "contributions_received";
+type ProfileSectionType = "long_response" | "legislation_written" | "legislation_cosponsored" | "organizations" | "dear_colleague_letters" | "votes_cast" | "contributions_received";
 type ProfileSectionRow = {
   id?: string;
   section_key: string;
@@ -94,9 +94,10 @@ const defaultProfileSections: ProfileSectionRow[] = [
   { section_key: "constituency_description", title: "Constituency Description", section_type: "long_response", width: "full", position: 1 },
   { section_key: "key_issues", title: "Key Issues", section_type: "long_response", width: "full", position: 2 },
   { section_key: "legislation_written", title: "Legislation Written", section_type: "legislation_written", width: "half", position: 3 },
-  { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "full", position: 4 },
-  { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", position: 5 },
-  { section_key: "votes_cast", title: "Votes Cast", section_type: "votes_cast", width: "half", position: 6 },
+  { section_key: "legislation_cosponsored", title: "Legislation Cosponsored", section_type: "legislation_cosponsored", width: "half", position: 4 },
+  { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "full", position: 5 },
+  { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", position: 6 },
+  { section_key: "votes_cast", title: "Votes Cast", section_type: "votes_cast", width: "half", position: 7 },
 ];
 
 const PROFILE_COLLAPSE_WORDS = 150;
@@ -702,34 +703,40 @@ export function StudentProfile() {
     );
   };
 
-  const renderLegislationSection = (section: ProfileSectionRow) => (
-    <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
-      <div className="mb-4 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-blue-600" />
-          <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+  const renderLegislationSection = (section: ProfileSectionRow) => {
+    const cosponsored = section.section_type === "legislation_cosponsored";
+    const bills = cosponsored ? billsCosponsored : billsAuthored;
+    const Icon = cosponsored ? Award : FileText;
+    const allParam = cosponsored ? "cosponsor" : "sponsor";
+    return (
+      <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
+        <div className="mb-4 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <Icon className="h-5 w-5 text-blue-600" />
+            <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+          </div>
+          <Link to={`/bills?${allParam}=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+            All <ChevronRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
-        <Link to={`/bills?sponsor=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
-          All <ChevronRight className="h-3.5 w-3.5" />
-        </Link>
-      </div>
-      <div className="space-y-3">
-        {billsAuthored.length ? (
-          billsAuthored.map((bill: any) => (
-            <Link key={bill.id} to={`/bills/${bill.id}`} className="block rounded-md bg-gray-50 p-3 transition-colors hover:bg-gray-100">
-              <div className="mb-1 flex items-center gap-2">
-                <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
-                <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-700">{statusLabel(bill.status)}</span>
-              </div>
-              <p className="text-sm text-gray-700">{bill.title}</p>
-            </Link>
-          ))
-        ) : (
-          <p className="text-sm text-gray-500">No legislation yet</p>
-        )}
-      </div>
-    </section>
-  );
+        <div className="space-y-3">
+          {bills.length ? (
+            bills.map((bill: any) => (
+              <Link key={bill.id} to={`/bills/${bill.id}`} className="block rounded-md bg-gray-50 p-3 transition-colors hover:bg-gray-100">
+                <div className="mb-1 flex items-center gap-2">
+                  <span className="font-mono text-sm font-semibold text-gray-900">{bill.hr_label}</span>
+                  <span className="rounded bg-blue-100 px-2 py-1 text-xs text-blue-700">{statusLabel(bill.status)}</span>
+                </div>
+                <p className="text-sm text-gray-700">{bill.title}</p>
+              </Link>
+            ))
+          ) : (
+            <p className="text-sm text-gray-500">{cosponsored ? "No legislation cosponsored yet" : "No legislation yet"}</p>
+          )}
+        </div>
+      </section>
+    );
+  };
 
   const renderOrganizationsSection = (section: ProfileSectionRow) => (
     <section key={section.section_key} className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm md:col-span-2">
@@ -892,7 +899,7 @@ export function StudentProfile() {
   );
 
   const renderProfileSection = (section: ProfileSectionRow) => {
-    if (section.section_type === "legislation_written") return renderLegislationSection(section);
+    if (section.section_type === "legislation_written" || section.section_type === "legislation_cosponsored") return renderLegislationSection(section);
     if (section.section_type === "organizations") return renderOrganizationsSection(section);
     if (section.section_type === "dear_colleague_letters") return renderLettersSection(section);
     if (section.section_type === "votes_cast") return renderVotesCastSection(section);

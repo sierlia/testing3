@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import { AlignLeft, DollarSign, FileText, GripVertical, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users, Vote } from "lucide-react";
+import { AlignLeft, Award, DollarSign, FileText, GripVertical, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 
-type SectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters" | "votes_cast" | "contributions_received";
+type SectionType = "long_response" | "legislation_written" | "legislation_cosponsored" | "organizations" | "dear_colleague_letters" | "votes_cast" | "contributions_received";
 type ProfileSection = {
   id?: string;
   class_id: string;
@@ -23,14 +23,16 @@ const defaultSections: Array<Omit<ProfileSection, "class_id">> = [
   { section_key: "constituency_description", title: "Constituency Description", section_type: "long_response", width: "full", is_editable: true, position: 1 },
   { section_key: "key_issues", title: "Key Issues", section_type: "long_response", width: "full", is_editable: true, position: 2 },
   { section_key: "legislation_written", title: "Legislation Written", section_type: "legislation_written", width: "half", is_editable: false, position: 3 },
-  { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "full", is_editable: false, position: 4 },
-  { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", is_editable: false, position: 5 },
-  { section_key: "votes_cast", title: "Votes Cast", section_type: "votes_cast", width: "half", is_editable: false, position: 6 },
+  { section_key: "legislation_cosponsored", title: "Legislation Cosponsored", section_type: "legislation_cosponsored", width: "half", is_editable: false, position: 4 },
+  { section_key: "organizations", title: "Organizations", section_type: "organizations", width: "full", is_editable: false, position: 5 },
+  { section_key: "dear_colleague_letters", title: "Dear Colleague Letters", section_type: "dear_colleague_letters", width: "full", is_editable: false, position: 6 },
+  { section_key: "votes_cast", title: "Votes Cast", section_type: "votes_cast", width: "half", is_editable: false, position: 7 },
 ];
 
 const typeLabels: Record<SectionType, string> = {
   long_response: "Long response",
   legislation_written: "Legislation written",
+  legislation_cosponsored: "Legislation cosponsored",
   organizations: "Organizations",
   dear_colleague_letters: "Dear Colleague letters",
   votes_cast: "Votes cast",
@@ -39,6 +41,7 @@ const typeLabels: Record<SectionType, string> = {
 
 function sectionIcon(type: SectionType) {
   if (type === "legislation_written") return FileText;
+  if (type === "legislation_cosponsored") return Award;
   if (type === "organizations") return Users;
   if (type === "dear_colleague_letters") return Mail;
   if (type === "votes_cast") return Vote;
@@ -297,20 +300,22 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
 
   const renderPreviewSection = (section: ProfileSection) => {
     const span = section.width === "full" || section.section_type === "organizations" ? "md:col-span-2" : "";
-    if (section.section_type === "legislation_written") {
+    if (section.section_type === "legislation_written" || section.section_type === "legislation_cosponsored") {
+      const cosponsored = section.section_type === "legislation_cosponsored";
+      const Icon = cosponsored ? Award : FileText;
       return (
         <section key={`preview-${section.section_key}`} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${span}`}>
           <div className="mb-4 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <FileText className="h-5 w-5 text-blue-600" />
+              <Icon className="h-5 w-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-gray-900">{section.title || "Untitled section"}</h2>
             </div>
             <span className="text-sm font-medium text-blue-600">All</span>
           </div>
           <div className="space-y-3">
             {[
-              ["H.R. 12", "Civic Records Modernization Act", "Reported"],
-              ["H.R. 18", "Community Transit Access Act", "Draft"],
+              cosponsored ? ["H.R. 22", "Student Privacy Safeguards Act", "Calendared"] : ["H.R. 12", "Civic Records Modernization Act", "Reported"],
+              cosponsored ? ["H.R. 31", "Local Transit Pilot Act", "Introduced"] : ["H.R. 18", "Community Transit Access Act", "Draft"],
             ].map(([label, title, status]) => (
               <div key={label} className="rounded-md bg-gray-50 p-3">
                 <div className="mb-1 flex items-center gap-2">
@@ -461,7 +466,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
 
       {activeView === "editor" && <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          {(["long_response", "legislation_written", "organizations", "dear_colleague_letters", "votes_cast", "contributions_received"] as SectionType[]).map((type) => {
+          {(["long_response", "legislation_written", "legislation_cosponsored", "organizations", "dear_colleague_letters", "votes_cast", "contributions_received"] as SectionType[]).map((type) => {
             const Icon = sectionIcon(type);
             const disabled = type !== "long_response" && usedSingleTypes.has(type);
             return (
