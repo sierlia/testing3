@@ -62,7 +62,7 @@ type ProfileRow = {
   class_id?: string | null;
 };
 
-type ProfileSectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters" | "votes_cast";
+type ProfileSectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters" | "votes_cast" | "contributions_received";
 type ProfileSectionRow = {
   id?: string;
   section_key: string;
@@ -80,6 +80,14 @@ type VoteCast = {
   context: string;
   href: string;
 };
+type ContributionReceived = {
+  id: string;
+  amount: number;
+  note: string | null;
+  created_at: string;
+  sourceName: string;
+  fromName: string;
+};
 
 const defaultProfileSections: ProfileSectionRow[] = [
   { section_key: "personal_statement", title: "Personal Statement", section_type: "long_response", width: "full", position: 0 },
@@ -92,7 +100,7 @@ const defaultProfileSections: ProfileSectionRow[] = [
 ];
 
 const PROFILE_COLLAPSE_WORDS = 150;
-const COOK_PVI_SOURCE_URL = "https://www.cookpolitical.com/cook-pvi/2025-partisan-voting-index/district-map-and-list";
+const COOK_PVI_SOURCE_URL = "https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index";
 
 function countWords(text: string) {
   return text.trim().split(/\s+/).filter(Boolean).length;
@@ -130,6 +138,7 @@ export function StudentProfile() {
   const [profileContentFormat, setProfileContentFormat] = useState<"editor" | "pdf">("editor");
   const [moneyEnabled, setMoneyEnabled] = useState(false);
   const [campaignFunds, setCampaignFunds] = useState(0);
+  const [contributionsReceived, setContributionsReceived] = useState<ContributionReceived[]>([]);
 
   const [editingSection, setEditingSection] = useState<EditingSection>(null);
   const [editingContent, setEditingContent] = useState<string>("");
@@ -218,8 +227,30 @@ export function StudentProfile() {
           setProfileContentFormat(((cls as any)?.settings?.editorFormats?.profile ?? "editor") === "pdf" ? "pdf" : "editor");
           setProfileWordLimit(Math.min(2000, Math.max(1, Number((cls as any)?.settings?.wordLimits?.profileLongResponse ?? 1000))));
           setProfileSectionWordLimits(((cls as any)?.settings?.profileSectionWordLimits ?? {}) as Record<string, number>);
-          const { data: contributions } = await supabase.from("lobbyist_contributions").select("amount").eq("class_id", pr.class_id).eq("recipient_type", "member").eq("recipient_id", uid);
-          setCampaignFunds((contributions ?? []).reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0));
+          const { data: contributions } = await supabase
+            .from("lobbyist_contributions")
+            .select("id,amount,note,created_at,from_user_id,lobbyist_groups(name)")
+            .eq("class_id", pr.class_id)
+            .eq("recipient_type", "member")
+            .eq("recipient_id", uid)
+            .order("created_at", { ascending: false });
+          const contributionRows = (contributions ?? []) as any[];
+          const contributorIds = Array.from(new Set(contributionRows.map((row) => row.from_user_id).filter(Boolean)));
+          const { data: contributorProfiles } = contributorIds.length
+            ? await supabase.from("profiles").select("user_id,display_name").in("user_id", contributorIds)
+            : ({ data: [] } as any);
+          const contributorNameMap = new Map(((contributorProfiles ?? []) as any[]).map((row) => [row.user_id, row.display_name ?? "Member"]));
+          setCampaignFunds(contributionRows.reduce((sum: number, row: any) => sum + Number(row.amount ?? 0), 0));
+          setContributionsReceived(
+            contributionRows.map((row) => ({
+              id: row.id,
+              amount: Number(row.amount ?? 0),
+              note: row.note ?? null,
+              created_at: row.created_at,
+              sourceName: row.lobbyist_groups?.name ?? "Lobbyist group",
+              fromName: row.from_user_id ? contributorNameMap.get(row.from_user_id) ?? "Member" : row.lobbyist_groups?.name ?? "Lobbyist group",
+            })),
+          );
       }
 
       let authoredQuery = supabase
@@ -808,11 +839,64 @@ export function StudentProfile() {
     </section>
   );
 
+  const renderContributionsReceivedSection = (section: ProfileSectionRow) => (
+    <section key={section.section_key} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${section.width === "full" ? "md:col-span-2" : ""}`}>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <DollarSign className="h-5 w-5 text-green-600" />
+          <h2 className="text-lg font-semibold text-gray-900">{section.title}</h2>
+        </div>
+        <Link to={`/records?type=campaign_contribution&user=${profile?.user_id ?? ""}`} className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-700">
+          All <ChevronRight className="h-3.5 w-3.5" />
+        </Link>
+      </div>
+      {!moneyEnabled ? (
+        <p className="text-sm text-gray-500">Campaign contributions are not enabled for this simulation.</p>
+      ) : (
+        <>
+          <div className="mb-3 rounded-md bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">
+            Total amount received: ${campaignFunds.toLocaleString()}
+          </div>
+          <div className="max-h-72 overflow-y-auto rounded-md border border-gray-200">
+            <table className="min-w-full divide-y divide-gray-200 text-sm">
+              <thead className="sticky top-0 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">From</th>
+                  <th className="px-3 py-2">Amount</th>
+                  <th className="px-3 py-2">Note</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 bg-white">
+                {contributionsReceived.length ? contributionsReceived.map((contribution) => (
+                  <tr key={contribution.id}>
+                    <td className="whitespace-nowrap px-3 py-2 text-gray-600">{new Date(contribution.created_at).toLocaleDateString()}</td>
+                    <td className="px-3 py-2 text-gray-900">
+                      <div className="font-medium">{contribution.sourceName}</div>
+                      <div className="text-xs text-gray-500">{contribution.fromName}</div>
+                    </td>
+                    <td className="whitespace-nowrap px-3 py-2 font-semibold text-green-700">${contribution.amount.toLocaleString()}</td>
+                    <td className="max-w-xs px-3 py-2 text-gray-600">{contribution.note || "Campaign contribution"}</td>
+                  </tr>
+                )) : (
+                  <tr>
+                    <td colSpan={4} className="px-3 py-8 text-center text-gray-500">No contributions received.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </section>
+  );
+
   const renderProfileSection = (section: ProfileSectionRow) => {
     if (section.section_type === "legislation_written") return renderLegislationSection(section);
     if (section.section_type === "organizations") return renderOrganizationsSection(section);
     if (section.section_type === "dear_colleague_letters") return renderLettersSection(section);
     if (section.section_type === "votes_cast") return renderVotesCastSection(section);
+    if (section.section_type === "contributions_received") return renderContributionsReceivedSection(section);
     return renderLongResponseSection(section);
   };
 
@@ -902,12 +986,6 @@ export function StudentProfile() {
                         </a>
                       ) : null}
                     </div>
-                    {moneyEnabled && (
-                      <Link to={`/records?type=campaign_contribution&user=${profile.user_id}`} className="mt-2 inline-flex items-center gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-sm font-semibold text-green-700 hover:bg-green-100">
-                        <DollarSign className="h-4 w-4" />
-                        Campaign ${campaignFunds.toLocaleString()} All
-                      </Link>
-                    )}
                   </div>
                 )}
               </div>

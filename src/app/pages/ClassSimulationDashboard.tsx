@@ -7,6 +7,7 @@ import { AnnouncementsFeed } from "../components/AnnouncementsFeed";
 import { QuickLinks } from "../components/QuickLinks";
 import { TeacherAdminShortcuts } from "../components/TeacherAdminShortcuts";
 import { supabase } from "../utils/supabase";
+import { committeeDisplayName } from "../utils/committeeNames";
 import { fetchCalendaredBillsForCurrentClass, fetchMyBillsForCurrentClass, fetchMyCosponsoredBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 
@@ -18,6 +19,13 @@ type Profile = {
   constituency_name: string | null;
 };
 
+function displayPartyName(name: string) {
+  const normalized = name.trim();
+  if (/democratic( party)?$/i.test(normalized) || /^democrat(ic)?$/i.test(normalized)) return "Democratic Party";
+  if (/republican( party)?$/i.test(normalized)) return "Republican Party";
+  return /party$/i.test(normalized) ? normalized : `${normalized} Party`;
+}
+
 export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?: string | null } = {}) {
   const { classId: routeClassId } = useParams();
   const classId = classIdOverride ?? routeClassId;
@@ -28,7 +36,7 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
   const [committeeNames, setCommitteeNames] = useState<string[]>([]);
   const [leadershipRoles, setLeadershipRoles] = useState<string[]>([]);
   const [className, setClassName] = useState("");
-  const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
+  const [announcements, setAnnouncements] = useState<Array<{ id: string; author: string; role?: string; content: string; timestamp: Date; isPinned: boolean; href?: string; isNew?: boolean }>>([]);
   const [myBills, setMyBills] = useState<BillRecord[]>([]);
   const [cosponsoredBills, setCosponsoredBills] = useState<BillRecord[]>([]);
   const [calendarItems, setCalendarItems] = useState<Array<{ id: string; bill_id: string; scheduled_at: string; duration_minutes: number; bill: BillRecord }>>([]);
@@ -99,18 +107,32 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
         // Announcements feed (committee + caucus announcements)
         let committeeIds: string[] = [];
         let caucusIds: string[] = [];
+        let partyIds: string[] = [];
+        let lobbyistIds: string[] = [];
 
         if ((pRow as any)?.role === "teacher") {
           const { data: allCommittees } = await supabase.from("committees").select("id");
           const { data: allCaucuses } = await supabase.from("caucuses").select("id");
+          const { data: allParties } = await supabase.from("parties").select("id");
+          const { data: allLobbyists } = await supabase.from("lobbyist_groups").select("id").eq("class_id", classId);
           committeeIds = (allCommittees ?? []).map((c: any) => c.id);
           caucusIds = (allCaucuses ?? []).map((c: any) => c.id);
+          partyIds = (allParties ?? []).map((p: any) => p.id);
+          lobbyistIds = (allLobbyists ?? []).map((group: any) => group.id);
         } else {
           committeeIds = (cm ?? []).map((r: any) => r.committee_id);
           caucusIds = (caucusMemberships ?? []).map((r: any) => r.caucus_id);
+          const [{ data: partyRows }, { data: lobbyistRows }] = await Promise.all([
+            (pRow as any)?.party
+              ? supabase.from("parties").select("id").eq("class_id", classId).eq("name", (pRow as any).party)
+              : Promise.resolve({ data: [] as any[] } as any),
+            supabase.from("lobbyist_group_members").select("group_id").eq("user_id", uid),
+          ]);
+          partyIds = (partyRows ?? []).map((p: any) => p.id);
+          lobbyistIds = (lobbyistRows ?? []).map((group: any) => group.group_id);
         }
 
-        const [classAnn, cAnn, mAnn, taskRows] = await Promise.all([
+        const [classAnn, cAnn, mAnn, pAnn, lAnn, taskRows, caucusRows, partyRows, lobbyistRows] = await Promise.all([
           supabase
             .from("class_announcements")
             .select("id,author_user_id,body,is_pinned,created_at")
@@ -134,18 +156,48 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
                 .order("created_at", { ascending: false })
                 .limit(10)
             : Promise.resolve({ data: [] as any[] } as any),
+          partyIds.length
+            ? supabase
+                .from("party_announcements")
+                .select("id,author_user_id,body,created_at,party_id")
+                .in("party_id", partyIds)
+                .order("created_at", { ascending: false })
+                .limit(10)
+            : Promise.resolve({ data: [] as any[] } as any),
+          lobbyistIds.length
+            ? supabase
+                .from("lobbyist_group_announcements")
+                .select("id,author_user_id,body,created_at,group_id")
+                .in("group_id", lobbyistIds)
+                .order("created_at", { ascending: false })
+                .limit(10)
+            : Promise.resolve({ data: [] as any[] } as any),
           supabase
             .from("class_tasks")
             .select("id,task_type,title,description,due_at,created_at,created_by")
             .eq("class_id", classId)
             .order("created_at", { ascending: false })
             .limit(10),
+          caucusIds.length
+            ? supabase.from("caucuses").select("id,title").in("id", caucusIds)
+            : Promise.resolve({ data: [] as any[] } as any),
+          partyIds.length
+            ? supabase.from("parties").select("id,name").in("id", partyIds)
+            : Promise.resolve({ data: [] as any[] } as any),
+          lobbyistIds.length
+            ? supabase.from("lobbyist_groups").select("id,name").in("id", lobbyistIds)
+            : Promise.resolve({ data: [] as any[] } as any),
         ]);
+        const caucusNameMap = new Map((((caucusRows as any).data ?? []) as any[]).map((caucus) => [caucus.id, caucus.title ?? "Caucus"]));
+        const partyNameMap = new Map((((partyRows as any).data ?? []) as any[]).map((party) => [party.id, displayPartyName(party.name)]));
+        const lobbyistNameMap = new Map((((lobbyistRows as any).data ?? []) as any[]).map((group) => [group.id, group.name ?? "Lobbyist group"]));
 
         const combined = [
           ...(((classAnn as any).data ?? []) as any[]).map((a: any) => ({ ...a, _type: "class" as const })),
           ...((cAnn as any).data ?? []).map((a: any) => ({ ...a, _type: "caucus" as const })),
           ...((mAnn as any).data ?? []).map((a: any) => ({ ...a, _type: "committee" as const })),
+          ...((pAnn as any).data ?? []).map((a: any) => ({ ...a, _type: "party" as const })),
+          ...((lAnn as any).data ?? []).map((a: any) => ({ ...a, _type: "lobbyist" as const })),
           ...(((taskRows as any).data ?? []) as any[]).map((t: any) => ({ ...t, _type: "task" as const })),
         ]
           .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
@@ -172,29 +224,44 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
         const seenKey = `class:${classId}:announcements-seen-at`;
         const seenAt = Number(window.localStorage.getItem(seenKey) || "0");
         setAnnouncements(
-          combined.map((a: any) => ({
-            id: a.id,
-            author:
-              authorMap.get(a._type === "task" ? a.created_by : a.author_user_id)?.display_name ?? "Unknown",
-            role: a._type === "task" || a._type === "class" ? "Teacher" : a._type === "committee" ? "Committee" : "Caucus",
-            content:
-              a._type === "task"
-                ? `${a.task_type === "deadline" ? "Deadline" : "Assignment"}: ${a.title}${
-                    a.due_at ? ` (Due ${new Date(a.due_at).toLocaleString()})` : ""
-                  }\n\n${a.description || ""}`.trim()
-                : a.body,
-            timestamp: new Date(a.created_at),
-            isPinned: a._type === "class" ? Boolean(a.is_pinned) : false,
-            href:
-              a._type === "committee"
-                ? `/committees/${a.committee_id}?announcement=${a.id}`
-                : a._type === "caucus"
+          combined.map((a: any) => {
+            const personName = authorMap.get(a._type === "task" ? a.created_by : a.author_user_id)?.display_name ?? "Unknown";
+            const orgName = a._type === "committee"
+              ? committeeDisplayName(committeeMap.get(a.committee_id))
+              : a._type === "caucus"
+                ? caucusNameMap.get(a.caucus_id) ?? "Caucus"
+                : a._type === "party"
+                  ? partyNameMap.get(a.party_id) ?? "Party"
+                  : a._type === "lobbyist"
+                    ? lobbyistNameMap.get(a.group_id) ?? "Lobbyist group"
+                    : "";
+            return {
+              id: a.id,
+              author: a._type === "task" ? "New Assignment" : a._type === "committee" || a._type === "caucus" || a._type === "party" || a._type === "lobbyist" ? orgName : personName,
+              role: a._type === "class" ? "Teacher" : undefined,
+              content:
+                a._type === "task"
+                  ? `${a.title}${a.due_at ? ` - Due ${new Date(a.due_at).toLocaleString()}` : ""}`
+                  : a._type === "committee" || a._type === "caucus" || a._type === "party" || a._type === "lobbyist"
+                    ? `${personName}: ${a.body}`
+                    : a.body,
+              timestamp: new Date(a.created_at),
+              isPinned: a._type === "class" ? Boolean(a.is_pinned) : false,
+              href:
+                a._type === "committee"
+                  ? `/committees/${a.committee_id}?announcement=${a.id}`
+                  : a._type === "caucus"
                   ? `/caucuses/${a.caucus_id}?announcement=${a.id}`
-                  : a._type === "task" && a.task_type === "assignment"
-                    ? `/assignments/${a.id}`
-                    : undefined,
-            isNew: new Date(a.created_at).getTime() > seenAt,
-          })),
+                  : a._type === "party"
+                    ? `/parties/${a.party_id}?announcement=${a.id}`
+                    : a._type === "lobbyist"
+                      ? `/lobbyists/${a.group_id}?announcement=${a.id}`
+                      : a._type === "task" && a.task_type === "assignment"
+                        ? `/assignments/${a.id}`
+                        : undefined,
+              isNew: new Date(a.created_at).getTime() > seenAt,
+            };
+          }),
         );
         window.localStorage.setItem(seenKey, String(Date.now()));
 

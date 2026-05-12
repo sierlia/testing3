@@ -1,8 +1,6 @@
 {
-  "source": "https://www.cookpolitical.com/cook-pvi/2025-partisan-voting-index/district-map-and-list",
-  "scrapedAt": "2026-05-12T18:26:42.502Z",
+  "source": "https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index",
   "districts": [],
-  "scrapeStatus": "blocked",
-  "scrapeError": "Cook PVI request failed: 403 Forbidden",
-  "fallbackNote": "Live Cook Political Report scraping was blocked; no Cook PVI defaults were refreshed."
+  "scrapeStatus": "pending",
+  "fallbackNote": "Run scripts/scrape-cook-pvi.mjs to refresh district PVI defaults from Wikipedia."
 }

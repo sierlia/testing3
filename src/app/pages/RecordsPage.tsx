@@ -397,9 +397,10 @@ export function RecordsPage() {
     setRecordTypes(customTypes.length ? customTypes : ["record"]);
     setMoneyEnabled(Boolean((cls as any)?.settings?.money?.enabled));
 
-    const [{ data: customRecords }, { data: letters }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, { data: lobbyistMemberships }, { data: contributions }, { data: contributionCommittees }, { data: contributionParties }, { data: contributionCaucuses }, directory] = await Promise.all([
+    const [{ data: customRecords }, { data: letters }, { data: orgLetterRecipients }, { data: reports }, { data: committeeDocs }, { data: committeeVotes }, { data: committeeMembers }, { data: floorSessions }, { data: floorVotes }, { data: lobbyistMemberships }, { data: contributions }, { data: contributionCommittees }, { data: contributionParties }, { data: contributionCaucuses }, directory] = await Promise.all([
       supabase.from("custom_records").select("id,type,title,body,created_by,generated,metadata,created_at,updated_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
       supabase.from("dear_colleague_letters").select("id,sender_user_id,subject,body,created_at").eq("class_id", activeClassId).order("created_at", { ascending: false }),
+      supabase.from("dear_colleague_org_recipients").select("letter_id,organization_type,organization_id").eq("class_id", activeClassId),
       supabase
         .from("committee_bill_docs")
         .select("bill_id,committee_id,committee_report_submitted_at,bills!inner(id,hr_label,title,status),committees(id,name)")
@@ -443,6 +444,17 @@ export function RecordsPage() {
     const committeeNames = new Map(((contributionCommittees ?? []) as any[]).map((committee) => [committee.id, committeeDisplayName(committee.name)]));
     const partyNames = new Map(((contributionParties ?? []) as any[]).map((party) => [party.id, displayPartyName(party.name)]));
     const caucusNames = new Map(((contributionCaucuses ?? []) as any[]).map((caucus) => [caucus.id, caucus.title ?? "Caucus"]));
+    const orgNameFor = (type: string, id: string) => {
+      if (type === "committee") return committeeNames.get(id) ?? "Committee";
+      if (type === "party") return partyNames.get(id) ?? "Party";
+      if (type === "caucus") return caucusNames.get(id) ?? "Caucus";
+      return typeLabel(type);
+    };
+    const orgRecipientsByLetter = new Map<string, string[]>();
+    for (const row of (orgLetterRecipients ?? []) as any[]) {
+      const name = orgNameFor(row.organization_type, row.organization_id);
+      orgRecipientsByLetter.set(row.letter_id, [...(orgRecipientsByLetter.get(row.letter_id) ?? []), name]);
+    }
     const recipientNameFor = (contribution: any) => {
       if (contribution.recipient_type === "member") return peopleById.get(contribution.recipient_id) ?? "Member";
       if (contribution.recipient_type === "committee") return committeeNames.get(contribution.recipient_id) ?? "Committee";
@@ -499,16 +511,21 @@ export function RecordsPage() {
           metadata: { contribution },
         };
       }),
-      ...(letters ?? []).map((letter: any) => ({
-        id: `letter:${letter.id}`,
-        type: "letter",
-        title: letter.subject || "Dear Colleague Letter",
-        subtitle: `From ${profileMap.get(letter.sender_user_id) ?? "Member"}`,
-        date: letter.created_at,
-        href: `/letters/${letter.id}`,
-        body: letter.body,
-        authorId: letter.sender_user_id,
-      })),
+      ...(letters ?? []).map((letter: any) => {
+        const orgRecipients = orgRecipientsByLetter.get(letter.id) ?? [];
+        return {
+          id: `letter:${letter.id}`,
+          type: "letter",
+          title: letter.subject || "Dear Colleague Letter",
+          subtitle: orgRecipients.length
+            ? `To ${orgRecipients.join(", ")} | From ${profileMap.get(letter.sender_user_id) ?? "Member"}`
+            : `From ${profileMap.get(letter.sender_user_id) ?? "Member"}`,
+          date: letter.created_at,
+          href: `/letters/${letter.id}`,
+          body: letter.body,
+          authorId: letter.sender_user_id,
+        };
+      }),
       ...(reports ?? []).map((report: any) => ({
         id: `report:${report.committee_id}:${report.bill_id}`,
         type: "report",

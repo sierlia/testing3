@@ -1,9 +1,64 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 
-const SOURCE_URL = "https://www.cookpolitical.com/cook-pvi/2025-partisan-voting-index/district-map-and-list";
+const SOURCE_URL = "https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index";
 const OUTPUT = resolve("src/app/data/cookPviDistricts.json");
 const STRICT = process.env.SCRAPER_STRICT === "1";
+
+const STATE_ABBR = {
+  Alabama: "AL",
+  Alaska: "AK",
+  Arizona: "AZ",
+  Arkansas: "AR",
+  California: "CA",
+  Colorado: "CO",
+  Connecticut: "CT",
+  Delaware: "DE",
+  Florida: "FL",
+  Georgia: "GA",
+  Hawaii: "HI",
+  Idaho: "ID",
+  Illinois: "IL",
+  Indiana: "IN",
+  Iowa: "IA",
+  Kansas: "KS",
+  Kentucky: "KY",
+  Louisiana: "LA",
+  Maine: "ME",
+  Maryland: "MD",
+  Massachusetts: "MA",
+  Michigan: "MI",
+  Minnesota: "MN",
+  Mississippi: "MS",
+  Missouri: "MO",
+  Montana: "MT",
+  Nebraska: "NE",
+  Nevada: "NV",
+  "New Hampshire": "NH",
+  "New Jersey": "NJ",
+  "New Mexico": "NM",
+  "New York": "NY",
+  "North Carolina": "NC",
+  "North Dakota": "ND",
+  Ohio: "OH",
+  Oklahoma: "OK",
+  Oregon: "OR",
+  Pennsylvania: "PA",
+  "Rhode Island": "RI",
+  "South Carolina": "SC",
+  "South Dakota": "SD",
+  Tennessee: "TN",
+  Texas: "TX",
+  Utah: "UT",
+  Vermont: "VT",
+  Virginia: "VA",
+  Washington: "WA",
+  "West Virginia": "WV",
+  Wisconsin: "WI",
+  Wyoming: "WY",
+};
+
+const STATE_NAMES = Object.keys(STATE_ABBR).sort((a, b) => b.length - a.length);
 
 function decodeHtml(value) {
   return value
@@ -17,11 +72,24 @@ function decodeHtml(value) {
 }
 
 function normalizeDistrict(value) {
-  const text = value.replace(/\s+/g, " ").trim();
+  const text = decodeHtml(value)
+    .replace(/\[[^\]]+\]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   const match = text.match(/\b([A-Z]{2})[-\s]?(\d{1,2}|AL)\b/i);
-  if (!match) return null;
-  const district = match[2].toUpperCase() === "AL" ? "AL" : match[2].padStart(2, "0");
-  return `${match[1].toUpperCase()}-${district}`;
+  if (match) {
+    const district = match[2].toUpperCase() === "AL" ? "AL" : match[2].padStart(2, "0");
+    return `${match[1].toUpperCase()}-${district}`;
+  }
+  const normalizedText = text.replace(/^(at-large congressional district of|congressional district of)\s+/i, "");
+  const stateName = STATE_NAMES.find((name) => new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i").test(normalizedText));
+  if (!stateName) return null;
+  const remainder = normalizedText.slice(stateName.length).replace(/^[\s,'-]+/, "");
+  const districtMatch = remainder.match(/^(?:at-large|AL|\d{1,2})\b/i);
+  if (!districtMatch) return null;
+  const rawDistrict = districtMatch[0].toUpperCase();
+  const district = rawDistrict === "AT-LARGE" || rawDistrict === "AL" ? "AL" : rawDistrict.padStart(2, "0");
+  return `${STATE_ABBR[stateName]}-${district}`;
 }
 
 async function fetchCookPvi() {
@@ -31,21 +99,21 @@ async function fetchCookPvi() {
     accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "accept-language": "en-US,en;q=0.9",
     "cache-control": "no-cache",
-    referer: "https://www.cookpolitical.com/",
+    referer: "https://en.wikipedia.org/",
   };
   let lastError = null;
   for (let attempt = 1; attempt <= 2; attempt += 1) {
     try {
       const response = await fetch(SOURCE_URL, { headers });
       if (response.ok) return response.text();
-      lastError = new Error(`Cook PVI request failed: ${response.status} ${response.statusText}`);
+      lastError = new Error(`Wikipedia Cook PVI request failed: ${response.status} ${response.statusText}`);
       if (response.status === 403 || response.status === 429) break;
     } catch (error) {
       lastError = error;
     }
     await new Promise((resolveDelay) => setTimeout(resolveDelay, attempt * 750));
   }
-  throw lastError ?? new Error("Cook PVI request failed");
+  throw lastError ?? new Error("Wikipedia Cook PVI request failed");
 }
 
 async function writeDistricts(districts, metadata = {}) {
@@ -68,7 +136,7 @@ try {
   metadata = {
     scrapeStatus: "blocked",
     scrapeError: error.message,
-    fallbackNote: "Live Cook Political Report scraping was blocked; no Cook PVI defaults were refreshed.",
+    fallbackNote: "Wikipedia scraping was blocked; no Cook PVI defaults were refreshed.",
   };
 }
 
@@ -81,7 +149,7 @@ if (html) {
     .map((cells) => {
       const districtCell = cells.find((cell) => normalizeDistrict(cell));
       const district = districtCell ? normalizeDistrict(districtCell) : null;
-      const pvi = cells.find((cell) => /\b(?:EVEN|[DR]\+\d+)\b/i.test(cell))?.toUpperCase() ?? null;
+      const pvi = cells.find((cell) => /^\s*(?:EVEN|[DR]\+\d+)\s*$/i.test(cell))?.toUpperCase() ?? null;
       if (!district || !pvi) return null;
       return {
         district,
@@ -100,7 +168,7 @@ if (html && !districts.length) {
   metadata = {
     scrapeStatus: "fallback",
     scrapeError: error.message,
-    fallbackNote: "Live Cook Political Report parsing produced no rows; no Cook PVI defaults were refreshed.",
+    fallbackNote: "Wikipedia parsing produced no rows; no Cook PVI defaults were refreshed.",
   };
 }
 

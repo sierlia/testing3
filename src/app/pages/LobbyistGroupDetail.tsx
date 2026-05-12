@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useParams, useSearchParams } from "react-router";
-import { DollarSign, LogOut, MoreHorizontal, Plus, Send, Trash2, UserPlus, Users, X } from "lucide-react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
+import { DollarSign, LogOut, MoreHorizontal, Pencil, Plus, Search, Send, Trash2, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { SecureAvatar } from "../components/SecureAvatar";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 import { profilePath } from "../utils/profileRoute";
@@ -21,7 +22,7 @@ type Contribution = {
   contributorName?: string;
   recipientName?: string;
 };
-type Candidate = { user_id: string; display_name: string | null };
+type Candidate = { user_id: string; display_name: string | null; avatar_url: string | null; role: string | null };
 type Announcement = { id: string; author_user_id: string; body: string; created_at: string; author?: Member | null };
 
 function money(value: number) {
@@ -49,6 +50,7 @@ function displayAccessNote(note: string) {
 
 export function LobbyistGroupDetail() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const groupId = id!;
   const activeTab = searchParams.get("tab") === "spending" ? "spending" : "dashboard";
@@ -64,9 +66,12 @@ export function LobbyistGroupDetail() {
   const [isMember, setIsMember] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
   const [candidates, setCandidates] = useState<Candidate[]>([]);
-  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
+  const [candidateSearch, setCandidateSearch] = useState("");
   const [memberPickerOpen, setMemberPickerOpen] = useState(false);
   const [openMemberMenuId, setOpenMemberMenuId] = useState<string | null>(null);
+  const [groupEditorOpen, setGroupEditorOpen] = useState(false);
+  const [groupDraft, setGroupDraft] = useState({ name: "", description: "" });
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -92,6 +97,7 @@ export function LobbyistGroupDetail() {
       setIsTeacher((profile as any)?.role === "teacher");
       const ids = (memberRows ?? []).map((row: any) => row.user_id);
       setIsMember(uid ? ids.includes(uid) : false);
+      setGroupDraft({ name: (g as any).name ?? "", description: (g as any).description ?? "" });
 
       const profileIds = Array.from(
         new Set([
@@ -119,10 +125,9 @@ export function LobbyistGroupDetail() {
       setMembers(ids.map((userId: string) => profileMap.get(userId) ?? { user_id: userId, display_name: "Member", avatar_url: null, role: null }));
       const memberSet = new Set(ids);
       const nextCandidates = ((directory.data ?? []) as any[])
-        .filter((row) => row.role !== "teacher" && !memberSet.has(row.user_id))
-        .map((row) => ({ user_id: row.user_id, display_name: row.display_name ?? "Member" }));
+        .filter((row) => !memberSet.has(row.user_id))
+        .map((row) => ({ user_id: row.user_id, display_name: row.display_name ?? "Member", avatar_url: row.avatar_url ?? null, role: row.role ?? null }));
       setCandidates(nextCandidates);
-      setSelectedCandidateIds((current) => current.filter((id) => nextCandidates.some((candidate) => candidate.user_id === id)));
       setContributions(
         ((spending ?? []) as any[]).map((row) => ({
           ...row,
@@ -162,6 +167,10 @@ export function LobbyistGroupDetail() {
   const totalMoney = useMemo(() => Math.max(0, effectiveGroupStartingAmount(group, classSettings) - totalSpent), [classSettings, group, totalSpent]);
   const selectedAnnouncement = announcements.find((announcement) => announcement.id === selectedAnnouncementId) ?? null;
   const canPostAnnouncements = isMember || isTeacher;
+  const filteredCandidates = useMemo(() => {
+    const q = candidateSearch.trim().toLowerCase();
+    return candidates.filter((candidate) => !q || (candidate.display_name ?? "Member").toLowerCase().includes(q));
+  }, [candidates, candidateSearch]);
 
   const join = async () => {
     if (!meId || !group) return;
@@ -179,22 +188,22 @@ export function LobbyistGroupDetail() {
     await load();
   };
 
-  const assignMembers = async () => {
-    if (!isTeacher || !selectedCandidateIds.length) return;
-    const { data: existingLobbyist } = await supabase.from("lobbyist_group_members").select("user_id").in("user_id", selectedCandidateIds);
-    const existingIds = new Set(((existingLobbyist ?? []) as any[]).map((row) => row.user_id));
-    const ids = selectedCandidateIds.filter((candidateId) => !existingIds.has(candidateId));
-    if (!ids.length) return toast.error("Those members are already in a lobbyist group");
-    await Promise.all([
-      supabase.from("profiles").update({ party: null } as any).in("user_id", ids),
-      supabase.from("committee_members").delete().in("user_id", ids),
-      supabase.from("caucus_members").delete().in("user_id", ids),
-    ]);
-    const { error } = await supabase.from("lobbyist_group_members").insert(ids.map((userId) => ({ group_id: groupId, user_id: userId, assigned_by_teacher: true })) as any);
+  const assignMember = async (candidate: Candidate) => {
+    if (!isTeacher) return;
+    const { data: existingLobbyist } = await supabase.from("lobbyist_group_members").select("user_id").eq("user_id", candidate.user_id).limit(1);
+    if ((existingLobbyist ?? []).length) return toast.error("That member is already in a lobbyist group");
+    if (candidate.role !== "teacher") {
+      await Promise.all([
+        supabase.from("profiles").update({ party: null } as any).eq("user_id", candidate.user_id),
+        supabase.from("committee_members").delete().eq("user_id", candidate.user_id),
+        supabase.from("caucus_members").delete().eq("user_id", candidate.user_id),
+      ]);
+    }
+    const { error } = await supabase.from("lobbyist_group_members").insert({ group_id: groupId, user_id: candidate.user_id, assigned_by_teacher: true } as any);
     if (error) return toast.error(error.message || "Could not assign member");
-    setSelectedCandidateIds([]);
-    setMemberPickerOpen(false);
+    setCandidates((current) => current.filter((row) => row.user_id !== candidate.user_id));
     await load();
+    toast.success("Member added");
   };
 
   const removeMember = async (userId: string) => {
@@ -203,6 +212,34 @@ export function LobbyistGroupDetail() {
     if (error) return toast.error(error.message || "Could not remove member");
     setMembers((current) => current.filter((member) => member.user_id !== userId));
     toast.success("Member removed");
+  };
+
+  const saveGroup = async () => {
+    if (!isTeacher || !groupDraft.name.trim()) return;
+    const { error } = await supabase
+      .from("lobbyist_groups")
+      .update({ name: groupDraft.name.trim(), description: groupDraft.description.trim() } as any)
+      .eq("id", groupId);
+    if (error) return toast.error(error.message || "Could not update lobbyist group");
+    setGroup((current: any) => current ? { ...current, name: groupDraft.name.trim(), description: groupDraft.description.trim() } : current);
+    setGroupEditorOpen(false);
+    toast.success("Lobbyist group updated");
+  };
+
+  const requestDeleteGroup = () => {
+    if (!isTeacher || !group) return;
+    setConfirmDialog({
+      title: "Delete lobbyist group?",
+      message: `${group.name} will be removed from this simulation. This cannot be undone.`,
+      confirmLabel: "Delete group",
+      danger: true,
+      onConfirm: async () => {
+        const { error } = await supabase.from("lobbyist_groups").delete().eq("id", groupId);
+        if (error) return toast.error(error.message || "Could not delete lobbyist group");
+        toast.success("Lobbyist group deleted");
+        navigate("/lobbyists");
+      },
+    });
   };
 
   const postAnnouncement = async () => {
@@ -239,13 +276,27 @@ export function LobbyistGroupDetail() {
               <span className="rounded-md bg-blue-50 px-3 py-1.5 font-semibold text-blue-800">Contributed: {money(totalSpent)}</span>
             </div>
           </div>
-          {!isTeacher && group.join_mode === "free_join" && (
-            isMember ? (
-              <button type="button" onClick={() => void leave()} className="inline-flex items-center gap-2 rounded-md bg-red-100 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-200"><LogOut className="h-4 w-4" />Leave</button>
-            ) : (
-              <button type="button" onClick={() => void join()} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"><UserPlus className="h-4 w-4" />Join</button>
-            )
-          )}
+          <div className="flex items-center gap-2">
+            {isTeacher && (
+              <>
+                <button type="button" onClick={() => setGroupEditorOpen(true)} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  <Pencil className="h-4 w-4" />
+                  Edit
+                </button>
+                <button type="button" onClick={requestDeleteGroup} className="inline-flex items-center gap-2 rounded-md border border-red-200 bg-white px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50">
+                  <Trash2 className="h-4 w-4" />
+                  Delete
+                </button>
+              </>
+            )}
+            {!isTeacher && group.join_mode === "free_join" && (
+              isMember ? (
+                <button type="button" onClick={() => void leave()} className="inline-flex items-center gap-2 rounded-md bg-red-100 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-200"><LogOut className="h-4 w-4" />Leave</button>
+              ) : (
+                <button type="button" onClick={() => void join()} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"><UserPlus className="h-4 w-4" />Join</button>
+              )
+            )}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
@@ -361,29 +412,33 @@ export function LobbyistGroupDetail() {
                   {memberPickerOpen && (
                     <div className="absolute right-0 top-full z-[120] mt-2 w-72 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg">
                       <div className="flex items-center justify-between border-b border-gray-100 px-3 py-2">
-                        <div className="text-sm font-semibold text-gray-900">Add students</div>
+                        <div className="text-sm font-semibold text-gray-900">Add members</div>
                         <button type="button" onClick={() => setMemberPickerOpen(false)} className="rounded p-1 text-gray-400 hover:bg-gray-100"><X className="h-4 w-4" /></button>
                       </div>
-                      <div className="max-h-72 overflow-y-auto p-2">
-                        {candidates.length ? candidates.map((candidate) => {
-                          const checked = selectedCandidateIds.includes(candidate.user_id);
-                          return (
-                            <button
-                              key={candidate.user_id}
-                              type="button"
-                              onClick={() => setSelectedCandidateIds((current) => checked ? current.filter((id) => id !== candidate.user_id) : [...current, candidate.user_id])}
-                              className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-gray-50"
-                            >
-                              <span className={`h-4 w-4 rounded border ${checked ? "border-blue-600 bg-blue-600" : "border-gray-400 bg-white"}`} />
-                              <span className="truncate">{candidate.display_name ?? "Member"}</span>
-                            </button>
-                          );
-                        }) : <div className="px-3 py-6 text-center text-sm text-gray-500">No available students.</div>}
+                      <div className="border-b border-gray-100 p-2">
+                        <div className="relative">
+                          <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                          <input
+                            value={candidateSearch}
+                            onChange={(event) => setCandidateSearch(event.target.value)}
+                            placeholder="Search members..."
+                            className="h-9 w-full rounded-md border border-gray-300 py-2 pl-8 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
                       </div>
-                      <div className="border-t border-gray-100 p-2">
-                        <button type="button" onClick={() => void assignMembers()} disabled={!selectedCandidateIds.length} className="w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
-                          Add selected
-                        </button>
+                      <div className="max-h-72 overflow-y-auto p-2">
+                        {filteredCandidates.length ? filteredCandidates.map((candidate) => (
+                          <button
+                            key={candidate.user_id}
+                            type="button"
+                            onClick={() => void assignMember(candidate)}
+                            className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-gray-50"
+                          >
+                            <SecureAvatar src={candidate.avatar_url} alt={candidate.display_name ?? "Member"} className="h-7 w-7 rounded-full object-cover" fallbackClassName="h-7 w-7" iconClassName="h-4 w-4 text-gray-500" />
+                            <span className="min-w-0 flex-1 truncate">{candidate.display_name ?? "Member"}</span>
+                            {candidate.role === "teacher" && <span className="rounded bg-green-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-green-700">Teacher</span>}
+                          </button>
+                        )) : <div className="px-3 py-6 text-center text-sm text-gray-500">No available members.</div>}
                       </div>
                     </div>
                   )}
@@ -419,6 +474,31 @@ export function LobbyistGroupDetail() {
           </aside>
         </div>
       </main>
+      {groupEditorOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl overflow-hidden rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <h2 className="text-lg font-semibold text-gray-900">Edit lobbyist group</h2>
+              <button type="button" onClick={() => setGroupEditorOpen(false)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-4 p-5">
+              <label className="block text-sm font-medium text-gray-700">
+                Name
+                <input value={groupDraft.name} onChange={(event) => setGroupDraft({ ...groupDraft, name: event.target.value })} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Description
+                <textarea value={groupDraft.description} onChange={(event) => setGroupDraft({ ...groupDraft, description: event.target.value })} rows={5} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
+            </div>
+            <div className="flex justify-end gap-3 border-t border-gray-200 px-5 py-4">
+              <button type="button" onClick={() => setGroupEditorOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+              <button type="button" onClick={() => void saveGroup()} disabled={!groupDraft.name.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Save changes</button>
+            </div>
+          </div>
+        </div>
+      )}
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

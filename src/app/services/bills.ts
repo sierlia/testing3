@@ -2,6 +2,7 @@ import { supabase } from '../utils/supabase';
 import { BillRecord } from '../types/domain';
 import { getCurrentUser } from '../utils/currentUser';
 import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { committeeDisplayName } from '../utils/committeeNames';
 
 export async function fetchBillsForCurrentClass() {
   const me = (await getCurrentUser())?.id;
@@ -53,7 +54,7 @@ export async function fetchBillsForCurrentClass() {
   const committeesByBill = new Map<string, string[]>();
   for (const row of referralRows ?? []) {
     const name = (row as any).committees?.name;
-    if (name) committeesByBill.set((row as any).bill_id, [...(committeesByBill.get((row as any).bill_id) ?? []), name]);
+    if (name) committeesByBill.set((row as any).bill_id, [...(committeesByBill.get((row as any).bill_id) ?? []), committeeDisplayName(name)]);
   }
 
   return (data ?? []).map((b: any) => ({
@@ -393,7 +394,7 @@ export async function fetchReportedBillsForTeacherCalendar() {
   const committeeMap = new Map<string, string[]>();
   for (const row of referrals ?? []) {
     const name = (row as any).committees?.name ?? 'Committee';
-    committeeMap.set((row as any).bill_id, [...(committeeMap.get((row as any).bill_id) ?? []), name]);
+    committeeMap.set((row as any).bill_id, [...(committeeMap.get((row as any).bill_id) ?? []), committeeDisplayName(name)]);
   }
   return (bills ?? []).map((bill: any) => ({
     ...bill,

@@ -4,7 +4,7 @@ import { Link } from "react-router";
 interface Announcement {
   id: string;
   author: string;
-  role: string;
+  role?: string;
   content: string;
   timestamp: Date;
   isPinned: boolean;
@@ -64,9 +64,11 @@ export function AnnouncementsFeed({ announcements }: AnnouncementsFeedProps) {
                     <span className="font-medium text-gray-900">
                       {announcement.author}
                     </span>
-                    <span className="text-sm text-gray-500">
-                      | {announcement.role}
-                    </span>
+                    {announcement.role && (
+                      <span className="text-sm text-gray-500">
+                        | {announcement.role}
+                      </span>
+                    )}
                   </div>
                   <p className="text-gray-700 whitespace-pre-wrap">
                     {announcement.content}

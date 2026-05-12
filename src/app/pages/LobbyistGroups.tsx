@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { Plus, Search, Users } from "lucide-react";
+import { MoreHorizontal, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { OrganizationsLayout } from "./OrganizationsLayout";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
@@ -27,6 +28,9 @@ export function LobbyistGroups() {
   const [classId, setClassId] = useState<string | null>(null);
   const [settings, setSettings] = useState<any>({});
   const [editing, setEditing] = useState(false);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [openGroupMenuId, setOpenGroupMenuId] = useState<string | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [draft, setDraft] = useState({ name: "", description: "" });
   const [loading, setLoading] = useState(true);
   const [spentByGroup, setSpentByGroup] = useState<Record<string, number>>({});
@@ -66,6 +70,13 @@ export function LobbyistGroups() {
     void load();
   }, []);
 
+  useEffect(() => {
+    if (!openGroupMenuId) return;
+    const close = () => setOpenGroupMenuId(null);
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [openGroupMenuId]);
+
   const items = useMemo(() => {
     const q = query.toLowerCase().trim();
     return groups.filter((group) => !q || group.name.toLowerCase().includes(q) || group.description.toLowerCase().includes(q));
@@ -89,6 +100,40 @@ export function LobbyistGroups() {
     await load();
   };
 
+  const startEditGroup = (group: LobbyistGroup) => {
+    setEditing(false);
+    setEditingGroupId(group.id);
+    setDraft({ name: group.name, description: group.description ?? "" });
+  };
+
+  const saveGroup = async () => {
+    if (!editingGroupId || !draft.name.trim()) return;
+    const { error } = await supabase
+      .from("lobbyist_groups")
+      .update({ name: draft.name.trim(), description: draft.description.trim() } as any)
+      .eq("id", editingGroupId);
+    if (error) return toast.error(error.message || "Could not update lobbyist group");
+    setEditingGroupId(null);
+    setDraft({ name: "", description: "" });
+    await load();
+    toast.success("Lobbyist group updated");
+  };
+
+  const requestDeleteGroup = (group: LobbyistGroup) => {
+    setConfirmDialog({
+      title: "Delete lobbyist group?",
+      message: `${group.name} will be removed from this simulation. This cannot be undone.`,
+      confirmLabel: "Delete group",
+      danger: true,
+      onConfirm: async () => {
+        const { error } = await supabase.from("lobbyist_groups").delete().eq("id", group.id);
+        if (error) return toast.error(error.message || "Could not delete lobbyist group");
+        setGroups((current) => current.filter((row) => row.id !== group.id));
+        toast.success("Lobbyist group deleted");
+      },
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -102,7 +147,7 @@ export function LobbyistGroups() {
                   <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search lobbyist groups..." className="h-10 w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 {role === "teacher" && !sectionDisabled && (
-                  <button type="button" onClick={() => setEditing(true)} className="inline-flex h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                  <button type="button" onClick={() => { setEditing(true); setEditingGroupId(null); setDraft({ name: "", description: "" }); }} className="inline-flex h-10 items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
                     <Plus className="h-4 w-4" />
                     Create group
                   </button>
@@ -117,6 +162,18 @@ export function LobbyistGroups() {
                   <div className="flex gap-2">
                     <button type="button" onClick={() => void createGroup()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Save</button>
                     <button type="button" onClick={() => setEditing(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {role === "teacher" && editingGroupId && (
+              <div className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+                <div className="grid gap-3 md:grid-cols-[1fr_2fr_auto]">
+                  <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Group name" />
+                  <input value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} className="rounded-md border border-gray-300 px-3 py-2 text-sm" placeholder="Summary" />
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => void saveGroup()} className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+                    <button type="button" onClick={() => { setEditingGroupId(null); setDraft({ name: "", description: "" }); }} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">Cancel</button>
                   </div>
                 </div>
               </div>
@@ -142,6 +199,33 @@ export function LobbyistGroups() {
                         ${lobbyistGroupBalance(group, settings, spentByGroup[group.id] ?? 0).toLocaleString()} total money
                       </div>
                     </div>
+                    {role === "teacher" && !sectionDisabled && (
+                      <div className="relative flex-shrink-0" onPointerDown={(event) => event.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setOpenGroupMenuId((current) => current === group.id ? null : group.id);
+                          }}
+                          className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+                          aria-label="Lobbyist group options"
+                        >
+                          <MoreHorizontal className="h-4 w-4" />
+                        </button>
+                        {openGroupMenuId === group.id && (
+                          <div className="absolute right-0 top-full z-[120] mt-1 w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                            <button type="button" onClick={(event) => { event.stopPropagation(); setOpenGroupMenuId(null); startEditGroup(group); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-gray-700 hover:bg-gray-50">
+                              <Pencil className="h-4 w-4" />
+                              Edit
+                            </button>
+                            <button type="button" onClick={(event) => { event.stopPropagation(); setOpenGroupMenuId(null); requestDeleteGroup(group); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50">
+                              <Trash2 className="h-4 w-4" />
+                              Delete
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -149,6 +233,7 @@ export function LobbyistGroups() {
           </div>
         </OrganizationsLayout>
       </main>
+      <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );
 }

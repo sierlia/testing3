@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
-import { AlignLeft, FileText, GripVertical, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users, Vote } from "lucide-react";
+import { AlignLeft, DollarSign, FileText, GripVertical, Mail, Maximize2, PanelLeft, Plus, Save, Trash2, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 
-type SectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters" | "votes_cast";
+type SectionType = "long_response" | "legislation_written" | "organizations" | "dear_colleague_letters" | "votes_cast" | "contributions_received";
 type ProfileSection = {
   id?: string;
   class_id: string;
@@ -34,6 +34,7 @@ const typeLabels: Record<SectionType, string> = {
   organizations: "Organizations",
   dear_colleague_letters: "Dear Colleague letters",
   votes_cast: "Votes cast",
+  contributions_received: "Contributions received",
 };
 
 function sectionIcon(type: SectionType) {
@@ -41,6 +42,7 @@ function sectionIcon(type: SectionType) {
   if (type === "organizations") return Users;
   if (type === "dear_colleague_letters") return Mail;
   if (type === "votes_cast") return Vote;
+  if (type === "contributions_received") return DollarSign;
   return AlignLeft;
 }
 
@@ -396,6 +398,34 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
         </section>
       );
     }
+    if (section.section_type === "contributions_received") {
+      return (
+        <section key={`preview-${section.section_key}`} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${span}`}>
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-green-600" />
+              <h2 className="text-lg font-semibold text-gray-900">{section.title || "Untitled section"}</h2>
+            </div>
+            <span className="text-sm font-medium text-blue-600">All</span>
+          </div>
+          <div className="mb-3 rounded-md bg-green-50 px-3 py-2 text-sm font-semibold text-green-800">Total amount received: $1,250</div>
+          <div className="rounded-md border border-gray-200">
+            {[
+              ["Civic Health Coalition", "$750", "Healthcare town hall support"],
+              ["Transit Access Fund", "$500", "Campaign contribution"],
+            ].map(([source, amount, note]) => (
+              <div key={source} className="grid grid-cols-[1fr_auto] gap-3 border-b border-gray-100 px-3 py-2 text-sm last:border-b-0">
+                <div>
+                  <div className="font-medium text-gray-900">{source}</div>
+                  <div className="text-xs text-gray-500">{note}</div>
+                </div>
+                <div className="font-semibold text-green-700">{amount}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    }
     const sample = sampleLongResponse(section);
     return (
       <section key={`preview-${section.section_key}`} className={`rounded-lg border border-gray-200 bg-white p-6 shadow-sm ${span}`}>
@@ -431,7 +461,7 @@ export function ProfileLayoutEditor({ embedded = false }: { embedded?: boolean }
 
       {activeView === "editor" && <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
-          {(["long_response", "legislation_written", "organizations", "dear_colleague_letters", "votes_cast"] as SectionType[]).map((type) => {
+          {(["long_response", "legislation_written", "organizations", "dear_colleague_letters", "votes_cast", "contributions_received"] as SectionType[]).map((type) => {
             const Icon = sectionIcon(type);
             const disabled = type !== "long_response" && usedSingleTypes.has(type);
             return (

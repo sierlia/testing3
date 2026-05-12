@@ -295,8 +295,8 @@ export function ConstituencyPicker({
       </div>
       <p className="mt-3 text-xs text-gray-500">
         District PVI and district reference data are sourced from{" "}
-        <a href="https://www.cookpolitical.com/cook-pvi/2025-partisan-voting-index/district-map-and-list" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
-          The Cook Political Report 2025 Partisan Voting Index
+        <a href="https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index" target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">
+          Wikipedia's Cook Partisan Voting Index page
         </a>
         .
       </p>
