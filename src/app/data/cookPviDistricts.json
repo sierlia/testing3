@@ -1,6 +1,25 @@
 {
   "source": "https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index",
-  "districts": [],
-  "scrapeStatus": "pending",
-  "fallbackNote": "Run scripts/scrape-cook-pvi.mjs to refresh district PVI defaults from Wikipedia."
+  "scrapedAt": "2026-05-12T20:12:57.252Z",
+  "districts": [
+    {
+      "district": "NB-01",
+      "cookPvi": "D+4",
+      "description": "Maine | Democratic | Democratic | 2D",
+      "source": "https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index"
+    },
+    {
+      "district": "NB-02",
+      "cookPvi": "D+17",
+      "description": "Vermont | Democratic | Republican | 1D",
+      "source": "https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index"
+    },
+    {
+      "district": "NB-03",
+      "cookPvi": "D+44",
+      "description": "Washington, D.C. | Democratic | N/A | 1D&#91;nb 4&#93;",
+      "source": "https://en.wikipedia.org/wiki/Cook_Partisan_Voting_Index"
+    }
+  ],
+  "scrapeStatus": "live"
 }
