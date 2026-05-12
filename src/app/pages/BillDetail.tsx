@@ -15,6 +15,7 @@ import { displayPersonName } from "../utils/displayName";
 import { profilePath } from "../utils/profileRoute";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { committeeDisplayName } from "../utils/committeeNames";
+import { storageFileHashUrl } from "../utils/privateStorage";
 
 type TextTab = "revised" | "original" | "supporting";
 type TrackerStatus = "completed" | "current" | "upcoming";
@@ -271,7 +272,7 @@ export function BillDetail() {
   const committeeCounts = useMemo(() => voteCounts(committeeVotes), [committeeVotes]);
   const floorCounts = useMemo(() => voteCounts(floorVotes), [floorVotes]);
   const committeePassed = bill ? ["reported", "calendared", "floor", "passed"].includes(bill.status) || (bill.status === "failed" && committeeCounts.yea > committeeCounts.nay) : false;
-  const showRevisedText = Boolean(committeePassed && referral?.committee_id && (committeeDoc?.ydoc_base64 || committeeDoc?.committee_markup_posted_at));
+  const showRevisedText = Boolean(committeePassed && referral?.committee_id && (committeeDoc?.ydoc_base64 || committeeDoc?.revised_pdf_path || committeeDoc?.committee_markup_posted_at));
   const cosponsorshipMode = classSettings?.bills?.cosponsorshipMode ?? (classSettings?.bills?.cosponsorAfterCommitteeReport ? "after_report" : "always");
   const reportSubmitted = Boolean(committeeDoc?.committee_report_submitted_at);
   const subcommitteeReports = Array.isArray(committeeDoc?.subcommittee_reports) ? committeeDoc.subcommittee_reports : [];
@@ -675,9 +676,15 @@ export function BillDetail() {
                     </span>
                   ))}
                   {committeeDoc?.committee_report_submitted_at ? (
-                    <Link to={`/committee/${referral.committee_id}/reports/${bill.id}`} className="font-medium text-blue-600 hover:underline">
-                      {committeeDisplayName(referral.committee_name)} Report
-                    </Link>
+                    committeeDoc?.committee_report_pdf_path ? (
+                      <a href={storageFileHashUrl("simulation-pdfs", committeeDoc.committee_report_pdf_path)} target="_blank" rel="noopener noreferrer" className="font-medium text-blue-600 hover:underline">
+                        {committeeDisplayName(referral.committee_name)} Report
+                      </a>
+                    ) : (
+                      <Link to={`/committee/${referral.committee_id}/reports/${bill.id}`} className="font-medium text-blue-600 hover:underline">
+                        {committeeDisplayName(referral.committee_name)} Report
+                      </Link>
+                    )
                   ) : null}
                 </span>
               ) : (
@@ -734,7 +741,16 @@ export function BillDetail() {
 
               <div className="p-6">
                 {activeTab === "revised" && showRevisedText && (
-                  <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(revisedHtml) }} />
+                  committeeDoc?.revised_pdf_path ? (
+                    <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
+                      <div className="text-sm font-semibold text-gray-900">Committee revised text PDF</div>
+                      <a href={storageFileHashUrl("simulation-pdfs", committeeDoc.revised_pdf_path)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-sm font-medium text-blue-600 hover:underline">
+                        Open uploaded PDF
+                      </a>
+                    </div>
+                  ) : (
+                    <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(revisedHtml) }} />
+                  )
                 )}
                 {activeTab === "original" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislative_text) }} />}
                 {activeTab === "supporting" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.supporting_text || "<p><em>No supporting text</em></p>") }} />}

@@ -165,6 +165,7 @@ export function CreateDearColleagueLetter() {
       }
 
       const recipientUserIds = new Set<string>();
+      const organizationRecipients: Array<{ organization_type: Exclude<RecipientType, "individual">; organization_id: string }> = [];
       for (const r of recipients) {
         if (r.type === "individual") {
           if (r.id === ALL_MEMBERS_RECIPIENT_ID) {
@@ -174,26 +175,18 @@ export function CreateDearColleagueLetter() {
           }
         }
         if (r.type === "caucus") {
-          const { data } = await supabase.from("caucus_members").select("user_id").eq("caucus_id", r.id);
-          for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
+          organizationRecipients.push({ organization_type: "caucus", organization_id: r.id });
         }
         if (r.type === "party") {
-          const { data: partyRow } = await supabase.from("parties").select("name").eq("id", r.id).maybeSingle();
-          const { data } = await supabase
-            .from("profiles")
-            .select("user_id")
-            .eq("class_id", classId)
-            .eq("party", (partyRow as any)?.name ?? r.name);
-          for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
+          organizationRecipients.push({ organization_type: "party", organization_id: r.id });
         }
         if (r.type === "committee") {
-          const { data } = await supabase.from("committee_members").select("user_id").eq("committee_id", r.id);
-          for (const row of data ?? []) recipientUserIds.add((row as any).user_id);
+          organizationRecipients.push({ organization_type: "committee", organization_id: r.id });
         }
       }
       recipientUserIds.delete(uid);
       const ids = Array.from(recipientUserIds);
-      if (ids.length === 0) {
+      if (ids.length === 0 && organizationRecipients.length === 0) {
         toast.error("No recipients found for that selection");
         return;
       }
@@ -206,8 +199,15 @@ export function CreateDearColleagueLetter() {
       if (lErr) throw lErr;
 
       const rows = ids.map((rid) => ({ letter_id: (letter as any).id, recipient_user_id: rid }));
-      const { error: rErr } = await supabase.from("dear_colleague_recipients").insert(rows as any);
-      if (rErr) throw rErr;
+      if (rows.length) {
+        const { error: rErr } = await supabase.from("dear_colleague_recipients").insert(rows as any);
+        if (rErr) throw rErr;
+      }
+      if (organizationRecipients.length) {
+        const orgRows = organizationRecipients.map((recipient) => ({ letter_id: (letter as any).id, class_id: classId, ...recipient }));
+        const { error: orgErr } = await supabase.from("dear_colleague_org_recipients").insert(orgRows as any);
+        if (orgErr) throw orgErr;
+      }
 
       toast.success("Letter sent");
       navigate("/inbox");

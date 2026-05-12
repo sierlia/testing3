@@ -237,7 +237,7 @@ export async function fetchBillDetail(billId: string) {
     referralCommitteeId
       ? supabase
           .from('committee_bill_docs')
-          .select('updated_at,committee_markup_posted_at,committee_report_submitted_at,committee_vote_closed_at,committee_vote_finalized_at,ydoc_base64,committee_report_ydoc_base64,subcommittee_reports')
+          .select('updated_at,committee_markup_posted_at,committee_report_submitted_at,committee_vote_closed_at,committee_vote_finalized_at,ydoc_base64,committee_report_ydoc_base64,revised_pdf_path,committee_report_pdf_path,subcommittee_reports')
           .eq('bill_id', billId)
           .eq('committee_id', referralCommitteeId)
           .maybeSingle()

@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useParams } from "react-router";
+import { useBlocker, useParams } from "react-router";
 import { Check, CheckSquare, Clock3, Copy, FileText, Mail, Save, Search, Settings, ShieldCheck, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
@@ -369,6 +369,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const [selectedQuickSetup, setSelectedQuickSetup] = useState<"all-online" | "blended" | "core" | null>(null);
   const [quickSetupModified, setQuickSetupModified] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [unsavedNavigationOpen, setUnsavedNavigationOpen] = useState(false);
   const authoritySearchRef = useRef<HTMLDivElement | null>(null);
   const billSubmissionSearchRef = useRef<HTMLDivElement | null>(null);
   const profileEditingSearchRef = useRef<HTMLDivElement | null>(null);
@@ -493,6 +494,24 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (selectedQuickSetup) setQuickSetupModified(true);
     setHasChanges(true);
   };
+
+  const navigationBlocker = useBlocker(({ currentLocation, nextLocation }) => {
+    return Boolean(hasChanges && !loading && currentLocation.pathname !== nextLocation.pathname);
+  }) as any;
+
+  useEffect(() => {
+    if (navigationBlocker.state === "blocked") setUnsavedNavigationOpen(true);
+  }, [navigationBlocker.state]);
+
+  useEffect(() => {
+    if (!hasChanges) return;
+    const handler = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasChanges]);
 
   useEffect(() => {
     const load = async () => {
@@ -2156,6 +2175,39 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           </button>
         </div>
       </div>
+      {unsavedNavigationOpen && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white shadow-xl">
+            <div className="border-b border-gray-200 p-5">
+              <h2 className="text-lg font-semibold text-gray-900">Changes are not saved</h2>
+              <p className="mt-1 text-sm text-gray-600">Save simulation settings before leaving, or leave without saving these changes.</p>
+            </div>
+            <div className="flex items-center justify-end gap-3 p-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setUnsavedNavigationOpen(false);
+                  navigationBlocker.reset?.();
+                }}
+                className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100"
+              >
+                Stay
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setHasChanges(false);
+                  setUnsavedNavigationOpen(false);
+                  setTimeout(() => navigationBlocker.proceed?.(), 0);
+                }}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Leave without saving
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );

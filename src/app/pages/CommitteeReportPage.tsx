@@ -4,6 +4,7 @@ import { FileText } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
+import { SimulationPdfUpload } from "../components/SimulationPdfUpload";
 import { supabase } from "../utils/supabase";
 
 export function CommitteeReportPage() {
@@ -13,6 +14,8 @@ export function CommitteeReportPage() {
   const [committeeName, setCommitteeName] = useState("Committee");
   const [bill, setBill] = useState<{ id: string; hr_label: string; title: string; status: string } | null>(null);
   const [submittedAt, setSubmittedAt] = useState<string | null>(null);
+  const [reportFormat, setReportFormat] = useState<"editor" | "pdf">("editor");
+  const [reportPdfPath, setReportPdfPath] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -24,6 +27,10 @@ export function CommitteeReportPage() {
         const cid = (committee as any)?.class_id ?? null;
         setClassId(cid);
         setCommitteeName((committee as any)?.name ?? "Committee");
+        if (cid) {
+          const { data: cls } = await supabase.from("classes").select("settings").eq("id", cid).maybeSingle();
+          setReportFormat(((cls as any)?.settings?.editorFormats?.committeeReport ?? "editor") === "pdf" ? "pdf" : "editor");
+        }
 
         const { data: billRow, error: bErr } = await supabase
           .from("bill_display")
@@ -36,11 +43,12 @@ export function CommitteeReportPage() {
 
         const { data: doc } = await supabase
           .from("committee_bill_docs")
-          .select("committee_report_submitted_at")
+          .select("committee_report_submitted_at,committee_report_pdf_path")
           .eq("committee_id", committeeId)
           .eq("bill_id", billId)
           .maybeSingle();
         setSubmittedAt((doc as any)?.committee_report_submitted_at ?? null);
+        setReportPdfPath((doc as any)?.committee_report_pdf_path ?? null);
       } catch (e: any) {
         toast.error(e.message || "Could not load committee report");
       } finally {
@@ -49,6 +57,31 @@ export function CommitteeReportPage() {
     };
     void load();
   }, [committeeId, billId]);
+
+  const saveReportPdf = async (path: string) => {
+    if (!committeeId || !billId || !classId) return;
+    const { error } = await supabase.from("committee_bill_docs").upsert(
+      { committee_id: committeeId, bill_id: billId, class_id: classId, committee_report_pdf_path: path } as any,
+      { onConflict: "bill_id,committee_id" },
+    );
+    if (error) throw error;
+    setReportPdfPath(path);
+  };
+
+  const submitPdfReport = async () => {
+    if (!committeeId || !billId || !classId || !reportPdfPath) return;
+    const submitted = new Date().toISOString();
+    const { error } = await supabase.from("committee_bill_docs").upsert(
+      { committee_id: committeeId, bill_id: billId, class_id: classId, committee_report_pdf_path: reportPdfPath, committee_report_submitted_at: submitted } as any,
+      { onConflict: "bill_id,committee_id" },
+    );
+    if (error) {
+      toast.error(error.message || "Could not submit report");
+      return;
+    }
+    setSubmittedAt(submitted);
+    toast.success("Committee report submitted");
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -75,16 +108,36 @@ export function CommitteeReportPage() {
               <div className="mt-2 text-xs text-gray-500">{submittedAt ? `Submitted ${new Date(submittedAt).toLocaleString()}` : "Work in progress"}</div>
             </div>
             <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-              <CollaborativeBillEditor
-                classId={classId}
-                committeeId={committeeId}
-                billId={billId}
-                documentId={`${billId}:report`}
-                storageColumn="committee_report_ydoc_base64"
-                initialHtml="<p></p>"
-                editable={bill.status === "committee_vote" && !submittedAt}
-                trackDeletes={false}
-              />
+              {reportFormat === "pdf" ? (
+                <div className="space-y-4">
+                  <SimulationPdfUpload
+                    title="Committee report PDF"
+                    description="Upload the PDF committee report for this bill. Class members will open this file from the bill page."
+                    path={reportPdfPath}
+                    uploadPrefix={`${classId}/committee-reports/${committeeId}/${billId}`}
+                    disabled={bill.status !== "committee_vote" || Boolean(submittedAt)}
+                    onUploaded={saveReportPdf}
+                  />
+                  {bill.status === "committee_vote" && !submittedAt && (
+                    <div className="flex justify-end">
+                      <button type="button" onClick={() => void submitPdfReport()} disabled={!reportPdfPath} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                        Submit report
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <CollaborativeBillEditor
+                  classId={classId}
+                  committeeId={committeeId}
+                  billId={billId}
+                  documentId={`${billId}:report`}
+                  storageColumn="committee_report_ydoc_base64"
+                  initialHtml="<p></p>"
+                  editable={bill.status === "committee_vote" && !submittedAt}
+                  trackDeletes={false}
+                />
+              )}
             </div>
           </div>
         )}

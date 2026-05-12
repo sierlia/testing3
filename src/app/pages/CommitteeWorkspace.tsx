@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { supabase } from "../utils/supabase";
 import { CollaborativeBillEditor } from "../components/CollaborativeBillEditor";
+import { SimulationPdfUpload } from "../components/SimulationPdfUpload";
 import { SecureAvatar } from "../components/SecureAvatar";
 import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, readCommitteeSeenIds, updateCommitteeTabCounts } from "../components/CommitteeTabs";
 import { closeCommitteeVote, finalizeCommitteeVote, postCommitteeProgress, proposeBillForCommitteeVote, submitCommitteeReport } from "../services/bills";
@@ -112,6 +113,7 @@ export function CommitteeWorkspace() {
   const [mySubcommitteeIds, setMySubcommitteeIds] = useState<Set<string>>(new Set());
   const [isTeacher, setIsTeacher] = useState(false);
   const [paidReviewAccess, setPaidReviewAccess] = useState(false);
+  const [editorFormats, setEditorFormats] = useState({ committeeRevisedText: "editor", committeeReport: "editor" });
   const [activeMeeting, setActiveMeeting] = useState<{ id: string; started_at: string; started_by: string } | null>(null);
   const [meetingBusy, setMeetingBusy] = useState(false);
   const [selectedBillId, setSelectedBillId] = useState<string | null>(null);
@@ -122,6 +124,8 @@ export function CommitteeWorkspace() {
   const [votes, setVotes] = useState<VoteRow[]>([]);
   const [voteClosedAt, setVoteClosedAt] = useState<string | null>(null);
   const [reportSubmittedAt, setReportSubmittedAt] = useState<string | null>(null);
+  const [revisedPdfPath, setRevisedPdfPath] = useState<string | null>(null);
+  const [reportPdfPath, setReportPdfPath] = useState<string | null>(null);
   const [voting, setVoting] = useState(false);
   const [closing, setClosing] = useState(false);
   const [reopening, setReopening] = useState(false);
@@ -165,7 +169,7 @@ export function CommitteeWorkspace() {
         }
         if (!cid) return;
 
-        const [{ data: myMembership }, { data: profile }, { data: subRows }, { data: paidAccess }, { data: meeting }] = await Promise.all([
+        const [{ data: myMembership }, { data: profile }, { data: subRows }, { data: paidAccess }, { data: meeting }, { data: classRow }] = await Promise.all([
           supabase
           .from("committee_members")
           .select("role")
@@ -176,10 +180,15 @@ export function CommitteeWorkspace() {
           supabase.from("subcommittees").select("id,name").eq("committee_id", committeeId).order("created_at", { ascending: true }),
           supabase.from("committee_paid_access").select("access_type").eq("committee_id", committeeId).eq("user_id", uid).eq("access_type", "review").maybeSingle(),
           supabase.from("committee_meetings").select("id,started_at,started_by").eq("committee_id", committeeId).is("ended_at", null).order("started_at", { ascending: false }).limit(1).maybeSingle(),
+          supabase.from("classes").select("settings").eq("id", cid).maybeSingle(),
         ]);
         setMyCommitteeRole((myMembership as any)?.role ?? null);
         setIsTeacher((profile as any)?.role === "teacher");
         setPaidReviewAccess(Boolean(paidAccess));
+        setEditorFormats({
+          committeeRevisedText: ((classRow as any)?.settings?.editorFormats?.committeeRevisedText ?? "editor") === "pdf" ? "pdf" : "editor",
+          committeeReport: ((classRow as any)?.settings?.editorFormats?.committeeReport ?? "editor") === "pdf" ? "pdf" : "editor",
+        });
         setActiveMeeting((meeting as any) ?? null);
         setSubcommittees((subRows ?? []) as Subcommittee[]);
         const subIds = (subRows ?? []).map((row: any) => row.id);
@@ -484,20 +493,24 @@ export function CommitteeWorkspace() {
   const loadDocState = async (billId: string) => {
     const { data, error } = await supabase
       .from("committee_bill_docs")
-      .select("committee_vote_closed_at,committee_report_submitted_at")
+      .select("committee_vote_closed_at,committee_report_submitted_at,revised_pdf_path,committee_report_pdf_path")
       .eq("committee_id", committeeId)
       .eq("bill_id", billId)
       .maybeSingle();
     if (error) throw error;
     setVoteClosedAt((data as any)?.committee_vote_closed_at ?? null);
     setReportSubmittedAt((data as any)?.committee_report_submitted_at ?? null);
+    setRevisedPdfPath((data as any)?.revised_pdf_path ?? null);
+    setReportPdfPath((data as any)?.committee_report_pdf_path ?? null);
   };
 
   useEffect(() => {
-    if (!selectedBillId || !classId || !selectedInVote) {
+    if (!selectedBillId || !classId) {
       setVotes([]);
       setVoteClosedAt(null);
       setReportSubmittedAt(null);
+      setRevisedPdfPath(null);
+      setReportPdfPath(null);
       return;
     }
     let cancelled = false;
@@ -518,7 +531,8 @@ export function CommitteeWorkspace() {
         }
       }
     };
-    void refreshVotes();
+    if (selectedInVote) void refreshVotes();
+    else setVotes([]);
     void refreshDoc();
     const voteChannel = supabase
       .channel(`committee-markup-votes:${committeeId}:${selectedBillId}`)
@@ -534,6 +548,17 @@ export function CommitteeWorkspace() {
       void supabase.removeChannel(docChannel);
     };
   }, [classId, committeeId, selectedBillId, selectedInVote]);
+
+  const saveCommitteePdf = async (column: "revised_pdf_path" | "committee_report_pdf_path", path: string) => {
+    if (!selected || !classId) return;
+    const { error } = await supabase.from("committee_bill_docs").upsert(
+      { bill_id: selected.id, committee_id: committeeId, class_id: classId, [column]: path } as any,
+      { onConflict: "bill_id,committee_id" },
+    );
+    if (error) throw error;
+    if (column === "revised_pdf_path") setRevisedPdfPath(path);
+    else setReportPdfPath(path);
+  };
 
   const castCommitteeVote = async (vote: VoteChoice) => {
     if (!selected || !classId || !meId) return;
@@ -625,6 +650,10 @@ export function CommitteeWorkspace() {
 
   const submitReport = async () => {
     if (!selected) return;
+    if (editorFormats.committeeReport === "pdf" && !reportPdfPath) {
+      toast.error("Upload the committee report PDF before submitting.");
+      return;
+    }
     setSubmittingReport(true);
     try {
       await submitCommitteeReport(selected.id, committeeId);
@@ -1033,7 +1062,7 @@ export function CommitteeWorkspace() {
                             <button
                               type="button"
                               onClick={() => void submitReport()}
-                              disabled={submittingReport || Boolean(reportSubmittedAt)}
+                              disabled={submittingReport || Boolean(reportSubmittedAt) || (editorFormats.committeeReport === "pdf" && !reportPdfPath)}
                               className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                             >
                               <Save className="h-4 w-4" />
@@ -1063,19 +1092,43 @@ export function CommitteeWorkspace() {
                             />
                           ))}
                         </div>
+                        {editorFormats.committeeReport === "pdf" && (
+                          <SimulationPdfUpload
+                            title="Committee report PDF"
+                            description="Upload the report before submitting it."
+                            path={reportPdfPath}
+                            uploadPrefix={`${classId}/committee-reports/${committeeId}/${selected.id}`}
+                            disabled={Boolean(reportSubmittedAt)}
+                            onUploaded={(path) => saveCommitteePdf("committee_report_pdf_path", path)}
+                          />
+                        )}
                       </div>
                     )}
                     <div>
                       <div className={textView === "original" ? "hidden" : ""}>
-                        <CollaborativeBillEditor
-                          classId={classId}
-                          committeeId={committeeId}
-                          billId={selected.id}
-                          initialHtml={selected.legislativeHtml}
-                          editable={textView === "edited" && billsEditable}
-                          displayMode={textView === "clean" ? "clean" : "tracked"}
-                          toolbarControls={textViewControls}
-                        />
+                        {editorFormats.committeeRevisedText === "pdf" ? (
+                          <div className="space-y-3 rounded-md border border-gray-200 bg-white p-4">
+                            <div className="flex justify-end">{textViewControls}</div>
+                            <SimulationPdfUpload
+                              title="Committee revised text PDF"
+                              description="Upload the revised text produced by the committee."
+                              path={revisedPdfPath}
+                              uploadPrefix={`${classId}/committee-revisions/${committeeId}/${selected.id}`}
+                              disabled={!billsEditable || textView !== "edited"}
+                              onUploaded={(path) => saveCommitteePdf("revised_pdf_path", path)}
+                            />
+                          </div>
+                        ) : (
+                          <CollaborativeBillEditor
+                            classId={classId}
+                            committeeId={committeeId}
+                            billId={selected.id}
+                            initialHtml={selected.legislativeHtml}
+                            editable={textView === "edited" && billsEditable}
+                            displayMode={textView === "clean" ? "clean" : "tracked"}
+                            toolbarControls={textViewControls}
+                          />
+                        )}
                       </div>
                       {textView === "original" && (
                         <div>

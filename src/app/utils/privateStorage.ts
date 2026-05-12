@@ -45,3 +45,11 @@ export function randomStoragePath(prefix: string, filename: string) {
   const random = typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   return `${prefix.replace(/^\/+|\/+$/g, "")}/${random}.${extension}`;
 }
+
+export function storageFileHashUrl(bucket: string, path: string) {
+  return `#/storage-file?bucket=${encodeURIComponent(bucket)}&path=${encodeURIComponent(path)}`;
+}
+
+export function simulationPdfLinkHtml(path: string) {
+  return `<p><a href="${storageFileHashUrl("simulation-pdfs", path)}" target="_blank" rel="noopener noreferrer">Open uploaded PDF</a></p>`;
+}

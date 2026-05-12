@@ -475,24 +475,25 @@ export function PartiesPage() {
                             </div>
                           </div>
                         </div>
-                        {role && (
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              void updateMyParty(isCurrentParty ? null : party.name);
-                            }}
-                            className={`inline-flex flex-shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                              isCurrentParty ? "border hover:opacity-90" : "text-white hover:opacity-90"
-                            }`}
-                            style={isCurrentParty ? { backgroundColor: fadedPartyColor(party.color), borderColor: party.color, color: party.color } : { backgroundColor: party.color }}
-                          >
-                            {isCurrentParty ? <LogOut className="h-3.5 w-3.5" /> : currentPartyName ? <Repeat2 className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
-                            {isCurrentParty ? "Leave" : currentPartyName ? "Switch" : "Join"}
-                          </button>
-                        )}
-                        {role === "teacher" && (
-                          <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                        <div className="flex flex-shrink-0 items-center gap-1.5">
+                          {role && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void updateMyParty(isCurrentParty ? null : party.name);
+                              }}
+                              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                                isCurrentParty ? "border hover:opacity-90" : "text-white hover:opacity-90"
+                              }`}
+                              style={isCurrentParty ? { backgroundColor: fadedPartyColor(party.color), borderColor: party.color, color: party.color } : { backgroundColor: party.color }}
+                            >
+                              {isCurrentParty ? <LogOut className="h-3.5 w-3.5" /> : currentPartyName ? <Repeat2 className="h-3.5 w-3.5" /> : <UserPlus className="h-3.5 w-3.5" />}
+                              {isCurrentParty ? "Leave" : currentPartyName ? "Switch" : "Join"}
+                            </button>
+                          )}
+                          {role === "teacher" && (
+                            <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
                             <button
                               type="button"
                               onClick={(event) => {
@@ -535,8 +536,9 @@ export function PartiesPage() {
                                 </button>
                               </div>
                             )}
-                          </div>
-                        )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                       <p className="line-clamp-3 text-sm text-gray-600">{party.platform || "No platform yet."}</p>
                       <div className="mt-4 grid gap-2 border-t border-gray-200 pt-4 text-sm">

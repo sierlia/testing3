@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
-import { Check, Circle, Clock, ExternalLink, Eye, FileText, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, Check, Circle, Clock, ExternalLink, Eye, FileText, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BillPreviewPanel } from "../components/BillPreviewPanel";
@@ -16,7 +16,8 @@ import { displayPersonName } from "../utils/displayName";
 import { profilePath } from "../utils/profileRoute";
 
 type RowMode = "preview" | "open";
-type SortKey = "number" | "newest" | "oldest" | "title" | "sponsor" | "status" | "cosponsors";
+type SortKey = "number" | "date" | "title" | "sponsor" | "status" | "cosponsors";
+type SortDirection = "asc" | "desc";
 
 interface BillView {
   id: string;
@@ -51,6 +52,7 @@ function partyAbbr(party: string | null | undefined) {
 }
 
 function statusLabel(status: string) {
+  if (status === "submitted") return "Introduced";
   return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
@@ -141,6 +143,16 @@ const toBillView = (bill: BillRecord): BillView => ({
   })),
 });
 
+const statusFilterOptions = [
+  { value: "submitted", label: "Introduced" },
+  { value: "in_committee", label: "In Committee" },
+  { value: "reported", label: "Reported" },
+  { value: "calendared", label: "Calendared" },
+  { value: "floor", label: "Floor" },
+  { value: "passed", label: "Passed" },
+  { value: "failed", label: "Failed" },
+];
+
 export function TessBills() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -158,6 +170,7 @@ export function TessBills() {
     cosponsorId: "all",
   });
   const [sortBy, setSortBy] = useState<SortKey>("number");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [openBillMenuId, setOpenBillMenuId] = useState<string | null>(null);
@@ -190,7 +203,6 @@ export function TessBills() {
     }));
   }, [searchKey]);
 
-  const statusOptions = useMemo(() => Array.from(new Set(allBills.map((bill) => bill.status))).sort(), [allBills]);
   const committeeOptions = useMemo(() => Array.from(new Set(allBills.map((bill) => bill.committee).filter(Boolean))).sort(), [allBills]);
   const sponsorOptions = useMemo(
     () => Array.from(new Map(allBills.map((bill) => [bill.sponsorId, { id: bill.sponsorId, name: bill.sponsor }])).values()).sort((a, b) => a.name.localeCompare(b.name)),
@@ -223,19 +235,19 @@ export function TessBills() {
     });
 
     return rows.sort((a, b) => {
-      if (sortBy === "newest") return new Date(b.introducedAt).getTime() - new Date(a.introducedAt).getTime();
-      if (sortBy === "oldest") return new Date(a.introducedAt).getTime() - new Date(b.introducedAt).getTime();
-      if (sortBy === "title") return a.title.localeCompare(b.title);
-      if (sortBy === "sponsor") return a.sponsor.localeCompare(b.sponsor);
-      if (sortBy === "status") return statusLabel(a.status).localeCompare(statusLabel(b.status));
-      if (sortBy === "cosponsors") return b.cosponsorCount - a.cosponsorCount;
-      return a.billNumber - b.billNumber;
+      let result = a.billNumber - b.billNumber;
+      if (sortBy === "date") result = new Date(a.introducedAt).getTime() - new Date(b.introducedAt).getTime();
+      if (sortBy === "title") result = a.title.localeCompare(b.title);
+      if (sortBy === "sponsor") result = a.sponsor.localeCompare(b.sponsor);
+      if (sortBy === "status") result = statusLabel(a.status).localeCompare(statusLabel(b.status));
+      if (sortBy === "cosponsors") result = a.cosponsorCount - b.cosponsorCount;
+      return result * (sortDirection === "asc" ? 1 : -1);
     });
-  }, [allBills, filters, searchQuery, sortBy]);
+  }, [allBills, filters, searchQuery, sortBy, sortDirection]);
 
   useEffect(() => {
     setPage(1);
-  }, [filters, pageSize, searchQuery, sortBy]);
+  }, [filters, pageSize, searchQuery, sortBy, sortDirection]);
 
   useEffect(() => {
     if (!filteredBills.length) {
@@ -261,6 +273,7 @@ export function TessBills() {
     setSearchQuery("");
     setFilters({ status: "all", committee: "all", sponsorId: "all", cosponsorId: "all" });
     setSortBy("number");
+    setSortDirection("asc");
   };
 
   const handleBillClick = (bill: BillView) => {
@@ -338,7 +351,7 @@ export function TessBills() {
               <div className="flex flex-wrap items-center gap-2">
               <FilterSelect value={filters.status} onChange={(value) => setFilters({ ...filters, status: value })}>
                 <SelectItem value="all">All statuses</SelectItem>
-                {statusOptions.map((status) => <SelectItem key={status} value={status}>{statusLabel(status)}</SelectItem>)}
+                {statusFilterOptions.map((status) => <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>)}
               </FilterSelect>
               <FilterSelect value={filters.committee} onChange={(value) => setFilters({ ...filters, committee: value })} className="w-44">
                 <SelectItem value="all">All committees</SelectItem>
@@ -354,13 +367,21 @@ export function TessBills() {
               </FilterSelect>
               <FilterSelect value={sortBy} onChange={(value) => setSortBy(value as SortKey)} className="w-40">
                 <SelectItem value="number">Sort: Bill number</SelectItem>
-                <SelectItem value="newest">Sort: Newest</SelectItem>
-                <SelectItem value="oldest">Sort: Oldest</SelectItem>
+                <SelectItem value="date">Sort: Introduced</SelectItem>
                 <SelectItem value="title">Sort: Title</SelectItem>
                 <SelectItem value="sponsor">Sort: Sponsor</SelectItem>
                 <SelectItem value="status">Sort: Status</SelectItem>
                 <SelectItem value="cosponsors">Sort: Cosponsors</SelectItem>
               </FilterSelect>
+              <button
+                type="button"
+                onClick={() => setSortDirection((current) => (current === "asc" ? "desc" : "asc"))}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                aria-label={sortDirection === "asc" ? "Sort ascending" : "Sort descending"}
+                title={sortDirection === "asc" ? "Ascending" : "Descending"}
+              >
+                {sortDirection === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
+              </button>
               <button onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
               </div>
               <div className="flex rounded-md border border-gray-300 bg-white p-1 shadow-sm">

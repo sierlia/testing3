@@ -29,6 +29,7 @@ import {
 import { supabase } from "../utils/supabase";
 import { SecureAvatar } from "../components/SecureAvatar";
 import { ContributionButton } from "../components/ContributionButton";
+import { SimulationPdfUpload } from "../components/SimulationPdfUpload";
 import { formatConstituencyFull, normalizeConstituencyId } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
@@ -54,6 +55,7 @@ type ProfileRow = {
   constituency_url: string | null;
   written_responses: Record<string, any> | null;
   personal_statement?: string | null;
+  profile_pdf_path?: string | null;
   updated_at?: string | null;
   created_at?: string | null;
   role?: string | null;
@@ -125,6 +127,7 @@ export function StudentProfile() {
   const [profileSections, setProfileSections] = useState<ProfileSectionRow[]>(defaultProfileSections);
   const [profileSectionWordLimits, setProfileSectionWordLimits] = useState<Record<string, number>>({});
   const [profileWordLimit, setProfileWordLimit] = useState(1000);
+  const [profileContentFormat, setProfileContentFormat] = useState<"editor" | "pdf">("editor");
   const [moneyEnabled, setMoneyEnabled] = useState(false);
   const [campaignFunds, setCampaignFunds] = useState(0);
 
@@ -200,6 +203,7 @@ export function StudentProfile() {
           avatar_url: null,
           personal_statement: "",
           written_responses: {},
+          profile_pdf_path: null,
         };
 
       setProfile(pr);
@@ -211,6 +215,7 @@ export function StudentProfile() {
         if (pr.class_id) {
           const { data: cls } = await supabase.from("classes").select("settings").eq("id", pr.class_id).maybeSingle();
           setMoneyEnabled(Boolean((cls as any)?.settings?.money?.enabled));
+          setProfileContentFormat(((cls as any)?.settings?.editorFormats?.profile ?? "editor") === "pdf" ? "pdf" : "editor");
           setProfileWordLimit(Math.min(2000, Math.max(1, Number((cls as any)?.settings?.wordLimits?.profileLongResponse ?? 1000))));
           setProfileSectionWordLimits(((cls as any)?.settings?.profileSectionWordLimits ?? {}) as Record<string, number>);
           const { data: contributions } = await supabase.from("lobbyist_contributions").select("amount").eq("class_id", pr.class_id).eq("recipient_type", "member").eq("recipient_id", uid);
@@ -461,6 +466,10 @@ export function StudentProfile() {
     const written = { ...(profile.written_responses || {}), avatar_position: next };
     await saveProfile({ written_responses: written } as any);
     setPhotoModalOpen(false);
+  };
+
+  const saveProfilePdf = async (path: string) => {
+    await saveProfile({ profile_pdf_path: path } as any);
   };
 
   const updateAvatarDrag = (clientX: number, clientY: number) => {
@@ -920,9 +929,22 @@ export function StudentProfile() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {profileSections.map(renderProfileSection)}
-        </div>
+        {profileContentFormat === "pdf" ? (
+          <div className="mb-6">
+            <SimulationPdfUpload
+              title="Profile PDF"
+              description={isMe ? "Upload the PDF that should open for this profile." : "This class uses uploaded PDFs for profile content."}
+              path={profile.profile_pdf_path}
+              uploadPrefix={`${profile.class_id ?? "profiles"}/profiles/${profile.user_id}`}
+              disabled={!isMe}
+              onUploaded={saveProfilePdf}
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+            {profileSections.map(renderProfileSection)}
+          </div>
+        )}
         {false && (
         <>
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">

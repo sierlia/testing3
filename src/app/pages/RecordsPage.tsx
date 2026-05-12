@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { DollarSign, Download, ExternalLink, Eye, FileText, Mail, MoreHorizontal, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
+import { ArrowDownAZ, ArrowUpAZ, DollarSign, Download, ExternalLink, Eye, FileText, Mail, MoreHorizontal, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { InfoTooltip } from "../components/InfoTooltip";
@@ -17,7 +17,8 @@ import { committeeDisplayName } from "../utils/committeeNames";
 type VoteChoice = "yea" | "nay" | "present" | "not_voted";
 type BaseRecordType = "letter" | "report" | "vote" | "newsletter" | "campaign_contribution";
 type RowMode = "preview" | "open";
-type SortKey = "newest" | "oldest" | "title" | "type";
+type SortKey = "date" | "title" | "type";
+type SortDirection = "asc" | "desc";
 type VoteList = Record<VoteChoice, Array<{ userId: string; name: string }>>;
 type NewsletterRow = { label: string; detail?: string; href?: string; sponsor?: string; sponsorHref?: string; transition?: string };
 
@@ -351,6 +352,7 @@ function NewsletterSection({ title, rows }: { title: string; rows?: NewsletterRo
 export function RecordsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
+  const initialSortParam = searchParams.get("sort");
   const { user } = useAuth();
   const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const [loading, setLoading] = useState(true);
@@ -358,7 +360,8 @@ export function RecordsPage() {
   const [recordTypes, setRecordTypes] = useState<string[]>(["record"]);
   const [classId, setClassId] = useState<string | null>(null);
   const [query, setQuery] = useState(searchParams.get("q") ?? "");
-  const [sortBy, setSortBy] = useState<SortKey>((searchParams.get("sort") as SortKey) ?? "newest");
+  const [sortBy, setSortBy] = useState<SortKey>(initialSortParam === "title" || initialSortParam === "type" ? initialSortParam : "date");
+  const [sortDirection, setSortDirection] = useState<SortDirection>(initialSortParam === "oldest" || searchParams.get("dir") === "asc" ? "asc" : "desc");
   const [rowMode, setRowMode] = useState<RowMode>("preview");
   const [selectedRecord, setSelectedRecord] = useState<RecordItem | null>(null);
   const [typeFilter, setTypeFilter] = useState(searchParams.get("type") ?? "all");
@@ -486,8 +489,8 @@ export function RecordsPage() {
         return {
           id: `contribution:${contribution.id}`,
           type: "campaign_contribution",
-          title: `${sourceName} contributed $${Number(contribution.amount ?? 0).toLocaleString()}`,
-          subtitle: `To ${recipientName}`,
+          title: `${sourceName} contributed $${Number(contribution.amount ?? 0).toLocaleString()} to ${recipientName}`,
+          subtitle: `By ${peopleById.get(contribution.from_user_id) ?? sourceName}`,
           date: contribution.created_at,
           href: `/records?type=campaign_contribution&record=${contribution.id}`,
           body: displayContributionNote(contribution.note || "Campaign contribution recorded."),
@@ -556,7 +559,7 @@ export function RecordsPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [query, sortBy, typeFilter, pageSize, userFilter]);
+  }, [query, sortBy, sortDirection, typeFilter, pageSize, userFilter]);
 
   useEffect(() => {
     if (!openRecordMenuId) return;
@@ -566,7 +569,7 @@ export function RecordsPage() {
   }, [openRecordMenuId]);
 
   const availableTypes = useMemo(() => Array.from(new Set([...builtInTypes, ...recordTypes, ...records.map((record) => record.type)])), [recordTypes, records]);
-  const defaultRecordsView = !query.trim() && typeFilter === "all" && sortBy === "newest" && !userFilter;
+  const defaultRecordsView = !query.trim() && typeFilter === "all" && sortBy === "date" && sortDirection === "desc" && !userFilter;
   const latestNewsletterId = useMemo(
     () => [...records].filter((record) => record.type === "newsletter").sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]?.id ?? "",
     [records],
@@ -578,17 +581,17 @@ export function RecordsPage() {
       .filter((record) => !userFilter || record.authorId === userFilter || record.voteUserIds?.includes(userFilter))
       .filter((record) => !q || `${record.title} ${record.subtitle} ${record.body ?? ""}`.toLowerCase().includes(q))
       .sort((a, b) => {
-        if (sortBy === "oldest") return new Date(a.date).getTime() - new Date(b.date).getTime();
-        if (sortBy === "title") return a.title.localeCompare(b.title);
-        if (sortBy === "type") return typeLabel(a.type).localeCompare(typeLabel(b.type)) || new Date(b.date).getTime() - new Date(a.date).getTime();
-        return new Date(b.date).getTime() - new Date(a.date).getTime();
+        let result = new Date(a.date).getTime() - new Date(b.date).getTime();
+        if (sortBy === "title") result = a.title.localeCompare(b.title);
+        if (sortBy === "type") result = typeLabel(a.type).localeCompare(typeLabel(b.type)) || new Date(a.date).getTime() - new Date(b.date).getTime();
+        return result * (sortDirection === "asc" ? 1 : -1);
       });
     if (defaultRecordsView && latestNewsletterId) {
       const index = list.findIndex((record) => record.id === latestNewsletterId);
       if (index > 0) list.unshift(...list.splice(index, 1));
     }
     return list;
-  }, [defaultRecordsView, latestNewsletterId, query, records, sortBy, typeFilter, userFilter]);
+  }, [defaultRecordsView, latestNewsletterId, query, records, sortBy, sortDirection, typeFilter, userFilter]);
 
   useEffect(() => {
     if (!filteredRecords.length) {
@@ -622,11 +625,13 @@ export function RecordsPage() {
   const resetFilters = () => {
     setQuery("");
     setType("all");
-    setSortBy("newest");
+    setSortBy("date");
+    setSortDirection("desc");
     const next = new URLSearchParams(searchParams);
     next.delete("q");
     next.delete("type");
     next.delete("sort");
+    next.delete("dir");
     next.delete("user");
     next.delete("author");
     setSearchParams(next);
@@ -865,12 +870,24 @@ export function RecordsPage() {
                   <SelectItem value="all">All people</SelectItem>
                   {peopleOptions.map((person) => <SelectItem key={person.id} value={person.id}>{person.name}</SelectItem>)}
                 </FilterSelect>
-                <FilterSelect value={sortBy} onChange={(value) => { setSortBy(value as SortKey); updateParam("sort", value, "newest"); }}>
-                  <SelectItem value="newest">Sort: Newest</SelectItem>
-                  <SelectItem value="oldest">Sort: Oldest</SelectItem>
+                <FilterSelect value={sortBy} onChange={(value) => { setSortBy(value as SortKey); updateParam("sort", value, "date"); }}>
+                  <SelectItem value="date">Sort: Date</SelectItem>
                   <SelectItem value="title">Sort: Title</SelectItem>
                   <SelectItem value="type">Sort: Type</SelectItem>
                 </FilterSelect>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = sortDirection === "asc" ? "desc" : "asc";
+                    setSortDirection(next);
+                    updateParam("dir", next, "desc");
+                  }}
+                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900"
+                  aria-label={sortDirection === "asc" ? "Sort ascending" : "Sort descending"}
+                  title={sortDirection === "asc" ? "Ascending" : "Descending"}
+                >
+                  {sortDirection === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
+                </button>
                 <button onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
               </div>
               <div className="flex rounded-md border border-gray-300 bg-white p-1 shadow-sm">

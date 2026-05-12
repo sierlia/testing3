@@ -13,6 +13,8 @@ type LetterRow = {
 };
 
 export function OrganizationLettersInbox({
+  organizationType,
+  organizationId,
   memberIds,
 }: {
   organizationType: "party" | "committee" | "caucus";
@@ -28,24 +30,21 @@ export function OrganizationLettersInbox({
     const load = async () => {
       setLoading(true);
       try {
-        const ids = Array.from(new Set(memberIds.filter(Boolean)));
-        if (!ids.length) {
-          setLetters([]);
-          return;
-        }
         const { data: letterRows } = await supabase
-          .from("dear_colleague_letters")
-          .select("id,sender_user_id,subject,body,created_at")
-          .in("sender_user_id", ids)
+          .from("dear_colleague_org_recipients")
+          .select("dear_colleague_letters(id,sender_user_id,subject,body,created_at)")
+          .eq("organization_type", organizationType)
+          .eq("organization_id", organizationId)
           .order("created_at", { ascending: false })
           .limit(8);
-        const senderIds = Array.from(new Set((letterRows ?? []).map((letter: any) => letter.sender_user_id).filter(Boolean)));
+        const lettersForOrg = (letterRows ?? []).map((row: any) => row.dear_colleague_letters).filter(Boolean);
+        const senderIds = Array.from(new Set(lettersForOrg.map((letter: any) => letter.sender_user_id).filter(Boolean)));
         const { data: profiles } = senderIds.length
           ? await supabase.from("profiles").select("user_id,display_name").in("user_id", senderIds)
           : ({ data: [] } as any);
         const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
         if (!cancelled) {
-          setLetters((letterRows ?? []).map((letter: any) => ({ ...letter, senderName: profileMap.get(letter.sender_user_id) ?? "Member" })));
+          setLetters(lettersForOrg.map((letter: any) => ({ ...letter, senderName: profileMap.get(letter.sender_user_id) ?? "Member" })));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -55,7 +54,7 @@ export function OrganizationLettersInbox({
     return () => {
       cancelled = true;
     };
-  }, [memberIds.join("|")]);
+  }, [organizationId, organizationType, memberIds.join("|")]);
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -68,7 +67,7 @@ export function OrganizationLettersInbox({
       {loading ? (
         <div className="text-sm text-gray-500">Loading letters...</div>
       ) : letters.length === 0 ? (
-        <div className="rounded-md border border-dashed border-gray-300 p-5 text-sm text-gray-500">No letters from members yet.</div>
+        <div className="rounded-md border border-dashed border-gray-300 p-5 text-sm text-gray-500">No letters addressed to this organization yet.</div>
       ) : (
         <div className="divide-y divide-gray-100">
           {letters.map((letter) => (

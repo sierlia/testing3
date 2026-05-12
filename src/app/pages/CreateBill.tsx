@@ -30,7 +30,7 @@ import { createBillForCurrentClass, fetchBillDetail, getCurrentProfileClass, upd
 import { htmlToMarkdown, markdownToHtml } from "../utils/markdown";
 import { supabase } from "../utils/supabase";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
-import { randomStoragePath } from "../utils/privateStorage";
+import { randomStoragePath, simulationPdfLinkHtml } from "../utils/privateStorage";
 
 type TextMode = "default" | "markdown" | "preview";
 
@@ -94,11 +94,6 @@ function stripMarkdownFormatting(value: string) {
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/<u>(.*?)<\/u>/gi, "$1");
-}
-
-function pdfLinkHtml(path: string) {
-  const href = `#/storage-file?bucket=simulation-pdfs&path=${encodeURIComponent(path)}`;
-  return `<p><a href="${href}" target="_blank" rel="noopener noreferrer">Open uploaded PDF</a></p>`;
 }
 
 function MarkdownToolbar({
@@ -446,7 +441,7 @@ export function CreateBill() {
     const path = randomStoragePath(`${classId}/bills/${userId}`, pdfFile.name);
     const { error } = await supabase.storage.from("simulation-pdfs").upload(path, pdfFile, { upsert: false, contentType: "application/pdf" });
     if (error) throw error;
-    return pdfLinkHtml(path);
+    return simulationPdfLinkHtml(path);
   };
 
   const buildBillPayload = async () => {

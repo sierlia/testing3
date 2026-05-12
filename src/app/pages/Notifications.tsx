@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Bell, MessageSquare, Settings, ThumbsUp, Trash2 } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
+import { CompactPager } from "../components/CompactPager";
 import { supabase } from "../utils/supabase";
 import { useAuth } from "../utils/AuthContext";
 
@@ -20,6 +21,8 @@ export function Notifications() {
   const { user } = useAuth();
   const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const load = async () => {
     if (!user?.id) return;
@@ -29,7 +32,7 @@ export function Notifications() {
       .select("id,title,message,href,created_at,read_at,event_key")
       .eq("recipient_user_id", user.id)
       .order("created_at", { ascending: false })
-      .limit(100);
+      .limit(200);
     setItems((data ?? []).map((row: any) => ({
       id: row.id,
       title: row.title,
@@ -45,6 +48,29 @@ export function Notifications() {
   useEffect(() => {
     void load();
   }, [user?.id]);
+
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = useMemo(() => items.slice((currentPage - 1) * pageSize, currentPage * pageSize), [currentPage, items, pageSize]);
+  const pageItemIds = pageItems.map((item) => item.id).join("|");
+
+  useEffect(() => {
+    setPage(1);
+  }, [pageSize, user?.id]);
+
+  useEffect(() => {
+    if (!user?.id || loading || !pageItems.length) return;
+    const unreadIds = pageItems.filter((item) => !item.read_at).map((item) => item.id);
+    if (!unreadIds.length) return;
+    const readAt = new Date().toISOString();
+    setItems((prev) => prev.map((item) => (unreadIds.includes(item.id) ? { ...item, read_at: readAt } : item)));
+    void supabase
+      .from("notifications")
+      .update({ read_at: readAt })
+      .eq("recipient_user_id", user.id)
+      .in("id", unreadIds)
+      .is("read_at", null);
+  }, [currentPage, loading, pageItemIds, user?.id]);
 
   const markRead = async (id: string) => {
     const readAt = new Date().toISOString();
@@ -98,7 +124,7 @@ export function Notifications() {
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
-              {items.map((item) => (
+              {pageItems.map((item) => (
                 <div key={item.id} className={`p-4 transition-colors ${!item.read_at ? "bg-blue-50" : "bg-white"}`}>
                   <div className="flex items-start gap-3">
                     <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${item.kind === "comment" ? "bg-blue-100" : "bg-purple-100"}`}>
@@ -128,6 +154,7 @@ export function Notifications() {
             </div>
           )}
         </div>
+        {!loading && items.length > 0 && <CompactPager currentPage={currentPage} totalPages={totalPages} totalItems={items.length} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={setPageSize} />}
       </main>
     </div>
   );
