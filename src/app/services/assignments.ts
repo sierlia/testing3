@@ -243,6 +243,22 @@ export const AUTO_CRITERIA_OPTIONS: Array<{
     defaultTarget: 1,
     defaultPoints: 5,
   },
+  {
+    id: "floor_discussion_posts",
+    label: "Floor discussion posts",
+    description: "Counts original posts the student added to floor discussion boards.",
+    unit: "posts",
+    defaultTarget: 2,
+    defaultPoints: 5,
+  },
+  {
+    id: "floor_discussion_replies",
+    label: "Floor discussion replies",
+    description: "Counts replies the student added to floor discussion posts.",
+    unit: "replies",
+    defaultTarget: 2,
+    defaultPoints: 3,
+  },
 ];
 
 export function newRubricItem(): RubricItem {
@@ -342,6 +358,8 @@ export async function computeAutoCriteriaScores(classId: string, userId: string,
     committeeVoteCount,
     floorVoteCount,
     preferenceCount,
+    floorDiscussionPostCount,
+    floorDiscussionReplyCount,
   ] = await Promise.all([
     profilePromise,
     needed.has("write_bills")
@@ -413,6 +431,24 @@ export async function computeAutoCriteriaScores(classId: string, userId: string,
             .eq("user_id", userId) as any,
         )
       : Promise.resolve(0),
+    needed.has("floor_discussion_posts")
+      ? countRows(
+          supabase
+            .from("floor_discussion_posts")
+            .select("id", { count: "exact", head: true })
+            .eq("class_id", classId)
+            .eq("author_user_id", userId) as any,
+        )
+      : Promise.resolve(0),
+    needed.has("floor_discussion_replies")
+      ? countRows(
+          supabase
+            .from("floor_discussion_comments")
+            .select("id", { count: "exact", head: true })
+            .eq("class_id", classId)
+            .eq("author_user_id", userId) as any,
+        )
+      : Promise.resolve(0),
   ]);
 
   const profile = (profileResult as any)?.data ?? null;
@@ -425,6 +461,8 @@ export async function computeAutoCriteriaScores(classId: string, userId: string,
   values.cast_committee_votes = committeeVoteCount;
   values.cast_floor_votes = floorVoteCount;
   values.submit_committee_preferences = preferenceCount > 0 ? 1 : 0;
+  values.floor_discussion_posts = floorDiscussionPostCount;
+  values.floor_discussion_replies = floorDiscussionReplyCount;
   values.select_constituency = profile?.constituency_name ? 1 : 0;
   values.join_party = profile?.party ? 1 : 0;
   values.complete_profile =

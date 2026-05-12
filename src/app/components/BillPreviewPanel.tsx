@@ -64,12 +64,14 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="bg-blue-600 p-4 text-white">
-        <div className="flex items-center justify-between mb-2">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
           <span className="font-mono text-sm font-semibold">{bill.number}</span>
-          <Link to={`/bills/${bill.id}`}>
-            <button className="p-1 hover:bg-blue-700 rounded transition-colors">
-              <ExternalLink className="w-4 h-4" />
-            </button>
+          <Link
+            to={`/bills/${bill.id}`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            View Full Bill
           </Link>
         </div>
         <h3 className="font-semibold">{bill.title}</h3>
@@ -139,13 +141,6 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
           />
         </div>
 
-        {/* View Full Bill button */}
-        <Link to={`/bills/${bill.id}`}>
-          <button className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium text-sm">
-            <ExternalLink className="w-4 h-4" />
-            View Full Bill
-          </button>
-        </Link>
       </div>
     </div>
   );

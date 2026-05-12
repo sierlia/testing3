@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { ArrowDownAZ, ArrowUpAZ, Check, Circle, Clock, ExternalLink, Eye, FileText, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,8 @@ import { profilePath } from "../utils/profileRoute";
 type RowMode = "preview" | "open";
 type SortKey = "number" | "date" | "title" | "sponsor" | "status" | "cosponsors";
 type SortDirection = "asc" | "desc";
+const BILL_ROW_MODE_KEY = "gavel:bills:row-mode";
+const BILL_PREVIEW_SPLIT_KEY = "gavel:bills:preview-split";
 
 interface BillView {
   id: string;
@@ -162,7 +164,15 @@ export function TessBills() {
   const [selectedBill, setSelectedBill] = useState<BillView | null>(null);
   const [allBills, setAllBills] = useState<BillView[]>([]);
   const [loading, setLoading] = useState(true);
-  const [rowMode, setRowMode] = useState<RowMode>("preview");
+  const [rowMode, setRowMode] = useState<RowMode>(() => {
+    const saved = window.localStorage.getItem(BILL_ROW_MODE_KEY);
+    return saved === "open" || saved === "preview" ? saved : "preview";
+  });
+  const [previewSplitPct, setPreviewSplitPct] = useState(() => {
+    const saved = Number(window.localStorage.getItem(BILL_PREVIEW_SPLIT_KEY));
+    return Number.isFinite(saved) && saved >= 45 && saved <= 78 ? saved : 66;
+  });
+  const [draggingSplit, setDraggingSplit] = useState(false);
   const [filters, setFilters] = useState({
     status: "all",
     committee: "all",
@@ -263,6 +273,36 @@ export function TessBills() {
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [openBillMenuId]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BILL_ROW_MODE_KEY, rowMode);
+  }, [rowMode]);
+
+  useEffect(() => {
+    window.localStorage.setItem(BILL_PREVIEW_SPLIT_KEY, String(Math.round(previewSplitPct)));
+  }, [previewSplitPct]);
+
+  useEffect(() => {
+    if (!draggingSplit) return;
+    const onMove = (event: MouseEvent) => {
+      const container = document.getElementById("bills-preview-split");
+      if (!container) return;
+      const rect = container.getBoundingClientRect();
+      const next = ((event.clientX - rect.left) / rect.width) * 100;
+      setPreviewSplitPct(Math.min(78, Math.max(45, next)));
+    };
+    const onUp = () => setDraggingSplit(false);
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [draggingSplit]);
 
   const totalPages = Math.max(1, Math.ceil(filteredBills.length / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -398,8 +438,12 @@ export function TessBills() {
           </div>
         </div>
 
-        <div className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-3" : ""}`}>
-          <div className={rowMode === "preview" ? "lg:col-span-2" : ""}>
+        <div
+          id="bills-preview-split"
+          className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_0.5rem_minmax(18rem,1fr)] lg:gap-3" : ""}`}
+          style={rowMode === "preview" ? ({ "--bill-list-width": `${previewSplitPct}%` } as CSSProperties) : undefined}
+        >
+          <div>
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               {loading ? (
                 <div className="py-12 text-center text-gray-500">Loading bills...</div>
@@ -492,7 +536,16 @@ export function TessBills() {
           </div>
 
           {rowMode === "preview" && (
-            <div className="lg:col-span-1">
+            <button
+              type="button"
+              onMouseDown={() => setDraggingSplit(true)}
+              className="hidden cursor-col-resize rounded-full bg-gray-200 transition-colors hover:bg-blue-300 active:bg-blue-400 lg:block"
+              aria-label="Resize bill preview"
+            />
+          )}
+
+          {rowMode === "preview" && (
+            <div>
               <div className="sticky top-8">
                 {selectedBill ? (
                   <BillPreviewPanel bill={selectedBill} />

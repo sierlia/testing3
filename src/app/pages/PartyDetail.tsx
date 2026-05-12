@@ -435,6 +435,45 @@ export function PartyDetail() {
     }
   };
 
+  const removePartyMember = async (member: MemberRow) => {
+    if (!party || !isTeacher) return;
+    try {
+      const [{ error: roleError }, { error: profileError }] = await Promise.all([
+        supabase.from("party_member_roles").delete().eq("party_id", party.id).eq("user_id", member.user_id),
+        supabase.from("profiles").update({ party: null } as any).eq("user_id", member.user_id),
+      ]);
+      if (roleError || profileError) throw roleError ?? profileError;
+      setMembers((prev) => prev.filter((row) => row.user_id !== member.user_id));
+      setPartyRoles((prev) => prev.filter((row) => row.user_id !== member.user_id));
+      setMemberCandidates((prev) => [
+        ...prev.filter((row) => row.user_id !== member.user_id),
+        {
+          user_id: member.user_id,
+          display_name: member.display_name,
+          party: null,
+          constituency_name: member.constituency_name,
+          avatar_url: member.avatar_url,
+          role: member.role ?? null,
+        },
+      ]);
+      setMemberMenuOpen(null);
+      toast.success("Member removed");
+    } catch (e: any) {
+      toast.error(e.message || "Could not remove member");
+    }
+  };
+
+  const requestRemovePartyMember = (member: MemberRow) => {
+    if (!party || !isTeacher) return;
+    setConfirmDialog({
+      title: "Remove party member?",
+      message: `Remove ${member.display_name ?? "this member"} from ${displayPartyName(party.name)}?`,
+      confirmLabel: "Remove",
+      danger: true,
+      onConfirm: () => removePartyMember(member),
+    });
+  };
+
   const postAnnouncement = async () => {
     if (!party || !meId || !newAnnouncement.trim()) return;
     try {
@@ -978,6 +1017,7 @@ export function PartyDetail() {
                             </button>
                             {memberMenuOpen === m.user_id && (
                               <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
+                                <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Modify position</div>
                                 {partyRoleOptions().map((option) => (
                                   <button
                                     key={option.role}
@@ -990,6 +1030,16 @@ export function PartyDetail() {
                                     {(m.organization_role ?? "member") === option.role && <span className="text-xs">Current</span>}
                                   </button>
                                 ))}
+                                <div className="my-1 border-t border-gray-100" />
+                                <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Other</div>
+                                <button
+                                  type="button"
+                                  onClick={() => requestRemovePartyMember(m)}
+                                  className="flex w-full items-center gap-2 rounded px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                  Remove
+                                </button>
                               </div>
                             )}
                           </div>

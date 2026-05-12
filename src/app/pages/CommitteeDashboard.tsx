@@ -1366,6 +1366,7 @@ export function CommitteeDashboard() {
                       </button>
                       {memberMenuOpen === m.user_id && (
                         <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
+                          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Modify position</div>
                           {(["member", "chair", "ranking_member"] as MembershipRole[]).map((role) => (
                             <button
                               key={role}
@@ -1382,6 +1383,7 @@ export function CommitteeDashboard() {
                             </button>
                           ))}
                           <div className="my-1 border-t border-gray-100" />
+                          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Other</div>
                           <button
                             type="button"
                             onClick={() => {

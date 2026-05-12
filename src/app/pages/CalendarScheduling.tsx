@@ -389,7 +389,13 @@ export function CalendarScheduling() {
               ))}
             {tasks.map((task) => (
               <div key={task.id} className="block bg-sky-50 p-4">
-                <div className="text-sm font-semibold text-gray-900">{task.title}</div>
+                {task.task_type === "assignment" ? (
+                  <Link to={`/assignments/${task.id}`} className="text-sm font-semibold text-gray-900 hover:text-blue-600">
+                    {task.title}
+                  </Link>
+                ) : (
+                  <div className="text-sm font-semibold text-gray-900">{task.title}</div>
+                )}
                 <div className="mt-1 text-xs font-medium text-sky-700">{new Date(task.due_at).toLocaleString()}</div>
                 <div className="mt-1 text-xs capitalize text-gray-500">{task.task_type}</div>
               </div>

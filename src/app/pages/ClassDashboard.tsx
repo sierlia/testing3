@@ -18,6 +18,7 @@ import {
   Unlock,
   Users,
   Vote,
+  X,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
@@ -60,6 +61,14 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
   const [recentActivity, setRecentActivity] = useState<ClassActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [selectedUpcomingDay, setSelectedUpcomingDay] = useState<string | null>(null);
+  const [dashboardCalendarMonth, setDashboardCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
+  const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [assignmentTitle, setAssignmentTitle] = useState("");
+  const [assignmentDescription, setAssignmentDescription] = useState("");
+  const [assignmentDueDate, setAssignmentDueDate] = useState("");
+  const [assignmentDueTime, setAssignmentDueTime] = useState("23:59");
+  const [assignmentPoints, setAssignmentPoints] = useState("100");
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
   const [billStats, setBillStats] = useState({ total: 0, waitingReferral: 0, waitingCalendar: 0 });
   const [workflowBusy, setWorkflowBusy] = useState(false);
@@ -113,7 +122,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
         .select("id,title,task_type,due_at")
         .gte("due_at", nowIso)
         .order("due_at", { ascending: true })
-        .limit(6);
+        .limit(30);
       const calendaredBills = await fetchCalendaredBillsForCurrentClass();
       setUpcomingEvents(
         [
@@ -122,6 +131,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
           title: `${task.task_type === "assignment" ? "Assignment" : "Deadline"}: ${task.title}`,
           date: new Date(task.due_at),
           type: "deadline",
+          href: task.task_type === "assignment" ? `/assignments/${task.id}` : undefined,
         })),
           ...calendaredBills.map((item) => ({
             id: `bill-${item.id}`,
@@ -188,16 +198,15 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     return `${year}-${month}-${day}`;
   };
 
-  const currentWeekDays = useMemo(() => {
-    const today = new Date();
-    const start = new Date(today);
-    start.setDate(today.getDate() - today.getDay());
-    return Array.from({ length: 7 }, (_, index) => {
+  const dashboardMonthDays = useMemo(() => {
+    const start = new Date(dashboardCalendarMonth);
+    start.setDate(1 - start.getDay());
+    return Array.from({ length: 42 }, (_, index) => {
       const day = new Date(start);
       day.setDate(start.getDate() + index);
       return day;
     });
-  }, []);
+  }, [dashboardCalendarMonth]);
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -314,6 +323,48 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
       toast.error(e.message === "EMAIL_REQUIRED" ? "please enter a valid email address" : "invitation sent if user exists");
     } finally {
       setInviteBusy(false);
+    }
+  };
+
+  const createDashboardAssignment = async () => {
+    if (!classId || !assignmentTitle.trim()) return;
+    setAssignmentSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Sign in required");
+      const dueAt = assignmentDueDate.trim()
+        ? new Date(`${assignmentDueDate}T${(assignmentDueTime || "23:59").trim()}:00`).toISOString()
+        : null;
+      const { error } = await supabase.from("class_tasks").insert({
+        class_id: classId,
+        created_by: user.id,
+        task_type: "assignment",
+        audience_type: "all",
+        audience_id: null,
+        audience_user_ids: [],
+        title: assignmentTitle.trim(),
+        description: assignmentDescription.trim(),
+        due_at: dueAt,
+        points_possible: Math.max(0, Number(assignmentPoints) || 0),
+        grading_mode: "manual",
+        manual_submission_required: true,
+        rubric: [],
+        auto_criteria: [],
+        integration_targets: [],
+      } as any);
+      if (error) throw error;
+      setAssignmentTitle("");
+      setAssignmentDescription("");
+      setAssignmentDueDate("");
+      setAssignmentDueTime("23:59");
+      setAssignmentPoints("100");
+      setAssignmentModalOpen(false);
+      await loadDashboard();
+      toast.success("Assignment created");
+    } catch (e: any) {
+      toast.error(e.message || "Could not create assignment");
+    } finally {
+      setAssignmentSaving(false);
     }
   };
 
@@ -553,28 +604,56 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle>Upcoming Events & Assignments</CardTitle>
+                    <CardTitle>Calendar</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button onClick={() => navigate("/teacher/assignments?add=1")}><Plus className="mr-2 h-4 w-4" />Add Assignment</Button>
+                    <Button onClick={() => setAssignmentModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Assignment</Button>
                   </div>
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 grid grid-cols-7 gap-2">
-                  {currentWeekDays.map((day) => {
+                <div className="mb-4 flex items-center justify-between gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setDashboardCalendarMonth(new Date(dashboardCalendarMonth.getFullYear(), dashboardCalendarMonth.getMonth() - 1, 1))}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Previous
+                  </button>
+                  <div className="text-sm font-semibold text-gray-900">
+                    {dashboardCalendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setDashboardCalendarMonth(new Date(dashboardCalendarMonth.getFullYear(), dashboardCalendarMonth.getMonth() + 1, 1))}
+                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    Next
+                  </button>
+                </div>
+                <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <div key={day}>{day}</div>)}
+                </div>
+                <div className="mb-4 grid grid-cols-7 gap-1">
+                  {dashboardMonthDays.map((day) => {
                     const events = eventsByDay.get(dayKey(day)) ?? [];
                     const isToday = dayKey(day) === dayKey(new Date());
+                    const inMonth = day.getMonth() === dashboardCalendarMonth.getMonth();
                     return (
                       <button
                         key={dayKey(day)}
                         type="button"
                         onClick={() => setSelectedUpcomingDay(dayKey(day))}
-                        className="group relative text-left"
+                        className="group relative min-h-20 rounded-md border border-gray-200 bg-white p-2 text-left hover:bg-gray-50"
                       >
-                        <div className={`flex min-h-16 flex-col items-center justify-center rounded-full border text-center text-xs ${selectedUpcomingDay === dayKey(day) ? "border-blue-300 bg-blue-100 text-blue-900" : events.length ? "border-sky-200 bg-sky-50 text-sky-800" : isToday ? "border-gray-200 bg-gray-100 text-gray-800" : "border-gray-200 bg-white text-gray-500"}`}>
-                          <span className="font-semibold">{day.toLocaleDateString(undefined, { weekday: "short" })}</span>
-                          <span className="text-lg font-bold">{day.getDate()}</span>
+                        <div className={`text-xs font-semibold ${selectedUpcomingDay === dayKey(day) ? "text-blue-700" : isToday ? "text-gray-900" : inMonth ? "text-gray-600" : "text-gray-300"}`}>{day.getDate()}</div>
+                        <div className="mt-1 space-y-1">
+                          {events.slice(0, 2).map((event) => (
+                            <div key={event.id} className={`truncate rounded px-1.5 py-0.5 text-[10px] font-medium ${event.type === "bill" ? "bg-blue-50 text-blue-700" : "bg-sky-50 text-sky-700"}`}>
+                              {event.title}
+                            </div>
+                          ))}
+                          {events.length > 2 && <div className="text-[10px] font-medium text-gray-500">+{events.length - 2} more</div>}
                         </div>
                         {events.length > 0 && (
                           <div className="pointer-events-none absolute left-full top-0 z-10 ml-2 hidden w-56 space-y-2 rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg group-hover:block">
@@ -625,7 +704,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                   )}
                 </div>
                 <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <Button variant="outline" onClick={() => navigate("/teacher/assignments")}>Manage assignments</Button>
+                  <Button variant="outline" onClick={() => navigate("/assignments")}>Manage assignments</Button>
                   <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
                 </div>
               </CardContent>
@@ -717,6 +796,53 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
           </div>
         </div>
       </main>
+      {assignmentModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">Add Assignment</h2>
+                <p className="text-sm text-gray-500">Create a dashboard assignment for this class.</p>
+              </div>
+              <button type="button" onClick={() => setAssignmentModalOpen(false)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Close assignment menu">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-4 p-5">
+              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
+                  <input value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">Points</span>
+                  <input type="number" min={0} value={assignmentPoints} onChange={(event) => setAssignmentPoints(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                </label>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">Due date</span>
+                  <input type="date" value={assignmentDueDate} onChange={(event) => setAssignmentDueDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium text-gray-700">Due time</span>
+                  <input type="time" value={assignmentDueTime} onChange={(event) => setAssignmentDueTime(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                </label>
+              </div>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Description</span>
+                <textarea value={assignmentDescription} onChange={(event) => setAssignmentDescription(event.target.value)} rows={4} className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
+            </div>
+            <div className="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
+              <Button type="button" variant="outline" onClick={() => setAssignmentModalOpen(false)}>Cancel</Button>
+              <Button type="button" onClick={() => void createDashboardAssignment()} disabled={assignmentSaving || !assignmentTitle.trim()}>
+                {assignmentSaving ? "Saving..." : "Create Assignment"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );

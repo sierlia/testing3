@@ -459,6 +459,7 @@ export function LobbyistGroupDetail() {
                       </button>
                       {openMemberMenuId === member.user_id && (
                         <div className="absolute right-0 top-full z-[120] mt-1 w-40 overflow-hidden rounded-md border border-gray-200 bg-white py-1 text-sm shadow-lg">
+                          <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Other</div>
                           <button type="button" onClick={() => void removeMember(member.user_id)} className="flex w-full items-center gap-2 px-3 py-2 text-left text-red-600 hover:bg-red-50">
                             <Trash2 className="h-4 w-4" />
                             Remove
