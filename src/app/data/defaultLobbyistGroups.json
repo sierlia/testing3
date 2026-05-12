@@ -1,0 +1,110 @@
+{
+  "source": "https://www.opensecrets.org/federal-lobbying/top-spenders",
+  "scrapedAt": "2026-05-12T18:13:56.646Z",
+  "groups": [
+    {
+      "name": "US Chamber of Commerce",
+      "defaultStartingMoney": 69580000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "National Assn of Realtors",
+      "defaultStartingMoney": 52400000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "American Hospital Assn",
+      "defaultStartingMoney": 30240000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Blue Cross/Blue Shield",
+      "defaultStartingMoney": 28590000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Pharmaceutical Research & Manufacturers of America",
+      "defaultStartingMoney": 27630000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "American Medical Assn",
+      "defaultStartingMoney": 21220000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Amazon.com",
+      "defaultStartingMoney": 19840000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Business Roundtable",
+      "defaultStartingMoney": 19740000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Meta",
+      "defaultStartingMoney": 19300000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "CTIA",
+      "defaultStartingMoney": 17180000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "AARP",
+      "defaultStartingMoney": 16520000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "American Chemistry Council",
+      "defaultStartingMoney": 15800000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Pharmaceutical Care Management Assn",
+      "defaultStartingMoney": 15430000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "NCTA The Internet & Television Assn",
+      "defaultStartingMoney": 14560000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Boeing Co",
+      "defaultStartingMoney": 14490000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "General Motors",
+      "defaultStartingMoney": 14420000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Pfizer Inc",
+      "defaultStartingMoney": 14360000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Alphabet Inc",
+      "defaultStartingMoney": 14360000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Amgen Inc",
+      "defaultStartingMoney": 14290000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    },
+    {
+      "name": "Lockheed Martin",
+      "defaultStartingMoney": 14070000,
+      "source": "https://www.opensecrets.org/federal-lobbying/top-spenders"
+    }
+  ],
+  "scrapeStatus": "fallback",
+  "scrapeError": "OpenSecrets request failed: 403 Forbidden",
+  "fallbackSource": "https://www.statistico.com/s/us-leading-lobbying-clients-by-expenditure",
+  "fallbackNote": "Live OpenSecrets scraping was blocked; fallback values are OpenSecrets-sourced 2023 leading lobbying clients in USD."
+}
