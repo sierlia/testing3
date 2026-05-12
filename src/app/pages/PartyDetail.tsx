@@ -13,12 +13,13 @@ import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox
 import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
 import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
+import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
 type PartyRole = "majority_leader" | "majority_whip" | "minority_leader" | "minority_whip" | "leader" | "whip" | "chair" | "vice_chair";
 type MemberRow = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null; role?: string | null; organization_role?: PartyRole | null };
-type Announcement = { id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
-type CommentRow = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; author?: MemberRow | null };
+type Announcement = { id: string; author_user_id: string; body: string; created_at: string; updated_at?: string | null; attachments?: DiscussionAttachment[]; author?: MemberRow | null };
+type CommentRow = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; updated_at?: string | null; attachments?: DiscussionAttachment[]; author?: MemberRow | null };
 type PartyMemberRoleRow = { party_id: string; user_id: string; role: PartyRole };
 
 function displayPartyName(name: string) {
@@ -100,7 +101,9 @@ export function PartyDetail() {
   const [comments, setComments] = useState<Record<string, CommentRow[]>>({});
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   const [newAnnouncement, setNewAnnouncement] = useState("");
+  const [newAnnouncementAttachments, setNewAnnouncementAttachments] = useState<DiscussionAttachment[]>([]);
   const [newComment, setNewComment] = useState("");
+  const [newCommentAttachments, setNewCommentAttachments] = useState<DiscussionAttachment[]>([]);
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
   const [editingAnnouncementBody, setEditingAnnouncementBody] = useState("");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
@@ -179,7 +182,7 @@ export function PartyDetail() {
 
       const { data: aRows, error: aErr } = await supabase
         .from("party_announcements")
-        .select("id,author_user_id,body,created_at")
+        .select("id,author_user_id,body,created_at,updated_at,attachments")
         .eq("party_id", partyId)
         .order("created_at", { ascending: false });
       if (aErr) throw aErr;
@@ -190,13 +193,13 @@ export function PartyDetail() {
         .select("user_id,display_name,party,constituency_name,avatar_url,role")
         .in("user_id", authorIds.length ? authorIds : ["00000000-0000-0000-0000-000000000000"]);
       const authorMap = new Map((authors ?? []).map((a: any) => [a.user_id, { ...a, organization_role: nextRoles.find((row) => row.user_id === a.user_id)?.role ?? null }]));
-      const mappedAnnouncements = (aRows ?? []).map((a: any) => ({ ...a, author: authorMap.get(a.author_user_id) ?? null }));
+      const mappedAnnouncements = (aRows ?? []).map((a: any) => ({ ...a, attachments: parseDiscussionAttachments(a.attachments), author: authorMap.get(a.author_user_id) ?? null }));
       setAnnouncements(mappedAnnouncements as any);
       setSelectedAnnouncementId((prev) => prev ?? mappedAnnouncements[0]?.id ?? null);
 
       const announcementIds = mappedAnnouncements.map((a: any) => a.id);
       if (announcementIds.length) {
-        const { data: cRows } = await supabase.from("party_comments").select("id,announcement_id,author_user_id,body,created_at").in("announcement_id", announcementIds).order("created_at", { ascending: true });
+        const { data: cRows } = await supabase.from("party_comments").select("id,announcement_id,author_user_id,body,created_at,updated_at,attachments").in("announcement_id", announcementIds).order("created_at", { ascending: true });
         const commentAuthorIds = [...new Set((cRows ?? []).map((c: any) => c.author_user_id))];
         const { data: cAuthors } = await supabase
           .from("profiles")
@@ -205,7 +208,7 @@ export function PartyDetail() {
         const cAuthorMap = new Map((cAuthors ?? []).map((a: any) => [a.user_id, { ...a, organization_role: nextRoles.find((row) => row.user_id === a.user_id)?.role ?? null }]));
         const grouped: Record<string, CommentRow[]> = {};
         for (const row of cRows ?? []) {
-          const comment = { ...(row as any), author: cAuthorMap.get((row as any).author_user_id) ?? null };
+          const comment = { ...(row as any), attachments: parseDiscussionAttachments((row as any).attachments), author: cAuthorMap.get((row as any).author_user_id) ?? null };
           grouped[comment.announcement_id] = [...(grouped[comment.announcement_id] ?? []), comment];
         }
         setComments(grouped);
@@ -482,9 +485,11 @@ export function PartyDetail() {
         class_id: party.class_id,
         author_user_id: meId,
         body: newAnnouncement.trim(),
+        attachments: newAnnouncementAttachments,
       } as any);
       if (error) throw error;
       setNewAnnouncement("");
+      setNewAnnouncementAttachments([]);
       await load();
     } catch (e: any) {
       toast.error(e.message || "Could not post announcement");
@@ -498,9 +503,11 @@ export function PartyDetail() {
         announcement_id: selectedAnnouncementId,
         author_user_id: meId,
         body: newComment.trim(),
+        attachments: newCommentAttachments,
       } as any);
       if (error) throw error;
       setNewComment("");
+      setNewCommentAttachments([]);
       await load();
     } catch (e: any) {
       toast.error(e.message || "Could not post comment");
@@ -563,20 +570,22 @@ export function PartyDetail() {
 
   const editAnnouncement = async () => {
     if (!editingAnnouncementId || !editingAnnouncementBody.trim()) return;
-    const { error } = await supabase.from("party_announcements").update({ body: editingAnnouncementBody.trim() }).eq("id", editingAnnouncementId);
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from("party_announcements").update({ body: editingAnnouncementBody.trim(), updated_at: updatedAt } as any).eq("id", editingAnnouncementId);
     if (error) return toast.error(error.message || "Could not edit announcement");
-    setAnnouncements((prev) => prev.map((announcement) => announcement.id === editingAnnouncementId ? { ...announcement, body: editingAnnouncementBody.trim() } : announcement));
+    setAnnouncements((prev) => prev.map((announcement) => announcement.id === editingAnnouncementId ? { ...announcement, body: editingAnnouncementBody.trim(), updated_at: updatedAt } : announcement));
     setEditingAnnouncementId(null);
     setEditingAnnouncementBody("");
   };
 
   const editComment = async () => {
     if (!selectedAnnouncement || !editingCommentId || !editingCommentBody.trim()) return;
-    const { error } = await supabase.from("party_comments").update({ body: editingCommentBody.trim() }).eq("id", editingCommentId);
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from("party_comments").update({ body: editingCommentBody.trim(), updated_at: updatedAt } as any).eq("id", editingCommentId);
     if (error) return toast.error(error.message || "Could not edit comment");
     setComments((prev) => ({
       ...prev,
-      [selectedAnnouncement.id]: (prev[selectedAnnouncement.id] ?? []).map((comment) => comment.id === editingCommentId ? { ...comment, body: editingCommentBody.trim() } : comment),
+      [selectedAnnouncement.id]: (prev[selectedAnnouncement.id] ?? []).map((comment) => comment.id === editingCommentId ? { ...comment, body: editingCommentBody.trim(), updated_at: updatedAt } : comment),
     }));
     setEditingCommentId(null);
     setEditingCommentBody("");
@@ -780,7 +789,8 @@ export function PartyDetail() {
                     <div className="border-b border-gray-200 p-5">
                       <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
                         <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} rows={3} placeholder="Post an announcement..." className="w-full resize-y border-0 p-0 text-sm outline-none" />
-                        <div className="mt-3 flex justify-end">
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <AttachmentPicker value={newAnnouncementAttachments} onChange={setNewAnnouncementAttachments} />
                           <button onClick={() => void postAnnouncement()} disabled={!newAnnouncement.trim()} className="inline-flex items-center gap-2 rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Send className="h-4 w-4" />Post</button>
                         </div>
                       </div>
@@ -816,13 +826,17 @@ export function PartyDetail() {
                                 </div>
                               </div>
                             ) : (
-                              <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
+                              <>
+                                <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
+                                <AttachmentList attachments={selectedAnnouncement.attachments} />
+                              </>
                             )}
                             <div className="mt-2 text-xs text-gray-500">
                               <Link to={profilePath(selectedAnnouncement.author_user_id)} className={partyAuthorLinkClass(selectedAnnouncement.author)}>{displayAuthorName(selectedAnnouncement.author)}</Link> • {new Date(selectedAnnouncement.created_at).toLocaleString()}
                             </div>
                             {(isTeacher || selectedAnnouncement.author_user_id === meId) && (
                               <div className="mt-3 flex justify-end gap-2">
+                                {selectedAnnouncement.author_user_id === meId && (
                                 <button
                                   type="button"
                                   onClick={() => {
@@ -833,6 +847,7 @@ export function PartyDetail() {
                                 >
                                   Edit
                                 </button>
+                                )}
                                 {isTeacher && (
                                 <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
                                   <Trash2 className="h-3.5 w-3.5" />
@@ -863,9 +878,13 @@ export function PartyDetail() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <div className="mt-1 text-gray-700">{comment.body}</div>
+                                  <>
+                                    <div className="mt-1 text-gray-700">{comment.body}</div>
+                                    <AttachmentList attachments={comment.attachments} />
+                                  </>
                                 )}
-                                {(isTeacher || comment.author_user_id === meId) && editingCommentId !== comment.id && (
+                                {comment.updated_at && new Date(comment.updated_at).getTime() - new Date(comment.created_at).getTime() > 1000 && <div className="mt-1 text-xs text-gray-400">Edited</div>}
+                                {comment.author_user_id === meId && editingCommentId !== comment.id && (
                                   <button
                                     type="button"
                                     onClick={() => {
@@ -881,10 +900,15 @@ export function PartyDetail() {
                             ))}
                           </div>
                           {canUseBoard && (
+                            <>
                             <div className="flex gap-2 border-t border-gray-200 pt-3">
                               <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={2} placeholder="Write a comment..." className="flex-1 rounded-md border border-gray-300 px-3 py-2" />
                               <button onClick={() => void postComment()} disabled={!newComment.trim()} className="rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">Send</button>
                             </div>
+                            <div className="mt-2">
+                              <AttachmentPicker value={newCommentAttachments} onChange={setNewCommentAttachments} />
+                            </div>
+                            </>
                           )}
                         </div>
                       ) : (

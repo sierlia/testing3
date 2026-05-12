@@ -17,13 +17,14 @@ import { ContributionButton } from "../components/ContributionButton";
 import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
 import { profilePath } from "../utils/profileRoute";
 import { committeeDisplayName } from "../utils/committeeNames";
+import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type Subcommittee = { id: string; committee_id: string; class_id: string; name: string; description: string | null; created_at: string };
 type ProfileLite = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url: string | null; role?: string | null; organization_role?: MembershipRole | null };
 
-type Announcement = { id: string; committee_id: string; author_user_id: string; title: string; body: string; created_at: string; author?: ProfileLite | null };
-type Comment = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; parent_comment_id?: string | null; author?: ProfileLite | null };
+type Announcement = { id: string; committee_id: string; author_user_id: string; title: string; body: string; created_at: string; updated_at?: string | null; attachments?: DiscussionAttachment[]; author?: ProfileLite | null };
+type Comment = { id: string; announcement_id: string; author_user_id: string; body: string; created_at: string; updated_at?: string | null; parent_comment_id?: string | null; attachments?: DiscussionAttachment[]; author?: ProfileLite | null };
 
 function partyAbbr(party: string | null | undefined) {
   const normalized = String(party ?? "").toLowerCase();
@@ -114,8 +115,12 @@ export function CommitteeDashboard() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   const [newAnnouncement, setNewAnnouncement] = useState("");
+  const [newAnnouncementAttachments, setNewAnnouncementAttachments] = useState<DiscussionAttachment[]>([]);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
+  const [editingAnnouncementBody, setEditingAnnouncementBody] = useState("");
   const [commentsByAnnouncement, setCommentsByAnnouncement] = useState<Record<string, ThreadComment[]>>({});
   const [newComment, setNewComment] = useState("");
+  const [newCommentAttachments, setNewCommentAttachments] = useState<DiscussionAttachment[]>([]);
 
   const [announcementReactions, setAnnouncementReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
   const [commentReactions, setCommentReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
@@ -272,7 +277,7 @@ export function CommitteeDashboard() {
 
         const { data: aRows, error: aErr } = await supabase
           .from("committee_announcements")
-          .select("id,committee_id,author_user_id,title,body,created_at")
+          .select("id,committee_id,author_user_id,title,body,created_at,updated_at,attachments")
           .eq("committee_id", committeeId)
           .order("created_at", { ascending: false });
         if (aErr) throw aErr;
@@ -286,6 +291,7 @@ export function CommitteeDashboard() {
 
         const mappedAnnouncements: Announcement[] = (aRows ?? []).map((a: any) => ({
           ...(a as any),
+          attachments: parseDiscussionAttachments(a.attachments),
           author: aAuthorMap.get(a.author_user_id)
             ? ({ ...(aAuthorMap.get(a.author_user_id) as ProfileLite), organization_role: memberRoleMap.get(a.author_user_id) ?? null })
             : null,
@@ -302,7 +308,7 @@ export function CommitteeDashboard() {
         if (announcementIds.length) {
           const { data: cRows, error: ccErr } = await supabase
             .from("committee_comments")
-            .select("id,announcement_id,author_user_id,body,created_at,parent_comment_id")
+            .select("id,announcement_id,author_user_id,body,created_at,updated_at,parent_comment_id,attachments")
             .in("announcement_id", announcementIds)
             .order("created_at", { ascending: true });
           if (ccErr) throw ccErr;
@@ -319,6 +325,7 @@ export function CommitteeDashboard() {
             const author = cAuthorMap.get((row as any).author_user_id) as ProfileLite | undefined;
             const comment: ThreadComment = {
               ...(row as any),
+              attachments: parseDiscussionAttachments((row as any).attachments),
               author: author ? ({ ...author, organization_role: memberRoleMap.get((row as any).author_user_id) ?? null } as any) : null,
             };
             grouped[comment.announcement_id] = [...(grouped[comment.announcement_id] ?? []), comment];
@@ -619,15 +626,17 @@ export function CommitteeDashboard() {
         author_user_id: meId,
         title: "",
         body: newAnnouncement.trim(),
+        attachments: newAnnouncementAttachments,
       });
       if (error) throw error;
       setNewAnnouncement("");
+      setNewAnnouncementAttachments([]);
     } catch (e: any) {
       toast.error(e.message || "Could not post announcement");
     }
   };
 
-  const submitComment = async (body: string, parentCommentId: string | null) => {
+  const submitComment = async (body: string, parentCommentId: string | null, attachments: DiscussionAttachment[] = []) => {
     if (!meId) return;
     if (!selectedAnnouncementId) return;
     const trimmed = body.trim();
@@ -640,24 +649,37 @@ export function CommitteeDashboard() {
           author_user_id: meId,
           body: trimmed,
           parent_comment_id: parentCommentId,
+          attachments,
         })
-        .select("id,announcement_id,author_user_id,body,created_at,parent_comment_id")
+        .select("id,announcement_id,author_user_id,body,created_at,updated_at,parent_comment_id,attachments")
         .single();
       if (error) throw error;
 
-      const comment: ThreadComment = { ...(inserted as any), author: (meProfile as any) ?? null };
+      const comment: ThreadComment = { ...(inserted as any), attachments: parseDiscussionAttachments((inserted as any).attachments), author: (meProfile as any) ?? null };
       setCommentsByAnnouncement((prev) => {
         const cur = prev[comment.announcement_id] ?? [];
         if (cur.some((c) => c.id === comment.id)) return prev;
         return { ...prev, [comment.announcement_id]: [...cur, comment] };
       });
-      if (!parentCommentId) setNewComment("");
+      if (!parentCommentId) {
+        setNewComment("");
+        setNewCommentAttachments([]);
+      }
     } catch (e: any) {
       toast.error(e.message || "Could not post comment");
     }
   };
 
-  const postComment = async () => submitComment(newComment, null);
+  const postComment = async () => submitComment(newComment, null, newCommentAttachments);
+
+  const editAnnouncement = async () => {
+    if (!selectedAnnouncement || !editingAnnouncementBody.trim()) return;
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from("committee_announcements").update({ body: editingAnnouncementBody.trim(), updated_at: updatedAt } as any).eq("id", selectedAnnouncement.id);
+    if (error) return toast.error(error.message || "Could not edit announcement");
+    setAnnouncements((prev) => prev.map((announcement) => announcement.id === selectedAnnouncement.id ? { ...announcement, body: editingAnnouncementBody.trim(), updated_at: updatedAt } : announcement));
+    setEditingAnnouncementId(null);
+  };
 
   const deleteAnnouncement = async (announcementId: string) => {
     if (!isTeacher) return;
@@ -715,11 +737,12 @@ export function CommitteeDashboard() {
 
   const editComment = async (commentId: string, body: string) => {
     if (!selectedAnnouncementId || !body.trim()) return;
-    const { error } = await supabase.from("committee_comments").update({ body: body.trim() }).eq("id", commentId);
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from("committee_comments").update({ body: body.trim(), updated_at: updatedAt } as any).eq("id", commentId);
     if (error) return toast.error(error.message || "Could not edit comment");
     setCommentsByAnnouncement((prev) => ({
       ...prev,
-      [selectedAnnouncementId]: (prev[selectedAnnouncementId] ?? []).map((comment) => comment.id === commentId ? { ...comment, body: body.trim() } : comment),
+      [selectedAnnouncementId]: (prev[selectedAnnouncementId] ?? []).map((comment) => comment.id === commentId ? { ...comment, body: body.trim(), updated_at: updatedAt } : comment),
     }));
   };
 
@@ -1176,7 +1199,7 @@ export function CommitteeDashboard() {
             </div>
 
             {canViewDashboard ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-visible">
               <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
               </div>
@@ -1185,7 +1208,8 @@ export function CommitteeDashboard() {
                 <div className="p-6 border-b border-gray-200">
                   <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
                     <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} placeholder="Post an announcement..." rows={3} className="w-full resize-y border-0 p-0 text-sm outline-none" />
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <AttachmentPicker value={newAnnouncementAttachments} onChange={setNewAnnouncementAttachments} />
                     <button onClick={() => void postAnnouncement()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50" disabled={!newAnnouncement.trim()}>
                       <Send className="w-4 h-4" />
                       Post
@@ -1237,7 +1261,20 @@ export function CommitteeDashboard() {
                     <div className="space-y-4">
                       <div className="relative border border-gray-200 rounded-md p-4 bg-white">
                         {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
-                        <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
+                        {editingAnnouncementId === selectedAnnouncement.id ? (
+                          <div className="space-y-2">
+                            <textarea value={editingAnnouncementBody} onChange={(event) => setEditingAnnouncementBody(event.target.value)} rows={4} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                            <div className="flex gap-2">
+                              <button type="button" onClick={() => void editAnnouncement()} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+                              <button type="button" onClick={() => setEditingAnnouncementId(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <>
+                            <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
+                            <AttachmentList attachments={selectedAnnouncement.attachments} />
+                          </>
+                        )}
                         <div className="text-xs text-gray-500 mt-2">
                           <Link to={profilePath(selectedAnnouncement.author_user_id)} className={authorLinkClass(selectedAnnouncement.author)}>
                             {displayAuthorName(selectedAnnouncement.author)}
@@ -1252,12 +1289,26 @@ export function CommitteeDashboard() {
                             canReact={canComment}
                           />
                         </div>
-                        {isTeacher && (
-                          <div className="mt-3 flex justify-end">
+                        {(isTeacher || selectedAnnouncement.author_user_id === meId) && (
+                          <div className="mt-3 flex justify-end gap-2">
+                            {selectedAnnouncement.author_user_id === meId && editingAnnouncementId !== selectedAnnouncement.id && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingAnnouncementId(selectedAnnouncement.id);
+                                  setEditingAnnouncementBody(selectedAnnouncement.body);
+                                }}
+                                className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                              >
+                                Edit
+                              </button>
+                            )}
+                            {isTeacher && (
                             <button type="button" onClick={() => void deleteAnnouncement(selectedAnnouncement.id)} className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-red-50 hover:text-red-600">
                               <Trash2 className="h-3.5 w-3.5" />
                               Delete
                             </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -1272,7 +1323,7 @@ export function CommitteeDashboard() {
                           onSubmitComment={submitComment}
                           canDeleteComments={isTeacher}
                           onDeleteComment={deleteComment}
-                          canEditComment={(comment) => isTeacher || comment.author_user_id === meId}
+                          canEditComment={(comment) => comment.author_user_id === meId}
                           onEditComment={editComment}
                         />
                       </div>
@@ -1290,6 +1341,9 @@ export function CommitteeDashboard() {
                             <button onClick={() => void postComment()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50" disabled={!newComment.trim()}>
                               Send
                             </button>
+                          </div>
+                          <div className="mt-2">
+                            <AttachmentPicker value={newCommentAttachments} onChange={setNewCommentAttachments} />
                           </div>
                         </div>
                       )}

@@ -15,6 +15,7 @@ import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
 import { getCurrentUser } from "../utils/currentUser";
 import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
+import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -35,6 +36,8 @@ type Announcement = {
   title: string;
   body: string;
   created_at: string;
+  updated_at?: string | null;
+  attachments?: DiscussionAttachment[];
   author?: ProfileLite | null;
 };
 
@@ -44,7 +47,9 @@ type Comment = {
   author_user_id: string;
   body: string;
   created_at: string;
+  updated_at?: string | null;
   parent_comment_id?: string | null;
+  attachments?: DiscussionAttachment[];
   author?: ProfileLite | null;
 };
 
@@ -101,9 +106,11 @@ export function TessCaucusDetail() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   const [newAnnouncement, setNewAnnouncement] = useState("");
+  const [newAnnouncementAttachments, setNewAnnouncementAttachments] = useState<DiscussionAttachment[]>([]);
 
   const [commentsByAnnouncement, setCommentsByAnnouncement] = useState<Record<string, ThreadComment[]>>({});
   const [newComment, setNewComment] = useState("");
+  const [newCommentAttachments, setNewCommentAttachments] = useState<DiscussionAttachment[]>([]);
 
   const [announcementReactions, setAnnouncementReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
   const [commentReactions, setCommentReactions] = useState<Record<string, ReactionsSummary | undefined>>({});
@@ -229,7 +236,7 @@ export function TessCaucusDetail() {
 
         const { data: aRows, error: aErr } = await supabase
           .from("caucus_announcements")
-          .select("id,caucus_id,author_user_id,title,body,created_at")
+          .select("id,caucus_id,author_user_id,title,body,created_at,updated_at,attachments")
           .eq("caucus_id", caucusId)
           .order("created_at", { ascending: false });
         if (aErr) throw aErr;
@@ -243,6 +250,7 @@ export function TessCaucusDetail() {
 
         const mappedAnnouncements: Announcement[] = (aRows ?? []).map((a: any) => ({
           ...a,
+          attachments: parseDiscussionAttachments(a.attachments),
           author: aAuthorMap.get(a.author_user_id)
             ? ({ ...(aAuthorMap.get(a.author_user_id) as ProfileLite), organization_role: memberRoleMap.get(a.author_user_id) ?? null })
             : null,
@@ -260,7 +268,7 @@ export function TessCaucusDetail() {
         if (announcementIds.length) {
           const { data: cRows, error: ccErr } = await supabase
             .from("caucus_comments")
-            .select("id,announcement_id,author_user_id,body,created_at,parent_comment_id")
+            .select("id,announcement_id,author_user_id,body,created_at,updated_at,parent_comment_id,attachments")
             .in("announcement_id", announcementIds)
             .order("created_at", { ascending: true });
           if (ccErr) throw ccErr;
@@ -277,6 +285,7 @@ export function TessCaucusDetail() {
             const author = cAuthorMap.get((row as any).author_user_id) as ProfileLite | undefined;
             const comment: ThreadComment = {
               ...(row as any),
+              attachments: parseDiscussionAttachments((row as any).attachments),
               author: author ? ({ ...author, organization_role: memberRoleMap.get((row as any).author_user_id) ?? null } as any) : null,
             };
             grouped[comment.announcement_id] = [...(grouped[comment.announcement_id] ?? []), comment];
@@ -634,16 +643,18 @@ export function TessCaucusDetail() {
         author_user_id: meId,
         title: "",
         body: newAnnouncement.trim(),
+        attachments: newAnnouncementAttachments,
       });
       if (error) throw error;
       setNewAnnouncement("");
+      setNewAnnouncementAttachments([]);
       toast.success("Posted");
     } catch (e: any) {
       toast.error(e.message || "Could not post announcement");
     }
   };
 
-  const submitComment = async (body: string, parentCommentId: string | null) => {
+  const submitComment = async (body: string, parentCommentId: string | null, attachments: DiscussionAttachment[] = []) => {
     if (!meId) return;
     if (!selectedAnnouncementId) return;
     const trimmed = body.trim();
@@ -656,24 +667,28 @@ export function TessCaucusDetail() {
         author_user_id: meId,
         body: trimmed,
         parent_comment_id: parentCommentId,
+        attachments,
         })
-        .select("id,announcement_id,author_user_id,body,created_at,parent_comment_id")
+        .select("id,announcement_id,author_user_id,body,created_at,updated_at,parent_comment_id,attachments")
         .single();
       if (error) throw error;
 
-      const comment: ThreadComment = { ...(inserted as any), author: (meProfile as any) ?? null };
+      const comment: ThreadComment = { ...(inserted as any), attachments: parseDiscussionAttachments((inserted as any).attachments), author: (meProfile as any) ?? null };
       setCommentsByAnnouncement((prev) => {
         const cur = prev[comment.announcement_id] ?? [];
         if (cur.some((c) => c.id === comment.id)) return prev;
         return { ...prev, [comment.announcement_id]: [...cur, comment] };
       });
-      if (!parentCommentId) setNewComment("");
+      if (!parentCommentId) {
+        setNewComment("");
+        setNewCommentAttachments([]);
+      }
     } catch (e: any) {
       toast.error(e.message || "Could not post comment");
     }
   };
 
-  const postComment = async () => submitComment(newComment, null);
+  const postComment = async () => submitComment(newComment, null, newCommentAttachments);
 
   const deleteAnnouncement = async (announcementId: string) => {
     if (!isTeacher) return;
@@ -731,11 +746,12 @@ export function TessCaucusDetail() {
 
   const editComment = async (commentId: string, body: string) => {
     if (!selectedAnnouncementId || !body.trim()) return;
-    const { error } = await supabase.from("caucus_comments").update({ body: body.trim() }).eq("id", commentId);
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from("caucus_comments").update({ body: body.trim(), updated_at: updatedAt } as any).eq("id", commentId);
     if (error) return toast.error(error.message || "Could not edit comment");
     setCommentsByAnnouncement((prev) => ({
       ...prev,
-      [selectedAnnouncementId]: (prev[selectedAnnouncementId] ?? []).map((comment) => comment.id === commentId ? { ...comment, body: body.trim() } : comment),
+      [selectedAnnouncementId]: (prev[selectedAnnouncementId] ?? []).map((comment) => comment.id === commentId ? { ...comment, body: body.trim(), updated_at: updatedAt } : comment),
     }));
   };
 
@@ -981,7 +997,7 @@ export function TessCaucusDetail() {
             {activeTab === "letters" ? (
               <OrganizationLettersInbox organizationType="caucus" organizationId={caucusId} organizationName={caucus.title} memberIds={members.map((member) => member.user_id)} />
             ) : activeTab === "dashboard" ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-visible">
               <div className="p-6 border-b border-gray-200 flex items-center justify-between">
                 <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
               </div>
@@ -996,7 +1012,8 @@ export function TessCaucusDetail() {
                       rows={3}
                       className="w-full resize-y border-0 p-0 text-sm outline-none"
                     />
-                    <div className="mt-3 flex justify-end">
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                    <AttachmentPicker value={newAnnouncementAttachments} onChange={setNewAnnouncementAttachments} />
                     <button
                       onClick={() => void postAnnouncement()}
                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
@@ -1051,6 +1068,7 @@ export function TessCaucusDetail() {
                       <div className="relative border border-gray-200 rounded-md p-4 bg-white">
                         {selectedAnnouncement.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
                         <CollapsibleText text={selectedAnnouncement.body} limit={500} className="text-sm text-gray-900" />
+                        <AttachmentList attachments={selectedAnnouncement.attachments} />
                         <div className="text-xs text-gray-500 mt-2">
                           <Link to={profilePath(selectedAnnouncement.author_user_id)} className={authorLinkClass(selectedAnnouncement.author)}>
                             {displayAuthorName(selectedAnnouncement.author)}
@@ -1085,7 +1103,7 @@ export function TessCaucusDetail() {
                           onSubmitComment={submitComment}
                           canDeleteComments={isTeacher}
                           onDeleteComment={deleteComment}
-                          canEditComment={(comment) => isTeacher || comment.author_user_id === meId}
+                          canEditComment={(comment) => comment.author_user_id === meId}
                           onEditComment={editComment}
                         />
                       </div>
@@ -1107,6 +1125,9 @@ export function TessCaucusDetail() {
                             >
                               Send
                             </button>
+                          </div>
+                          <div className="mt-2">
+                            <AttachmentPicker value={newCommentAttachments} onChange={setNewCommentAttachments} />
                           </div>
                         </div>
                       )}

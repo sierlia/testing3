@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router";
-import { MoreHorizontal, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import { LogOut, MoreHorizontal, Pencil, Plus, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -25,6 +25,7 @@ export function LobbyistGroups() {
   const [groups, setGroups] = useState<LobbyistGroup[]>([]);
   const [query, setQuery] = useState("");
   const [role, setRole] = useState<"teacher" | "student" | null>(null);
+  const [meId, setMeId] = useState<string | null>(null);
   const [classId, setClassId] = useState<string | null>(null);
   const [settings, setSettings] = useState<any>({});
   const [editing, setEditing] = useState(false);
@@ -34,6 +35,8 @@ export function LobbyistGroups() {
   const [draft, setDraft] = useState({ name: "", description: "" });
   const [loading, setLoading] = useState(true);
   const [spentByGroup, setSpentByGroup] = useState<Record<string, number>>({});
+  const [joinedGroupIds, setJoinedGroupIds] = useState<Set<string>>(new Set());
+  const [membershipBusyId, setMembershipBusyId] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -42,6 +45,7 @@ export function LobbyistGroups() {
       setLoading(false);
       return;
     }
+    setMeId(uid);
     const { data: profile } = await supabase.from("profiles").select("class_id,role").eq("user_id", uid).maybeSingle();
     const activeClassId = (profile as any)?.class_id ?? null;
     setRole(((profile as any)?.role ?? null) as any);
@@ -54,11 +58,12 @@ export function LobbyistGroups() {
     setSettings((cls as any)?.settings ?? {});
     const [{ data: rows }, { data: members }, { data: contributions }] = await Promise.all([
       supabase.from("lobbyist_groups").select("id,class_id,name,description,join_mode,starting_amount,created_at").eq("class_id", activeClassId).order("created_at", { ascending: true }),
-      supabase.from("lobbyist_group_members").select("group_id"),
+      supabase.from("lobbyist_group_members").select("group_id,user_id"),
       supabase.from("lobbyist_contributions").select("group_id,amount").eq("class_id", activeClassId),
     ]);
     const counts: Record<string, number> = {};
     for (const member of members ?? []) counts[(member as any).group_id] = (counts[(member as any).group_id] ?? 0) + 1;
+    setJoinedGroupIds(new Set(((members ?? []) as any[]).filter((member) => member.user_id === uid).map((member) => member.group_id)));
     const spent: Record<string, number> = {};
     for (const row of contributions ?? []) spent[(row as any).group_id] = (spent[(row as any).group_id] ?? 0) + Number((row as any).amount ?? 0);
     setSpentByGroup(spent);
@@ -134,6 +139,45 @@ export function LobbyistGroups() {
     });
   };
 
+  const joinGroup = async (group: LobbyistGroup) => {
+    if (!meId || group.join_mode !== "free_join" || joinedGroupIds.has(group.id)) return;
+    setMembershipBusyId(group.id);
+    try {
+      const { data: existing } = await supabase.from("lobbyist_group_members").select("group_id").eq("user_id", meId).limit(1);
+      if ((existing ?? []).length) {
+        toast.error("You are already in a lobbyist group");
+        return;
+      }
+      const { error } = await supabase.from("lobbyist_group_members").insert({ group_id: group.id, user_id: meId } as any);
+      if (error) throw error;
+      setJoinedGroupIds((current) => new Set([...current, group.id]));
+      setGroups((current) => current.map((row) => row.id === group.id ? { ...row, memberCount: row.memberCount + 1 } : row));
+    } catch (e: any) {
+      toast.error(e.message || "Could not join lobbyist group");
+    } finally {
+      setMembershipBusyId(null);
+    }
+  };
+
+  const leaveGroup = async (group: LobbyistGroup) => {
+    if (!meId || group.join_mode !== "free_join" || !joinedGroupIds.has(group.id)) return;
+    setMembershipBusyId(group.id);
+    try {
+      const { error } = await supabase.from("lobbyist_group_members").delete().eq("group_id", group.id).eq("user_id", meId);
+      if (error) throw error;
+      setJoinedGroupIds((current) => {
+        const next = new Set(current);
+        next.delete(group.id);
+        return next;
+      });
+      setGroups((current) => current.map((row) => row.id === group.id ? { ...row, memberCount: Math.max(0, row.memberCount - 1) } : row));
+    } catch (e: any) {
+      toast.error(e.message || "Could not leave lobbyist group");
+    } finally {
+      setMembershipBusyId(null);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -185,7 +229,7 @@ export function LobbyistGroups() {
             ) : items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No lobbyist groups yet.</div>
             ) : (
-              <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              <div className="overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm">
                 {sectionDisabled && <div className="border-b border-gray-200 bg-gray-100 px-4 py-3 text-sm text-gray-600">Lobbyist groups have been disabled from settings.</div>}
                 {items.map((group, index) => (
                   <div key={group.id} role="button" tabIndex={0} onClick={() => navigate(`/lobbyists/${group.id}`)} onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") navigate(`/lobbyists/${group.id}`); }} className={`flex cursor-pointer items-start justify-between gap-4 p-4 transition-colors hover:bg-gray-50 ${index < items.length - 1 ? "border-b border-gray-200" : ""} ${sectionDisabled ? "pointer-events-none opacity-50 grayscale" : ""}`}>
@@ -199,8 +243,28 @@ export function LobbyistGroups() {
                         ${lobbyistGroupBalance(group, settings, spentByGroup[group.id] ?? 0).toLocaleString()} total money
                       </div>
                     </div>
-                    {role === "teacher" && !sectionDisabled && (
-                      <div className="relative flex-shrink-0" onPointerDown={(event) => event.stopPropagation()}>
+                    <div className="flex flex-shrink-0 items-center gap-2" onPointerDown={(event) => event.stopPropagation()}>
+                      {!sectionDisabled && (group.join_mode === "free_join" || joinedGroupIds.has(group.id)) && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            if (joinedGroupIds.has(group.id)) void leaveGroup(group);
+                            else void joinGroup(group);
+                          }}
+                          disabled={membershipBusyId === group.id || group.join_mode !== "free_join"}
+                          className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors disabled:opacity-60 ${
+                            joinedGroupIds.has(group.id)
+                              ? "bg-red-100 text-red-700 hover:bg-red-200"
+                              : "bg-blue-600 text-white hover:bg-blue-700"
+                          }`}
+                        >
+                          {joinedGroupIds.has(group.id) ? <LogOut className="h-4 w-4" /> : <UserPlus className="h-4 w-4" />}
+                          {joinedGroupIds.has(group.id) ? (membershipBusyId === group.id ? "Leaving" : "Leave") : membershipBusyId === group.id ? "Joining" : "Join"}
+                        </button>
+                      )}
+                      {role === "teacher" && !sectionDisabled && (
+                        <div className="relative">
                         <button
                           type="button"
                           onClick={(event) => {
@@ -225,7 +289,8 @@ export function LobbyistGroups() {
                           </div>
                         )}
                       </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

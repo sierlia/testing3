@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
   Calendar,
+  Check,
   ClipboardCheck,
   CloudUpload,
   MoreVertical,
   Pencil,
   Plus,
   RefreshCw,
+  Search,
   Send,
   Settings2,
   Trash2,
@@ -177,6 +179,9 @@ export function TeacherDeadlines() {
   const [parties, setParties] = useState<OrgOption[]>([]);
   const [committees, setCommittees] = useState<OrgOption[]>([]);
   const [caucuses, setCaucuses] = useState<OrgOption[]>([]);
+  const [lobbyists, setLobbyists] = useState<OrgOption[]>([]);
+  const [studentPickerQuery, setStudentPickerQuery] = useState("");
+  const [audienceOptionQuery, setAudienceOptionQuery] = useState("");
   const menuRef = useRef<HTMLDivElement | null>(null);
 
   const selectedAssignment = useMemo(
@@ -210,6 +215,7 @@ export function TeacherDeadlines() {
         { data: pRows },
         { data: cRows },
         { data: caRows },
+        { data: lRows },
         { data: iRows },
         { data: memberRows },
       ] = await Promise.all([
@@ -223,6 +229,7 @@ export function TeacherDeadlines() {
         supabase.from("parties").select("id,name").eq("class_id", activeClassId).order("name"),
         supabase.from("committees").select("id,name").eq("class_id", activeClassId).order("name"),
         supabase.from("caucuses").select("id,title").eq("class_id", activeClassId).order("title"),
+        supabase.from("lobbyist_groups").select("id,name").eq("class_id", activeClassId).order("name"),
         supabase.from("grade_integrations").select("id,provider,enabled,external_course_id,external_gradebook_id,sync_mode,status,settings").eq("class_id", activeClassId),
         supabase
           .from("class_memberships")
@@ -237,6 +244,7 @@ export function TeacherDeadlines() {
       setParties(((pRows ?? []) as any[]).map((party) => ({ ...party, name: displayPartyName(party.name) })));
       setCommittees((cRows ?? []) as any);
       setCaucuses(((caRows ?? []) as any[]).map((row) => ({ id: row.id, name: row.title })));
+      setLobbyists((lRows ?? []) as any);
 
       const studentIds = ((memberRows ?? []) as any[]).map((row) => row.user_id);
       const { data: profileRows } = studentIds.length
@@ -356,18 +364,28 @@ export function TeacherDeadlines() {
     const partyMap = new Map(parties.map((p) => [p.id, p.name]));
     const committeeMap = new Map(committees.map((c) => [c.id, c.name]));
     const caucusMap = new Map(caucuses.map((c) => [c.id, c.name]));
+    const lobbyistMap = new Map(lobbyists.map((l) => [l.id, l.name]));
     return (t: TaskRow) => {
       if (t.audience_type === "all") return "All students";
       if (t.audience_type === "selected_students") return `${t.audience_user_ids.length} selected student${t.audience_user_ids.length === 1 ? "" : "s"}`;
       if (t.audience_type === "party") return `Party: ${displayPartyName(partyMap.get(t.audience_id || "") || "Unknown")}`;
       if (t.audience_type === "committee") return `Committee: ${committeeMap.get(t.audience_id || "") || "Unknown"}`;
       if (t.audience_type === "caucus") return `Caucus: ${caucusMap.get(t.audience_id || "") || "Unknown"}`;
+      if (t.audience_type === "lobbyist") return `Lobbyist group: ${lobbyistMap.get(t.audience_id || "") || "Unknown"}`;
       return t.audience_type;
     };
-  }, [parties, committees, caucuses]);
+  }, [parties, committees, caucuses, lobbyists]);
 
   const specificOptions =
-    newAudienceType === "party" ? parties : newAudienceType === "committee" ? committees : newAudienceType === "caucus" ? caucuses : [];
+    newAudienceType === "party" ? parties : newAudienceType === "committee" ? committees : newAudienceType === "caucus" ? caucuses : newAudienceType === "lobbyist" ? lobbyists : [];
+  const filteredSpecificOptions = useMemo(() => {
+    const q = audienceOptionQuery.trim().toLowerCase();
+    return specificOptions.filter((option) => !q || option.name.toLowerCase().includes(q));
+  }, [audienceOptionQuery, specificOptions]);
+  const filteredStudents = useMemo(() => {
+    const q = studentPickerQuery.trim().toLowerCase();
+    return students.filter((student) => !q || student.display_name.toLowerCase().includes(q));
+  }, [studentPickerQuery, students]);
 
   const resetModal = () => {
     setShowModal(false);
@@ -379,6 +397,8 @@ export function TeacherDeadlines() {
     setNewAudienceType("all");
     setNewAudienceId("");
     setSelectedStudentIds([]);
+    setStudentPickerQuery("");
+    setAudienceOptionQuery("");
     setGradingMode("manual");
     setManualSubmissionRequired(true);
     setNewPointsPossible("100");
@@ -400,6 +420,8 @@ export function TeacherDeadlines() {
     setNewAudienceType(task.audience_type);
     setNewAudienceId(task.audience_id ?? "");
     setSelectedStudentIds(task.audience_user_ids ?? []);
+    setStudentPickerQuery("");
+    setAudienceOptionQuery("");
     setGradingMode(task.grading_mode);
     setManualSubmissionRequired(task.manual_submission_required);
     setNewPointsPossible(String(task.points_possible ?? 100));
@@ -989,7 +1011,7 @@ export function TeacherDeadlines() {
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+          <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
             <div className="flex items-center justify-between border-b border-gray-200 p-6">
               <div className="flex items-center gap-2">
                 <ClipboardCheck className="h-5 w-5 text-blue-600" />
@@ -1000,7 +1022,8 @@ export function TeacherDeadlines() {
               </button>
             </div>
 
-            <div className="space-y-5 overflow-y-auto p-6">
+            <div className="grid gap-6 overflow-y-auto p-6 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,0.95fr)]">
+              <div className="space-y-5">
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
                 <input
@@ -1014,59 +1037,87 @@ export function TeacherDeadlines() {
               <div>
                 <div className="mb-2 text-sm font-medium text-gray-700">Assigned to</div>
                 <div className="flex flex-wrap gap-1.5">
-                  {(["all", "selected_students", "party", "committee", "caucus"] as AudienceType[]).map((type) => (
+                  {(["all", "selected_students", "party", "committee", "caucus", "lobbyist"] as AudienceType[]).map((type) => (
                     <button
                       key={type}
                       type="button"
                       onClick={() => {
                         setNewAudienceType(type);
                         setNewAudienceId("");
+                        setAudienceOptionQuery("");
                         if (type !== "selected_students") setSelectedStudentIds([]);
                       }}
                       className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
                         newAudienceType === type ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                       }`}
                     >
-                      {type === "all" ? "All students" : type === "selected_students" ? "Select students" : type === "party" ? "Parties" : type === "committee" ? "Committees" : "Caucuses"}
+                      {type === "all" ? "All students" : type === "selected_students" ? "Select students" : type === "party" ? "Parties" : type === "committee" ? "Committees" : type === "caucus" ? "Caucuses" : "Lobbyists"}
                     </button>
                   ))}
                 </div>
               </div>
 
               {newAudienceType !== "all" && newAudienceType !== "selected_students" ? (
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-700">Target</span>
-                  <select
-                    value={newAudienceId}
-                    onChange={(event) => setNewAudienceId(event.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Choose...</option>
-                    {specificOptions.map((option) => (
-                      <option key={option.id} value={option.id}>
-                        {option.name}
-                      </option>
+                <div className="rounded-lg border border-gray-200 p-3">
+                  <div className="mb-2 text-sm font-medium text-gray-700">Target</div>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={audienceOptionQuery}
+                      onChange={(event) => setAudienceOptionQuery(event.target.value)}
+                      placeholder={`Search ${newAudienceType === "lobbyist" ? "lobbyist groups" : `${newAudienceType}s`}...`}
+                      className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="max-h-48 space-y-1 overflow-y-auto">
+                    {filteredSpecificOptions.map((option) => (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setNewAudienceId(option.id)}
+                        className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${newAudienceId === option.id ? "bg-blue-50 text-blue-800 ring-1 ring-blue-200" : "hover:bg-gray-50"}`}
+                      >
+                        <span className="truncate">{option.name}</span>
+                        {newAudienceId === option.id ? <Check className="h-4 w-4 flex-shrink-0 text-blue-600" /> : null}
+                      </button>
                     ))}
-                  </select>
-                </label>
+                    {!filteredSpecificOptions.length ? <div className="p-2 text-sm text-gray-500">No matches.</div> : null}
+                  </div>
+                </div>
               ) : null}
 
               {newAudienceType === "selected_students" ? (
                 <div className="rounded-lg border border-gray-200 p-3">
-                  <div className="mb-2 text-sm font-medium text-gray-700">Students</div>
-                  <div className="grid max-h-48 gap-1 overflow-y-auto sm:grid-cols-2">
-                    {students.map((student) => (
-                      <label key={student.user_id} className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm hover:bg-gray-50">
-                        <input
-                          type="checkbox"
-                          checked={selectedStudentIds.includes(student.user_id)}
-                          onChange={() => toggleSelectedStudent(student.user_id)}
-                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                        />
-                        <span className="truncate">{student.display_name}</span>
-                      </label>
-                    ))}
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="text-sm font-medium text-gray-700">Students</div>
+                    <div className="text-xs text-gray-500">{selectedStudentIds.length} selected</div>
+                  </div>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                    <input
+                      value={studentPickerQuery}
+                      onChange={(event) => setStudentPickerQuery(event.target.value)}
+                      placeholder="Search students..."
+                      className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div className="max-h-56 space-y-1 overflow-y-auto">
+                    {filteredStudents.map((student) => {
+                      const selected = selectedStudentIds.includes(student.user_id);
+                      return (
+                        <button
+                          key={student.user_id}
+                          type="button"
+                          onClick={() => toggleSelectedStudent(student.user_id)}
+                          className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${selected ? "bg-blue-50 text-blue-800 ring-1 ring-blue-200" : "hover:bg-gray-50"}`}
+                        >
+                          <span className="truncate">{student.display_name}</span>
+                          {selected ? <Check className="h-4 w-4 flex-shrink-0 text-blue-600" /> : null}
+                        </button>
+                      );
+                    })}
                     {students.length === 0 ? <div className="p-2 text-sm text-gray-500">No approved students yet.</div> : null}
+                    {students.length > 0 && filteredStudents.length === 0 ? <div className="p-2 text-sm text-gray-500">No matches.</div> : null}
                   </div>
                 </div>
               ) : null}
@@ -1102,6 +1153,8 @@ export function TeacherDeadlines() {
                   className="w-full rounded-md border border-gray-300 px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </label>
+
+              </div>
 
               <section className="rounded-lg border border-gray-200 p-4">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

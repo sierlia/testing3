@@ -1,6 +1,6 @@
 import { supabase } from "../utils/supabase";
 
-export type AudienceType = "all" | "caucus" | "party" | "committee" | "selected_students";
+export type AudienceType = "all" | "caucus" | "party" | "committee" | "lobbyist" | "selected_students";
 export type TaskType = "deadline" | "assignment";
 export type AssignmentProvider = "synergy" | "schoology" | "powerschool" | "google_classroom";
 export type GradingMode = "manual" | "auto";

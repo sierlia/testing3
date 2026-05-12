@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Check, ExternalLink, MessageSquare, Minus, MonitorUp, Plus, Search, Send, Trash2, Trophy, Vote, X } from "lucide-react";
+import { Check, ExternalLink, MessageSquare, Minus, MonitorUp, Pencil, Plus, Search, Send, Trash2, Trophy, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../services/bills";
@@ -8,6 +8,8 @@ import { supabase } from "../utils/supabase";
 import { formatConstituency } from "../utils/constituency";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
+import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
+import { SecureAvatar } from "../components/SecureAvatar";
 
 type VoteChoice = "yea" | "nay" | "present";
 type FloorMode = "election" | "bills" | "discussion";
@@ -30,16 +32,14 @@ type SpeakerVoteRow = { class_id: string; voter_user_id: string; candidate_user_
 type SpeakerOptOutRow = { class_id: string; user_id: string };
 type FloorSpeakerRow = { bill_id: string; user_id: string; side: "for" | "against"; status: "pending" | "approved" | "rejected"; speaker_role: "speaker" | "opposition_leader"; name: string; party?: string | null; constituency?: string | null };
 type PreviousQuestionVoteRow = { bill_id: string; user_id: string; vote: "yea" | "nay" };
-type DiscussionArea = { id: string; class_id: string; title: string; prompt: string | null; is_active: boolean; created_by: string | null; created_at: string };
-type DiscussionAuthor = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null };
-type DiscussionPost = { id: string; discussion_id: string; class_id: string; author_user_id: string; body: string; created_at: string; author?: DiscussionAuthor | null };
-type DiscussionComment = { id: string; post_id: string; discussion_id: string; class_id: string; author_user_id: string; body: string; created_at: string; author?: DiscussionAuthor | null };
-type DiscussionReaction = { id: string; post_id: string; class_id: string; user_id: string; emoji: "thumbs_up" | "agree" | "question" };
+type DiscussionArea = { id: string; class_id: string; title: string; prompt: string | null; visibility?: "live" | "archive" | "invisible"; is_active: boolean; created_by: string | null; created_at: string };
+type DiscussionAuthor = { user_id: string; display_name: string | null; party: string | null; constituency_name: string | null; avatar_url?: string | null };
+type DiscussionPost = { id: string; discussion_id: string; class_id: string; author_user_id: string; body: string; created_at: string; attachments?: DiscussionAttachment[]; author?: DiscussionAuthor | null };
+type DiscussionComment = { id: string; post_id: string; discussion_id: string; class_id: string; author_user_id: string; body: string; created_at: string; attachments?: DiscussionAttachment[]; author?: DiscussionAuthor | null };
+type DiscussionReaction = { id: string; post_id: string; class_id: string; user_id: string; emoji: "thumbs_up" };
 
 const DISCUSSION_REACTIONS: Array<{ id: DiscussionReaction["emoji"]; label: string }> = [
-  { id: "thumbs_up", label: "👍" },
-  { id: "agree", label: "Agree" },
-  { id: "question", label: "?" },
+  { id: "thumbs_up", label: "Thumbs up" },
 ];
 
 async function fetchFloorSpeakersForClass(classId: string): Promise<FloorSpeakerRow[]> {
@@ -120,12 +120,17 @@ export function FloorSession() {
   const [newDiscussionTitle, setNewDiscussionTitle] = useState("");
   const [newDiscussionPrompt, setNewDiscussionPrompt] = useState("");
   const [newDiscussionPost, setNewDiscussionPost] = useState("");
+  const [newDiscussionPostAttachments, setNewDiscussionPostAttachments] = useState<DiscussionAttachment[]>([]);
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
+  const [commentAttachments, setCommentAttachments] = useState<Record<string, DiscussionAttachment[]>>({});
+  const [editingDiscussionId, setEditingDiscussionId] = useState<string | null>(null);
+  const [editingDiscussionTitle, setEditingDiscussionTitle] = useState("");
+  const [editingDiscussionPrompt, setEditingDiscussionPrompt] = useState("");
 
   const loadDiscussions = async (targetClassId: string) => {
     const { data: areaRows, error: areaError } = await supabase
       .from("floor_discussion_areas")
-      .select("id,class_id,title,prompt,is_active,created_by,created_at")
+      .select("id,class_id,title,prompt,visibility,is_active,created_by,created_at")
       .eq("class_id", targetClassId)
       .order("created_at", { ascending: false });
     if (areaError) throw areaError;
@@ -141,8 +146,8 @@ export function FloorSession() {
     }
 
     const [postRows, commentRows, reactionRows] = await Promise.all([
-      supabase.from("floor_discussion_posts").select("id,discussion_id,class_id,author_user_id,body,created_at").in("discussion_id", areaIds).order("created_at", { ascending: true }),
-      supabase.from("floor_discussion_comments").select("id,post_id,discussion_id,class_id,author_user_id,body,created_at").in("discussion_id", areaIds).order("created_at", { ascending: true }),
+      supabase.from("floor_discussion_posts").select("id,discussion_id,class_id,author_user_id,body,created_at,attachments").in("discussion_id", areaIds).order("created_at", { ascending: true }),
+      supabase.from("floor_discussion_comments").select("id,post_id,discussion_id,class_id,author_user_id,body,created_at,attachments").in("discussion_id", areaIds).order("created_at", { ascending: true }),
       supabase.from("floor_discussion_reactions").select("id,post_id,class_id,user_id,emoji").eq("class_id", targetClassId),
     ]);
     if (postRows.error) throw postRows.error;
@@ -153,11 +158,11 @@ export function FloorSession() {
     const comments = ((commentRows.data ?? []) as any[]) as DiscussionComment[];
     const userIds = Array.from(new Set([...posts.map((post) => post.author_user_id), ...comments.map((comment) => comment.author_user_id)].filter(Boolean)));
     const { data: profileRows } = userIds.length
-      ? await supabase.from("profiles").select("user_id,display_name,party,constituency_name").in("user_id", userIds)
+      ? await supabase.from("profiles").select("user_id,display_name,party,constituency_name,avatar_url").in("user_id", userIds)
       : ({ data: [] } as any);
     const profileMap = new Map(((profileRows ?? []) as any[]).map((profile) => [profile.user_id, profile as DiscussionAuthor]));
-    setDiscussionPosts(posts.map((post) => ({ ...post, author: profileMap.get(post.author_user_id) ?? null })));
-    setDiscussionComments(comments.map((comment) => ({ ...comment, author: profileMap.get(comment.author_user_id) ?? null })));
+    setDiscussionPosts(posts.map((post) => ({ ...post, attachments: parseDiscussionAttachments((post as any).attachments), author: profileMap.get(post.author_user_id) ?? null })));
+    setDiscussionComments(comments.map((comment) => ({ ...comment, attachments: parseDiscussionAttachments((comment as any).attachments), author: profileMap.get(comment.author_user_id) ?? null })));
     setDiscussionReactions(((reactionRows.data ?? []) as any[]) as DiscussionReaction[]);
     setSelectedDiscussionId((current) => (current && areaIds.includes(current) ? current : areas.find((area) => area.is_active)?.id ?? areas[0]?.id ?? null));
   };
@@ -383,7 +388,25 @@ export function FloorSession() {
     const [winner] = [...speakerCandidates].sort((a, b) => speakerVoteCount(b.id) - speakerVoteCount(a.id) || a.name.localeCompare(b.name));
     return winner && speakerVoteCount(winner.id) > 0 ? winner : null;
   }, [speakerCandidates, speakerVotes, speakerOptOuts]);
-  const selectedDiscussion = discussionAreas.find((area) => area.id === selectedDiscussionId) ?? discussionAreas.find((area) => area.is_active) ?? discussionAreas[0] ?? null;
+  const visibleDiscussionAreas = useMemo(() => discussionAreas.filter((area) => role === "teacher" || area.visibility !== "invisible"), [discussionAreas, role]);
+  const selectedDiscussion = visibleDiscussionAreas.find((area) => area.id === selectedDiscussionId) ?? visibleDiscussionAreas.find((area) => area.visibility === "live" || area.is_active) ?? visibleDiscussionAreas[0] ?? null;
+  const selectedDiscussionCanPost = Boolean(selectedDiscussion && (selectedDiscussion.visibility === "live" || selectedDiscussion.is_active));
+  const discussionSections = useMemo<Array<{ id: NonNullable<DiscussionArea["visibility"]>; label: string }>>(
+    () => [
+      { id: "live", label: "Live" },
+      { id: "archive", label: "Archive" },
+      ...(role === "teacher" ? [{ id: "invisible" as const, label: "Invisible" }] : []),
+    ],
+    [role],
+  );
+  const discussionAreasByVisibility = useMemo(() => {
+    const grouped: Record<NonNullable<DiscussionArea["visibility"]>, DiscussionArea[]> = { live: [], archive: [], invisible: [] };
+    for (const area of visibleDiscussionAreas) {
+      const visibility = area.visibility ?? (area.is_active ? "live" : "archive");
+      grouped[visibility].push(area);
+    }
+    return grouped;
+  }, [visibleDiscussionAreas]);
   const selectedDiscussionPosts = selectedDiscussion ? discussionPosts.filter((post) => post.discussion_id === selectedDiscussion.id) : [];
   const discussionCommentsByPost = useMemo(() => {
     const map = new Map<string, DiscussionComment[]>();
@@ -703,6 +726,7 @@ export function FloorSession() {
           title: newDiscussionTitle.trim(),
           prompt: newDiscussionPrompt.trim(),
           is_active: shouldActivate,
+          visibility: shouldActivate ? "live" : "archive",
           created_by: meId,
         } as any)
         .select("id")
@@ -725,17 +749,37 @@ export function FloorSession() {
     if (!classId || role !== "teacher") return;
     setBusy(true);
     try {
-      const { error: clearError } = await supabase.from("floor_discussion_areas").update({ is_active: false } as any).eq("class_id", classId);
+      const { error: clearError } = await supabase.from("floor_discussion_areas").update({ is_active: false, visibility: "archive" } as any).eq("class_id", classId).neq("id", discussionId);
       if (clearError) throw clearError;
-      const { error } = await supabase.from("floor_discussion_areas").update({ is_active: true, updated_at: new Date().toISOString() } as any).eq("id", discussionId);
+      const { error } = await supabase.from("floor_discussion_areas").update({ is_active: true, visibility: "live", updated_at: new Date().toISOString() } as any).eq("id", discussionId);
       if (error) throw error;
-      setDiscussionAreas((prev) => prev.map((area) => ({ ...area, is_active: area.id === discussionId })));
+      setDiscussionAreas((prev) => prev.map((area) => ({ ...area, is_active: area.id === discussionId, visibility: area.id === discussionId ? "live" : area.visibility === "live" ? "archive" : area.visibility })));
       toast.success("Discussion is live on the floor");
     } catch (e: any) {
       toast.error(e.message || "Could not activate discussion");
     } finally {
       setBusy(false);
     }
+  };
+
+  const updateDiscussionVisibility = async (discussionId: string, visibility: DiscussionArea["visibility"]) => {
+    if (!classId || role !== "teacher" || !visibility) return;
+    try {
+      if (visibility === "live") await supabase.from("floor_discussion_areas").update({ is_active: false, visibility: "archive" } as any).eq("class_id", classId).neq("id", discussionId);
+      const { error } = await supabase.from("floor_discussion_areas").update({ visibility, is_active: visibility === "live", updated_at: new Date().toISOString() } as any).eq("id", discussionId);
+      if (error) throw error;
+      setDiscussionAreas((prev) => prev.map((area) => ({ ...area, visibility: area.id === discussionId ? visibility : visibility === "live" ? (area.visibility === "live" ? "archive" : area.visibility) : area.visibility, is_active: area.id === discussionId ? visibility === "live" : visibility === "live" ? false : area.is_active })));
+    } catch (e: any) {
+      toast.error(e.message || "Could not move discussion");
+    }
+  };
+
+  const updateDiscussionDetails = async () => {
+    if (!editingDiscussionId || role !== "teacher" || !editingDiscussionTitle.trim()) return;
+    const { error } = await supabase.from("floor_discussion_areas").update({ title: editingDiscussionTitle.trim(), prompt: editingDiscussionPrompt.trim(), updated_at: new Date().toISOString() } as any).eq("id", editingDiscussionId);
+    if (error) return toast.error(error.message || "Could not update discussion");
+    setDiscussionAreas((prev) => prev.map((area) => area.id === editingDiscussionId ? { ...area, title: editingDiscussionTitle.trim(), prompt: editingDiscussionPrompt.trim() } : area));
+    setEditingDiscussionId(null);
   };
 
   const submitDiscussionPost = async () => {
@@ -747,9 +791,11 @@ export function FloorSession() {
         class_id: classId,
         author_user_id: meId,
         body: newDiscussionPost.trim(),
+        attachments: newDiscussionPostAttachments,
       } as any);
       if (error) throw error;
       setNewDiscussionPost("");
+      setNewDiscussionPostAttachments([]);
       await loadDiscussions(classId);
     } catch (e: any) {
       toast.error(e.message || "Could not post discussion");
@@ -770,9 +816,11 @@ export function FloorSession() {
         class_id: classId,
         author_user_id: meId,
         body,
+        attachments: commentAttachments[postId] ?? [],
       } as any);
       if (error) throw error;
       setCommentDrafts((prev) => ({ ...prev, [postId]: "" }));
+      setCommentAttachments((prev) => ({ ...prev, [postId]: [] }));
       await loadDiscussions(classId);
     } catch (e: any) {
       toast.error(e.message || "Could not add reply");
@@ -831,7 +879,7 @@ export function FloorSession() {
   };
 
   const discussionBoard = (
-    <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+    <div className="grid gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
       <aside className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
         <div className="mb-4 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
@@ -864,55 +912,115 @@ export function FloorSession() {
             </button>
           </div>
         )}
-        <div className="space-y-2">
-          {discussionAreas.length ? discussionAreas.map((area) => (
-            <button
-              key={area.id}
-              type="button"
-              onClick={() => setSelectedDiscussionId(area.id)}
-              className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedDiscussion?.id === area.id ? "border-blue-300 bg-blue-50 text-blue-900" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span className="min-w-0 truncate font-semibold">{area.title}</span>
-                {area.is_active && <span className="rounded bg-green-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-green-700">Live</span>}
+        <div className="space-y-4">
+          {discussionSections.map((section) => {
+            const areas = discussionAreasByVisibility[section.id];
+            return (
+              <div
+                key={section.id}
+                onDragOver={(event) => {
+                  if (role === "teacher") event.preventDefault();
+                }}
+                onDrop={(event) => {
+                  if (role !== "teacher") return;
+                  event.preventDefault();
+                  const discussionId = event.dataTransfer.getData("text/plain");
+                  if (discussionId) void updateDiscussionVisibility(discussionId, section.id);
+                }}
+              >
+                <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-gray-500">{section.label}</div>
+                <div className="min-h-10 space-y-2 rounded-md border border-dashed border-gray-200 p-1.5">
+                  {areas.length ? areas.map((area) => (
+                    <button
+                      key={area.id}
+                      type="button"
+                      draggable={role === "teacher"}
+                      onDragStart={(event) => event.dataTransfer.setData("text/plain", area.id)}
+                      onClick={() => setSelectedDiscussionId(area.id)}
+                      className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedDiscussion?.id === area.id ? "border-blue-300 bg-blue-50 text-blue-900" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
+                    >
+                      <span className="block truncate font-semibold">{area.title}</span>
+                      <span className="mt-1 block text-xs text-gray-500">{new Date(area.created_at).toLocaleDateString()}</span>
+                    </button>
+                  )) : <div className="px-2 py-2 text-xs text-gray-400">{role === "teacher" ? "Drag discussions here." : "None"}</div>}
+                </div>
               </div>
-              <div className="mt-1 text-xs text-gray-500">{new Date(area.created_at).toLocaleDateString()}</div>
-            </button>
-          )) : <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">No discussion areas yet.</div>}
+            );
+          })}
         </div>
       </aside>
       <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
         {selectedDiscussion ? (
           <>
             <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-2xl font-bold text-gray-900">{selectedDiscussion.title}</h2>
-                  {selectedDiscussion.is_active && <span className="rounded bg-green-100 px-2 py-1 text-xs font-semibold uppercase text-green-700">Live on floor</span>}
+              {editingDiscussionId === selectedDiscussion.id ? (
+                <div className="min-w-0 flex-1 space-y-2">
+                  <input
+                    value={editingDiscussionTitle}
+                    onChange={(event) => setEditingDiscussionTitle(event.target.value)}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <textarea
+                    value={editingDiscussionPrompt}
+                    onChange={(event) => setEditingDiscussionPrompt(event.target.value)}
+                    rows={3}
+                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => void updateDiscussionDetails()} disabled={!editingDiscussionTitle.trim()} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Save</button>
+                    <button type="button" onClick={() => setEditingDiscussionId(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
+                  </div>
                 </div>
-                {selectedDiscussion.prompt && <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm text-gray-600">{selectedDiscussion.prompt}</p>}
-              </div>
-              {role === "teacher" && !selectedDiscussion.is_active && (
-                <button type="button" onClick={() => void activateDiscussionArea(selectedDiscussion.id)} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                  Make live
-                </button>
+              ) : (
+                <div className="min-w-0">
+                  <h2 className="text-2xl font-bold text-gray-900">{selectedDiscussion.title}</h2>
+                  {selectedDiscussion.prompt && <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm text-gray-600">{selectedDiscussion.prompt}</p>}
+                </div>
+              )}
+              {role === "teacher" && editingDiscussionId !== selectedDiscussion.id && (
+                <div className="flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEditingDiscussionId(selectedDiscussion.id);
+                      setEditingDiscussionTitle(selectedDiscussion.title);
+                      setEditingDiscussionPrompt(selectedDiscussion.prompt ?? "");
+                    }}
+                    className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  >
+                    <Pencil className="h-4 w-4" />
+                    Edit
+                  </button>
+                  {!selectedDiscussionCanPost && (
+                    <button type="button" onClick={() => void activateDiscussionArea(selectedDiscussion.id)} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                      Make live
+                    </button>
+                  )}
+                </div>
               )}
             </div>
-            <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3">
-              <textarea
-                value={newDiscussionPost}
-                onChange={(event) => setNewDiscussionPost(event.target.value)}
-                placeholder="Add a text post..."
-                rows={3}
-                className="w-full resize-none rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <div className="mt-2 flex justify-end">
-                <button type="button" onClick={() => void submitDiscussionPost()} disabled={busy || !newDiscussionPost.trim()} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                  <Send className="h-4 w-4" />
-                  Post
-                </button>
+            {selectedDiscussionCanPost ? (
+              <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3">
+                <textarea
+                  value={newDiscussionPost}
+                  onChange={(event) => setNewDiscussionPost(event.target.value)}
+                  placeholder="Add a text post..."
+                  rows={4}
+                  className="w-full resize-y rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <AttachmentPicker value={newDiscussionPostAttachments} onChange={setNewDiscussionPostAttachments} />
+                  <button type="button" onClick={() => void submitDiscussionPost()} disabled={busy || !newDiscussionPost.trim()} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                    <Send className="h-4 w-4" />
+                    Post
+                  </button>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="mb-5 rounded-md border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                {selectedDiscussion.visibility === "invisible" ? "This discussion is invisible to students." : "This discussion is archived and can only be viewed."}
+              </div>
+            )}
             {selectedDiscussionPosts.length ? (
               <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {selectedDiscussionPosts.map((post) => {
@@ -921,9 +1029,12 @@ export function FloorSession() {
                   return (
                     <article key={post.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
                       <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <div className="truncate text-sm font-semibold text-gray-900">{authorLabel(post.author)}</div>
-                          <div className="text-xs text-gray-500">{new Date(post.created_at).toLocaleString()}</div>
+                        <div className="flex min-w-0 items-start gap-2">
+                          <SecureAvatar src={post.author?.avatar_url} alt={post.author?.display_name ?? "Member"} className="h-9 w-9 rounded-full object-cover" fallbackClassName="h-9 w-9 rounded-full" />
+                          <div className="min-w-0">
+                            <div className="truncate text-sm font-semibold text-gray-900">{authorLabel(post.author)}</div>
+                            <div className="text-xs text-gray-500">{new Date(post.created_at).toLocaleString()}</div>
+                          </div>
                         </div>
                         {(role === "teacher" || post.author_user_id === meId) && (
                           <button type="button" onClick={() => void deleteDiscussionPost(post)} className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete post">
@@ -932,6 +1043,7 @@ export function FloorSession() {
                         )}
                       </div>
                       <p className="whitespace-pre-wrap text-sm leading-6 text-gray-800">{post.body}</p>
+                      <AttachmentList attachments={post.attachments} />
                       <div className="mt-4 flex flex-wrap gap-2">
                         {DISCUSSION_REACTIONS.map((reaction) => {
                           const count = postReactions.filter((row) => row.emoji === reaction.id).length;
@@ -941,7 +1053,8 @@ export function FloorSession() {
                               key={reaction.id}
                               type="button"
                               onClick={() => void toggleDiscussionReaction(post.id, reaction.id)}
-                              className={`rounded-full border px-2.5 py-1 text-xs font-medium ${selected ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
+                              disabled={!selectedDiscussionCanPost}
+                              className={`rounded-full border px-2.5 py-1 text-xs font-medium disabled:opacity-60 ${selected ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
                             >
                               {reaction.label} {count}
                             </button>
@@ -950,11 +1063,14 @@ export function FloorSession() {
                       </div>
                       <div className="mt-4 border-t border-gray-100 pt-3">
                         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Replies ({postComments.length})</div>
-                        <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                        <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
                           {postComments.map((comment) => (
                             <div key={comment.id} className="rounded-md bg-gray-50 p-2">
                               <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0 text-xs font-semibold text-gray-900">{authorLabel(comment.author)}</div>
+                                <div className="flex min-w-0 items-start gap-2">
+                                  <SecureAvatar src={comment.author?.avatar_url} alt={comment.author?.display_name ?? "Member"} className="h-7 w-7 rounded-full object-cover" fallbackClassName="h-7 w-7 rounded-full" />
+                                  <div className="min-w-0 text-xs font-semibold text-gray-900">{authorLabel(comment.author)}</div>
+                                </div>
                                 {(role === "teacher" || comment.author_user_id === meId) && (
                                   <button type="button" onClick={() => void deleteDiscussionComment(comment)} className="rounded p-0.5 text-gray-400 hover:text-red-600" aria-label="Delete reply">
                                     <Trash2 className="h-3.5 w-3.5" />
@@ -962,20 +1078,27 @@ export function FloorSession() {
                                 )}
                               </div>
                               <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-gray-700">{comment.body}</p>
+                              <AttachmentList attachments={comment.attachments} />
                             </div>
                           ))}
                         </div>
-                        <div className="mt-3 flex gap-2">
-                          <input
-                            value={commentDrafts[post.id] ?? ""}
-                            onChange={(event) => setCommentDrafts((prev) => ({ ...prev, [post.id]: event.target.value }))}
-                            placeholder="Reply..."
-                            className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                          <button type="button" onClick={() => void submitDiscussionComment(post.id)} disabled={busy || !(commentDrafts[post.id] ?? "").trim()} className="rounded-md bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50">
-                            Reply
-                          </button>
-                        </div>
+                        {selectedDiscussionCanPost && (
+                          <div className="mt-3 space-y-2">
+                            <textarea
+                              value={commentDrafts[post.id] ?? ""}
+                              onChange={(event) => setCommentDrafts((prev) => ({ ...prev, [post.id]: event.target.value }))}
+                              placeholder="Reply..."
+                              rows={4}
+                              className="w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                            <div className="flex items-center justify-between gap-3">
+                              <AttachmentPicker value={commentAttachments[post.id] ?? []} onChange={(next) => setCommentAttachments((prev) => ({ ...prev, [post.id]: next }))} />
+                              <button type="button" onClick={() => void submitDiscussionComment(post.id)} disabled={busy || !(commentDrafts[post.id] ?? "").trim()} className="rounded-md bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50">
+                                Reply
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </article>
                   );

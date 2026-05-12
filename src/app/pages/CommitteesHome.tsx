@@ -391,7 +391,7 @@ export function CommitteesHome() {
             ) : items.length === 0 ? (
               <div className="rounded-lg border border-dashed border-gray-300 bg-white p-8 text-center text-sm text-gray-500">No committees yet.</div>
             ) : (
-              <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              <div className="overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm">
                 {items.map((c, index) => (
                   <div
                     key={c.id}

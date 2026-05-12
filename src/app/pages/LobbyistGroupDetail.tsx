@@ -9,6 +9,7 @@ import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
 import { profilePath } from "../utils/profileRoute";
 import { committeeDisplayName } from "../utils/committeeNames";
+import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
 
 type Member = { user_id: string; display_name: string | null; avatar_url: string | null; role: string | null };
 type Contribution = {
@@ -23,7 +24,7 @@ type Contribution = {
   recipientName?: string;
 };
 type Candidate = { user_id: string; display_name: string | null; avatar_url: string | null; role: string | null };
-type Announcement = { id: string; author_user_id: string; body: string; created_at: string; author?: Member | null };
+type Announcement = { id: string; author_user_id: string; body: string; created_at: string; updated_at?: string | null; attachments?: DiscussionAttachment[]; author?: Member | null };
 
 function money(value: number) {
   return `$${Math.max(0, Number(value ?? 0)).toLocaleString()}`;
@@ -62,6 +63,9 @@ export function LobbyistGroupDetail() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
   const [newAnnouncement, setNewAnnouncement] = useState("");
+  const [newAnnouncementAttachments, setNewAnnouncementAttachments] = useState<DiscussionAttachment[]>([]);
+  const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
+  const [editingAnnouncementBody, setEditingAnnouncementBody] = useState("");
   const [meId, setMeId] = useState<string | null>(null);
   const [isMember, setIsMember] = useState(false);
   const [isTeacher, setIsTeacher] = useState(false);
@@ -86,7 +90,7 @@ export function LobbyistGroupDetail() {
         uid ? supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle() : ({ data: null } as any),
         supabase.from("lobbyist_contributions").select("id,recipient_type,recipient_id,from_user_id,amount,note,created_at").eq("group_id", groupId).order("created_at", { ascending: false }),
         supabase.rpc("class_directory", { target_class: (g as any).class_id } as any),
-        supabase.from("lobbyist_group_announcements").select("id,author_user_id,body,created_at").eq("group_id", groupId).order("created_at", { ascending: false }),
+        supabase.from("lobbyist_group_announcements").select("id,author_user_id,body,created_at,updated_at,attachments").eq("group_id", groupId).order("created_at", { ascending: false }),
         supabase.from("classes").select("settings").eq("id", (g as any).class_id).maybeSingle(),
         supabase.from("committees").select("id,name").eq("class_id", (g as any).class_id),
         supabase.from("parties").select("id,name").eq("class_id", (g as any).class_id),
@@ -138,6 +142,7 @@ export function LobbyistGroupDetail() {
       );
       const mappedAnnouncements = ((announcementRows ?? []) as any[]).map((row) => ({
         ...row,
+        attachments: parseDiscussionAttachments(row.attachments),
         author: profileMap.get(row.author_user_id) ?? null,
       }));
       setAnnouncements(mappedAnnouncements);
@@ -249,11 +254,22 @@ export function LobbyistGroupDetail() {
       class_id: group.class_id,
       author_user_id: meId,
       body: newAnnouncement.trim(),
+      attachments: newAnnouncementAttachments,
     } as any);
     if (error) return toast.error(error.message || "Could not post announcement");
     setNewAnnouncement("");
+    setNewAnnouncementAttachments([]);
     await load();
     toast.success("Announcement posted");
+  };
+
+  const editAnnouncement = async () => {
+    if (!editingAnnouncementId || !editingAnnouncementBody.trim()) return;
+    const updatedAt = new Date().toISOString();
+    const { error } = await supabase.from("lobbyist_group_announcements").update({ body: editingAnnouncementBody.trim(), updated_at: updatedAt } as any).eq("id", editingAnnouncementId);
+    if (error) return toast.error(error.message || "Could not edit announcement");
+    setAnnouncements((current) => current.map((announcement) => announcement.id === editingAnnouncementId ? { ...announcement, body: editingAnnouncementBody.trim(), updated_at: updatedAt } : announcement));
+    setEditingAnnouncementId(null);
   };
 
   if (loading && !group) {
@@ -351,7 +367,7 @@ export function LobbyistGroupDetail() {
                   <p className="mt-3 whitespace-pre-line text-gray-700">{group.description || "No description yet."}</p>
                 </section>
 
-                <section className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+                <section className="overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm">
                   <div className="border-b border-gray-200 p-6">
                     <h2 className="text-lg font-semibold text-gray-900">Announcement Board</h2>
                   </div>
@@ -359,7 +375,8 @@ export function LobbyistGroupDetail() {
                     <div className="border-b border-gray-200 p-6">
                       <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
                         <textarea value={newAnnouncement} onChange={(event) => setNewAnnouncement(event.target.value)} placeholder="Post an announcement..." rows={3} className="w-full resize-y border-0 p-0 text-sm outline-none" />
-                        <div className="mt-3 flex justify-end">
+                        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                          <AttachmentPicker value={newAnnouncementAttachments} onChange={setNewAnnouncementAttachments} />
                           <button onClick={() => void postAnnouncement()} className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 disabled:opacity-50" disabled={!newAnnouncement.trim()}>
                             <Send className="h-4 w-4" />
                             Post
@@ -380,7 +397,25 @@ export function LobbyistGroupDetail() {
                     <div className="max-h-[520px] flex-1 overflow-y-auto p-4">
                       {selectedAnnouncement ? (
                         <div className="rounded-md border border-gray-200 bg-white p-4">
-                          <p className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</p>
+                          {editingAnnouncementId === selectedAnnouncement.id ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={editingAnnouncementBody}
+                                onChange={(event) => setEditingAnnouncementBody(event.target.value)}
+                                rows={4}
+                                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                              />
+                              <div className="flex gap-2">
+                                <button type="button" onClick={() => void editAnnouncement()} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700">Save</button>
+                                <button type="button" onClick={() => setEditingAnnouncementId(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                              </div>
+                            </div>
+                          ) : (
+                            <>
+                              <p className="whitespace-pre-line text-sm text-gray-900">{selectedAnnouncement.body}</p>
+                              <AttachmentList attachments={selectedAnnouncement.attachments} />
+                            </>
+                          )}
                           <div className="mt-3 text-xs text-gray-500">
                             {selectedAnnouncement.author_user_id ? (
                               <Link to={profilePath(selectedAnnouncement.author_user_id)} className="text-blue-600 hover:underline">
@@ -388,7 +423,22 @@ export function LobbyistGroupDetail() {
                               </Link>
                             ) : "Member"}{" "}
                             - {new Date(selectedAnnouncement.created_at).toLocaleString()}
+                            {selectedAnnouncement.updated_at && new Date(selectedAnnouncement.updated_at).getTime() - new Date(selectedAnnouncement.created_at).getTime() > 1000 ? " - Edited" : ""}
                           </div>
+                          {selectedAnnouncement.author_user_id === meId && editingAnnouncementId !== selectedAnnouncement.id && (
+                            <div className="mt-3 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingAnnouncementId(selectedAnnouncement.id);
+                                  setEditingAnnouncementBody(selectedAnnouncement.body);
+                                }}
+                                className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                              >
+                                Edit
+                              </button>
+                            </div>
+                          )}
                         </div>
                       ) : <div className="text-sm text-gray-500">Select an announcement.</div>}
                     </div>

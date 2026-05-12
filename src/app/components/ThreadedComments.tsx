@@ -4,6 +4,7 @@ import { Link } from "react-router";
 import { ReactionEmoji, ReactionsBar, ReactionsSummary } from "./ReactionsBar";
 import { SecureAvatar } from "./SecureAvatar";
 import { profilePath } from "../utils/profileRoute";
+import { AttachmentList, AttachmentPicker, DiscussionAttachment } from "./DiscussionAttachments";
 
 export type ProfileLite = {
   user_id: string;
@@ -19,7 +20,9 @@ export type ThreadComment = {
   author_user_id: string;
   body: string;
   created_at: string;
+  updated_at?: string | null;
   parent_comment_id?: string | null;
+  attachments?: DiscussionAttachment[];
   author: ProfileLite | null;
 };
 
@@ -43,7 +46,7 @@ export function ThreadedComments({
   meId: string | null;
   reactionsByCommentId: Record<string, ReactionsSummary | undefined>;
   onToggleReaction: (commentId: string, emoji: ReactionEmoji) => void | Promise<void>;
-  onSubmitComment: (body: string, parentCommentId: string | null) => Promise<void>;
+  onSubmitComment: (body: string, parentCommentId: string | null, attachments?: DiscussionAttachment[]) => Promise<void>;
   canDeleteComments?: boolean;
   onDeleteComment?: (commentId: string) => Promise<void>;
   canEditComment?: (comment: ThreadComment) => boolean;
@@ -51,6 +54,7 @@ export function ThreadedComments({
 }) {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [replyAttachments, setReplyAttachments] = useState<Record<string, DiscussionAttachment[]>>({});
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState("");
@@ -73,6 +77,7 @@ export function ThreadedComments({
     const isCollapsed = collapsed[comment.id] ?? false;
     const draft = replyDrafts[comment.id] ?? "";
     const canReply = !!meId;
+    const wasEdited = Boolean(comment.updated_at && new Date(comment.updated_at).getTime() - new Date(comment.created_at).getTime() > 1000);
 
     const parent = comment.parent_comment_id ? byId.get(comment.parent_comment_id) ?? null : null;
     const parentName = parent ? parent.author?.display_name ?? "Member" : null;
@@ -103,6 +108,7 @@ export function ThreadedComments({
                   {comment.author?.display_name ?? "Member"}{comment.author?.role === "teacher" ? " (Teacher)" : ""}
                 </Link>
                 <span className="text-gray-500 text-xs ml-2">{formatDate(comment.created_at)}</span>
+                {wasEdited && <span className="ml-2 text-xs text-gray-400">Edited</span>}
               </div>
               {(canDeleteComments && onDeleteComment) || (canEditComment?.(comment) && onEditComment) ? (
                 <div className="flex items-center gap-1">
@@ -145,6 +151,7 @@ export function ThreadedComments({
                 {comment.body}
               </div>
             )}
+            <AttachmentList attachments={comment.attachments} />
             <div className="flex items-center gap-3 mt-2">
               <ReactionsBar summary={reactionsByCommentId[comment.id]} onToggle={(e) => onToggleReaction(comment.id, e)} canReact={!!meId} />
               <button
@@ -177,14 +184,17 @@ export function ThreadedComments({
                   placeholder="Write a reply…"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                 />
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <AttachmentPicker value={replyAttachments[comment.id] ?? []} onChange={(next) => setReplyAttachments((prev) => ({ ...prev, [comment.id]: next }))} />
+                  <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={async () => {
                       const body = draft.trim();
                       if (!body) return;
-                      await onSubmitComment(body, comment.id);
+                      await onSubmitComment(body, comment.id, replyAttachments[comment.id] ?? []);
                       setReplyDrafts((p) => ({ ...p, [comment.id]: "" }));
+                      setReplyAttachments((p) => ({ ...p, [comment.id]: [] }));
                       setReplyingTo(null);
                     }}
                     className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
@@ -198,6 +208,7 @@ export function ThreadedComments({
                   >
                     Cancel
                   </button>
+                  </div>
                 </div>
               </div>
             )}
