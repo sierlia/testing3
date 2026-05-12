@@ -5,7 +5,7 @@ import { GraduationCap, MoreHorizontal, Save, X, Users as UsersIcon, Send, Penci
 import { Link, useParams, useSearchParams } from "react-router";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
-import { ReactionEmoji, ReactionsSummary, ReactionsBar } from "../components/ReactionsBar";
+import { ReactionEmoji, ReactionsSummary, ReactionsBar, addReactionToSummary, removeReactionFromSummary } from "../components/ReactionsBar";
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { SecureAvatar } from "../components/SecureAvatar";
 import { formatConstituency } from "../utils/constituency";
@@ -14,6 +14,7 @@ import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox
 import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
 import { getCurrentUser } from "../utils/currentUser";
+import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -88,6 +89,7 @@ export function TessCaucusDetail() {
   const [members, setMembers] = useState<Array<{ user_id: string; role: MembershipRole; profile: ProfileLite | null }>>([]);
   const [memberSearch, setMemberSearch] = useState("");
   const [memberSort, setMemberSort] = useState<"role" | "name" | "party">("role");
+  const [memberCandidates, setMemberCandidates] = useState<MemberCandidate[]>([]);
   const [myRole, setMyRole] = useState<MembershipRole | null>(null);
   const [viewerRole, setViewerRole] = useState<"teacher" | "student" | null>(null);
 
@@ -208,6 +210,21 @@ export function TessCaucusDetail() {
         }));
         const memberRoleMap = new Map(mappedMembers.map((member) => [member.user_id, member.role]));
         setMembers(mappedMembers);
+        const viewerIsTeacher = me ? (await supabase.from("profiles").select("role").eq("user_id", me).maybeSingle()).data?.role === "teacher" : false;
+        if (viewerIsTeacher) {
+          const memberIdSet = new Set(memberIds);
+          const { data: candidateRows } = await supabase
+            .from("profiles")
+            .select("user_id,display_name,party,constituency_name,avatar_url,role")
+            .eq("class_id", c.class_id)
+            .order("display_name", { ascending: true });
+          const candidateUserIds = ((candidateRows ?? []) as any[]).map((row) => row.user_id);
+          const { data: lobbyistRows } = await supabase.from("lobbyist_group_members").select("user_id").in("user_id", candidateUserIds.length ? candidateUserIds : ["00000000-0000-0000-0000-000000000000"]);
+          const lobbyistUserIds = new Set(((lobbyistRows ?? []) as any[]).map((row) => row.user_id));
+          setMemberCandidates(((candidateRows ?? []) as any[]).filter((row) => !memberIdSet.has(row.user_id)).map((row) => ({ user_id: row.user_id, display_name: row.display_name, party: row.party, constituency_name: row.constituency_name, avatar_url: row.avatar_url, role: row.role, disabledReason: lobbyistUserIds.has(row.user_id) ? "Already in a lobbyist group." : null })));
+        } else {
+          setMemberCandidates([]);
+        }
         setMyRole(me ? ((mRows ?? []).find((r: any) => r.user_id === me)?.role as any) ?? null : null);
 
         const { data: aRows, error: aErr } = await supabase
@@ -272,6 +289,12 @@ export function TessCaucusDetail() {
             .in("announcement_id", announcementIds);
           if (arErr) throw arErr;
 
+          const announcementReactionUserIds = [...new Set((arRows ?? []).map((r: any) => r.user_id as string))];
+          const { data: announcementReactionProfiles } = await supabase
+            .from("profiles")
+            .select("user_id,display_name")
+            .in("user_id", announcementReactionUserIds.length ? announcementReactionUserIds : ["00000000-0000-0000-0000-000000000000"]);
+          const announcementReactionNames = new Map((announcementReactionProfiles ?? []).map((p: any) => [p.user_id, p.display_name ?? "Member"]));
           const announcementSummary: Record<string, ReactionsSummary> = {};
           const seenAnnouncementReactions = new Set<string>();
           for (const r of arRows ?? []) {
@@ -281,10 +304,7 @@ export function TessCaucusDetail() {
             const key = `${id}:${uid}:${emoji}`;
             if (seenAnnouncementReactions.has(key)) continue;
             seenAnnouncementReactions.add(key);
-            const prev = announcementSummary[id] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
-            prev.counts[emoji] = (prev.counts[emoji] ?? 0) + 1;
-            if (uid === me) prev.mine.add(emoji);
-            announcementSummary[id] = prev;
+            announcementSummary[id] = addReactionToSummary(announcementSummary[id], emoji, uid, uid === me ? "You" : announcementReactionNames.get(uid) ?? "Member", me);
           }
           setAnnouncementReactions(announcementSummary);
 
@@ -295,6 +315,12 @@ export function TessCaucusDetail() {
               .select("comment_id,user_id,emoji")
               .in("comment_id", commentIds);
             if (crErr) throw crErr;
+            const commentReactionUserIds = [...new Set((crRows ?? []).map((r: any) => r.user_id as string))];
+            const { data: commentReactionProfiles } = await supabase
+              .from("profiles")
+              .select("user_id,display_name")
+              .in("user_id", commentReactionUserIds.length ? commentReactionUserIds : ["00000000-0000-0000-0000-000000000000"]);
+            const commentReactionNames = new Map((commentReactionProfiles ?? []).map((p: any) => [p.user_id, p.display_name ?? "Member"]));
             const commentSummary: Record<string, ReactionsSummary> = {};
             const seenCommentReactions = new Set<string>();
             for (const r of crRows ?? []) {
@@ -304,10 +330,7 @@ export function TessCaucusDetail() {
               const key = `${id}:${uid}:${emoji}`;
               if (seenCommentReactions.has(key)) continue;
               seenCommentReactions.add(key);
-              const prev = commentSummary[id] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
-              prev.counts[emoji] = (prev.counts[emoji] ?? 0) + 1;
-              if (uid === me) prev.mine.add(emoji);
-              commentSummary[id] = prev;
+              commentSummary[id] = addReactionToSummary(commentSummary[id], emoji, uid, uid === me ? "You" : commentReactionNames.get(uid) ?? "Member", me);
             }
             setCommentReactions(commentSummary);
           }
@@ -390,10 +413,7 @@ export function TessCaucusDetail() {
           const uid = row.user_id as string;
           if (uid === meId) return;
           setAnnouncementReactions((prev) => {
-            const cur = prev[announcementId] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
-            const mine = new Set(cur.mine);
-            if (uid === meId) mine.add(emoji);
-            return { ...prev, [announcementId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
+            return { ...prev, [announcementId]: addReactionToSummary(prev[announcementId], emoji, uid, "Member", meId) };
           });
 
           // notifications are handled server-side
@@ -409,13 +429,9 @@ export function TessCaucusDetail() {
           const uid = row.user_id as string;
           if (uid === meId) return;
           setAnnouncementReactions((prev) => {
-            const cur = prev[announcementId];
-            if (!cur) return prev;
-            const mine = new Set(cur.mine);
-            if (uid === meId) mine.delete(emoji);
             return {
               ...prev,
-              [announcementId]: { counts: { ...cur.counts, [emoji]: Math.max(0, (cur.counts[emoji] ?? 0) - 1) }, mine },
+              [announcementId]: removeReactionFromSummary(prev[announcementId], emoji, uid, meId),
             };
           });
         },
@@ -430,10 +446,7 @@ export function TessCaucusDetail() {
           const uid = row.user_id as string;
           if (uid === meId) return;
           setCommentReactions((prev) => {
-            const cur = prev[commentId] ?? { counts: { "👍": 0, "👎": 0, "🎉": 0 }, mine: new Set<ReactionEmoji>() };
-            const mine = new Set(cur.mine);
-            if (uid === meId) mine.add(emoji);
-            return { ...prev, [commentId]: { counts: { ...cur.counts, [emoji]: (cur.counts[emoji] ?? 0) + 1 }, mine } };
+            return { ...prev, [commentId]: addReactionToSummary(prev[commentId], emoji, uid, "Member", meId) };
           });
 
           // notifications are handled server-side
@@ -449,11 +462,7 @@ export function TessCaucusDetail() {
           const uid = row.user_id as string;
           if (uid === meId) return;
           setCommentReactions((prev) => {
-            const cur = prev[commentId];
-            if (!cur) return prev;
-            const mine = new Set(cur.mine);
-            if (uid === meId) mine.delete(emoji);
-            return { ...prev, [commentId]: { counts: { ...cur.counts, [emoji]: Math.max(0, (cur.counts[emoji] ?? 0) - 1) }, mine } };
+            return { ...prev, [commentId]: removeReactionFromSummary(prev[commentId], emoji, uid, meId) };
           });
         },
       )
@@ -462,7 +471,7 @@ export function TessCaucusDetail() {
     return () => {
       void supabase.removeChannel(channel);
     };
-  }, [caucusId]);
+  }, [caucusId, meId]);
 
   useEffect(() => {
     if (!memberMenuOpen) return;
@@ -571,10 +580,14 @@ export function TessCaucusDetail() {
 
   const removeMember = async (userId: string) => {
     if (!isTeacher) return;
+    const removed = members.find((member) => member.user_id === userId);
     try {
       const { error } = await supabase.from("caucus_members").delete().eq("caucus_id", caucusId).eq("user_id", userId);
       if (error) throw error;
       setMembers((prev) => prev.filter((member) => member.user_id !== userId));
+      if (removed?.profile) {
+        setMemberCandidates((prev) => [...prev, { user_id, display_name: removed.profile?.display_name ?? "Member", party: removed.profile?.party, constituency_name: removed.profile?.constituency_name, avatar_url: removed.profile?.avatar_url, role: removed.profile?.role ?? "student" }]);
+      }
       if (userId === meId) setMyRole(null);
       setMemberMenuOpen(null);
       toast.success("Member removed");
@@ -592,6 +605,24 @@ export function TessCaucusDetail() {
       danger: true,
       onConfirm: () => removeMember(member.user_id),
     });
+  };
+
+  const addMemberToCaucus = async (candidate: MemberCandidate) => {
+    if (!isTeacher) return;
+    const { error } = await supabase.from("caucus_members").insert({ caucus_id: caucusId, user_id: candidate.user_id, role: "member" } as any);
+    if (error) return toast.error(error.message || "Could not add member");
+    const profile: ProfileLite = {
+      user_id: candidate.user_id,
+      display_name: candidate.display_name,
+      party: candidate.party ?? null,
+      constituency_name: candidate.constituency_name ?? null,
+      avatar_url: candidate.avatar_url ?? null,
+      role: candidate.role ?? null,
+      organization_role: "member",
+    };
+    setMembers((prev) => (prev.some((member) => member.user_id === candidate.user_id) ? prev : [...prev, { user_id: candidate.user_id, role: "member", profile }]));
+    setMemberCandidates((prev) => prev.filter((row) => row.user_id !== candidate.user_id));
+    toast.success("Member added");
   };
 
   const postAnnouncement = async () => {
@@ -711,19 +742,13 @@ export function TessCaucusDetail() {
   const toggleAnnouncementReaction = async (announcementId: string, emoji: ReactionEmoji) => {
     if (!meId || !canComment) return;
     const mine = announcementReactions[announcementId]?.mine?.has(emoji) ?? false;
-    // optimistic UI
     setAnnouncementReactions((prev) => {
-      const cur = prev[announcementId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
-      const nextMine = new Set(cur.mine);
-      const nextCounts = { ...cur.counts };
-      if (mine) {
-        nextMine.delete(emoji);
-        nextCounts[emoji] = Math.max(0, (nextCounts[emoji] ?? 0) - 1);
-      } else {
-        nextMine.add(emoji);
-        nextCounts[emoji] = (nextCounts[emoji] ?? 0) + 1;
-      }
-      return { ...prev, [announcementId]: { counts: nextCounts, mine: nextMine } };
+      return {
+        ...prev,
+        [announcementId]: mine
+          ? removeReactionFromSummary(prev[announcementId], emoji, meId, meId)
+          : addReactionToSummary(prev[announcementId], emoji, meId, "You", meId),
+      };
     });
     try {
       if (mine) {
@@ -750,21 +775,13 @@ export function TessCaucusDetail() {
         if (error) throw error;
       }
     } catch (e: any) {
-      // rollback by reloading optimistic flip
       setAnnouncementReactions((prev) => {
-        const cur = prev[announcementId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
-        const nextMine = new Set(cur.mine);
-        const nextCounts = { ...cur.counts };
-        if (!mine) {
-          // we tried to add; remove
-          nextMine.delete(emoji);
-          nextCounts[emoji] = Math.max(0, (nextCounts[emoji] ?? 0) - 1);
-        } else {
-          // we tried to remove; add back
-          nextMine.add(emoji);
-          nextCounts[emoji] = (nextCounts[emoji] ?? 0) + 1;
-        }
-        return { ...prev, [announcementId]: { counts: nextCounts, mine: nextMine } };
+        return {
+          ...prev,
+          [announcementId]: mine
+            ? addReactionToSummary(prev[announcementId], emoji, meId, "You", meId)
+            : removeReactionFromSummary(prev[announcementId], emoji, meId, meId),
+        };
       });
       toast.error(e.message || "Could not react");
     }
@@ -774,17 +791,12 @@ export function TessCaucusDetail() {
     if (!meId || !canComment) return;
     const mine = commentReactions[commentId]?.mine?.has(emoji) ?? false;
     setCommentReactions((prev) => {
-      const cur = prev[commentId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
-      const nextMine = new Set(cur.mine);
-      const nextCounts = { ...cur.counts };
-      if (mine) {
-        nextMine.delete(emoji);
-        nextCounts[emoji] = Math.max(0, (nextCounts[emoji] ?? 0) - 1);
-      } else {
-        nextMine.add(emoji);
-        nextCounts[emoji] = (nextCounts[emoji] ?? 0) + 1;
-      }
-      return { ...prev, [commentId]: { counts: nextCounts, mine: nextMine } };
+      return {
+        ...prev,
+        [commentId]: mine
+          ? removeReactionFromSummary(prev[commentId], emoji, meId, meId)
+          : addReactionToSummary(prev[commentId], emoji, meId, "You", meId),
+      };
     });
     try {
       if (mine) {
@@ -811,17 +823,12 @@ export function TessCaucusDetail() {
       }
     } catch (e: any) {
       setCommentReactions((prev) => {
-        const cur = prev[commentId] ?? { counts: { "\u{1F44D}": 0, "\u{1F44E}": 0, "\u{1F389}": 0 }, mine: new Set<ReactionEmoji>() };
-        const nextMine = new Set(cur.mine);
-        const nextCounts = { ...cur.counts };
-        if (!mine) {
-          nextMine.delete(emoji);
-          nextCounts[emoji] = Math.max(0, (nextCounts[emoji] ?? 0) - 1);
-        } else {
-          nextMine.add(emoji);
-          nextCounts[emoji] = (nextCounts[emoji] ?? 0) + 1;
-        }
-        return { ...prev, [commentId]: { counts: nextCounts, mine: nextMine } };
+        return {
+          ...prev,
+          [commentId]: mine
+            ? addReactionToSummary(prev[commentId], emoji, meId, "You", meId)
+            : removeReactionFromSummary(prev[commentId], emoji, meId, meId),
+        };
       });
       toast.error(e.message || "Could not react");
     }
@@ -1177,9 +1184,12 @@ export function TessCaucusDetail() {
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <UsersIcon className="w-5 h-5 text-blue-600" />
-              <h2 className="text-lg font-semibold text-gray-900">Members</h2>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <UsersIcon className="w-5 h-5 text-blue-600" />
+                <h2 className="text-lg font-semibold text-gray-900">Members</h2>
+              </div>
+              {isTeacher ? <TeacherAddMembersPopover candidates={memberCandidates} onAdd={addMemberToCaucus} /> : null}
             </div>
             <div className="flex gap-2 mb-4">
               <input

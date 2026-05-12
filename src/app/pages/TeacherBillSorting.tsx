@@ -4,6 +4,7 @@ import { HTML5Backend } from "react-dnd-html5-backend";
 import { BookOpen, Check, FileText, GripVertical, Search } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { supabase } from "../utils/supabase";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
 
@@ -353,6 +354,7 @@ export function TeacherBillSorting() {
         <Navigation />
 
         <main className="mx-auto max-w-[96rem] px-4 py-8 sm:px-6 lg:px-8">
+          <BackButton className="mb-4" />
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
               <h1 className="mb-2 text-3xl font-bold text-gray-900">Sort Bills into Committees</h1>

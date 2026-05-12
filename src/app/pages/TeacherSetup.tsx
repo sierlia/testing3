@@ -1594,7 +1594,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               </SettingSelect>} />
             <SettingRow title="Chair selection" control={<SettingSelect value={settings.chairElectionMode} onValueChange={(value) => setSettings({ chairElectionMode: value })}>
                 <SelectItem value="elected">Committee vote</SelectItem>
-                <SelectItem value="teacher-assigned">Teacher assigned</SelectItem>
+                <SelectItem value="teacher-assigned">Teacher manually assigns</SelectItem>
               </SettingSelect>} />
           </div>
         </div>
@@ -1832,7 +1832,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                   </SettingSelect>} />
                 <SettingRow title="Chair selection" description="Choose how committee chairs are selected." control={<SettingSelect value={settings.chairElectionMode} onValueChange={(value) => setSettings({ chairElectionMode: value })}>
                     <SelectItem value="elected">Committee vote</SelectItem>
-                    <SelectItem value="teacher-assigned">Teacher assigned</SelectItem>
+                    <SelectItem value="teacher-assigned">Teacher manually assigns</SelectItem>
                   </SettingSelect>} />
               </div>
               <SettingRow

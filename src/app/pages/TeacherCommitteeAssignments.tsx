@@ -14,6 +14,7 @@ interface Student {
   preferences: string[];
   preferenceLabels?: string[];
   assignedCommittees: string[];
+  inLobbyistGroup?: boolean;
 }
 
 interface Committee {
@@ -34,6 +35,7 @@ export function TeacherCommitteeAssignments() {
   const [assignmentsPerStudent, setAssignmentsPerStudent] = useState(1);
   const [classSettings, setClassSettings] = useState<any>({});
   const [submissionCount, setSubmissionCount] = useState(0);
+  const [unassignedSearch, setUnassignedSearch] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -105,12 +107,19 @@ export function TeacherCommitteeAssignments() {
         }
 
         const { data: existingMemberships } = await supabase.from("committee_members").select("committee_id,user_id").in("user_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
+        const { data: lobbyistMemberships } = await supabase.from("lobbyist_group_members").select("user_id").in("user_id", studentIds.length ? studentIds : ["00000000-0000-0000-0000-000000000000"]);
+        const lobbyistUserIds = new Set(((lobbyistMemberships ?? []) as any[]).map((row) => row.user_id as string));
         const assignedByUser = new Map<string, string[]>();
         for (const r of existingMemberships ?? []) {
           const uid = (r as any).user_id;
           assignedByUser.set(uid, [...(assignedByUser.get(uid) ?? []), (r as any).committee_id]);
         }
-        if (assignedByUser.size > 0) setAssignmentStage("published");
+        const assignmentMode = settings?.committees?.assignmentMode ?? "preference";
+        if (assignedByUser.size > 0) {
+          setAssignmentStage("published");
+        } else if (assignmentMode === "self-join" || assignmentMode === "teacher-assigned") {
+          setAssignmentStage("preview");
+        }
 
         setStudents(
           (studentRows ?? []).map((s: any) => ({
@@ -118,6 +127,7 @@ export function TeacherCommitteeAssignments() {
             name: s.display_name ?? "Student",
             preferences: prefsByUser.get(s.user_id) ?? [],
             assignedCommittees: assignedByUser.get(s.user_id) ?? [],
+            inLobbyistGroup: lobbyistUserIds.has(s.user_id),
           })),
         );
       } catch (e: any) {
@@ -147,6 +157,7 @@ export function TeacherCommitteeAssignments() {
           });
 
       for (const student of ordered) {
+        if (student.inLobbyistGroup) continue;
         const rankedChoices = randomMode
           ? randomCommitteeIds()
           : [...student.preferences, ...committees.map((committee) => committee.id)].filter((id, index, arr) => arr.indexOf(id) === index);
@@ -170,6 +181,7 @@ export function TeacherCommitteeAssignments() {
   };
 
   const moveStudent = (studentId: string, toCommitteeId: string) => {
+    if (students.find((student) => student.id === studentId)?.inLobbyistGroup) return;
     const newStudents = students.map((s) => {
       if (s.id !== studentId) return s;
       if (toCommitteeId === "unassigned") return { ...s, assignedCommittees: [] };
@@ -214,7 +226,7 @@ export function TeacherCommitteeAssignments() {
         if (committeeIds.length) {
           await supabase.from("committee_members").delete().in("committee_id", committeeIds);
         }
-        const rows = students.flatMap((s) => s.assignedCommittees.map((committeeId) => ({ committee_id: committeeId, user_id: s.id, role: "member" })));
+        const rows = students.flatMap((s) => s.inLobbyistGroup ? [] : s.assignedCommittees.map((committeeId) => ({ committee_id: committeeId, user_id: s.id, role: "member" })));
         if (rows.length) {
           const { error } = await supabase.from("committee_members").insert(rows as any);
           if (error) throw error;
@@ -233,7 +245,8 @@ export function TeacherCommitteeAssignments() {
   };
 
   const getUnassignedStudents = () => {
-    return students.filter(s => s.assignedCommittees.length === 0);
+    const query = unassignedSearch.trim().toLowerCase();
+    return students.filter((s) => s.assignedCommittees.length === 0 && (!query || s.name.toLowerCase().includes(query)));
   };
 
   const withPreferenceLabels = (rows: Student[]) => {
@@ -295,6 +308,8 @@ export function TeacherCommitteeAssignments() {
               <div className="text-sm text-gray-600">
                 {classSettings?.committees?.assignmentMode === "random"
                   ? `${students.length} total students • ${committees.length} committees`
+                  : classSettings?.committees?.assignmentMode === "self-join" || classSettings?.committees?.assignmentMode === "teacher-assigned"
+                    ? `${students.length} total students • ${committees.length} committees`
                   : `${submissionCount} of ${students.length} students submitted preferences • ${committees.length} committees`}
               </div>
             </div>
@@ -349,6 +364,12 @@ export function TeacherCommitteeAssignments() {
           {(assignmentStage === 'preview' || assignmentStage === 'published') && (
             <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
               <div>
+                <input
+                  value={unassignedSearch}
+                  onChange={(event) => setUnassignedSearch(event.target.value)}
+                  placeholder="Search unassigned students..."
+                  className="mb-2 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
                 <CommitteeAssignmentColumn
                   committee={{ id: 'unassigned', name: 'Unassigned Students', capacity: 999 }}
                   students={withPreferenceLabels(getUnassignedStudents())}

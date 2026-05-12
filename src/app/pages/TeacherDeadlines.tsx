@@ -147,6 +147,7 @@ export function TeacherDeadlines() {
   const [showModal, setShowModal] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
+  const [assignmentReviewTab, setAssignmentReviewTab] = useState<"submissions" | "rubric">("submissions");
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [gradingDrafts, setGradingDrafts] = useState<Record<string, GradeDraft>>({});
@@ -727,7 +728,7 @@ export function TeacherDeadlines() {
                       >
                         <div className="mb-1 flex items-start justify-between gap-3">
                           <h3 className="line-clamp-2 text-sm font-semibold text-gray-900">{task.title}</h3>
-                          <span className="shrink-0 rounded bg-white px-2 py-0.5 text-xs font-medium text-gray-700">{task.points_possible} pts</span>
+                          <span className="mr-8 shrink-0 rounded bg-white px-2 py-0.5 text-xs font-medium text-gray-700">{task.points_possible} pts</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
                           <span>{formatDateTime(task.due_at)}</span>
@@ -781,7 +782,6 @@ export function TeacherDeadlines() {
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="min-w-0">
                       <div className="mb-2 flex flex-wrap items-center gap-2">
-                        <span className="rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">Assignment</span>
                         <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{selectedAssignment.grading_mode === "auto" ? "Auto-graded" : "Manual grading"}</span>
                         <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{targetLabel(selectedAssignment)}</span>
                       </div>
@@ -826,7 +826,26 @@ export function TeacherDeadlines() {
                   </div>
                 </div>
 
-                <div className="grid gap-5 p-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+                <div className="border-b border-gray-200 px-5 pt-4">
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentReviewTab("submissions")}
+                      className={`rounded-t-md px-3 py-2 text-sm font-medium ${assignmentReviewTab === "submissions" ? "border border-b-white border-gray-200 bg-white text-blue-700" : "text-gray-600 hover:text-gray-900"}`}
+                    >
+                      Student submissions
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAssignmentReviewTab("rubric")}
+                      className={`rounded-t-md px-3 py-2 text-sm font-medium ${assignmentReviewTab === "rubric" ? "border border-b-white border-gray-200 bg-white text-blue-700" : "text-gray-600 hover:text-gray-900"}`}
+                    >
+                      Auto-graded rubric
+                    </button>
+                  </div>
+                </div>
+                <div className="p-5">
+                  {assignmentReviewTab === "submissions" ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="font-semibold text-gray-900">Student submissions</h3>
@@ -920,8 +939,8 @@ export function TeacherDeadlines() {
                       </div>
                     )}
                   </div>
-
-                  <aside className="space-y-4">
+                  ) : (
+                  <aside className="max-w-3xl space-y-4">
                     {selectedAssignment.rubric.length ? (
                       <section>
                         <div className="mb-2 flex items-center justify-between gap-3">
@@ -958,6 +977,7 @@ export function TeacherDeadlines() {
                       </section>
                     ) : null}
                   </aside>
+                  )}
                 </div>
               </div>
             ) : (

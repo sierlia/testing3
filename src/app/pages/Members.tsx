@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigation } from "../components/Navigation";
+import { BackButton } from "../components/BackButton";
 import { Search } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
@@ -82,13 +83,14 @@ export function Members() {
         if (error) throw error;
         setMoneyEnabled(Boolean((cls as any)?.settings?.money?.enabled));
         const userIds = ((data ?? []) as any[]).map((member) => member.user_id);
-        const [{ data: committeeRows }, { data: caucusRows }, { data: billRows }, { data: cosponsorRows }, { data: partyRows }, { data: contributionRows }] = await Promise.all([
+        const [{ data: committeeRows }, { data: caucusRows }, { data: billRows }, { data: cosponsorRows }, { data: partyRows }, { data: contributionRows }, { data: lobbyistMemberRows }] = await Promise.all([
           supabase.from("committee_members").select("user_id,committees(name,class_id)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
           supabase.from("caucus_members").select("user_id,caucuses(title,class_id)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
           supabase.from("bills").select("author_user_id,status").eq("class_id", classId),
           supabase.from("bill_cosponsors").select("user_id").eq("class_id", classId),
           supabase.from("parties").select("id,name").eq("class_id", classId),
-          supabase.from("lobbyist_contributions").select("recipient_id,amount").eq("class_id", classId).eq("recipient_type", "member"),
+          supabase.from("lobbyist_contributions").select("group_id,from_user_id,recipient_type,recipient_id,amount").eq("class_id", classId),
+          supabase.from("lobbyist_group_members").select("user_id,group_id,lobbyist_groups(starting_amount)").in("user_id", userIds.length ? userIds : ["00000000-0000-0000-0000-000000000000"]),
         ]);
         const partyNameById = new Map((partyRows ?? []).map((party: any) => [party.id, party.name]));
         const partyIds = Array.from(partyNameById.keys());
@@ -127,8 +129,34 @@ export function Members() {
         }
         const cosponsorsByUser = new Map<string, number>();
         for (const row of cosponsorRows ?? []) cosponsorsByUser.set((row as any).user_id, (cosponsorsByUser.get((row as any).user_id) ?? 0) + 1);
-        const campaignByUser = new Map<string, number>();
-        for (const row of contributionRows ?? []) campaignByUser.set((row as any).recipient_id, (campaignByUser.get((row as any).recipient_id) ?? 0) + Number((row as any).amount ?? 0));
+        const settings = (cls as any)?.settings ?? {};
+        const startingAmount = Math.max(0, Number(settings?.money?.startingAmount ?? 1000) || 0);
+        const receivedByUser = new Map<string, number>();
+        const spentByUser = new Map<string, number>();
+        const spentByGroup = new Map<string, number>();
+        for (const row of contributionRows ?? []) {
+          const amount = Number((row as any).amount ?? 0);
+          const fromUser = (row as any).from_user_id as string | null;
+          const groupId = (row as any).group_id as string | null;
+          if (fromUser) spentByUser.set(fromUser, (spentByUser.get(fromUser) ?? 0) + amount);
+          if (groupId) spentByGroup.set(groupId, (spentByGroup.get(groupId) ?? 0) + amount);
+          if ((row as any).recipient_type === "member") {
+            receivedByUser.set((row as any).recipient_id, (receivedByUser.get((row as any).recipient_id) ?? 0) + amount);
+          }
+        }
+        const lobbyistGroupByUser = new Map<string, { groupId: string; startingAmount: number }>();
+        for (const row of lobbyistMemberRows ?? []) {
+          const group = (row as any).lobbyist_groups;
+          lobbyistGroupByUser.set((row as any).user_id, {
+            groupId: (row as any).group_id,
+            startingAmount: Math.max(0, Number(group?.starting_amount ?? 0) || 0) || startingAmount,
+          });
+        }
+        const currentMoneyForUser = (userId: string) => {
+          const group = lobbyistGroupByUser.get(userId);
+          if (group) return Math.max(0, group.startingAmount - (spentByGroup.get(group.groupId) ?? 0));
+          return Math.max(0, startingAmount - (spentByUser.get(userId) ?? 0) + (receivedByUser.get(userId) ?? 0));
+        };
         setMembers(((data ?? []) as any[]).map((member) => ({
           ...member,
           committees: committeesByUser.get(member.user_id) ?? [],
@@ -137,7 +165,7 @@ export function Members() {
           passedBills: passedByUser.get(member.user_id) ?? 0,
           failedBills: failedByUser.get(member.user_id) ?? 0,
           cosponsors: cosponsorsByUser.get(member.user_id) ?? 0,
-          campaignFunds: campaignByUser.get(member.user_id) ?? 0,
+          campaignFunds: currentMoneyForUser(member.user_id),
         })));
       } catch (e: any) {
         toast.error(e.message || "Could not load members");
@@ -199,6 +227,7 @@ export function Members() {
       <Navigation />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <BackButton className="mb-4" />
         <div className="mb-8">
           <div className="flex items-center gap-2">
             <h1 className="text-3xl font-bold text-gray-900">{loading ? "Members" : `Members (${memberCount})`}</h1>

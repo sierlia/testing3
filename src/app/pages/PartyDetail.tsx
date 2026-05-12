@@ -12,6 +12,7 @@ import { InfoTooltip } from "../components/InfoTooltip";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
 import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
+import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
 type PartyRole = "majority_leader" | "majority_whip" | "minority_leader" | "minority_whip" | "leader" | "whip" | "chair" | "vice_chair";
@@ -94,6 +95,7 @@ export function PartyDetail() {
   const [viewerRole, setViewerRole] = useState<"teacher" | "student" | null>(null);
   const [party, setParty] = useState<PartyRow | null>(null);
   const [members, setMembers] = useState<MemberRow[]>([]);
+  const [memberCandidates, setMemberCandidates] = useState<MemberCandidate[]>([]);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [comments, setComments] = useState<Record<string, CommentRow[]>>({});
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
@@ -165,7 +167,15 @@ export function PartyDetail() {
       const nextRoles = (roleRows ?? []) as PartyMemberRoleRow[];
       setPartyRoles(nextRoles);
       const roleMap = new Map(nextRoles.map((row) => [row.user_id, row.role]));
-      setMembers(((memberRows ?? []) as any[]).filter((member) => comparablePartyName(member.party) === comparablePartyName((p as any).name)).map((member) => ({ ...member, organization_role: roleMap.get(member.user_id) ?? null })) as any);
+      const nextPartyMembers = ((memberRows ?? []) as any[]).filter((member) => comparablePartyName(member.party) === comparablePartyName((p as any).name)).map((member) => ({ ...member, organization_role: roleMap.get(member.user_id) ?? null })) as MemberRow[];
+      setMembers(nextPartyMembers as any);
+      const candidateRows = ((memberRows ?? []) as any[]).filter((member) => comparablePartyName(member.party) !== comparablePartyName((p as any).name));
+      const candidateUserIds = candidateRows.map((member) => member.user_id);
+      const { data: lobbyistRows } = await supabase.from("lobbyist_group_members").select("user_id").in("user_id", candidateUserIds.length ? candidateUserIds : ["00000000-0000-0000-0000-000000000000"]);
+      const lobbyistUserIds = new Set(((lobbyistRows ?? []) as any[]).map((row) => row.user_id));
+      setMemberCandidates(
+        candidateRows.map((member) => ({ user_id: member.user_id, display_name: member.display_name, party: member.party, constituency_name: member.constituency_name, avatar_url: member.avatar_url, role: member.role, disabledReason: lobbyistUserIds.has(member.user_id) ? "Already in a lobbyist group." : null })),
+      );
 
       const { data: aRows, error: aErr } = await supabase
         .from("party_announcements")
@@ -332,6 +342,25 @@ export function PartyDetail() {
     } catch (e: any) {
       toast.error(e.message || "Could not update party");
     }
+  };
+
+  const addMemberToParty = async (candidate: MemberCandidate) => {
+    if (!party || !isTeacher) return;
+    const nextParty = displayPartyName(party.name);
+    const { error } = await supabase.from("profiles").update({ party: nextParty } as any).eq("user_id", candidate.user_id);
+    if (error) return toast.error(error.message || "Could not add member");
+    const row: MemberRow = {
+      user_id: candidate.user_id,
+      display_name: candidate.display_name,
+      party: nextParty,
+      constituency_name: candidate.constituency_name ?? null,
+      avatar_url: candidate.avatar_url ?? null,
+      role: candidate.role ?? null,
+      organization_role: null,
+    };
+    setMembers((prev) => (prev.some((member) => member.user_id === candidate.user_id) ? prev : [...prev, row]));
+    setMemberCandidates((prev) => prev.filter((member) => member.user_id !== candidate.user_id));
+    toast.success("Member added");
   };
 
   const saveName = async () => {
@@ -912,9 +941,12 @@ export function PartyDetail() {
               </div>
 
               <div className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
-                <div className="mb-4 flex items-center gap-2">
-                  <Users className="h-5 w-5 text-[var(--party-color)]" />
-                  <h2 className="text-lg font-semibold text-gray-900">Members</h2>
+                <div className="mb-4 flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-5 w-5 text-[var(--party-color)]" />
+                    <h2 className="text-lg font-semibold text-gray-900">Members</h2>
+                  </div>
+                  {isTeacher ? <TeacherAddMembersPopover candidates={memberCandidates} onAdd={addMemberToParty} /> : null}
                 </div>
                 <div className="mb-4 flex gap-2">
                   <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search members..." className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm" />

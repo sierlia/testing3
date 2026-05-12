@@ -274,6 +274,13 @@ export function FloorSession() {
     yea: previousQuestionForBill.filter((row) => row.vote === "yea").length,
     nay: previousQuestionForBill.filter((row) => row.vote === "nay").length,
   };
+  const previousQuestionVoters = (vote: "yea" | "nay") => {
+    const names = previousQuestionForBill
+      .filter((row) => row.vote === vote)
+      .map((row) => speakerCandidates.find((candidate) => candidate.id === row.user_id)?.name ?? "Member")
+      .sort((a, b) => a.localeCompare(b));
+    return names.length ? names.join("\n") : `No ${vote} votes`;
+  };
   const speakerParties = useMemo(
     () => [...new Set(speakerCandidates.map((candidate) => candidate.party || "No party"))].sort((a, b) => a.localeCompare(b)),
     [speakerCandidates],
@@ -568,6 +575,16 @@ export function FloorSession() {
   const castPreviousQuestionVote = async (vote: "yea" | "nay") => {
     if (!activeItem || !classId || !meId || role === "teacher") return;
     try {
+      if (myPreviousQuestionVote === vote) {
+        const { error } = await supabase
+          .from("bill_previous_question_votes")
+          .delete()
+          .eq("bill_id", activeItem.bill_id)
+          .eq("user_id", meId);
+        if (error) throw error;
+        setPreviousQuestionVotes((prev) => prev.filter((row) => !(row.bill_id === activeItem.bill_id && row.user_id === meId)));
+        return;
+      }
       const { error } = await supabase.from("bill_previous_question_votes").upsert({ class_id: classId, bill_id: activeItem.bill_id, user_id: meId, vote, updated_at: new Date().toISOString() } as any, { onConflict: "bill_id,user_id" });
       if (error) throw error;
       setPreviousQuestionVotes((prev) => [...prev.filter((row) => !(row.bill_id === activeItem.bill_id && row.user_id === meId)), { bill_id: activeItem.bill_id, user_id: meId, vote }]);
@@ -872,23 +889,30 @@ export function FloorSession() {
                       <button type="button" onClick={() => quickPresentation("previous_question", "Motion for the previous question")} className="rounded-md border border-purple-200 bg-purple-50 px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-100">Show live count</button>
                     )}
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-                    <div className="rounded-md bg-green-50 p-3 text-center">
+                  <div className={`grid gap-3 ${role === "teacher" ? "sm:grid-cols-[1fr_1fr_auto]" : "sm:grid-cols-2"}`}>
+                    <button
+                      type="button"
+                      onClick={() => void castPreviousQuestionVote("yea")}
+                      disabled={role === "teacher"}
+                      title={previousQuestionVoters("yea")}
+                      className={`rounded-md bg-green-50 p-3 text-center transition-colors disabled:cursor-default ${role !== "teacher" ? "hover:bg-green-100" : ""} ${myPreviousQuestionVote === "yea" ? "ring-2 ring-green-500" : ""}`}
+                    >
                       <div className="text-2xl font-bold text-green-700">{previousQuestionCounts.yea}</div>
                       <div className="text-xs font-medium text-green-700">Yea</div>
-                    </div>
-                    <div className="rounded-md bg-red-50 p-3 text-center">
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void castPreviousQuestionVote("nay")}
+                      disabled={role === "teacher"}
+                      title={previousQuestionVoters("nay")}
+                      className={`rounded-md bg-red-50 p-3 text-center transition-colors disabled:cursor-default ${role !== "teacher" ? "hover:bg-red-100" : ""} ${myPreviousQuestionVote === "nay" ? "ring-2 ring-red-500" : ""}`}
+                    >
                       <div className="text-2xl font-bold text-red-700">{previousQuestionCounts.nay}</div>
                       <div className="text-xs font-medium text-red-700">Nay</div>
-                    </div>
+                    </button>
                     {role === "teacher" ? (
                       <button type="button" onClick={() => quickPresentation("recess", "Previous question ordered")} className="rounded-md bg-purple-600 px-4 py-2 text-sm font-semibold text-white hover:bg-purple-700">Push through</button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button type="button" onClick={() => void castPreviousQuestionVote("yea")} className={`rounded-md px-4 py-2 text-sm font-semibold ${myPreviousQuestionVote === "yea" ? "bg-green-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>Yea</button>
-                        <button type="button" onClick={() => void castPreviousQuestionVote("nay")} className={`rounded-md px-4 py-2 text-sm font-semibold ${myPreviousQuestionVote === "nay" ? "bg-red-600 text-white" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}>Nay</button>
-                      </div>
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 <div className="prose max-w-none rounded-md border border-gray-200 bg-white p-5" dangerouslySetInnerHTML={{ __html: sanitizeHtml(activeItem.bill.legislative_text || "<p><em>No legislative text</em></p>") }} />

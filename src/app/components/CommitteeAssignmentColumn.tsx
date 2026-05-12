@@ -8,6 +8,7 @@ interface Student {
   preferences: string[];
   preferenceLabels?: string[];
   assignedCommittees?: string[];
+  inLobbyistGroup?: boolean;
 }
 
 interface Committee {
@@ -96,7 +97,7 @@ export function CommitteeAssignmentColumn({
               key={student.id}
               student={student}
               currentCommitteeId={committee.id}
-              disabled={disabled}
+              disabled={disabled || Boolean(student.inLobbyistGroup)}
             />
           ))
         )}
