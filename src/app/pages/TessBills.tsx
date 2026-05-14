@@ -8,7 +8,7 @@ import { InfoTooltip } from "../components/InfoTooltip";
 import { CompactPager } from "../components/CompactPager";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { deleteBillForCurrentClass, fetchBillsForCurrentClass } from "../services/bills";
+import { bulkUpdateBillStatusForCurrentClass, deleteBillForCurrentClass, fetchBillsForCurrentClass } from "../services/bills";
 import { BillRecord } from "../types/domain";
 import { useAuth } from "../utils/AuthContext";
 import { formatConstituency } from "../utils/constituency";
@@ -20,9 +20,9 @@ type SortKey = "number" | "date" | "title" | "sponsor" | "status" | "cosponsors"
 type SortDirection = "asc" | "desc";
 const BILL_ROW_MODE_KEY = "gavel:bills:row-mode";
 const BILL_PREVIEW_SPLIT_KEY = "gavel:bills:preview-split";
-const PREVIEW_SPLIT_MIN = 38;
-const PREVIEW_SPLIT_MAX = 90;
-const PREVIEW_SPLIT_CLOSE_AT = 92;
+const PREVIEW_SPLIT_MIN = 0;
+const PREVIEW_SPLIT_MAX = 97;
+const PREVIEW_SPLIT_CLOSE_AT = 98.5;
 
 interface BillView {
   id: string;
@@ -64,6 +64,7 @@ function statusLabel(status: string) {
 function statusClass(status: string) {
   if (status === "submitted") return "bg-blue-100 text-blue-700";
   if (status === "in_committee") return "bg-slate-100 text-slate-700";
+  if (status === "committee_vote") return "bg-cyan-100 text-cyan-700";
   if (status === "reported") return "bg-purple-100 text-purple-700";
   if (status === "calendared") return "bg-yellow-100 text-yellow-700";
   if (status === "floor") return "bg-indigo-100 text-indigo-700";
@@ -89,14 +90,14 @@ function sponsorDescriptor(bill: BillView) {
 
 function billTrackerSteps(bill: BillView) {
   const status = bill.status;
-  const referred = Boolean(bill.committee) || ["in_committee", "reported", "calendared", "floor", "passed", "failed"].includes(status);
+  const referred = Boolean(bill.committee) || ["in_committee", "committee_vote", "reported", "calendared", "floor", "passed", "failed"].includes(status);
   const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
   const calendared = ["calendared", "floor", "passed", "failed"].includes(status);
   const floor = ["floor", "passed", "failed"].includes(status);
   const final = ["passed", "failed"].includes(status);
   return [
     { label: "Introduced", done: true, current: status === "submitted" },
-    { label: bill.committee ? "Referred" : "Committee", done: referred, current: status === "in_committee" },
+    { label: bill.committee ? "Referred" : "Committee", done: referred, current: status === "in_committee" || status === "committee_vote" },
     { label: "Reported", done: reported, current: status === "reported" },
     { label: "Calendared", done: calendared, current: status === "calendared" },
     { label: "Floor", done: floor, current: status === "floor" },
@@ -158,6 +159,17 @@ const statusFilterOptions = [
   { value: "failed", label: "Failed" },
 ];
 
+const bulkStatusOptions = [
+  { value: "submitted", label: "Introduced" },
+  { value: "in_committee", label: "In Committee" },
+  { value: "committee_vote", label: "Marked Up" },
+  { value: "reported", label: "Reported" },
+  { value: "calendared", label: "Calendared" },
+  { value: "floor", label: "Floor" },
+  { value: "passed", label: "Passed" },
+  { value: "failed", label: "Failed" },
+];
+
 export function TessBills() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -189,6 +201,9 @@ export function TessBills() {
   const [openBillMenuId, setOpenBillMenuId] = useState<string | null>(null);
   const [deletingBillId, setDeletingBillId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
+  const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState("reported");
+  const [bulkBusy, setBulkBusy] = useState(false);
   const searchKey = searchParams.toString();
 
   useEffect(() => {
@@ -265,10 +280,18 @@ export function TessBills() {
   useEffect(() => {
     if (!filteredBills.length) {
       setSelectedBill(null);
+      setSelectedBillIds([]);
       return;
     }
     setSelectedBill((current) => (current && filteredBills.some((bill) => bill.id === current.id) ? current : filteredBills[0]));
+    const filteredIds = new Set(filteredBills.map((bill) => bill.id));
+    setSelectedBillIds((current) => current.filter((id) => filteredIds.has(id)));
   }, [filteredBills]);
+
+  useEffect(() => {
+    const existing = new Set(allBills.map((bill) => bill.id));
+    setSelectedBillIds((current) => current.filter((id) => existing.has(id)));
+  }, [allBills]);
 
   useEffect(() => {
     if (!openBillMenuId) return;
@@ -317,6 +340,11 @@ export function TessBills() {
   const currentPage = Math.min(page, totalPages);
   const pageBills = filteredBills.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const resultLabel = loading ? "Loading bills..." : `${filteredBills.length} bills found`;
+  const selectedBillIdSet = useMemo(() => new Set(selectedBillIds), [selectedBillIds]);
+  const filteredBillIds = useMemo(() => filteredBills.map((bill) => bill.id), [filteredBills]);
+  const selectedCount = selectedBillIds.length;
+  const allFilteredSelected = filteredBillIds.length > 0 && filteredBillIds.every((id) => selectedBillIdSet.has(id));
+  const bulkStatusLabel = bulkStatusOptions.find((option) => option.value === bulkStatus)?.label ?? statusLabel(bulkStatus);
 
   const resetFilters = () => {
     setSearchQuery("");
@@ -331,6 +359,18 @@ export function TessBills() {
       return;
     }
     setSelectedBill(bill);
+  };
+
+  const toggleBillSelection = (billId: string) => {
+    setSelectedBillIds((current) => (current.includes(billId) ? current.filter((id) => id !== billId) : [...current, billId]));
+  };
+
+  const toggleSelectAllFiltered = () => {
+    if (allFilteredSelected) {
+      setSelectedBillIds((current) => current.filter((id) => !filteredBillIds.includes(id)));
+      return;
+    }
+    setSelectedBillIds((current) => Array.from(new Set([...current, ...filteredBillIds])));
   };
 
   const requestDeleteBill = (bill: BillView) => {
@@ -351,6 +391,56 @@ export function TessBills() {
           toast.error(error.message || "Could not delete bill");
         } finally {
           setDeletingBillId(null);
+        }
+      },
+    });
+  };
+
+  const requestBulkDelete = () => {
+    if (!selectedCount) return;
+    const ids = [...selectedBillIds];
+    setConfirmDialog({
+      title: `Delete ${ids.length} bill${ids.length === 1 ? "" : "s"}?`,
+      message: "Selected bills will be removed from the legislation list.",
+      confirmLabel: "Delete selected",
+      danger: true,
+      onConfirm: async () => {
+        setBulkBusy(true);
+        try {
+          for (const id of ids) await deleteBillForCurrentClass(id);
+          setAllBills((current) => current.filter((bill) => !ids.includes(bill.id)));
+          setSelectedBillIds([]);
+          setSelectedBill((current) => (current && ids.includes(current.id) ? null : current));
+          toast.success(`Deleted ${ids.length} bill${ids.length === 1 ? "" : "s"}`);
+        } catch (error: any) {
+          toast.error(error.message || "Could not delete selected bills");
+        } finally {
+          setBulkBusy(false);
+        }
+      },
+    });
+  };
+
+  const requestBulkStatusOverride = () => {
+    if (!selectedCount || !bulkStatus) return;
+    const ids = [...selectedBillIds];
+    setConfirmDialog({
+      title: `Set ${ids.length} bill${ids.length === 1 ? "" : "s"} to ${bulkStatusLabel}?`,
+      message: "This will manually override the status for every selected bill.",
+      confirmLabel: "Override status",
+      onConfirm: async () => {
+        setBulkBusy(true);
+        try {
+          const updatedIds = await bulkUpdateBillStatusForCurrentClass(ids, bulkStatus);
+          const updatedSet = new Set(updatedIds);
+          setAllBills((current) => current.map((bill) => (updatedSet.has(bill.id) ? { ...bill, status: bulkStatus } : bill)));
+          setSelectedBill((current) => (current && updatedSet.has(current.id) ? { ...current, status: bulkStatus } : current));
+          setSelectedBillIds([]);
+          toast.success(`Updated ${updatedIds.length} bill${updatedIds.length === 1 ? "" : "s"}`);
+        } catch (error: any) {
+          toast.error(error.message || "Could not override selected bills");
+        } finally {
+          setBulkBusy(false);
         }
       },
     });
@@ -449,11 +539,48 @@ export function TessBills() {
 
         <div
           id="bills-preview-split"
-          className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_2px_minmax(18rem,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_2px] lg:gap-3"}`}
+          className={`grid grid-cols-1 gap-6 overflow-hidden ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_2px_minmax(0,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_2px] lg:gap-3"}`}
           style={{ "--bill-list-width": `${previewSplitPct}%` } as CSSProperties}
         >
-          <div>
+          <div className="min-w-0">
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+              {isTeacher && !loading && filteredBills.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllFiltered}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Select all
+                  </label>
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <span className="text-sm text-gray-600">{selectedCount} selected</span>
+                    <FilterSelect value={bulkStatus} onChange={setBulkStatus} className="w-44">
+                      {bulkStatusOptions.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                      ))}
+                    </FilterSelect>
+                    <button
+                      type="button"
+                      onClick={requestBulkStatusOverride}
+                      disabled={!selectedCount || bulkBusy}
+                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
+                    >
+                      Override status
+                    </button>
+                    <button
+                      type="button"
+                      onClick={requestBulkDelete}
+                      disabled={!selectedCount || bulkBusy}
+                      className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Delete selected
+                    </button>
+                  </div>
+                </div>
+              )}
               {loading ? (
                 <div className="py-12 text-center text-gray-500">Loading bills...</div>
               ) : filteredBills.length === 0 ? (
@@ -476,6 +603,17 @@ export function TessBills() {
                       } ${selectedBill?.id === bill.id && rowMode === "preview" ? (teacherAuthored ? "bg-green-50 hover:bg-green-50" : "bg-blue-50 hover:bg-blue-50") : ""}`}
                     >
                       <div className="flex items-start justify-between gap-4">
+                        {isTeacher && (
+                          <div className="pt-0.5" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
+                            <input
+                              type="checkbox"
+                              checked={selectedBillIdSet.has(bill.id)}
+                              onChange={() => toggleBillSelection(bill.id)}
+                              className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                              aria-label={`Select ${bill.number}`}
+                            />
+                          </div>
+                        )}
                         <div className="min-w-0 flex-1">
                           <div className="mb-2 flex flex-wrap items-center gap-2">
                             <span className="font-mono text-sm font-semibold text-gray-900">{bill.number}</span>
@@ -552,7 +690,7 @@ export function TessBills() {
           />
 
           {rowMode === "preview" && (
-            <div>
+            <div className="min-w-0">
               <div className="sticky top-8">
                 {selectedBill ? (
                   <BillPreviewPanel bill={selectedBill} />

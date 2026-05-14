@@ -328,6 +328,44 @@ export async function deleteBillForCurrentClass(billId: string) {
   return softDeleted as { id: string };
 }
 
+export async function bulkUpdateBillStatusForCurrentClass(billIds: string[], status: string) {
+  const ids = Array.from(new Set(billIds.filter(Boolean)));
+  if (!ids.length) return [];
+  const { classId, profile, userId } = await getCurrentProfileClass();
+  if ((profile as any)?.role !== 'teacher') throw new Error('Only teachers can override bill status');
+
+  const { data, error } = await supabase
+    .from('bills')
+    .update({ status } as any)
+    .eq('class_id', classId)
+    .in('id', ids)
+    .neq('status', 'deleted')
+    .select('id');
+  if (error) throw error;
+
+  const updatedIds = ((data ?? []) as Array<{ id: string }>).map((row) => row.id);
+  if (updatedIds.length) {
+    const stepLabel =
+      status === 'submitted' ? 'Introduced'
+        : status === 'in_committee' ? 'Referred'
+          : status === 'committee_vote' ? 'Marked up'
+            : status === 'reported' ? 'Reported'
+              : status === 'calendared' ? 'Calendared'
+                : status === 'floor' ? 'Floor'
+                  : ['passed', 'failed'].includes(status) ? 'Final'
+                    : 'Status override';
+    await supabase.from('bill_teacher_overrides').insert(updatedIds.map((billId) => ({
+      bill_id: billId,
+      class_id: classId,
+      actor_user_id: userId,
+      step: stepLabel,
+      note: `Status set to ${status.replace(/_/g, ' ')}`,
+    })) as any);
+  }
+
+  return updatedIds;
+}
+
 export async function getCurrentProfileClass() {
   const me = (await getCurrentUser())?.id;
   if (!me) throw new Error('Not signed in');

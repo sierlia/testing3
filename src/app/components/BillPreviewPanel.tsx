@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { ExternalLink, User, Building2, Calendar } from "lucide-react";
 import { Link } from "react-router";
 import { profilePath } from "../utils/profileRoute";
@@ -28,6 +29,8 @@ interface BillPreviewPanelProps {
 }
 
 export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [panelWidth, setPanelWidth] = useState(480);
   const statusLabel = (status: string) => status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
   const partyAbbr = (party: string) => {
     const normalized = party.toLowerCase();
@@ -39,6 +42,18 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
     return party.trim().slice(0, 1).toUpperCase() || "I";
   };
   const sponsorDescriptor = `Rep.-${partyAbbr(bill.sponsorParty)}-${bill.sponsorDistrict || "N/A"}`;
+  const textTooNarrow = panelWidth < 340;
+
+  useEffect(() => {
+    const node = panelRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      setPanelWidth(entry.contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
   const getStatusColor = (status: string) => {
     const colors: Record<string, string> = {
       "Draft": "bg-gray-100 text-gray-700",
@@ -61,7 +76,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+    <div ref={panelRef} className="min-w-0 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Header */}
       <div className="bg-blue-600 p-4 text-white">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
@@ -93,7 +108,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
           </div>
 
           <div className="space-y-1.5">
-          <div className="flex items-center gap-2 text-gray-600">
+          <div className="flex flex-wrap items-center gap-2 text-gray-600">
             <User className="w-4 h-4" />
             <span className="font-medium">Sponsor:</span>
             {bill.sponsorId ? (
@@ -105,12 +120,12 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
             )}
             <span>({sponsorDescriptor})</span>
           </div>
-          <div className="flex items-center gap-2 text-gray-600">
+          <div className="flex flex-wrap items-center gap-2 text-gray-600">
             <Building2 className="w-4 h-4" />
             <span className="font-medium">Committee:</span>
             <span>{bill.committee || "Not referred"}</span>
           </div>
-          <div className="flex items-center gap-2 text-gray-600">
+          <div className="flex flex-wrap items-center gap-2 text-gray-600">
             <Calendar className="w-4 h-4" />
             <span className="font-medium">Introduced:</span>
             <span>{new Date(bill.introducedAt ?? bill.lastUpdated).toLocaleDateString()}</span>
@@ -135,10 +150,16 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
         {/* Legislative Text Preview */}
         <div>
           <h4 className="text-sm font-semibold text-gray-900 mb-2">Legislative Text</h4>
-          <div 
-            className="max-h-[520px] overflow-hidden text-sm leading-6 text-gray-700"
-            dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislativeText) }}
-          />
+          {textTooNarrow ? (
+            <div className="rounded-md border border-dashed border-gray-300 bg-gray-50 px-3 py-4 text-center text-sm text-gray-500">
+              The preview window is too small to display the bill text.
+            </div>
+          ) : (
+            <div
+              className="max-h-[520px] overflow-hidden text-sm leading-6 text-gray-700"
+              dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislativeText) }}
+            />
+          )}
         </div>
 
       </div>
