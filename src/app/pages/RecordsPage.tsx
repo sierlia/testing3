@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { ArrowDownAZ, ArrowUpAZ, DollarSign, Download, ExternalLink, Eye, FileText, Mail, MoreHorizontal, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
 import { toast } from "sonner";
@@ -21,9 +21,9 @@ type SortKey = "date" | "title" | "type";
 type SortDirection = "asc" | "desc";
 const RECORD_ROW_MODE_KEY = "gavel:records:row-mode";
 const RECORD_PREVIEW_SPLIT_KEY = "gavel:records:preview-split";
-const PREVIEW_SPLIT_MIN = 38;
-const PREVIEW_SPLIT_MAX = 90;
-const PREVIEW_SPLIT_CLOSE_AT = 92;
+const PREVIEW_SPLIT_MIN = 25;
+const PREVIEW_SPLIT_MAX = 97;
+const PREVIEW_SPLIT_CLOSE_AT = 98.5;
 type VoteList = Record<VoteChoice, Array<{ userId: string; name: string }>>;
 type NewsletterRow = { label: string; detail?: string; href?: string; sponsor?: string; sponsorHref?: string; transition?: string };
 
@@ -261,9 +261,40 @@ function RecordPreviewPanel({ record }: { record: RecordItem }) {
   const Icon = recordIcon(record.type);
   const voteLists = record.votes;
   const newsletter = record.metadata?.newsletter;
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [panelWidth, setPanelWidth] = useState(480);
+  const textTooNarrow = panelWidth < 260;
+
+  useEffect(() => {
+    const node = panelRef.current;
+    if (!node || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(([entry]) => {
+      setPanelWidth(entry.contentRect.width);
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
+
+  if (textTooNarrow) {
+    return (
+      <div ref={panelRef} className="flex min-h-[18rem] items-center justify-center rounded-lg border border-dotted border-gray-300 bg-gray-50 p-5 text-center">
+        <div className="space-y-3">
+          <p className="text-sm font-medium text-gray-500">The preview window is too small to display the record text.</p>
+          <Link
+            to={record.href}
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            View Full Record
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-      <div className="bg-blue-600 p-4 text-white">
+    <div ref={panelRef} className="flex max-h-[calc(100vh-5rem)] min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+      <div className="flex-shrink-0 bg-blue-600 p-4 text-white">
         <div className="mb-2 flex items-center justify-between">
           <span className="inline-flex items-center gap-2 text-sm font-semibold">
             <Icon className="h-4 w-4" />
@@ -277,7 +308,7 @@ function RecordPreviewPanel({ record }: { record: RecordItem }) {
         </div>
         <h3 className="font-semibold">{record.title}</h3>
       </div>
-      <div className="space-y-4 p-4">
+      <div className="space-y-4 overflow-y-auto p-4">
         <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
           <div className="font-medium text-gray-900">{record.subtitle}</div>
           <div className="mt-1 text-xs text-gray-500">{new Date(record.date).toLocaleString()}</div>
@@ -303,7 +334,10 @@ function RecordPreviewPanel({ record }: { record: RecordItem }) {
             <NewsletterSection title="Advertisement Bids" rows={newsletter.adBids} />
           </div>
         ) : (
-          <div className="max-h-[520px] overflow-hidden whitespace-pre-line text-sm leading-6 text-gray-700">{record.body || "Select Open to view the full record."}</div>
+          <div className="relative">
+            <div className="max-h-[520px] overflow-hidden whitespace-pre-line text-sm leading-6 text-gray-700">{record.body || "Select Open to view the full record."}</div>
+            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white via-white/90 to-transparent" />
+          </div>
         )}
         <div className="grid gap-2">
           {newsletter && (
@@ -972,10 +1006,10 @@ export function RecordsPage() {
 
         <div
           id="records-preview-split"
-          className={`grid grid-cols-1 gap-6 ${rowMode === "preview" ? "lg:grid-cols-[var(--record-list-width)_2px_minmax(18rem,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_2px] lg:gap-3"}`}
+          className={`grid grid-cols-1 gap-6 overflow-hidden ${rowMode === "preview" ? "lg:grid-cols-[var(--record-list-width)_0.375rem_minmax(0,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_0.375rem] lg:gap-3"}`}
           style={{ "--record-list-width": `${previewSplitPct}%` } as CSSProperties}
         >
-          <div>
+          <div className="min-w-0">
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               {loading ? (
                 <div className="py-12 text-center text-gray-500">Loading records...</div>
@@ -1066,15 +1100,13 @@ export function RecordsPage() {
           <button
             type="button"
             onMouseDown={() => setDraggingSplit(true)}
-            className="hidden min-h-[24rem] cursor-col-resize bg-gray-300 transition-colors hover:bg-blue-400 active:bg-blue-500 lg:block"
+            className="my-3 hidden min-h-[22rem] cursor-col-resize bg-gray-300 transition-colors hover:bg-blue-400 active:bg-blue-500 lg:block"
             aria-label={rowMode === "preview" ? "Resize records preview" : "Drag left to show records preview"}
           />
 
           {rowMode === "preview" && (
-            <div>
-              <div className="sticky top-8">
-                {selectedRecord ? <RecordPreviewPanel record={selectedRecord} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
-              </div>
+            <div className="min-w-0 lg:w-full">
+              {selectedRecord ? <RecordPreviewPanel record={selectedRecord} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
             </div>
           )}
         </div>

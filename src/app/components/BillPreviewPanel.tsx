@@ -43,7 +43,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
     return party.trim().slice(0, 1).toUpperCase() || "I";
   };
   const sponsorDescriptor = `Rep.-${partyAbbr(bill.sponsorParty)}-${bill.sponsorDistrict || "N/A"}`;
-  const textTooNarrow = panelWidth < 340;
+  const textTooNarrow = panelWidth < 260;
 
   useEffect(() => {
     const node = panelRef.current;
@@ -78,12 +78,12 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
 
   if (textTooNarrow) {
     return (
-      <div ref={panelRef} className="flex min-h-[18rem] items-center justify-center rounded-lg border border-dotted border-gray-500 bg-gray-100 p-5 text-center">
+      <div ref={panelRef} className="flex min-h-[18rem] items-center justify-center rounded-lg border border-dotted border-gray-300 bg-gray-50 p-5 text-center">
         <div className="space-y-3">
-          <p className="text-sm font-medium text-gray-600">The preview window is too small to display the bill text.</p>
+          <p className="text-sm font-medium text-gray-500">The preview window is too small to display the bill text.</p>
           <Link
             to={fullBillTextHref}
-            className="inline-flex items-center gap-1.5 rounded-md border border-gray-400 bg-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-700 transition-colors hover:bg-gray-300"
+            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
           >
             <ExternalLink className="h-3.5 w-3.5" />
             View Full Bill

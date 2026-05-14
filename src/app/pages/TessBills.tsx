@@ -20,7 +20,7 @@ type SortKey = "number" | "date" | "title" | "sponsor" | "status" | "cosponsors"
 type SortDirection = "asc" | "desc";
 const BILL_ROW_MODE_KEY = "gavel:bills:row-mode";
 const BILL_PREVIEW_SPLIT_KEY = "gavel:bills:preview-split";
-const PREVIEW_SPLIT_MIN = 0;
+const PREVIEW_SPLIT_MIN = 25;
 const PREVIEW_SPLIT_MAX = 97;
 const PREVIEW_SPLIT_CLOSE_AT = 98.5;
 
@@ -533,57 +533,6 @@ export function TessBills() {
                 {sortDirection === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
               </button>
               <button onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
-              {isTeacher && filteredBills.length > 0 && (
-                <>
-                  <span className="hidden h-6 w-px bg-gray-200 sm:inline-block" />
-                  <label className="flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
-                    <input
-                      type="checkbox"
-                      checked={allFilteredSelected}
-                      onChange={toggleSelectAllFiltered}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Select all
-                  </label>
-                  {selectedCount > 0 && (
-                    <div className="flex flex-wrap items-center gap-2 rounded-md bg-blue-50 px-2 py-1">
-                      <span className="text-xs font-medium text-blue-700">{selectedCount} selected</span>
-                      <div className="relative" ref={bulkOverrideRef}>
-                        <button
-                          type="button"
-                          onClick={() => setBulkOverrideOpen((open) => !open)}
-                          disabled={bulkBusy}
-                          className="rounded-md border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
-                        >
-                          Override
-                        </button>
-                        {bulkOverrideOpen && (
-                          <div className="absolute left-0 top-full z-40 mt-1 w-44 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                            {bulkStatusOptions.map((option) => (
-                              <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => requestBulkStatusOverride(option.value)}
-                                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
-                              >
-                                {option.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={requestBulkDelete}
-                        disabled={bulkBusy}
-                        className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  )}
-                </>
-              )}
               </div>
               <div className="flex rounded-md border border-gray-300 bg-white p-1 shadow-sm">
                 <button type="button" onClick={() => setRowMode("preview")} className={`flex items-center justify-center gap-1 rounded px-3 py-1.5 text-sm font-medium ${rowMode === "preview" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
@@ -596,12 +545,62 @@ export function TessBills() {
                 </button>
               </div>
             </div>
+            {isTeacher && filteredBills.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+                <label className="flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                  <input
+                    type="checkbox"
+                    checked={allFilteredSelected}
+                    onChange={toggleSelectAllFiltered}
+                    className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Select all
+                </label>
+                {selectedCount > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-md bg-blue-50 px-2 py-1">
+                    <span className="text-xs font-medium text-blue-700">{selectedCount} selected</span>
+                    <div className="relative" ref={bulkOverrideRef}>
+                      <button
+                        type="button"
+                        onClick={() => setBulkOverrideOpen((open) => !open)}
+                        disabled={bulkBusy}
+                        className="rounded-md border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                      >
+                        Override
+                      </button>
+                      {bulkOverrideOpen && (
+                        <div className="absolute left-0 top-full z-40 mt-1 w-44 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                          {bulkStatusOptions.map((option) => (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => requestBulkStatusOverride(option.value)}
+                              className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={requestBulkDelete}
+                      disabled={bulkBusy}
+                      className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
         <div
           id="bills-preview-split"
-          className={`grid grid-cols-1 gap-6 overflow-hidden ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_2px_minmax(0,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_2px] lg:gap-3"}`}
+          className={`grid grid-cols-1 gap-6 overflow-hidden ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_0.375rem_minmax(0,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_0.375rem] lg:gap-3"}`}
           style={{ "--bill-list-width": `${previewSplitPct}%` } as CSSProperties}
         >
           <div className="min-w-0">
@@ -711,21 +710,19 @@ export function TessBills() {
           <button
             type="button"
             onMouseDown={() => setDraggingSplit(true)}
-            className="hidden min-h-[24rem] cursor-col-resize bg-gray-300 transition-colors hover:bg-blue-400 active:bg-blue-500 lg:block"
+            className="my-3 hidden min-h-[22rem] cursor-col-resize bg-gray-300 transition-colors hover:bg-blue-400 active:bg-blue-500 lg:block"
             aria-label={rowMode === "preview" ? "Resize bill preview" : "Drag left to show bill preview"}
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0 lg:w-full lg:max-w-[34rem] lg:justify-self-end">
-              <div className="sticky top-8">
-                {selectedBill ? (
-                  <BillPreviewPanel bill={selectedBill} />
-                ) : (
-                  <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-                    <p className="text-gray-500">Select a bill to preview</p>
-                  </div>
-                )}
-              </div>
+            <div className="min-w-0 lg:w-full">
+              {selectedBill ? (
+                <BillPreviewPanel bill={selectedBill} />
+              ) : (
+                <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+                  <p className="text-gray-500">Select a bill to preview</p>
+                </div>
+              )}
             </div>
           )}
         </div>
