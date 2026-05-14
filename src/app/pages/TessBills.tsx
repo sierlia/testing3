@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router";
 import { ArrowDownAZ, ArrowUpAZ, Check, Circle, Clock, ExternalLink, Eye, FileText, MoreHorizontal, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -202,8 +202,9 @@ export function TessBills() {
   const [deletingBillId, setDeletingBillId] = useState<string | null>(null);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [selectedBillIds, setSelectedBillIds] = useState<string[]>([]);
-  const [bulkStatus, setBulkStatus] = useState("reported");
+  const [bulkOverrideOpen, setBulkOverrideOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkOverrideRef = useRef<HTMLDivElement | null>(null);
   const searchKey = searchParams.toString();
 
   useEffect(() => {
@@ -301,6 +302,15 @@ export function TessBills() {
   }, [openBillMenuId]);
 
   useEffect(() => {
+    if (!bulkOverrideOpen) return;
+    const close = (event: PointerEvent) => {
+      if (!bulkOverrideRef.current?.contains(event.target as Node)) setBulkOverrideOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [bulkOverrideOpen]);
+
+  useEffect(() => {
     window.localStorage.setItem(BILL_ROW_MODE_KEY, rowMode);
   }, [rowMode]);
 
@@ -344,7 +354,6 @@ export function TessBills() {
   const filteredBillIds = useMemo(() => filteredBills.map((bill) => bill.id), [filteredBills]);
   const selectedCount = selectedBillIds.length;
   const allFilteredSelected = filteredBillIds.length > 0 && filteredBillIds.every((id) => selectedBillIdSet.has(id));
-  const bulkStatusLabel = bulkStatusOptions.find((option) => option.value === bulkStatus)?.label ?? statusLabel(bulkStatus);
 
   const resetFilters = () => {
     setSearchQuery("");
@@ -421,9 +430,11 @@ export function TessBills() {
     });
   };
 
-  const requestBulkStatusOverride = () => {
-    if (!selectedCount || !bulkStatus) return;
+  const requestBulkStatusOverride = (status: string) => {
+    if (!selectedCount || !status) return;
     const ids = [...selectedBillIds];
+    const bulkStatusLabel = bulkStatusOptions.find((option) => option.value === status)?.label ?? statusLabel(status);
+    setBulkOverrideOpen(false);
     setConfirmDialog({
       title: `Set ${ids.length} bill${ids.length === 1 ? "" : "s"} to ${bulkStatusLabel}?`,
       message: "This will manually override the status for every selected bill.",
@@ -431,10 +442,10 @@ export function TessBills() {
       onConfirm: async () => {
         setBulkBusy(true);
         try {
-          const updatedIds = await bulkUpdateBillStatusForCurrentClass(ids, bulkStatus);
+          const updatedIds = await bulkUpdateBillStatusForCurrentClass(ids, status);
           const updatedSet = new Set(updatedIds);
-          setAllBills((current) => current.map((bill) => (updatedSet.has(bill.id) ? { ...bill, status: bulkStatus } : bill)));
-          setSelectedBill((current) => (current && updatedSet.has(current.id) ? { ...current, status: bulkStatus } : current));
+          setAllBills((current) => current.map((bill) => (updatedSet.has(bill.id) ? { ...bill, status } : bill)));
+          setSelectedBill((current) => (current && updatedSet.has(current.id) ? { ...current, status } : current));
           setSelectedBillIds([]);
           toast.success(`Updated ${updatedIds.length} bill${updatedIds.length === 1 ? "" : "s"}`);
         } catch (error: any) {
@@ -522,6 +533,57 @@ export function TessBills() {
                 {sortDirection === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
               </button>
               <button onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
+              {isTeacher && filteredBills.length > 0 && (
+                <>
+                  <span className="hidden h-6 w-px bg-gray-200 sm:inline-block" />
+                  <label className="flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={toggleSelectAllFiltered}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    Select all
+                  </label>
+                  {selectedCount > 0 && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-md bg-blue-50 px-2 py-1">
+                      <span className="text-xs font-medium text-blue-700">{selectedCount} selected</span>
+                      <div className="relative" ref={bulkOverrideRef}>
+                        <button
+                          type="button"
+                          onClick={() => setBulkOverrideOpen((open) => !open)}
+                          disabled={bulkBusy}
+                          className="rounded-md border border-blue-200 bg-white px-2.5 py-1.5 text-xs font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                        >
+                          Override
+                        </button>
+                        {bulkOverrideOpen && (
+                          <div className="absolute left-0 top-full z-40 mt-1 w-44 overflow-hidden rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                            {bulkStatusOptions.map((option) => (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => requestBulkStatusOverride(option.value)}
+                                className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700"
+                              >
+                                {option.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={requestBulkDelete}
+                        disabled={bulkBusy}
+                        className="rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
+                      >
+                        Delete
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
               </div>
               <div className="flex rounded-md border border-gray-300 bg-white p-1 shadow-sm">
                 <button type="button" onClick={() => setRowMode("preview")} className={`flex items-center justify-center gap-1 rounded px-3 py-1.5 text-sm font-medium ${rowMode === "preview" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"}`}>
@@ -544,43 +606,6 @@ export function TessBills() {
         >
           <div className="min-w-0">
             <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
-              {isTeacher && !loading && filteredBills.length > 0 && (
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 bg-gray-50 px-4 py-3">
-                  <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-gray-700">
-                    <input
-                      type="checkbox"
-                      checked={allFilteredSelected}
-                      onChange={toggleSelectAllFiltered}
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    Select all
-                  </label>
-                  <div className="flex flex-wrap items-center justify-end gap-2">
-                    <span className="text-sm text-gray-600">{selectedCount} selected</span>
-                    <FilterSelect value={bulkStatus} onChange={setBulkStatus} className="w-44">
-                      {bulkStatusOptions.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
-                      ))}
-                    </FilterSelect>
-                    <button
-                      type="button"
-                      onClick={requestBulkStatusOverride}
-                      disabled={!selectedCount || bulkBusy}
-                      className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                    >
-                      Override status
-                    </button>
-                    <button
-                      type="button"
-                      onClick={requestBulkDelete}
-                      disabled={!selectedCount || bulkBusy}
-                      className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      Delete selected
-                    </button>
-                  </div>
-                </div>
-              )}
               {loading ? (
                 <div className="py-12 text-center text-gray-500">Loading bills...</div>
               ) : filteredBills.length === 0 ? (
@@ -589,6 +614,7 @@ export function TessBills() {
                 <div className="divide-y divide-gray-200">
                   {pageBills.map((bill) => {
                     const teacherAuthored = bill.sponsorRole === "teacher";
+                    const bulkSelected = selectedBillIdSet.has(bill.id);
                     return (
                     <div
                       key={bill.id}
@@ -599,8 +625,8 @@ export function TessBills() {
                         if (event.key === "Enter" || event.key === " ") handleBillClick(bill);
                       }}
                       className={`block w-full p-4 text-left transition-colors ${
-                        teacherAuthored ? "bg-green-50/40 hover:bg-green-50/70" : "hover:bg-gray-50"
-                      } ${selectedBill?.id === bill.id && rowMode === "preview" ? (teacherAuthored ? "bg-green-50 hover:bg-green-50" : "bg-blue-50 hover:bg-blue-50") : ""}`}
+                        bulkSelected ? "bg-blue-50 hover:bg-blue-50" : teacherAuthored ? "bg-green-50/40 hover:bg-green-50/70" : "hover:bg-gray-50"
+                      } ${!bulkSelected && selectedBill?.id === bill.id && rowMode === "preview" ? (teacherAuthored ? "bg-green-50 hover:bg-green-50" : "bg-blue-50 hover:bg-blue-50") : ""}`}
                     >
                       <div className="flex items-start justify-between gap-4">
                         {isTeacher && (
@@ -690,7 +716,7 @@ export function TessBills() {
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0">
+            <div className="min-w-0 lg:w-full lg:max-w-[34rem] lg:justify-self-end">
               <div className="sticky top-8">
                 {selectedBill ? (
                   <BillPreviewPanel bill={selectedBill} />

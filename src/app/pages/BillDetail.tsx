@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { AlertCircle, ArrowLeft, BookOpen, Check, Circle, Clock, FileText, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { generateHTML } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
@@ -189,6 +189,7 @@ function HorizontalTracker({ steps, onSelectStep }: { steps: TrackerItem[]; onSe
 
 export function BillDetail() {
   const { id } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<TextTab>("original");
 
@@ -307,6 +308,14 @@ export function BillDetail() {
       return prev === "revised" ? "original" : prev;
     });
   }, [bill, showRevisedText]);
+
+  useEffect(() => {
+    if (!bill || location.hash !== "#bill-text") return;
+    setActiveTab("original");
+    window.setTimeout(() => {
+      document.getElementById("bill-text")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
+  }, [bill, location.hash]);
 
   const actions = useMemo<BillAction[]>(() => {
     if (!bill) return [];
@@ -698,7 +707,7 @@ export function BillDetail() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <div className="space-y-6">
-            <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+            <div id="bill-text" className="scroll-mt-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-200">
                 <div className="flex">
                   {showRevisedText && (
