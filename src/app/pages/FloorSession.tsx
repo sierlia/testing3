@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
-import { Check, ExternalLink, MessageSquare, Minus, MonitorUp, Pencil, Plus, Search, Send, Trash2, Trophy, Vote, X } from "lucide-react";
+import { Check, ChevronLeft, ChevronRight, ExternalLink, MessageSquare, Minus, MonitorUp, Pencil, Plus, Search, Send, Trash2, Trophy, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../services/bills";
@@ -117,6 +117,7 @@ export function FloorSession() {
   const [discussionComments, setDiscussionComments] = useState<DiscussionComment[]>([]);
   const [discussionReactions, setDiscussionReactions] = useState<DiscussionReaction[]>([]);
   const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null);
+  const [discussionListCollapsed, setDiscussionListCollapsed] = useState(false);
   const [creatingDiscussion, setCreatingDiscussion] = useState(false);
   const [newDiscussionTitle, setNewDiscussionTitle] = useState("");
   const [newDiscussionPrompt, setNewDiscussionPrompt] = useState("");
@@ -906,19 +907,38 @@ export function FloorSession() {
   };
 
   const discussionBoard = (
-    <div className="grid gap-6 lg:grid-cols-[19rem_minmax(0,1fr)]">
-      <aside className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-blue-600" />
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Discussion Areas</h2>
-          </div>
-          {role === "teacher" && (
-            <button type="button" onClick={beginCreateDiscussion} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Create discussion area">
-              <Plus className="h-4 w-4" />
-            </button>
+    <div className={`grid min-h-[calc(100vh-12rem)] gap-4 ${discussionListCollapsed ? "lg:grid-cols-[3rem_minmax(0,1fr)]" : "lg:grid-cols-[18rem_minmax(0,1fr)]"}`}>
+      <aside className={`min-w-0 ${discussionListCollapsed ? "" : "border-r border-gray-200 pr-3"}`}>
+        <div className={`mb-4 flex items-center ${discussionListCollapsed ? "justify-center" : "justify-between gap-3"}`}>
+          {!discussionListCollapsed && (
+            <div className="flex items-center gap-2">
+              <MessageSquare className="h-4 w-4 text-blue-600" />
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Discussion Areas</h2>
+            </div>
           )}
+          <div className="flex items-center gap-1">
+            {role === "teacher" && !discussionListCollapsed && (
+              <button type="button" onClick={beginCreateDiscussion} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Create discussion area">
+                <Plus className="h-4 w-4" />
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setDiscussionListCollapsed((collapsed) => !collapsed)}
+              className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
+              aria-label={discussionListCollapsed ? "Show discussion areas" : "Hide discussion areas"}
+              title={discussionListCollapsed ? "Show discussion areas" : "Hide discussion areas"}
+            >
+              {discussionListCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </button>
+          </div>
         </div>
+        {discussionListCollapsed ? (
+          <div className="flex flex-col items-center gap-2 text-gray-400">
+            <MessageSquare className="h-5 w-5" />
+            <div className="text-xs font-semibold">{visibleDiscussionAreas.length}</div>
+          </div>
+        ) : (
         <div className="space-y-4">
           {discussionSections.map((section) => {
             const areas = discussionAreasByVisibility[section.id];
@@ -991,8 +1011,9 @@ export function FloorSession() {
             );
           })}
         </div>
+        )}
       </aside>
-      <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <section className="min-w-0">
         {creatingDiscussion && role === "teacher" ? (
           <div className="space-y-4">
             <div>
@@ -1071,7 +1092,7 @@ export function FloorSession() {
               )}
             </div>
             {selectedDiscussionCanPost ? (
-              <div className="mb-5 rounded-lg border border-gray-200 bg-gray-50 p-3">
+              <div className="mb-5 border-b border-gray-200 pb-4">
                 <textarea
                   value={newDiscussionPost}
                   onChange={(event) => setNewDiscussionPost(event.target.value)}
@@ -1093,49 +1114,51 @@ export function FloorSession() {
               </div>
             )}
             {selectedDiscussionPosts.length ? (
-              <div className="grid items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <div className="space-y-4">
                 {selectedDiscussionPosts.map((post) => {
                   const postComments = discussionCommentsByPost.get(post.id) ?? [];
                   const postReactions = discussionReactionsByPost.get(post.id) ?? [];
                   return (
-                    <article key={post.id} className="rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-                      <div className="mb-3 flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 items-start gap-2">
-                          <SecureAvatar src={post.author?.avatar_url} alt={post.author?.display_name ?? "Member"} className="h-9 w-9 rounded-full object-cover" fallbackClassName="h-9 w-9 rounded-full" />
-                          <div className="min-w-0">
-                            <div className="truncate text-sm font-semibold text-gray-900">{authorLabel(post.author)}</div>
-                            <div className="text-xs text-gray-500">{new Date(post.created_at).toLocaleString()}</div>
+                    <article key={post.id} className="grid gap-3 rounded-md border border-gray-200 bg-white p-4 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
+                      <div className="min-w-0">
+                        <div className="mb-3 flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 items-start gap-2">
+                            <SecureAvatar src={post.author?.avatar_url} alt={post.author?.display_name ?? "Member"} className="h-9 w-9 rounded-full object-cover" fallbackClassName="h-9 w-9 rounded-full" />
+                            <div className="min-w-0">
+                              <div className="truncate text-sm font-semibold text-gray-900">{authorLabel(post.author)}</div>
+                              <div className="text-xs text-gray-500">{new Date(post.created_at).toLocaleString()}</div>
+                            </div>
                           </div>
-                        </div>
-                        {(role === "teacher" || post.author_user_id === meId) && (
-                          <button type="button" onClick={() => void deleteDiscussionPost(post)} className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete post">
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        )}
-                      </div>
-                      <p className="whitespace-pre-wrap text-sm leading-6 text-gray-800">{post.body}</p>
-                      <AttachmentList attachments={post.attachments} />
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {DISCUSSION_REACTIONS.map((reaction) => {
-                          const count = postReactions.filter((row) => row.emoji === reaction.id).length;
-                          const selected = postReactions.some((row) => row.emoji === reaction.id && row.user_id === meId);
-                          return (
-                            <button
-                              key={reaction.id}
-                              type="button"
-                              onClick={() => void toggleDiscussionReaction(post.id, reaction.id)}
-                              disabled={!selectedDiscussionCanPost}
-                              className={`rounded-full border px-2.5 py-1 text-xs font-medium disabled:opacity-60 ${selected ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
-                            >
-                              {reaction.label} {count}
+                          {(role === "teacher" || post.author_user_id === meId) && (
+                            <button type="button" onClick={() => void deleteDiscussionPost(post)} className="rounded-md p-1 text-gray-400 hover:bg-red-50 hover:text-red-600" aria-label="Delete post">
+                              <Trash2 className="h-4 w-4" />
                             </button>
-                          );
-                        })}
+                          )}
+                        </div>
+                        <p className="whitespace-pre-wrap text-sm leading-6 text-gray-800">{post.body}</p>
+                        <AttachmentList attachments={post.attachments} />
+                        <div className="mt-4 flex flex-wrap gap-2">
+                          {DISCUSSION_REACTIONS.map((reaction) => {
+                            const count = postReactions.filter((row) => row.emoji === reaction.id).length;
+                            const selected = postReactions.some((row) => row.emoji === reaction.id && row.user_id === meId);
+                            return (
+                              <button
+                                key={reaction.id}
+                                type="button"
+                                onClick={() => void toggleDiscussionReaction(post.id, reaction.id)}
+                                disabled={!selectedDiscussionCanPost}
+                                className={`rounded-full border px-2.5 py-1 text-xs font-medium disabled:opacity-60 ${selected ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
+                              >
+                                {reaction.label} {count}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                      <div className="mt-4 border-t border-gray-100 pt-3">
+                      <aside className="flex max-h-72 min-h-0 flex-col border-t border-gray-100 pt-3 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
                         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Replies ({postComments.length})</div>
-                        <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
-                          {postComments.map((comment) => (
+                        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+                          {postComments.length ? postComments.map((comment) => (
                             <div key={comment.id} className="rounded-md bg-gray-50 p-2">
                               <div className="flex items-start justify-between gap-2">
                                 <div className="flex min-w-0 items-start gap-2">
@@ -1151,26 +1174,26 @@ export function FloorSession() {
                               <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-gray-700">{comment.body}</p>
                               <AttachmentList attachments={comment.attachments} />
                             </div>
-                          ))}
+                          )) : <div className="rounded-md bg-gray-50 p-3 text-xs text-gray-500">No replies yet.</div>}
                         </div>
                         {selectedDiscussionCanPost && (
-                          <div className="mt-3 space-y-2">
-                            <textarea
+                          <div className="mt-2 flex items-center gap-2">
+                            <AttachmentPicker compact value={commentAttachments[post.id] ?? []} onChange={(next) => setCommentAttachments((prev) => ({ ...prev, [post.id]: next }))} />
+                            <input
                               value={commentDrafts[post.id] ?? ""}
                               onChange={(event) => setCommentDrafts((prev) => ({ ...prev, [post.id]: event.target.value }))}
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter") {
+                                  event.preventDefault();
+                                  void submitDiscussionComment(post.id);
+                                }
+                              }}
                               placeholder="Reply..."
-                              rows={4}
-                              className="w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                              className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                             />
-                            <div className="flex items-center justify-between gap-3">
-                              <AttachmentPicker value={commentAttachments[post.id] ?? []} onChange={(next) => setCommentAttachments((prev) => ({ ...prev, [post.id]: next }))} />
-                              <button type="button" onClick={() => void submitDiscussionComment(post.id)} disabled={busy || !(commentDrafts[post.id] ?? "").trim()} className="rounded-md bg-gray-900 px-3 py-2 text-sm font-semibold text-white hover:bg-gray-800 disabled:opacity-50">
-                                Reply
-                              </button>
-                            </div>
                           </div>
                         )}
-                      </div>
+                      </aside>
                     </article>
                   );
                 })}
@@ -1187,10 +1210,10 @@ export function FloorSession() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${displayFloorMode === "discussion" ? "bg-white" : "bg-gray-50"}`}>
       <Navigation />
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-8">
+      <main className={displayFloorMode === "discussion" ? "px-3 py-4 sm:px-4 lg:px-6" : "mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"}>
+        <div className={displayFloorMode === "discussion" ? "mb-4" : "mb-8"}>
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
               <h1 className="mb-2 text-3xl font-bold text-gray-900">Floor</h1>

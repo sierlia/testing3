@@ -1014,7 +1014,7 @@ export function RecordsPage() {
 
         <div
           id="records-preview-split"
-          className={`grid grid-cols-1 gap-6 overflow-hidden ${rowMode === "preview" ? "lg:grid-cols-[var(--record-list-width)_0.375rem_minmax(0,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_0.375rem] lg:gap-3"}`}
+          className={`grid grid-cols-1 gap-6 overflow-visible ${rowMode === "preview" ? "lg:grid-cols-[var(--record-list-width)_0.375rem_minmax(0,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_0.375rem] lg:gap-3"}`}
           style={{ "--record-list-width": `${previewSplitPct}%` } as CSSProperties}
         >
           <div className="min-w-0">
@@ -1127,7 +1127,7 @@ export function RecordsPage() {
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0 lg:w-full">
+            <div className="min-w-0 lg:w-full lg:self-start">
               <div className="lg:sticky lg:top-4">
                 {selectedRecord ? <RecordPreviewPanel record={selectedRecord} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
               </div>

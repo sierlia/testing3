@@ -626,7 +626,7 @@ export function TessBills() {
 
         <div
           id="bills-preview-split"
-          className={`grid grid-cols-1 gap-6 overflow-hidden ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_0.375rem_minmax(0,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_0.375rem] lg:gap-3"}`}
+          className={`grid grid-cols-1 gap-6 overflow-visible ${rowMode === "preview" ? "lg:grid-cols-[var(--bill-list-width)_0.375rem_minmax(0,1fr)] lg:gap-3" : "lg:grid-cols-[minmax(0,1fr)_0.375rem] lg:gap-3"}`}
           style={{ "--bill-list-width": `${previewSplitPct}%` } as CSSProperties}
         >
           <div className="min-w-0">
@@ -755,7 +755,7 @@ export function TessBills() {
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0 lg:w-full">
+            <div className="min-w-0 lg:w-full lg:self-start">
               <div className="lg:sticky lg:top-4">
                 {selectedBill ? (
                   <BillPreviewPanel bill={selectedBill} />

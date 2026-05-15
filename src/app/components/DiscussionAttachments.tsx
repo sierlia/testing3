@@ -51,9 +51,11 @@ export function AttachmentList({ attachments }: { attachments?: DiscussionAttach
 export function AttachmentPicker({
   value,
   onChange,
+  compact = false,
 }: {
   value: DiscussionAttachment[];
   onChange: (next: DiscussionAttachment[]) => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<"legislation" | "records">("legislation");
@@ -129,13 +131,15 @@ export function AttachmentPicker({
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium ${value.length ? "border-blue-200 bg-blue-50 text-blue-700" : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"}`}
+        className={`inline-flex items-center justify-center gap-1.5 rounded-md border text-xs font-medium ${compact ? "h-8 w-8 p-0" : "px-2.5 py-1.5"} ${value.length ? "border-blue-200 bg-blue-50 text-blue-700" : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"}`}
+        title={value.length ? `${value.length} attached` : "Attach"}
+        aria-label={value.length ? `${value.length} attached` : "Attach"}
       >
         <Paperclip className="h-3.5 w-3.5" />
-        {value.length ? `${value.length} attached` : "Attach"}
+        {!compact && (value.length ? `${value.length} attached` : "Attach")}
       </button>
       {open && (
-        <div className="absolute bottom-full left-0 z-[150] mb-2 w-[28rem] max-w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl">
+        <div className={`absolute bottom-full z-[150] mb-2 w-[28rem] max-w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl ${compact ? "right-0" : "left-0"}`}>
           <div className="border-b border-gray-200 p-3">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
