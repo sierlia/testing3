@@ -20,7 +20,7 @@ type SortKey = "number" | "date" | "title" | "sponsor" | "status" | "cosponsors"
 type SortDirection = "asc" | "desc";
 const BILL_ROW_MODE_KEY = "gavel:bills:row-mode";
 const BILL_PREVIEW_SPLIT_KEY = "gavel:bills:preview-split";
-const PREVIEW_SPLIT_MIN = 25;
+const PREVIEW_SPLIT_MIN = 32;
 const PREVIEW_SPLIT_MAX = 97;
 const PREVIEW_SPLIT_CLOSE_AT = 98.5;
 
@@ -195,7 +195,7 @@ export function TessBills() {
     cosponsorId: "all",
   });
   const [sortBy, setSortBy] = useState<SortKey>("number");
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [openBillMenuId, setOpenBillMenuId] = useState<string | null>(null);
@@ -359,7 +359,7 @@ export function TessBills() {
     setSearchQuery("");
     setFilters({ status: "all", committee: "all", sponsorId: "all", cosponsorId: "all" });
     setSortBy("number");
-    setSortDirection("asc");
+    setSortDirection("desc");
   };
 
   const handleBillClick = (bill: BillView) => {
@@ -408,9 +408,22 @@ export function TessBills() {
   const requestBulkDelete = () => {
     if (!selectedCount) return;
     const ids = [...selectedBillIds];
+    const selectedBills = allBills.filter((bill) => ids.includes(bill.id));
     setConfirmDialog({
       title: `Delete ${ids.length} bill${ids.length === 1 ? "" : "s"}?`,
-      message: "Selected bills will be removed from the legislation list.",
+      message: (
+        <div className="space-y-3">
+          <p>This action will irreversibly apply to all these bills.</p>
+          <div className="max-h-48 overflow-y-auto rounded-md border border-gray-200 bg-gray-50">
+            {selectedBills.map((bill) => (
+              <div key={bill.id} className="border-b border-gray-100 px-3 py-2 last:border-b-0">
+                <div className="font-mono text-xs font-semibold text-gray-900">{bill.number}</div>
+                <div className="text-xs text-gray-600">{bill.title}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
       confirmLabel: "Delete selected",
       danger: true,
       onConfirm: async () => {
@@ -434,10 +447,23 @@ export function TessBills() {
     if (!selectedCount || !status) return;
     const ids = [...selectedBillIds];
     const bulkStatusLabel = bulkStatusOptions.find((option) => option.value === status)?.label ?? statusLabel(status);
+    const selectedBills = allBills.filter((bill) => ids.includes(bill.id));
     setBulkOverrideOpen(false);
     setConfirmDialog({
       title: `Set ${ids.length} bill${ids.length === 1 ? "" : "s"} to ${bulkStatusLabel}?`,
-      message: "This will manually override the status for every selected bill.",
+      message: (
+        <div className="space-y-3">
+          <p>This action will irreversibly apply to all these bills.</p>
+          <div className="max-h-48 overflow-y-auto rounded-md border border-gray-200 bg-gray-50">
+            {selectedBills.map((bill) => (
+              <div key={bill.id} className="border-b border-gray-100 px-3 py-2 last:border-b-0">
+                <div className="font-mono text-xs font-semibold text-gray-900">{bill.number}</div>
+                <div className="text-xs text-gray-600">{bill.title}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      ),
       confirmLabel: "Override status",
       onConfirm: async () => {
         setBulkBusy(true);
@@ -546,7 +572,7 @@ export function TessBills() {
               </div>
             </div>
             {isTeacher && filteredBills.length > 0 && (
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 pt-3">
+              <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 pt-3">
                 <label className="flex cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-700 hover:bg-gray-50">
                   <input
                     type="checkbox"
@@ -710,19 +736,21 @@ export function TessBills() {
           <button
             type="button"
             onMouseDown={() => setDraggingSplit(true)}
-            className="my-3 hidden min-h-[22rem] cursor-col-resize bg-gray-300 transition-colors hover:bg-blue-400 active:bg-blue-500 lg:block"
+            className="my-3 hidden min-h-[22rem] cursor-col-resize bg-gray-200 transition-colors hover:bg-gray-300 active:bg-blue-400 lg:block"
             aria-label={rowMode === "preview" ? "Resize bill preview" : "Drag left to show bill preview"}
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0 lg:w-full">
-              {selectedBill ? (
-                <BillPreviewPanel bill={selectedBill} />
-              ) : (
-                <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
-                  <p className="text-gray-500">Select a bill to preview</p>
-                </div>
-              )}
+            <div className="min-w-0 lg:w-full lg:max-w-[30rem]">
+              <div className="lg:sticky lg:top-4">
+                {selectedBill ? (
+                  <BillPreviewPanel bill={selectedBill} />
+                ) : (
+                  <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm">
+                    <p className="text-gray-500">Select a bill to preview</p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

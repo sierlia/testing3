@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router";
-import { Calendar, Check, Copy, Mail, User } from "lucide-react";
+import { Check, Copy } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
 import { supabase } from "../utils/supabase";
@@ -83,53 +83,30 @@ export function LetterView() {
         ) : !letter ? (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-sm text-gray-500">Letter not found.</div>
         ) : (
-          <>
-            <div className="mb-6 rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
-              <div className="mb-4 flex items-start justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-600">
-                    <Mail className="h-6 w-6 text-white" />
-                  </div>
-                  <div>
-                    <h1 className="text-xl font-bold text-gray-900">Dear Colleague Letter</h1>
-                    <p className="text-sm text-gray-600">{letter.subject}</p>
-                  </div>
+          <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-5 flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <h1 className="break-words text-2xl font-bold text-gray-900">{letter.subject || "Dear Colleague Letter"}</h1>
+                <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-600">
+                  <span>From</span>
+                  <Link to={profilePath(letter.sender_user_id)} className="font-medium text-blue-600 hover:underline">{sender?.display_name ?? "Member"}</Link>
+                  <span className="text-gray-300">|</span>
+                  <span>To</span>
+                  <span className="font-medium text-gray-800">{[...orgRecipients, ...recipients.slice(0, Math.max(0, 4 - orgRecipients.length)).map((recipient) => recipient.display_name ?? "Member")].join(", ") || "Recipients"}</span>
+                  {orgRecipients.length + recipients.length > 4 && <span className="text-gray-500">+{orgRecipients.length + recipients.length - 4} more</span>}
+                  <span className="text-gray-300">|</span>
+                  <span>Sent {new Date(letter.created_at).toLocaleString()}</span>
                 </div>
-                <button onClick={handleCopyLink} className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700">
+              </div>
+              <button onClick={handleCopyLink} className="flex flex-shrink-0 items-center gap-2 rounded-md bg-blue-600 px-4 py-2 font-medium text-white transition-colors hover:bg-blue-700">
                   {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
                   {copied ? "Copied" : "Copy link"}
-                </button>
-              </div>
-              <div className="grid grid-cols-1 gap-4 border-t border-gray-200 pt-4 md:grid-cols-3">
-                <div className="flex items-start gap-2">
-                  <User className="mt-0.5 h-4 w-4 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-600">From</p>
-                    <Link to={profilePath(letter.sender_user_id)} className="font-medium text-blue-600 hover:underline">{sender?.display_name ?? "Member"}</Link>
-                    <p className="text-xs text-gray-600">{sender?.party ?? ""}</p>
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <User className="mt-0.5 h-4 w-4 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-600">To</p>
-                    <p className="font-medium text-gray-900">{[...orgRecipients, ...recipients.slice(0, Math.max(0, 4 - orgRecipients.length)).map((recipient) => recipient.display_name ?? "Member")].join(", ") || "Recipients"}</p>
-                    {orgRecipients.length + recipients.length > 4 && <p className="text-xs text-gray-600">+{orgRecipients.length + recipients.length - 4} more</p>}
-                  </div>
-                </div>
-                <div className="flex items-start gap-2">
-                  <Calendar className="mt-0.5 h-4 w-4 text-gray-400" />
-                  <div>
-                    <p className="text-xs text-gray-600">Sent</p>
-                    <p className="font-medium text-gray-900">{new Date(letter.created_at).toLocaleString()}</p>
-                  </div>
-                </div>
-              </div>
+              </button>
             </div>
-            <div className="rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
-              <pre className="whitespace-pre-wrap font-sans leading-relaxed text-gray-700">{letter.body}</pre>
+            <div className="border-t border-gray-200 pt-6">
+              <pre className="whitespace-pre-wrap break-words font-sans leading-relaxed text-gray-700">{letter.body}</pre>
             </div>
-          </>
+          </div>
         )}
       </main>
     </div>

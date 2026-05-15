@@ -1,8 +1,9 @@
 import { AlertCircle } from "lucide-react";
+import type { ReactNode } from "react";
 
 export type ConfirmDialogState = {
   title: string;
-  message: string;
+  message: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
@@ -25,14 +26,14 @@ export function ConfirmDialog({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-md rounded-lg border border-gray-200 bg-white shadow-xl">
+      <div className="w-full max-w-lg rounded-lg border border-gray-200 bg-white shadow-xl">
         <div className="flex items-start gap-3 border-b border-gray-200 p-5">
           <div className={`mt-0.5 rounded-full p-2 ${dialog.danger ? "bg-red-50 text-red-600" : "bg-blue-50 text-blue-600"}`}>
             <AlertCircle className="h-5 w-5" />
           </div>
-          <div>
+          <div className="min-w-0">
             <h2 className="text-lg font-semibold text-gray-900">{dialog.title}</h2>
-            <p className="mt-1 text-sm text-gray-600">{dialog.message}</p>
+            <div className="mt-1 text-sm text-gray-600">{dialog.message}</div>
           </div>
         </div>
         <div className="flex items-center justify-end gap-3 p-4">

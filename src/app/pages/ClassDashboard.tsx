@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import {
   AlertCircle,
+  Backpack,
   BookOpen,
   Calendar as CalendarIcon,
   ChevronDown,
@@ -11,20 +12,22 @@ import {
   Lock,
   MessageSquare,
   Pencil,
+  Pin,
   Plus,
   Save,
+  Send,
   Settings,
   TrendingUp,
   Unlock,
   Users,
   Vote,
-  X,
 } from "lucide-react";
 import { Button } from "../components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
+import { TeacherAssignmentModal } from "../components/TeacherAssignmentModal";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
 import { fetchCalendaredBillsForCurrentClass } from "../services/bills";
 import { supabase } from "../utils/supabase";
@@ -36,7 +39,7 @@ interface CalendarEvent {
   id: string;
   title: string;
   date: Date;
-  type: "deadline" | "session" | "election" | "bill";
+  type: "assignment" | "deadline" | "session" | "election" | "bill";
   href?: string;
 }
 
@@ -61,20 +64,16 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
   const [recentActivity, setRecentActivity] = useState<ClassActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
   const [selectedUpcomingDay, setSelectedUpcomingDay] = useState<string | null>(null);
-  const [dashboardCalendarMonth, setDashboardCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
-  const [assignmentTitle, setAssignmentTitle] = useState("");
-  const [assignmentDescription, setAssignmentDescription] = useState("");
-  const [assignmentDueDate, setAssignmentDueDate] = useState("");
-  const [assignmentDueTime, setAssignmentDueTime] = useState("23:59");
-  const [assignmentPoints, setAssignmentPoints] = useState("100");
-  const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [timelineExpanded, setTimelineExpanded] = useState(false);
   const [billStats, setBillStats] = useState({ total: 0, waitingReferral: 0, waitingCalendar: 0 });
   const [workflowBusy, setWorkflowBusy] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteBusy, setInviteBusy] = useState(false);
+  const [announcementDraft, setAnnouncementDraft] = useState("");
+  const [announcementPinned, setAnnouncementPinned] = useState(false);
+  const [postingAnnouncement, setPostingAnnouncement] = useState(false);
   const currentTimelineCardRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   useUnsavedChangesPrompt(editingClassName && classNameDraft.trim() !== className);
@@ -116,21 +115,28 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
         waitingCalendar: statsRows.filter((bill) => bill.status === "reported").length,
       });
 
-      const nowIso = new Date().toISOString();
+      const now = new Date();
+      const calendarStart = new Date(now);
+      calendarStart.setDate(now.getDate() - 30);
+      const calendarEnd = new Date(now);
+      calendarEnd.setDate(now.getDate() + 120);
       const { data: taskRows } = await supabase
         .from("class_tasks")
         .select("id,title,task_type,due_at")
-        .gte("due_at", nowIso)
+        .eq("class_id", classId)
+        .not("due_at", "is", null)
+        .gte("due_at", calendarStart.toISOString())
+        .lte("due_at", calendarEnd.toISOString())
         .order("due_at", { ascending: true })
-        .limit(30);
+        .limit(80);
       const calendaredBills = await fetchCalendaredBillsForCurrentClass();
       setUpcomingEvents(
         [
           ...(taskRows ?? []).map((task: any) => ({
           id: task.id,
-          title: `${task.task_type === "assignment" ? "Assignment" : "Deadline"}: ${task.title}`,
+          title: task.title,
           date: new Date(task.due_at),
-          type: "deadline",
+          type: task.task_type === "assignment" ? "assignment" : "deadline",
           href: task.task_type === "assignment" ? `/assignments/${task.id}` : undefined,
         })),
           ...calendaredBills.map((item) => ({
@@ -185,10 +191,19 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
   };
 
   const getEventIcon = (type: string) => {
+    if (type === "assignment") return <Backpack className="h-4 w-4 text-blue-600" />;
     if (type === "deadline") return <Clock className="h-4 w-4 text-sky-600" />;
     if (type === "bill") return <FileText className="h-4 w-4 text-blue-600" />;
     if (type === "election") return <Vote className="h-4 w-4 text-purple-600" />;
     return <CalendarIcon className="h-4 w-4 text-blue-600" />;
+  };
+
+  const eventToneClass = (date: Date) => {
+    const today = dayKey(new Date());
+    const eventDay = dayKey(date);
+    if (eventDay < today) return "border-yellow-200 bg-yellow-50 hover:bg-yellow-100";
+    if (eventDay === today) return "border-blue-200 bg-blue-50 hover:bg-blue-100";
+    return "border-gray-200 bg-white hover:bg-gray-50";
   };
 
   const dayKey = (date: Date) => {
@@ -198,15 +213,16 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     return `${year}-${month}-${day}`;
   };
 
-  const dashboardMonthDays = useMemo(() => {
-    const start = new Date(dashboardCalendarMonth);
-    start.setDate(1 - start.getDay());
+  const dashboardCalendarDays = useMemo(() => {
+    const today = new Date();
+    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+    start.setDate(start.getDate() - start.getDay());
     return Array.from({ length: 42 }, (_, index) => {
       const day = new Date(start);
       day.setDate(start.getDate() + index);
       return day;
     });
-  }, [dashboardCalendarMonth]);
+  }, []);
 
   const eventsByDay = useMemo(() => {
     const map = new Map<string, CalendarEvent[]>();
@@ -326,45 +342,26 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     }
   };
 
-  const createDashboardAssignment = async () => {
-    if (!classId || !assignmentTitle.trim()) return;
-    setAssignmentSaving(true);
+  const postDashboardAnnouncement = async () => {
+    if (!classId || !announcementDraft.trim()) return;
+    setPostingAnnouncement(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Sign in required");
-      const dueAt = assignmentDueDate.trim()
-        ? new Date(`${assignmentDueDate}T${(assignmentDueTime || "23:59").trim()}:00`).toISOString()
-        : null;
-      const { error } = await supabase.from("class_tasks").insert({
+      const { error } = await supabase.from("class_announcements").insert({
         class_id: classId,
-        created_by: user.id,
-        task_type: "assignment",
-        audience_type: "all",
-        audience_id: null,
-        audience_user_ids: [],
-        title: assignmentTitle.trim(),
-        description: assignmentDescription.trim(),
-        due_at: dueAt,
-        points_possible: Math.max(0, Number(assignmentPoints) || 0),
-        grading_mode: "manual",
-        manual_submission_required: true,
-        rubric: [],
-        auto_criteria: [],
-        integration_targets: [],
+        author_user_id: user.id,
+        body: announcementDraft.trim(),
+        is_pinned: announcementPinned,
       } as any);
       if (error) throw error;
-      setAssignmentTitle("");
-      setAssignmentDescription("");
-      setAssignmentDueDate("");
-      setAssignmentDueTime("23:59");
-      setAssignmentPoints("100");
-      setAssignmentModalOpen(false);
-      await loadDashboard();
-      toast.success("Assignment created");
+      setAnnouncementDraft("");
+      setAnnouncementPinned(false);
+      toast.success("Announcement posted");
     } catch (e: any) {
-      toast.error(e.message || "Could not create assignment");
+      toast.error(e.message || "Could not post announcement");
     } finally {
-      setAssignmentSaving(false);
+      setPostingAnnouncement(false);
     }
   };
 
@@ -612,100 +609,78 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="mb-4 flex items-center justify-between gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setDashboardCalendarMonth(new Date(dashboardCalendarMonth.getFullYear(), dashboardCalendarMonth.getMonth() - 1, 1))}
-                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Previous
-                  </button>
-                  <div className="text-sm font-semibold text-gray-900">
-                    {dashboardCalendarMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setDashboardCalendarMonth(new Date(dashboardCalendarMonth.getFullYear(), dashboardCalendarMonth.getMonth() + 1, 1))}
-                    className="rounded-md border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50"
-                  >
-                    Next
-                  </button>
-                </div>
-                <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase tracking-wide text-gray-500">
-                  {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => <div key={day}>{day}</div>)}
-                </div>
-                <div className="mb-4 grid grid-cols-7 gap-1">
-                  {dashboardMonthDays.map((day) => {
-                    const events = eventsByDay.get(dayKey(day)) ?? [];
-                    const isToday = dayKey(day) === dayKey(new Date());
-                    const inMonth = day.getMonth() === dashboardCalendarMonth.getMonth();
-                    return (
-                      <button
-                        key={dayKey(day)}
-                        type="button"
-                        onClick={() => setSelectedUpcomingDay(dayKey(day))}
-                        className="group relative min-h-20 rounded-md border border-gray-200 bg-white p-2 text-left hover:bg-gray-50"
-                      >
-                        <div className={`text-xs font-semibold ${selectedUpcomingDay === dayKey(day) ? "text-blue-700" : isToday ? "text-gray-900" : inMonth ? "text-gray-600" : "text-gray-300"}`}>{day.getDate()}</div>
-                        <div className="mt-1 space-y-1">
-                          {events.slice(0, 2).map((event) => (
-                            <div key={event.id} className={`truncate rounded px-1.5 py-0.5 text-[10px] font-medium ${event.type === "bill" ? "bg-blue-50 text-blue-700" : "bg-sky-50 text-sky-700"}`}>
-                              {event.title}
-                            </div>
-                          ))}
-                          {events.length > 2 && <div className="text-[10px] font-medium text-gray-500">+{events.length - 2} more</div>}
-                        </div>
-                        {events.length > 0 && (
-                          <div className="pointer-events-none absolute left-full top-0 z-10 ml-2 hidden w-56 space-y-2 rounded-md border border-gray-200 bg-white p-3 text-xs text-gray-700 shadow-lg group-hover:block">
-                            {events.map((event) => (
-                              <div key={event.id}>
-                                <div className="font-semibold text-gray-900">{event.title}</div>
-                                <div className="mt-0.5 text-gray-500">{formatEventDate(event.date)}</div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="space-y-3">
-                  {selectedUpcomingDate && (
-                    <div className="flex items-center justify-between border-b border-gray-100 pb-2 text-sm">
-                      <span className="font-semibold text-gray-900">
-                        {selectedUpcomingDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
-                      </span>
-                      <button type="button" onClick={() => setSelectedUpcomingDay(null)} className="text-sm font-medium text-blue-600 hover:text-blue-700">
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                  <div className="min-w-0">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <div className="text-sm font-semibold text-gray-900">Current week onward</div>
+                      <button type="button" onClick={() => setSelectedUpcomingDay(null)} className="text-xs font-medium text-blue-600 hover:text-blue-700">
                         Show all
                       </button>
                     </div>
-                  )}
-                  {displayedUpcomingEvents.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">
-                      {selectedUpcomingDate ? "No upcoming events for this day." : "No upcoming events."}
-                    </div>
-                  ) : (
-                    displayedUpcomingEvents.map((event) => (
-                      <div key={event.id} className="flex items-start gap-3 rounded-lg bg-sky-50 p-3 transition-colors hover:bg-sky-100">
-                        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
-                        <div className="min-w-0 flex-1">
-                          {event.href ? (
-                            <Link to={event.href} className="text-sm font-semibold text-gray-900 hover:text-blue-600">
-                              {event.title}
-                            </Link>
-                          ) : (
-                            <h4 className="text-sm font-semibold text-gray-900">{event.title}</h4>
-                          )}
-                          <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
-                        </div>
-                        <span className="rounded-full bg-sky-100 px-2 py-1 text-xs text-sky-700">{event.type}</span>
+                    <div className="overflow-x-auto pb-2">
+                      <div className="grid auto-cols-[5.75rem] grid-flow-col gap-1.5">
+                        {dashboardCalendarDays.map((day) => {
+                          const key = dayKey(day);
+                          const events = eventsByDay.get(key) ?? [];
+                          const isToday = key === dayKey(new Date());
+                          const selected = selectedUpcomingDay === key;
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => setSelectedUpcomingDay(key)}
+                              className={`min-h-16 rounded-md border p-2 text-left transition-colors ${selected ? "border-blue-400 bg-blue-50" : isToday ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}
+                            >
+                              <div className={`text-[11px] font-semibold uppercase ${isToday ? "text-blue-700" : "text-gray-500"}`}>{day.toLocaleDateString(undefined, { weekday: "short" })}</div>
+                              <div className="text-sm font-semibold text-gray-900">{day.getDate()}</div>
+                              <div className="mt-1 flex gap-1">
+                                {events.slice(0, 3).map((event) => (
+                                  <span key={event.id} className={`h-1.5 w-1.5 rounded-full ${event.type === "bill" || event.type === "assignment" ? "bg-blue-600" : "bg-gray-400"}`} />
+                                ))}
+                                {events.length > 3 && <span className="text-[10px] leading-none text-gray-500">+{events.length - 3}</span>}
+                              </div>
+                            </button>
+                          );
+                        })}
                       </div>
-                    ))
-                  )}
-                </div>
-                <div className="mt-4 grid gap-2 sm:grid-cols-2">
-                  <Button variant="outline" onClick={() => navigate("/assignments")}>Manage assignments</Button>
-                  <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
+                    </div>
+                  </div>
+                  <div className="space-y-3">
+                    {selectedUpcomingDate && (
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-2 text-sm">
+                        <span className="font-semibold text-gray-900">
+                          {selectedUpcomingDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
+                        </span>
+                      </div>
+                    )}
+                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                      {displayedUpcomingEvents.length === 0 ? (
+                        <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                          {selectedUpcomingDate ? "No events for this day." : "No scheduled events."}
+                        </div>
+                      ) : (
+                        displayedUpcomingEvents.map((event) => (
+                          <div key={event.id} className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${eventToneClass(event.date)}`}>
+                            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
+                            <div className="min-w-0 flex-1">
+                              {event.href ? (
+                                <Link to={event.href} className="text-sm font-semibold text-gray-900 hover:text-blue-600">
+                                  {event.title}
+                                </Link>
+                              ) : (
+                                <h4 className="text-sm font-semibold text-gray-900">{event.title}</h4>
+                              )}
+                              <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    <div className="grid gap-2">
+                      <Button variant="outline" onClick={() => navigate("/assignments")}>Manage assignments</Button>
+                      <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -755,6 +730,37 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
           <div className="space-y-6">
             <Card>
               <CardHeader>
+                <CardTitle>Class Announcement</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <textarea
+                  value={announcementDraft}
+                  onChange={(event) => setAnnouncementDraft(event.target.value)}
+                  rows={4}
+                  placeholder="Post an announcement students will see on their dashboard"
+                  className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+                    <input
+                      type="checkbox"
+                      checked={announcementPinned}
+                      onChange={(event) => setAnnouncementPinned(event.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <Pin className="h-4 w-4 text-blue-600" />
+                    Pin
+                  </label>
+                  <Button type="button" onClick={() => void postDashboardAnnouncement()} disabled={!announcementDraft.trim() || postingAnnouncement}>
+                    <Send className="mr-2 h-4 w-4" />
+                    {postingAnnouncement ? "Posting..." : "Post"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
                 <CardTitle>Actions</CardTitle>
               </CardHeader>
               <CardContent className="space-y-5">
@@ -796,53 +802,15 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
           </div>
         </div>
       </main>
-      {assignmentModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-2xl overflow-hidden rounded-lg bg-white shadow-xl">
-            <div className="flex items-center justify-between border-b border-gray-200 px-5 py-4">
-              <div>
-                <h2 className="text-lg font-semibold text-gray-900">Add Assignment</h2>
-                <p className="text-sm text-gray-500">Create a dashboard assignment for this class.</p>
-              </div>
-              <button type="button" onClick={() => setAssignmentModalOpen(false)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900" aria-label="Close assignment menu">
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-            <div className="space-y-4 p-5">
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
-                  <input value={assignmentTitle} onChange={(event) => setAssignmentTitle(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-700">Points</span>
-                  <input type="number" min={0} value={assignmentPoints} onChange={(event) => setAssignmentPoints(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                </label>
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-700">Due date</span>
-                  <input type="date" value={assignmentDueDate} onChange={(event) => setAssignmentDueDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm font-medium text-gray-700">Due time</span>
-                  <input type="time" value={assignmentDueTime} onChange={(event) => setAssignmentDueTime(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                </label>
-              </div>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Description</span>
-                <textarea value={assignmentDescription} onChange={(event) => setAssignmentDescription(event.target.value)} rows={4} className="w-full resize-none rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-              </label>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-gray-200 bg-gray-50 px-5 py-4">
-              <Button type="button" variant="outline" onClick={() => setAssignmentModalOpen(false)}>Cancel</Button>
-              <Button type="button" onClick={() => void createDashboardAssignment()} disabled={assignmentSaving || !assignmentTitle.trim()}>
-                {assignmentSaving ? "Saving..." : "Create Assignment"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <TeacherAssignmentModal
+        classId={classId}
+        open={assignmentModalOpen}
+        onClose={() => setAssignmentModalOpen(false)}
+        onSaved={async () => {
+          setAssignmentModalOpen(false);
+          await loadDashboard();
+        }}
+      />
       <ConfirmDialog dialog={confirmDialog} onClose={() => setConfirmDialog(null)} />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ExternalLink, User, Building2, Calendar } from "lucide-react";
 import { Link } from "react-router";
 import { profilePath } from "../utils/profileRoute";
@@ -28,6 +28,23 @@ interface BillPreviewPanelProps {
   bill: Bill;
 }
 
+function htmlToPreviewText(html: string, maxWords = 750) {
+  const withBreaks = sanitizeHtml(html || "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|section|article)>/gi, "\n");
+  let text = withBreaks;
+  try {
+    const doc = new DOMParser().parseFromString(withBreaks, "text/html");
+    text = doc.body.textContent ?? "";
+  } catch {
+    text = withBreaks.replace(/<[^>]*>/g, " ");
+  }
+  const normalized = text.replace(/\u00a0/g, " ").replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+  const words = normalized.match(/\S+/g) ?? [];
+  if (words.length <= maxWords) return { text: normalized, truncated: false };
+  return { text: `${words.slice(0, maxWords).join(" ")}...`, truncated: true };
+}
+
 export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [panelWidth, setPanelWidth] = useState(480);
@@ -44,6 +61,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
   };
   const sponsorDescriptor = `Rep.-${partyAbbr(bill.sponsorParty)}-${bill.sponsorDistrict || "N/A"}`;
   const textTooNarrow = panelWidth < 260;
+  const legislativePreview = useMemo(() => htmlToPreviewText(bill.legislativeText), [bill.legislativeText]);
 
   useEffect(() => {
     const node = panelRef.current;
@@ -78,15 +96,15 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
 
   if (textTooNarrow) {
     return (
-      <div ref={panelRef} className="flex min-h-[18rem] items-center justify-center rounded-lg border border-dotted border-gray-300 bg-gray-50 p-5 text-center">
-        <div className="space-y-3">
-          <p className="text-sm font-medium text-gray-500">The preview window is too small to display the bill text.</p>
+      <div ref={panelRef} className="flex min-h-[18rem] min-w-0 items-center justify-center overflow-hidden rounded-lg border border-dotted border-gray-300 bg-gray-50 p-5 text-center">
+        <div className="max-w-full space-y-3">
+          <p className="break-words text-sm font-medium text-gray-500">The preview window is too small to display the bill text.</p>
           <Link
             to={fullBillTextHref}
-            className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
+            className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-gray-600 transition-colors hover:bg-gray-100"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            View Full Bill
+            <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">View Full Bill</span>
           </Link>
         </div>
       </div>
@@ -107,7 +125,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
             View Full Bill
           </Link>
         </div>
-        <h3 className="font-semibold">{bill.title}</h3>
+        <h3 className="break-words font-semibold">{bill.title}</h3>
       </div>
 
       <div className="space-y-4 overflow-y-auto p-4">
@@ -168,19 +186,16 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
         {/* Legislative Text Preview */}
         <div>
           <h4 className="text-sm font-semibold text-gray-900 mb-2">Legislative Text</h4>
-          <div className="relative">
-            <div
-              className="max-h-[520px] overflow-hidden text-sm leading-6 text-gray-700"
-              dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislativeText) }}
-            />
-            <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-white via-white/90 to-transparent" />
-          </div>
+          <p className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-700">
+            {legislativePreview.text || "No legislative text available."}
+          </p>
+          {legislativePreview.truncated && <p className="mt-2 text-xs font-medium text-gray-500">Preview shows the first 750 words.</p>}
           <Link
             to={fullBillTextHref}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
+            className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
           >
-            <ExternalLink className="h-3.5 w-3.5" />
-            View Full Bill
+            <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate">View Full Bill</span>
           </Link>
         </div>
 
