@@ -258,7 +258,7 @@ export async function fetchBillDetail(billId: string) {
       .maybeSingle(),
     supabase
       .from('bill_floor_sessions')
-      .select('status,opened_at,closed_at,created_at')
+      .select('status,opened_at,closed_at,created_at,results_posted_at')
       .eq('bill_id', billId)
       .eq('class_id', classId)
       .maybeSingle(),
@@ -352,7 +352,7 @@ export async function bulkUpdateBillStatusForCurrentClass(billIds: string[], sta
             : status === 'reported' ? 'Reported'
               : status === 'calendared' ? 'Calendared'
                 : status === 'floor' ? 'Floor'
-                  : ['passed', 'failed'].includes(status) ? 'Final'
+                  : ['passed', 'failed', 'senate', 'senate_passed', 'signed', 'vetoed'].includes(status) ? 'Final'
                     : 'Status override';
     await supabase.from('bill_teacher_overrides').insert(updatedIds.map((billId) => ({
       bill_id: billId,

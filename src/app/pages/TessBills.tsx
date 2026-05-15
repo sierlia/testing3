@@ -68,6 +68,10 @@ function statusClass(status: string) {
   if (status === "reported") return "bg-purple-100 text-purple-700";
   if (status === "calendared") return "bg-yellow-100 text-yellow-700";
   if (status === "floor") return "bg-indigo-100 text-indigo-700";
+  if (status === "senate") return "bg-violet-100 text-violet-700";
+  if (status === "senate_passed") return "bg-emerald-100 text-emerald-700";
+  if (status === "signed") return "bg-green-100 text-green-700";
+  if (status === "vetoed") return "bg-red-100 text-red-700";
   if (status === "passed") return "bg-green-100 text-green-700";
   if (status === "failed") return "bg-red-100 text-red-700";
   return "bg-gray-100 text-gray-700";
@@ -90,18 +94,20 @@ function sponsorDescriptor(bill: BillView) {
 
 function billTrackerSteps(bill: BillView) {
   const status = bill.status;
-  const referred = Boolean(bill.committee) || ["in_committee", "committee_vote", "reported", "calendared", "floor", "passed", "failed"].includes(status);
-  const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
-  const calendared = ["calendared", "floor", "passed", "failed"].includes(status);
-  const floor = ["floor", "passed", "failed"].includes(status);
-  const final = ["passed", "failed"].includes(status);
+  const postFloorStatuses = ["passed", "senate", "senate_passed", "signed", "vetoed"];
+  const referred = Boolean(bill.committee) || ["in_committee", "committee_vote", "reported", "calendared", "floor", "failed", ...postFloorStatuses].includes(status);
+  const reported = ["reported", "calendared", "floor", "failed", ...postFloorStatuses].includes(status);
+  const calendared = ["calendared", "floor", "failed", ...postFloorStatuses].includes(status);
+  const floor = ["floor", "failed", ...postFloorStatuses].includes(status);
+  const final = ["passed", "failed", "signed", "vetoed"].includes(status);
+  const finalLabel = status === "signed" ? "Signed" : status === "vetoed" ? "Vetoed" : status === "failed" ? "Failed" : status === "senate" ? "Senate" : status === "senate_passed" ? "Senate Passed" : "Passed";
   return [
     { label: "Introduced", done: true, current: status === "submitted" },
     { label: bill.committee ? "Referred" : "Committee", done: referred, current: status === "in_committee" || status === "committee_vote" },
     { label: "Reported", done: reported, current: status === "reported" },
     { label: "Calendared", done: calendared, current: status === "calendared" },
     { label: "Floor", done: floor, current: status === "floor" },
-    { label: final && status === "failed" ? "Failed" : "Passed", done: final, current: final },
+    { label: finalLabel, done: final, current: final || ["senate", "senate_passed"].includes(status) },
   ];
 }
 
@@ -155,6 +161,10 @@ const statusFilterOptions = [
   { value: "reported", label: "Reported" },
   { value: "calendared", label: "Calendared" },
   { value: "floor", label: "Floor" },
+  { value: "senate", label: "Senate" },
+  { value: "senate_passed", label: "Passed Senate" },
+  { value: "signed", label: "Signed" },
+  { value: "vetoed", label: "Vetoed" },
   { value: "passed", label: "Passed" },
   { value: "failed", label: "Failed" },
 ];
@@ -166,6 +176,10 @@ const bulkStatusOptions = [
   { value: "reported", label: "Reported" },
   { value: "calendared", label: "Calendared" },
   { value: "floor", label: "Floor" },
+  { value: "senate", label: "Senate" },
+  { value: "senate_passed", label: "Passed Senate" },
+  { value: "signed", label: "Signed" },
+  { value: "vetoed", label: "Vetoed" },
   { value: "passed", label: "Passed" },
   { value: "failed", label: "Failed" },
 ];
@@ -755,8 +769,8 @@ export function TessBills() {
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0 lg:w-full lg:self-start">
-              <div className="lg:sticky lg:top-4">
+            <div className="min-w-0 lg:sticky lg:top-4 lg:w-full lg:self-start">
+              <div>
                 {selectedBill ? (
                   <BillPreviewPanel bill={selectedBill} />
                 ) : (

@@ -14,6 +14,9 @@ function statusClass(status: string) {
   if (status === "submitted") return "bg-blue-100 text-blue-700";
   if (status === "in_committee") return "bg-slate-100 text-slate-700";
   if (status === "reported") return "bg-green-100 text-green-700";
+  if (status === "senate") return "bg-violet-100 text-violet-700";
+  if (status === "signed") return "bg-green-100 text-green-700";
+  if (status === "vetoed" || status === "failed") return "bg-red-100 text-red-700";
   return "bg-blue-100 text-blue-700";
 }
 
@@ -33,18 +36,20 @@ function FilterSelect({ value, onChange, children }: { value: string; onChange: 
 }
 
 function billTrackerSteps(status: string) {
-  const referred = ["in_committee", "committee_vote", "reported", "calendared", "floor", "passed", "failed"].includes(status);
-  const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
-  const calendared = ["calendared", "floor", "passed", "failed"].includes(status);
-  const floor = ["floor", "passed", "failed"].includes(status);
-  const final = ["passed", "failed"].includes(status);
+  const postFloorStatuses = ["passed", "senate", "senate_passed", "signed", "vetoed"];
+  const referred = ["in_committee", "committee_vote", "reported", "calendared", "floor", "failed", ...postFloorStatuses].includes(status);
+  const reported = ["reported", "calendared", "floor", "failed", ...postFloorStatuses].includes(status);
+  const calendared = ["calendared", "floor", "failed", ...postFloorStatuses].includes(status);
+  const floor = ["floor", "failed", ...postFloorStatuses].includes(status);
+  const final = ["passed", "failed", "signed", "vetoed"].includes(status);
+  const finalLabel = status === "signed" ? "Signed" : status === "vetoed" ? "Vetoed" : status === "failed" ? "Failed" : status === "senate" ? "Senate" : status === "senate_passed" ? "Senate Passed" : "Passed";
   return [
     { label: "Introduced", done: status !== "draft", current: status === "submitted" },
     { label: "Committee", done: referred, current: status === "in_committee" || status === "committee_vote" },
     { label: "Reported", done: reported, current: status === "reported" },
     { label: "Calendared", done: calendared, current: status === "calendared" },
     { label: "Floor", done: floor, current: status === "floor" },
-    { label: final && status === "failed" ? "Failed" : "Passed", done: final, current: final },
+    { label: finalLabel, done: final, current: final || ["senate", "senate_passed"].includes(status) },
   ];
 }
 

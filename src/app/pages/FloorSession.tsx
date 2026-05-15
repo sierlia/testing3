@@ -29,6 +29,7 @@ type SessionRow = {
 type VoteRow = { session_id: string; bill_id: string; user_id: string; vote: VoteChoice };
 type SpeakerCandidate = { id: string; name: string; party?: string | null; constituency?: string | null };
 type SpeakerVoteRow = { class_id: string; voter_user_id: string; candidate_user_id: string };
+type PresidentVoteRow = { class_id: string; voter_user_id: string; candidate_user_id: string };
 type SpeakerOptOutRow = { class_id: string; user_id: string };
 type FloorSpeakerRow = { bill_id: string; user_id: string; side: "for" | "against"; status: "pending" | "approved" | "rejected"; speaker_role: "speaker" | "opposition_leader"; name: string; party?: string | null; constituency?: string | null };
 type PreviousQuestionVoteRow = { bill_id: string; user_id: string; vote: "yea" | "nay" };
@@ -101,6 +102,10 @@ export function FloorSession() {
   const [speakerVote, setSpeakerVote] = useState<string | null>(null);
   const [speakerCandidates, setSpeakerCandidates] = useState<SpeakerCandidate[]>([]);
   const [speakerVotes, setSpeakerVotes] = useState<SpeakerVoteRow[]>([]);
+  const [presidentVote, setPresidentVote] = useState<string | null>(null);
+  const [presidentVotes, setPresidentVotes] = useState<PresidentVoteRow[]>([]);
+  const [presidentSearch, setPresidentSearch] = useState("");
+  const [presidentPartyFilter, setPresidentPartyFilter] = useState("all");
   const [speakerOptOuts, setSpeakerOptOuts] = useState<SpeakerOptOutRow[]>([]);
   const [speakerSearch, setSpeakerSearch] = useState("");
   const [speakerPartyFilter, setSpeakerPartyFilter] = useState("all");
@@ -118,6 +123,7 @@ export function FloorSession() {
   const [discussionReactions, setDiscussionReactions] = useState<DiscussionReaction[]>([]);
   const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null);
   const [discussionListCollapsed, setDiscussionListCollapsed] = useState(false);
+  const [expandedReplyRails, setExpandedReplyRails] = useState<Record<string, boolean>>({});
   const [creatingDiscussion, setCreatingDiscussion] = useState(false);
   const [newDiscussionTitle, setNewDiscussionTitle] = useState("");
   const [newDiscussionPrompt, setNewDiscussionPrompt] = useState("");
@@ -178,13 +184,14 @@ export function FloorSession() {
       setRole(current.profile.role ?? null);
       setMeId(current.userId);
       setClassId(current.classId);
-      const [calendarRows, sessionRows, voteRows, directory, classRow, speakerVoteRows, speakerOptOutRows, floorSpeakerRows, previousQuestionRows] = await Promise.all([
+      const [calendarRows, sessionRows, voteRows, directory, classRow, speakerVoteRows, presidentVoteRows, speakerOptOutRows, floorSpeakerRows, previousQuestionRows] = await Promise.all([
         fetchCalendaredBillsForCurrentClass(),
         supabase.from("bill_floor_sessions").select("id,bill_id,status,opened_at,closed_at,manual_counts,posted_result,results_posted_at").eq("class_id", current.classId),
         supabase.from("bill_floor_votes").select("session_id,bill_id,user_id,vote").eq("class_id", current.classId),
         supabase.rpc("class_directory", { target_class: current.classId } as any),
         supabase.from("classes").select("settings").eq("id", current.classId).maybeSingle(),
         supabase.from("class_speaker_votes").select("class_id,voter_user_id,candidate_user_id").eq("class_id", current.classId),
+        supabase.from("class_president_votes").select("class_id,voter_user_id,candidate_user_id").eq("class_id", current.classId),
         supabase.from("class_speaker_opt_outs").select("class_id,user_id").eq("class_id", current.classId),
         fetchFloorSpeakersForClass(current.classId),
         supabase.from("bill_previous_question_votes").select("bill_id,user_id,vote").eq("class_id", current.classId),
@@ -193,6 +200,7 @@ export function FloorSession() {
       if (voteRows.error) throw voteRows.error;
       if (classRow.error) throw classRow.error;
       if (speakerVoteRows.error) throw speakerVoteRows.error;
+      if (presidentVoteRows.error) throw presidentVoteRows.error;
       if (speakerOptOutRows.error) throw speakerOptOutRows.error;
       const students = ((directory.data ?? []) as any[]).filter((person) => person.role !== "teacher");
       setItems([...calendarRows].sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()));
@@ -206,6 +214,9 @@ export function FloorSession() {
       const nextSpeakerVotes = (speakerVoteRows.data ?? []) as any[];
       setSpeakerVotes(nextSpeakerVotes);
       setSpeakerVote(nextSpeakerVotes.find((row) => row.voter_user_id === current.userId)?.candidate_user_id ?? null);
+      const nextPresidentVotes = (presidentVoteRows.data ?? []) as any[];
+      setPresidentVotes(nextPresidentVotes);
+      setPresidentVote(nextPresidentVotes.find((row) => row.voter_user_id === current.userId)?.candidate_user_id ?? null);
       setSpeakerOptOuts((speakerOptOutRows.data ?? []) as any[]);
       await loadDiscussions(current.classId);
     } catch (e: any) {
@@ -255,9 +266,28 @@ export function FloorSession() {
         },
       )
       .subscribe();
+    const presidentChannel = supabase
+      .channel(`president-votes:${classId}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "class_president_votes", filter: `class_id=eq.${classId}` },
+        (payload: any) => {
+          const nextRow = payload.new as PresidentVoteRow | undefined;
+          const oldRow = payload.old as PresidentVoteRow | undefined;
+          setPresidentVotes((prev) => {
+            if (payload.eventType === "DELETE" && oldRow) return prev.filter((row) => row.voter_user_id !== oldRow.voter_user_id);
+            if (!nextRow) return prev;
+            return [...prev.filter((row) => row.voter_user_id !== nextRow.voter_user_id), nextRow];
+          });
+          if (nextRow?.voter_user_id === meId) setPresidentVote(nextRow.candidate_user_id);
+          if (payload.eventType === "DELETE" && oldRow?.voter_user_id === meId) setPresidentVote(null);
+        },
+      )
+      .subscribe();
     return () => {
       void supabase.removeChannel(channel);
       void supabase.removeChannel(optOutChannel);
+      void supabase.removeChannel(presidentChannel);
     };
   }, [classId, meId]);
 
@@ -395,6 +425,26 @@ export function FloorSession() {
     const [winner] = [...speakerCandidates].sort((a, b) => speakerVoteCount(b.id) - speakerVoteCount(a.id) || a.name.localeCompare(b.name));
     return winner && speakerVoteCount(winner.id) > 0 ? winner : null;
   }, [speakerCandidates, speakerVotes, speakerOptOuts]);
+  const executiveSettings = classSettings?.executive ?? {};
+  const executiveEnabled = Boolean(executiveSettings.enabled);
+  const presidentSelectionMode = (executiveSettings.selectionMode ?? executiveSettings.presidentSelectionMode ?? "student-vote") as "student-vote" | "teacher-assigned";
+  const presidentOpen = Boolean(executiveSettings.presidentOpen ?? executiveSettings.open);
+  const presidentConcluded = Boolean(executiveSettings.presidentConcluded);
+  const assignedPresident = speakerCandidates.find((candidate) => candidate.id === executiveSettings.presidentUserId) ?? null;
+  const presidentVoteCount = (candidateId: string) => presidentVotes.filter((row) => row.candidate_user_id === candidateId).length;
+  const visiblePresidentCandidates = useMemo(() => {
+    const query = presidentSearch.trim().toLowerCase();
+    return speakerCandidates.filter((candidate) => {
+      const party = candidate.party || "No party";
+      const district = formatConstituency(candidate.constituency);
+      return (!query || candidate.name.toLowerCase().includes(query) || party.toLowerCase().includes(query) || district.toLowerCase().includes(query)) && (presidentPartyFilter === "all" || party === presidentPartyFilter);
+    }).sort((a, b) => presidentVoteCount(b.id) - presidentVoteCount(a.id) || a.name.localeCompare(b.name));
+  }, [presidentPartyFilter, presidentSearch, presidentVotes, speakerCandidates]);
+  const presidentWinner = useMemo(() => {
+    const [winner] = [...speakerCandidates].sort((a, b) => presidentVoteCount(b.id) - presidentVoteCount(a.id) || a.name.localeCompare(b.name));
+    return winner && presidentVoteCount(winner.id) > 0 ? winner : null;
+  }, [presidentVotes, speakerCandidates]);
+  const currentPresident = assignedPresident ?? (presidentConcluded ? presidentWinner : null);
   const visibleDiscussionAreas = useMemo(() => discussionAreas.filter((area) => role === "teacher" || area.visibility !== "invisible"), [discussionAreas, role]);
   const liveDiscussion = visibleDiscussionAreas.find((area) => area.visibility === "live" || area.is_active) ?? null;
   const selectedDiscussion = visibleDiscussionAreas.find((area) => area.id === selectedDiscussionId) ?? visibleDiscussionAreas.find((area) => area.visibility === "live" || area.is_active) ?? visibleDiscussionAreas[0] ?? null;
@@ -560,6 +610,84 @@ export function FloorSession() {
     }
   };
 
+  const setPresidentElectionOpen = async (open: boolean) => {
+    if (!classId || role !== "teacher" || presidentConcluded) return;
+    setBusy(true);
+    try {
+      const nextSettings = {
+        ...classSettings,
+        executive: {
+          ...(classSettings.executive ?? {}),
+          enabled: true,
+          selectionMode: "student-vote",
+          presidentSelectionMode: "student-vote",
+          presidentOpen: open,
+        },
+      };
+      const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
+      if (error) throw error;
+      setClassSettings(nextSettings);
+      toast.success(open ? "President election opened" : "President election closed");
+    } catch (e: any) {
+      toast.error(e.message || "Could not update President election");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const postPresidentResults = async () => {
+    if (!classId || role !== "teacher") return;
+    setBusy(true);
+    try {
+      const winnerId = presidentWinner?.id ?? executiveSettings.presidentUserId ?? null;
+      const nextSettings = {
+        ...classSettings,
+        executive: {
+          ...(classSettings.executive ?? {}),
+          enabled: true,
+          selectionMode: "student-vote",
+          presidentSelectionMode: "student-vote",
+          presidentConcluded: true,
+          presidentOpen: false,
+          presidentUserId: winnerId,
+        },
+      };
+      const { error } = await supabase.from("classes").update({ settings: nextSettings } as any).eq("id", classId);
+      if (error) throw error;
+      setClassSettings(nextSettings);
+      toast.success(winnerId ? "President election results posted" : "President election closed without a winner");
+    } catch (e: any) {
+      toast.error(e.message || "Could not post President results");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const castPresidentVote = async (candidateId: string) => {
+    if (!classId || !meId || role === "teacher" || !executiveEnabled || presidentSelectionMode !== "student-vote" || !presidentOpen || presidentConcluded) return;
+    setBusy(true);
+    try {
+      if (presidentVote === candidateId) {
+        const { error } = await supabase.from("class_president_votes").delete().eq("class_id", classId).eq("voter_user_id", meId);
+        if (error) throw error;
+        setPresidentVote(null);
+        setPresidentVotes((prev) => prev.filter((row) => row.voter_user_id !== meId));
+        return;
+      }
+      const { error } = await supabase.from("class_president_votes").upsert(
+        { class_id: classId, voter_user_id: meId, candidate_user_id: candidateId, updated_at: new Date().toISOString() } as any,
+        { onConflict: "class_id,voter_user_id" },
+      );
+      if (error) throw error;
+      setPresidentVote(candidateId);
+      setPresidentVotes((prev) => [...prev.filter((row) => row.voter_user_id !== meId), { class_id: classId, voter_user_id: meId, candidate_user_id: candidateId }]);
+    } catch (e: any) {
+      toast.error(e.message || "Could not record president vote");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const openVote = async () => {
     if (!activeItem || !classId || !meId) return;
     setBusy(true);
@@ -623,9 +751,10 @@ export function FloorSession() {
       }
       const { error } = await supabase.from("bill_floor_sessions").upsert(sessionPayload, { onConflict: "class_id,bill_id" });
       if (error) throw error;
-      const { error: billError } = await supabase.from("bills").update({ status: result } as any).eq("id", activeItem.bill_id).eq("class_id", classId);
+      const nextBillStatus = result === "passed" && classSettings?.senate?.enabled ? "senate" : result;
+      const { error: billError } = await supabase.from("bills").update({ status: nextBillStatus } as any).eq("id", activeItem.bill_id).eq("class_id", classId);
       if (billError) throw billError;
-      toast.success(`Floor results posted: bill ${result}`);
+      toast.success(nextBillStatus === "senate" ? "Floor results posted: bill sent to Senate" : `Floor results posted: bill ${result}`);
       await load();
     } catch (e: any) {
       toast.error(e.message || "Could not post floor results");
@@ -894,7 +1023,6 @@ export function FloorSession() {
 
   const beginCreateDiscussion = () => {
     setCreatingDiscussion(true);
-    setSelectedDiscussionId(null);
     setEditingDiscussionId(null);
     setNewDiscussionTitle("");
     setNewDiscussionPrompt("");
@@ -907,6 +1035,7 @@ export function FloorSession() {
   };
 
   const discussionBoard = (
+    <>
     <div className={`grid min-h-[calc(100vh-12rem)] gap-4 ${discussionListCollapsed ? "lg:grid-cols-[3rem_minmax(0,1fr)]" : "lg:grid-cols-[18rem_minmax(0,1fr)]"}`}>
       <aside className={`min-w-0 ${discussionListCollapsed ? "" : "border-r border-gray-200 pr-3"}`}>
         <div className={`mb-4 flex items-center ${discussionListCollapsed ? "justify-center" : "justify-between gap-3"}`}>
@@ -1014,62 +1143,14 @@ export function FloorSession() {
         )}
       </aside>
       <section className="min-w-0">
-        {creatingDiscussion && role === "teacher" ? (
-          <div className="space-y-4">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900">New discussion</h2>
-              <p className="mt-1 text-sm text-gray-600">Name the floor discussion and add the directions students should see.</p>
-            </div>
-            <input
-              value={newDiscussionTitle}
-              onChange={(event) => setNewDiscussionTitle(event.target.value)}
-              placeholder="Discussion title"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <textarea
-              value={newDiscussionPrompt}
-              onChange={(event) => setNewDiscussionPrompt(event.target.value)}
-              placeholder="Prompt or directions"
-              rows={5}
-              className="w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <div className="flex gap-2">
-              <button type="button" onClick={() => void createDiscussionArea()} disabled={busy || !newDiscussionTitle.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
-                Create discussion
-              </button>
-              <button type="button" onClick={() => setCreatingDiscussion(false)} className="rounded-md px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100">
-                Cancel
-              </button>
-            </div>
-          </div>
-        ) : selectedDiscussion ? (
+        {selectedDiscussion ? (
           <>
             <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
-              {editingDiscussionId === selectedDiscussion.id ? (
-                <div className="min-w-0 flex-1 space-y-2">
-                  <input
-                    value={editingDiscussionTitle}
-                    onChange={(event) => setEditingDiscussionTitle(event.target.value)}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-xl font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <textarea
-                    value={editingDiscussionPrompt}
-                    onChange={(event) => setEditingDiscussionPrompt(event.target.value)}
-                    rows={3}
-                    className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <div className="flex gap-2">
-                    <button type="button" onClick={() => void updateDiscussionDetails()} disabled={!editingDiscussionTitle.trim()} className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">Save</button>
-                    <button type="button" onClick={() => setEditingDiscussionId(null)} className="rounded-md px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100">Cancel</button>
-                  </div>
-                </div>
-              ) : (
-                <div className="min-w-0">
-                  <h2 className="text-2xl font-bold text-gray-900">{selectedDiscussion.title}</h2>
-                  {selectedDiscussion.prompt && <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm text-gray-600">{selectedDiscussion.prompt}</p>}
-                </div>
-              )}
-              {role === "teacher" && editingDiscussionId !== selectedDiscussion.id && (
+              <div className="min-w-0">
+                <h2 className="text-2xl font-bold text-gray-900">{selectedDiscussion.title}</h2>
+                {selectedDiscussion.prompt && <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm text-gray-600">{selectedDiscussion.prompt}</p>}
+              </div>
+              {role === "teacher" && (
                 <div className="flex flex-wrap justify-end gap-2">
                   <button
                     type="button"
@@ -1118,6 +1199,8 @@ export function FloorSession() {
                 {selectedDiscussionPosts.map((post) => {
                   const postComments = discussionCommentsByPost.get(post.id) ?? [];
                   const postReactions = discussionReactionsByPost.get(post.id) ?? [];
+                  const repliesExpanded = Boolean(expandedReplyRails[post.id]);
+                  const replyRailHasOverflow = postComments.length > 3 || postComments.some((comment) => comment.body.length > 220 || (comment.attachments?.length ?? 0) > 0);
                   return (
                     <article key={post.id} className="grid gap-3 rounded-md border border-gray-200 bg-white p-4 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
                       <div className="min-w-0">
@@ -1155,26 +1238,38 @@ export function FloorSession() {
                           })}
                         </div>
                       </div>
-                      <aside className="flex max-h-72 min-h-0 flex-col border-t border-gray-100 pt-3 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0">
+                      <aside className={`flex min-h-0 flex-col border-t border-gray-100 pt-3 lg:border-l lg:border-t-0 lg:pl-3 lg:pt-0 ${repliesExpanded ? "max-h-[34rem]" : "max-h-72"}`}>
                         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Replies ({postComments.length})</div>
-                        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
-                          {postComments.length ? postComments.map((comment) => (
-                            <div key={comment.id} className="rounded-md bg-gray-50 p-2">
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="flex min-w-0 items-start gap-2">
-                                  <SecureAvatar src={comment.author?.avatar_url} alt={comment.author?.display_name ?? "Member"} className="h-7 w-7 rounded-full object-cover" fallbackClassName="h-7 w-7 rounded-full" />
-                                  <div className="min-w-0 text-xs font-semibold text-gray-900">{authorLabel(comment.author)}</div>
+                        <div className="relative min-h-0 flex-1">
+                          <div className={`min-h-0 space-y-2 overflow-y-auto pr-1 ${repliesExpanded ? "max-h-[25rem] pb-2" : "max-h-44 pb-9"}`}>
+                            {postComments.length ? postComments.map((comment) => (
+                              <div key={comment.id} className="rounded-md bg-gray-50 p-2">
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="flex min-w-0 items-start gap-2">
+                                    <SecureAvatar src={comment.author?.avatar_url} alt={comment.author?.display_name ?? "Member"} className="h-7 w-7 rounded-full object-cover" fallbackClassName="h-7 w-7 rounded-full" />
+                                    <div className="min-w-0 text-xs font-semibold text-gray-900">{authorLabel(comment.author)}</div>
+                                  </div>
+                                  {(role === "teacher" || comment.author_user_id === meId) && (
+                                    <button type="button" onClick={() => void deleteDiscussionComment(comment)} className="rounded p-0.5 text-gray-400 hover:text-red-600" aria-label="Delete reply">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </button>
+                                  )}
                                 </div>
-                                {(role === "teacher" || comment.author_user_id === meId) && (
-                                  <button type="button" onClick={() => void deleteDiscussionComment(comment)} className="rounded p-0.5 text-gray-400 hover:text-red-600" aria-label="Delete reply">
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                  </button>
-                                )}
+                                <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-gray-700">{comment.body}</p>
+                                <AttachmentList attachments={comment.attachments} />
                               </div>
-                              <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-gray-700">{comment.body}</p>
-                              <AttachmentList attachments={comment.attachments} />
-                            </div>
-                          )) : <div className="rounded-md bg-gray-50 p-3 text-xs text-gray-500">No replies yet.</div>}
+                            )) : <div className="rounded-md bg-gray-50 p-3 text-xs text-gray-500">No replies yet.</div>}
+                          </div>
+                          {!repliesExpanded && replyRailHasOverflow && <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-white via-white/95 to-white/0" />}
+                          {replyRailHasOverflow && (
+                            <button
+                              type="button"
+                              onClick={() => setExpandedReplyRails((prev) => ({ ...prev, [post.id]: !repliesExpanded }))}
+                              className="absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full border border-gray-200 bg-white px-3 py-1 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50"
+                            >
+                              {repliesExpanded ? "Show less" : "Show more"}
+                            </button>
+                          )}
                         </div>
                         {selectedDiscussionCanPost && (
                           <div className="mt-2 flex items-center gap-2">
@@ -1207,18 +1302,85 @@ export function FloorSession() {
         )}
       </section>
     </div>
+    {creatingDiscussion && role === "teacher" && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="w-full max-w-xl rounded-lg bg-white shadow-xl">
+          <div className="border-b border-gray-200 px-5 py-4">
+            <h2 className="text-lg font-semibold text-gray-900">New discussion</h2>
+          </div>
+          <div className="space-y-4 px-5 py-4">
+            <input
+              value={newDiscussionTitle}
+              onChange={(event) => setNewDiscussionTitle(event.target.value)}
+              placeholder="Discussion title"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-lg font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <textarea
+              value={newDiscussionPrompt}
+              onChange={(event) => setNewDiscussionPrompt(event.target.value)}
+              placeholder="Prompt or directions"
+              rows={5}
+              className="w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-5 py-4">
+            <button type="button" onClick={() => setCreatingDiscussion(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+              Cancel
+            </button>
+            <button type="button" onClick={() => void createDiscussionArea()} disabled={busy || !newDiscussionTitle.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+              Create discussion
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {editingDiscussionId && role === "teacher" && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="w-full max-w-xl rounded-lg bg-white shadow-xl">
+          <div className="border-b border-gray-200 px-5 py-4">
+            <h2 className="text-lg font-semibold text-gray-900">Edit discussion</h2>
+          </div>
+          <div className="space-y-4 px-5 py-4">
+            <input
+              value={editingDiscussionTitle}
+              onChange={(event) => setEditingDiscussionTitle(event.target.value)}
+              placeholder="Discussion title"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-lg font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <textarea
+              value={editingDiscussionPrompt}
+              onChange={(event) => setEditingDiscussionPrompt(event.target.value)}
+              placeholder="Prompt or directions"
+              rows={5}
+              className="w-full resize-y rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-700 outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-3 border-t border-gray-200 px-5 py-4">
+            <button type="button" onClick={() => setEditingDiscussionId(null)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-100">
+              Cancel
+            </button>
+            <button type="button" onClick={() => void updateDiscussionDetails()} disabled={!editingDiscussionTitle.trim()} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+              Save
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    </>
   );
 
   return (
     <div className={`min-h-screen ${displayFloorMode === "discussion" ? "bg-white" : "bg-gray-50"}`}>
       <Navigation />
       <main className={displayFloorMode === "discussion" ? "px-3 py-4 sm:px-4 lg:px-6" : "mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"}>
-        <div className={displayFloorMode === "discussion" ? "mb-4" : "mb-8"}>
+        {(displayFloorMode !== "discussion" || role === "teacher") && <div className={displayFloorMode === "discussion" ? "mb-4" : "mb-8"}>
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
-              <h1 className="mb-2 text-3xl font-bold text-gray-900">Floor</h1>
-              <p className="text-gray-600">Speaker election, active floor text, and floor votes.</p>
-            </div>
+            {displayFloorMode !== "discussion" ? (
+              <div>
+                <h1 className="mb-2 text-3xl font-bold text-gray-900">Floor</h1>
+                <p className="text-gray-600">Speaker election, active floor text, and floor votes.</p>
+              </div>
+            ) : <div />}
             {role === "teacher" && (
               <div className="inline-flex overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
                 {([
@@ -1239,11 +1401,12 @@ export function FloorSession() {
               </div>
             )}
           </div>
-        </div>
+        </div>}
 
         {loading ? (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">Loading floor...</div>
         ) : displayFloorMode === "election" ? (
+          <div className="space-y-6">
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -1329,6 +1492,86 @@ export function FloorSession() {
                 </div>
               </div>
             )}
+          </div>
+          {executiveEnabled && (
+            <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <div className="mb-2 flex items-center gap-2">
+                    <Trophy className="h-5 w-5 text-emerald-600" />
+                    <h2 className="text-xl font-semibold text-gray-900">President Election</h2>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {presidentSelectionMode === "teacher-assigned" ? "The president is assigned by the teacher." : presidentOpen ? "Voting is open." : "Voting is closed."}
+                  </p>
+                </div>
+                {role === "teacher" && presidentSelectionMode === "student-vote" && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                      <button type="button" onClick={() => void setPresidentElectionOpen(true)} disabled={busy || presidentConcluded} className={`px-4 py-2 text-sm font-medium disabled:opacity-50 ${presidentOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                        Open
+                      </button>
+                      <button type="button" onClick={() => void setPresidentElectionOpen(false)} disabled={busy || presidentConcluded} className={`border-l border-gray-300 px-4 py-2 text-sm font-medium disabled:opacity-50 ${!presidentOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                        Close
+                      </button>
+                    </div>
+                    <button type="button" onClick={() => void postPresidentResults()} disabled={busy} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50">
+                      Post results
+                    </button>
+                  </div>
+                )}
+              </div>
+              {presidentSelectionMode === "teacher-assigned" ? (
+                <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                  President: <span className="font-semibold text-gray-900">{currentPresident?.name ?? "No president assigned"}</span>
+                </div>
+              ) : speakerCandidates.length === 0 ? (
+                <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">No student candidates are available yet.</div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="rounded-md border border-gray-200 bg-gray-50 p-3 text-sm text-gray-700">
+                    Leader: <span className="font-semibold text-gray-900">{presidentWinner?.name ?? currentPresident?.name ?? "No votes yet"}</span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_12rem]">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                      <input
+                        value={presidentSearch}
+                        onChange={(event) => setPresidentSearch(event.target.value)}
+                        placeholder="Search candidates..."
+                        className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <select value={presidentPartyFilter} onChange={(event) => setPresidentPartyFilter(event.target.value)} className="rounded-md border border-gray-300 px-3 py-2 text-sm">
+                      <option value="all">All parties</option>
+                      {speakerParties.map((party) => <option key={party} value={party}>{party}</option>)}
+                    </select>
+                  </div>
+                  <div className="overflow-hidden rounded-lg border border-gray-200">
+                    {visiblePresidentCandidates.map((candidate) => (
+                      <button
+                        key={candidate.id}
+                        type="button"
+                        onClick={() => void castPresidentVote(candidate.id)}
+                        disabled={busy || role === "teacher" || !presidentOpen || presidentConcluded}
+                        className={`flex w-full items-center justify-between gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 disabled:cursor-default ${presidentVote === candidate.id ? "bg-blue-50" : "bg-white hover:bg-gray-50"}`}
+                      >
+                        <div className="min-w-0">
+                          <div className="font-semibold text-gray-900">{candidate.name}</div>
+                          <div className="text-sm text-gray-500">{partyAbbr(candidate.party)}-{formatConstituency(candidate.constituency) || "N/A"}</div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-lg font-bold text-blue-700">{presidentVoteCount(candidate.id)}</div>
+                          <div className="text-xs text-gray-500">{presidentVote === candidate.id ? "Selected" : "votes"}</div>
+                        </div>
+                      </button>
+                    ))}
+                    {visiblePresidentCandidates.length === 0 && <div className="p-4 text-center text-sm text-gray-500">No candidates match the filters.</div>}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           </div>
         ) : displayFloorMode === "discussion" ? (
           discussionBoard

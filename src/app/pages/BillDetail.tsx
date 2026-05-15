@@ -36,6 +36,10 @@ function formatDate(value?: string | null) {
 }
 
 function statusLabel(status: string) {
+  if (status === "senate") return "In Senate";
+  if (status === "senate_passed") return "Passed Senate";
+  if (status === "signed") return "Signed";
+  if (status === "vetoed") return "Vetoed";
   return status.replace(/_/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
@@ -53,6 +57,8 @@ function overrideMessage(step: string) {
   if (step === "Reported") return "This will mark the current committee's work as reported and move the bill to await calendaring.";
   if (step === "Calendared") return "This will place the bill on the floor calendar for the selected date and time.";
   if (step === "Floor") return "This will move the bill into the floor queue.";
+  if (step === "Senate") return "Use the Senate action buttons to record the Senate result.";
+  if (step === "President") return "Use the president action buttons to sign or veto the bill.";
   if (step === "Final") return "This will close floor action and record the final bill outcome.";
   return "This will update the bill's status.";
 }
@@ -109,7 +115,9 @@ function trackerRank(label: string) {
     Reported: 3,
     Calendared: 4,
     Floor: 5,
-    Final: 6,
+    Senate: 6,
+    President: 7,
+    Final: 8,
   };
   return ranks[label] ?? -1;
 }
@@ -272,7 +280,9 @@ export function BillDetail() {
   const isUserCosponsor = useMemo(() => (currentUserId ? cosponsorIds.includes(currentUserId) : false), [cosponsorIds, currentUserId]);
   const committeeCounts = useMemo(() => voteCounts(committeeVotes), [committeeVotes]);
   const floorCounts = useMemo(() => voteCounts(floorVotes), [floorVotes]);
-  const committeePassed = bill ? ["reported", "calendared", "floor", "passed"].includes(bill.status) || (bill.status === "failed" && committeeCounts.yea > committeeCounts.nay) : false;
+  const postFloorStatuses = ["passed", "senate", "senate_passed", "signed", "vetoed"];
+  const finalStatuses = ["passed", "failed", "signed", "vetoed"];
+  const committeePassed = bill ? ["reported", "calendared", "floor", ...postFloorStatuses].includes(bill.status) || (bill.status === "failed" && committeeCounts.yea > committeeCounts.nay) : false;
   const showRevisedText = Boolean(committeePassed && referral?.committee_id && (committeeDoc?.ydoc_base64 || committeeDoc?.revised_pdf_path || committeeDoc?.committee_markup_posted_at));
   const cosponsorshipMode = classSettings?.bills?.cosponsorshipMode ?? (classSettings?.bills?.cosponsorAfterCommitteeReport ? "after_report" : "always");
   const reportSubmitted = Boolean(committeeDoc?.committee_report_submitted_at);
@@ -326,14 +336,14 @@ export function BillDetail() {
     const committeeVoteDate = latestDate(committeeVotes);
     if (committeeVoteDate) {
       const passed = committeeCounts.yea > committeeCounts.nay;
-      const decided = ["reported", "calendared", "floor", "passed", "failed"].includes(bill.status);
+      const decided = ["reported", "calendared", "floor", "passed", "failed", "senate", "senate_passed", "signed", "vetoed"].includes(bill.status);
       rows.push({
         label: decided ? (passed ? `Reported by ${committeeName}` : `Rejected by ${committeeName}`) : "Committee vote recorded",
         detail: `${committeeCounts.yea} yeas to ${committeeCounts.nay} nays${committeeCounts.present ? `, ${committeeCounts.present} present` : ""}`,
         date: committeeDoc?.committee_vote_finalized_at || committeeDoc?.committee_vote_closed_at || committeeVoteDate,
       });
     }
-    if (committeeDoc?.committee_vote_closed_at && !["reported", "calendared", "floor", "passed", "failed"].includes(bill.status)) {
+    if (committeeDoc?.committee_vote_closed_at && !["reported", "calendared", "floor", "passed", "failed", "senate", "senate_passed", "signed", "vetoed"].includes(bill.status)) {
       rows.push({ label: "Committee vote closed", detail: `${committeeCounts.yea} yeas to ${committeeCounts.nay} nays`, date: committeeDoc.committee_vote_closed_at });
     }
     if (committeeDoc?.committee_report_submitted_at) rows.push({ label: `${committeeName} report submitted`, date: committeeDoc.committee_report_submitted_at });
@@ -342,6 +352,10 @@ export function BillDetail() {
     const floorVoteDate = latestDate(floorVotes);
     if (floorVoteDate) rows.push({ label: "Floor vote recorded", detail: `${floorCounts.yea} yeas to ${floorCounts.nay} nays${floorCounts.present ? `, ${floorCounts.present} present` : ""}`, date: floorVoteDate });
     if (floorSession?.closed_at) rows.push({ label: "Floor debate closed", date: floorSession.closed_at });
+    if (bill.status === "senate") rows.push({ label: "Sent to Senate", date: floorSession?.results_posted_at || floorSession?.closed_at || bill.created_at });
+    if (bill.status === "senate_passed") rows.push({ label: "Passed by Senate", date: floorSession?.results_posted_at || floorSession?.closed_at || bill.created_at });
+    if (bill.status === "signed") rows.push({ label: "Signed by President", date: floorSession?.results_posted_at || floorSession?.closed_at || bill.created_at });
+    if (bill.status === "vetoed") rows.push({ label: "Vetoed by President", date: floorSession?.results_posted_at || floorSession?.closed_at || bill.created_at });
     for (const override of teacherOverrideActions) {
       const label = override.step === "Referred" && override.note ? `Teacher Override: ${override.note}` : `Teacher Override: ${override.step}`;
       rows.push({
@@ -369,13 +383,18 @@ export function BillDetail() {
         step.status === "completed" &&
         (!step.date || (latestOverrideTime > 0 && Math.abs(new Date(step.date).getTime() - latestOverrideTime) < 120000)),
     });
-    const markedUp = Boolean(committeeDoc?.committee_markup_posted_at || ["committee_vote", "reported", "calendared", "floor", "passed", "failed"].includes(status));
-    const reported = ["reported", "calendared", "floor", "passed", "failed"].includes(status);
+    const markedUp = Boolean(committeeDoc?.committee_markup_posted_at || ["committee_vote", "reported", "calendared", "floor", "passed", "failed", "senate", "senate_passed", "signed", "vetoed"].includes(status));
+    const reported = ["reported", "calendared", "floor", "passed", "failed", "senate", "senate_passed", "signed", "vetoed"].includes(status);
     const calendared = Boolean(calendar);
-    const floor = Boolean(floorSession?.opened_at);
-    const final = ["passed", "failed"].includes(status);
+    const floor = Boolean(floorSession?.opened_at || ["passed", "failed", "senate", "senate_passed", "signed", "vetoed"].includes(status));
+    const senateEnabled = Boolean(classSettings?.senate?.enabled);
+    const executiveEnabled = Boolean(classSettings?.executive?.enabled);
+    const senateDone = ["senate_passed", "signed", "vetoed"].includes(status);
+    const executiveReady = executiveEnabled && (senateEnabled ? status === "senate_passed" : status === "passed");
+    const executiveDone = ["signed", "vetoed"].includes(status);
+    const final = finalStatuses.includes(status) && (!executiveEnabled || executiveDone || status === "failed");
     const markupDate = committeeDoc?.committee_markup_posted_at || committeeDoc?.committee_vote_finalized_at || committeeDoc?.committee_vote_closed_at || latestDate(committeeVotes);
-    return [
+    const steps: TrackerItem[] = [
       markOverrideFilled({ label: "Introduced", status: "completed", date: bill.created_at }),
       {
         kind: "split",
@@ -386,10 +405,17 @@ export function BillDetail() {
       },
       markOverrideFilled({ label: "Reported", status: reported ? (calendared || floor || final ? "completed" : "current") : referral ? "upcoming" : "upcoming", date: committeeDoc?.committee_vote_finalized_at }),
       markOverrideFilled({ label: "Calendared", status: calendared ? (floor || final ? "completed" : "current") : "upcoming", date: calendar?.created_at || calendar?.scheduled_at }),
-      markOverrideFilled({ label: "Floor", status: floor ? (final ? "completed" : "current") : "upcoming", date: floorSession?.opened_at }),
-      markOverrideFilled({ label: "Final", status: final ? "completed" : "upcoming", date: floorSession?.closed_at, note: final ? statusLabel(status) : undefined }),
+      markOverrideFilled({ label: "Floor", status: floor ? (status === "floor" ? "current" : "completed") : "upcoming", date: floorSession?.opened_at }),
     ];
-  }, [bill, calendar, committeeDoc, committeeVotes, floorSession, referral, teacherOverrideActions]);
+    if (senateEnabled) {
+      steps.push(markOverrideFilled({ label: "Senate", status: status === "senate" ? "current" : senateDone ? "completed" : floor ? "upcoming" : "upcoming", date: floorSession?.results_posted_at || floorSession?.closed_at, note: status === "senate" ? "Awaiting Senate" : senateDone ? "Passed Senate" : undefined }));
+    }
+    if (executiveEnabled) {
+      steps.push(markOverrideFilled({ label: "President", status: executiveDone ? "completed" : executiveReady ? "current" : "upcoming", date: floorSession?.results_posted_at || floorSession?.closed_at, note: executiveDone ? statusLabel(status) : executiveReady ? "Awaiting action" : undefined }));
+    }
+    steps.push(markOverrideFilled({ label: "Final", status: final ? "completed" : ["passed", "senate_passed"].includes(status) && !executiveEnabled ? "completed" : "upcoming", date: floorSession?.closed_at, note: final || (["passed", "senate_passed"].includes(status) && !executiveEnabled) ? statusLabel(status) : undefined }));
+    return steps;
+  }, [bill, calendar, classSettings, committeeDoc, committeeVotes, finalStatuses, floorSession, referral, teacherOverrideActions]);
 
   const toggleCurrentUserCosponsor = async () => {
     if (!id || !cosponsorAllowed || cosponsorPending) return;
@@ -473,6 +499,10 @@ export function BillDetail() {
 
   const openTeacherTrackerOverride = (step: TrackerStep) => {
     if (userRole !== "teacher" || !bill) return;
+    if (["Senate", "President"].includes(step.label)) {
+      toast.info(overrideMessage(step.label));
+      return;
+    }
     if (committeeOptions.length === 0 && ["Referred", "Marked up"].includes(step.label)) {
       toast.error("No committees are configured for this class");
       return;
@@ -578,6 +608,43 @@ export function BillDetail() {
     }
   };
 
+  const recordBillStatusDecision = async (status: string, note: string) => {
+    if (!bill) return;
+    try {
+      const { error } = await supabase.from("bills").update({ status } as any).eq("id", bill.id).eq("class_id", bill.class_id);
+      if (error) throw error;
+      if (currentUserId) {
+        await supabase.from("bill_teacher_overrides").insert({
+          bill_id: bill.id,
+          class_id: bill.class_id,
+          actor_user_id: currentUserId,
+          step: ["signed", "vetoed"].includes(status) ? "President" : "Senate",
+          note,
+        } as any);
+      }
+      await refreshBillState();
+      toast.success(note);
+    } catch (e: any) {
+      toast.error(e.message || "Could not update bill status");
+    }
+  };
+
+  const handleSenateDecision = async (passed: boolean) => {
+    if (userRole !== "teacher" || !bill || bill.status !== "senate") return;
+    await recordBillStatusDecision(passed ? "senate_passed" : "failed", passed ? "Passed by Senate" : "Rejected by Senate");
+  };
+
+  const handleExecutiveDecision = async (status: "signed" | "vetoed") => {
+    if (!bill) return;
+    const executiveEnabled = Boolean(classSettings?.executive?.enabled);
+    const senateEnabled = Boolean(classSettings?.senate?.enabled);
+    const presidentUserId = classSettings?.executive?.presidentUserId as string | null | undefined;
+    const ready = senateEnabled ? bill.status === "senate_passed" : bill.status === "passed";
+    const canAct = ready && executiveEnabled && (userRole === "teacher" || (currentUserId && presidentUserId === currentUserId));
+    if (!canAct) return;
+    await recordBillStatusDecision(status, status === "signed" ? "Signed by President" : "Vetoed by President");
+  };
+
   const handleDeleteBill = async () => {
     if (userRole !== "teacher" || !bill || deletePending) return;
     setDeletePending(true);
@@ -605,6 +672,13 @@ export function BillDetail() {
   const sponsorName = displayPersonName(sponsor?.display_name ?? "Unknown");
   const sponsorDistrict = formatConstituency(sponsor?.constituency_name);
   const isUserSponsor = sponsor?.user_id === currentUserId || bill.author_user_id === currentUserId;
+  const senateEnabled = Boolean(classSettings?.senate?.enabled);
+  const executiveEnabled = Boolean(classSettings?.executive?.enabled);
+  const presidentUserId = classSettings?.executive?.presidentUserId as string | null | undefined;
+  const isPresident = Boolean(executiveEnabled && currentUserId && presidentUserId === currentUserId);
+  const canRecordSenate = userRole === "teacher" && senateEnabled && bill.status === "senate";
+  const executiveReady = executiveEnabled && (senateEnabled ? bill.status === "senate_passed" : bill.status === "passed");
+  const canRecordExecutive = executiveReady && (userRole === "teacher" || isPresident);
   const overrideCommitteeOptions =
     trackerOverrideDraft?.step.label === "Marked up" && referral?.committee_id
       ? [
@@ -694,6 +768,32 @@ export function BillDetail() {
             <div className="mt-4 flex items-start gap-2 rounded-md border border-green-200 bg-green-50 px-3 py-2 text-xs text-green-900">
               <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-700" />
               <span>Teacher override is enabled. Click a tracker stage to review and confirm a manual status change.</span>
+            </div>
+          )}
+          {(canRecordSenate || canRecordExecutive) && (
+            <div className="mt-4 flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-gray-50 p-3">
+              {canRecordSenate && (
+                <>
+                  <span className="mr-1 text-sm font-semibold text-gray-900">Senate action</span>
+                  <button type="button" onClick={() => void handleSenateDecision(true)} className="rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700">
+                    Pass Senate
+                  </button>
+                  <button type="button" onClick={() => void handleSenateDecision(false)} className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                    Reject
+                  </button>
+                </>
+              )}
+              {canRecordExecutive && (
+                <>
+                  <span className="mr-1 text-sm font-semibold text-gray-900">President action</span>
+                  <button type="button" onClick={() => void handleExecutiveDecision("signed")} className="rounded-md bg-green-600 px-3 py-2 text-sm font-semibold text-white hover:bg-green-700">
+                    Sign
+                  </button>
+                  <button type="button" onClick={() => void handleExecutiveDecision("vetoed")} className="rounded-md bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700">
+                    Veto
+                  </button>
+                </>
+              )}
             </div>
           )}
           <HorizontalTracker steps={tracker} onSelectStep={userRole === "teacher" ? openTeacherTrackerOverride : undefined} />

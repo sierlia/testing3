@@ -422,6 +422,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     floorVoteThreshold: "simple-majority",
     floorVoteThresholdPct: 50,
     showVoteResultsLive: true,
+    enableExecutive: false,
+    presidentSelectionMode: "student-vote",
+    presidentUserId: "",
+    enableSenate: false,
+    senateVoteThresholdPct: 50,
     profileDistrictRequired: true,
     profilePartyRequired: true,
     profilesEnabled: true,
@@ -621,6 +626,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           floorVoteThreshold: s?.floor?.voteThreshold ?? prev.floorVoteThreshold,
           floorVoteThresholdPct: s?.floor?.voteThresholdPct ?? (s?.floor?.voteThreshold === "two-thirds" ? 67 : prev.floorVoteThresholdPct),
           showVoteResultsLive: s?.floor?.showVoteResultsLive ?? prev.showVoteResultsLive,
+          enableExecutive: s?.executive?.enabled ?? prev.enableExecutive,
+          presidentSelectionMode: s?.executive?.selectionMode ?? s?.executive?.presidentSelectionMode ?? prev.presidentSelectionMode,
+          presidentUserId: s?.executive?.presidentUserId ?? prev.presidentUserId,
+          enableSenate: s?.senate?.enabled ?? prev.enableSenate,
+          senateVoteThresholdPct: s?.senate?.voteThresholdPct ?? prev.senateVoteThresholdPct,
           enableHouseLeadershipElection: s?.elections?.houseLeadership?.enabled ?? prev.enableHouseLeadershipElection,
           enableOrganizationElections: s?.elections?.organizations?.enabled ?? prev.enableOrganizationElections,
           enableElections: s?.elections?.enabled ?? Boolean((s?.elections?.houseLeadership?.enabled ?? prev.enableHouseLeadershipElection) || (s?.elections?.organizations?.enabled ?? prev.enableOrganizationElections)),
@@ -855,6 +865,18 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                 calendarAutoPublish: settings.calendarAutoPublish,
                 speakerSignupMode: settings.floorSpeakerSignupMode,
               },
+              executive: {
+                ...(existing?.executive ?? {}),
+                enabled: settings.enableExecutive,
+                selectionMode: settings.presidentSelectionMode,
+                presidentSelectionMode: settings.presidentSelectionMode,
+                presidentUserId: settings.presidentSelectionMode === "teacher-assigned" ? settings.presidentUserId || null : existing?.executive?.presidentUserId ?? null,
+              },
+              senate: {
+                ...(existing?.senate ?? {}),
+                enabled: settings.enableSenate,
+                voteThresholdPct: Math.min(100, Math.max(1, Number(settings.senateVoteThresholdPct) || 50)),
+              },
               elections: {
                 ...(existing?.elections ?? {}),
                 enabled: settings.enableElections,
@@ -1070,6 +1092,7 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
 
   const studentOptions = memberOptions.filter((member) => member.role === "student");
   const selectedBillSubmissionStudents = studentOptions.filter((member) => settings.billSubmissionStudentIds.includes(member.id));
+  const selectedPresident = studentOptions.find((member) => member.id === settings.presidentUserId);
   const billSubmissionCandidates = studentOptions.filter((member) => {
     const query = billSubmissionSearch.trim().toLowerCase();
     return !settings.billSubmissionStudentIds.includes(member.id) && (!query || member.name.toLowerCase().includes(query) || member.email.toLowerCase().includes(query));
@@ -1173,6 +1196,11 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
           floorVoteThreshold: raw?.floor?.voteThreshold ?? settings.floorVoteThreshold,
           floorVoteThresholdPct: raw?.floor?.voteThresholdPct ?? settings.floorVoteThresholdPct,
           floorSpeakerSignupMode: raw?.floor?.speakerSignupMode ?? settings.floorSpeakerSignupMode,
+          enableExecutive: raw?.executive?.enabled ?? settings.enableExecutive,
+          presidentSelectionMode: raw?.executive?.selectionMode ?? raw?.executive?.presidentSelectionMode ?? settings.presidentSelectionMode,
+          presidentUserId: raw?.executive?.presidentUserId ?? settings.presidentUserId,
+          enableSenate: raw?.senate?.enabled ?? settings.enableSenate,
+          senateVoteThresholdPct: raw?.senate?.voteThresholdPct ?? settings.senateVoteThresholdPct,
           profilesEnabled: raw?.profiles?.enabled ?? settings.profilesEnabled,
           profileEditingAllowed: raw?.profiles?.editingAllowed ?? settings.profileEditingAllowed,
           profileEditingMode: raw?.profiles?.editingMode ?? settings.profileEditingMode,
@@ -1715,6 +1743,48 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
                     <SelectItem value="request">Students request to speak</SelectItem>
                   </SettingSelect>
                 }
+              />
+            </DisabledBlock>
+          </SettingsGroup>
+          <SettingsGroup title="President" action={enabledDisabledSelect(settings.enableExecutive, (v) => setSettings({ enableExecutive: v }), !settings.enableBills)}>
+            <div className="text-sm text-gray-600">Enable executive action so a president can sign or veto bills after the chamber vote flow.</div>
+            <DisabledBlock disabled={!settings.enableExecutive}>
+              <SettingRow
+                title="President selection"
+                description="Choose whether students elect the president or the teacher assigns one."
+                indent
+                control={
+                  <SettingSelect value={settings.presidentSelectionMode} onValueChange={(value) => setSettings({ presidentSelectionMode: value })}>
+                    <SelectItem value="student-vote">Student vote</SelectItem>
+                    <SelectItem value="teacher-assigned">Teacher assigns</SelectItem>
+                  </SettingSelect>
+                }
+              />
+              <DisabledBlock disabled={settings.presidentSelectionMode !== "teacher-assigned"} tight>
+                <SettingRow
+                  title="Assigned president"
+                  description={selectedPresident ? selectedPresident.email : "Select a student to serve as president."}
+                  indent
+                  control={
+                    <SettingSelect value={settings.presidentUserId || "none"} onValueChange={(value) => setSettings({ presidentUserId: value === "none" ? "" : value })} disabled={settings.presidentSelectionMode !== "teacher-assigned"}>
+                      <SelectItem value="none">No president selected</SelectItem>
+                      {studentOptions.map((student) => (
+                        <SelectItem key={student.id} value={student.id}>{student.name}</SelectItem>
+                      ))}
+                    </SettingSelect>
+                  }
+                />
+              </DisabledBlock>
+            </DisabledBlock>
+          </SettingsGroup>
+          <SettingsGroup title="Senate" action={enabledDisabledSelect(settings.enableSenate, (v) => setSettings({ enableSenate: v }), !settings.enableBills)}>
+            <div className="text-sm text-gray-600">When enabled, House-passed bills move to Senate before final executive action.</div>
+            <DisabledBlock disabled={!settings.enableSenate}>
+              <SettingRow
+                title="Senate pass threshold"
+                description="Percentage of senators needed to pass the bill."
+                indent
+                control={<PercentInput value={settings.senateVoteThresholdPct} onChange={(value) => setSettings({ senateVoteThresholdPct: value })} />}
               />
             </DisabledBlock>
           </SettingsGroup>

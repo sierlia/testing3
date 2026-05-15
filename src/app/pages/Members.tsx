@@ -124,8 +124,8 @@ export function Members() {
         const failedByUser = new Map<string, number>();
         for (const bill of billRows ?? []) {
           const author = (bill as any).author_user_id;
-          if ((bill as any).status === "passed") passedByUser.set(author, (passedByUser.get(author) ?? 0) + 1);
-          if ((bill as any).status === "failed") failedByUser.set(author, (failedByUser.get(author) ?? 0) + 1);
+          if (["passed", "senate_passed", "signed"].includes((bill as any).status)) passedByUser.set(author, (passedByUser.get(author) ?? 0) + 1);
+          if (["failed", "vetoed"].includes((bill as any).status)) failedByUser.set(author, (failedByUser.get(author) ?? 0) + 1);
         }
         const cosponsorsByUser = new Map<string, number>();
         for (const row of cosponsorRows ?? []) cosponsorsByUser.set((row as any).user_id, (cosponsorsByUser.get((row as any).user_id) ?? 0) + 1);

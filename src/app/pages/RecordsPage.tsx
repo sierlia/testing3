@@ -100,7 +100,7 @@ function partyAbbr(party: string | null | undefined) {
 }
 
 function statusRank(status: string) {
-  const ranks: Record<string, number> = { draft: 0, submitted: 1, in_committee: 2, committee_vote: 3, reported: 4, calendared: 5, floor: 6, passed: 7, failed: 7 };
+  const ranks: Record<string, number> = { draft: 0, submitted: 1, in_committee: 2, committee_vote: 3, reported: 4, calendared: 5, floor: 6, senate: 7, senate_passed: 8, passed: 9, signed: 10, vetoed: 10, failed: 10 };
   return ranks[status] ?? 0;
 }
 
@@ -113,7 +113,11 @@ function statusLabel(status: string) {
     reported: "Reported",
     calendared: "Calendared",
     floor: "Floor",
+    senate: "Senate",
+    senate_passed: "Passed Senate",
     passed: "Passed",
+    signed: "Signed",
+    vetoed: "Vetoed",
     failed: "Failed",
   };
   return labels[status] ?? typeLabel(status);
@@ -1127,8 +1131,8 @@ export function RecordsPage() {
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0 lg:w-full lg:self-start">
-              <div className="lg:sticky lg:top-4">
+            <div className="min-w-0 lg:sticky lg:top-4 lg:w-full lg:self-start">
+              <div>
                 {selectedRecord ? <RecordPreviewPanel record={selectedRecord} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
               </div>
             </div>
