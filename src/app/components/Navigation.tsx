@@ -662,8 +662,11 @@ export function Navigation() {
                 </button>
                 {floorOpen && (
                   <div className="absolute top-full left-0 mt-0 w-40 bg-white rounded-md shadow-lg border border-gray-200 py-1 z-10" onMouseEnter={openFloor} onMouseLeave={closeFloorSoon}>
-                    <Link to="/floor" className={dropdownItemClass(isActivePath(["/floor"]))}>
+                    <Link to="/floor" className={dropdownItemClass(location.pathname === "/floor" && location.search !== "?mode=discussion")}>
                       Live
+                    </Link>
+                    <Link to="/floor?mode=discussion" className={dropdownItemClass(location.pathname === "/floor" && new URLSearchParams(location.search).get("mode") === "discussion")}>
+                      Discussions
                     </Link>
                     <Link to="/calendar" className={dropdownItemClass(isActivePath(["/calendar"]))}>
                       Calendar

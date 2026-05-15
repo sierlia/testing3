@@ -1,28 +1,27 @@
-import { useEffect, useMemo, useState } from "react";
-import { Check, ClipboardCheck, Plus, Search, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, ClipboardCheck, Plus, Search, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
 import {
   AssignmentTask,
   AUTO_CRITERIA_OPTIONS,
   AutoCriteriaConfig,
+  RubricItem,
   criterionFromOption,
   newRubricItem,
   normalizeAssignment,
   normalizeCriteria,
   normalizeRubric,
-  RubricItem,
-  autoCriteriaTotal,
   rubricTotal,
 } from "../services/assignments";
+import { AttachmentList, AttachmentPicker, DiscussionAttachment } from "./DiscussionAttachments";
 
 type AudienceType = AssignmentTask["audience_type"];
-type GradingMode = AssignmentTask["grading_mode"];
 type OrgOption = { id: string; name: string };
 type StudentRow = { user_id: string; display_name: string };
 
 const assignmentSelect =
-  "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,rubric,auto_criteria,integration_targets";
+  "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,allow_late_submissions,rubric,auto_criteria,attachments,integration_targets";
 
 function displayPartyName(name: string) {
   const normalized = name.trim();
@@ -35,14 +34,69 @@ function sortByName<T extends { name: string }>(rows: T[]) {
   return [...rows].sort((a, b) => a.name.localeCompare(b.name));
 }
 
+function localDateInput(iso: string | null) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function localTimeInput(iso: string | null) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function criteriaFromRubric(rubric: RubricItem[]): AutoCriteriaConfig[] {
+  return rubric
+    .filter((item) => item.autoCriteriaId)
+    .map((item) => {
+      const fallback = criterionFromOption(item.autoCriteriaId || AUTO_CRITERIA_OPTIONS[0].id);
+      return {
+        id: item.autoCriteriaId || fallback.id,
+        target: Math.max(1, Number(item.autoTarget ?? fallback.target) || 1),
+        points: Math.max(0, Number(item.autoPoints ?? item.points ?? fallback.points) || 0),
+        extra_credit: Boolean(item.extraCredit),
+        rubric_item_id: item.id,
+      };
+    });
+}
+
+function parseRubricImport(text: string): RubricItem[] {
+  try {
+    const parsed = JSON.parse(text);
+    if (Array.isArray(parsed)) return normalizeRubric(parsed);
+    if (Array.isArray(parsed?.rubric)) return normalizeRubric(parsed.rubric);
+  } catch {
+    // Fall through to simple line parsing.
+  }
+
+  return normalizeRubric(
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const pieces = line.split(/,|\t/).map((piece) => piece.trim()).filter(Boolean);
+        const pointIndex = pieces.findIndex((piece) => Number.isFinite(Number(piece)));
+        const points = pointIndex >= 0 ? Math.max(0, Number(pieces[pointIndex]) || 0) : 10;
+        const textPieces = pieces.filter((_, index) => index !== pointIndex);
+        const title = textPieces[0] ?? "Rubric item";
+        const description = textPieces.slice(1).join(" ");
+        return { ...newRubricItem(), title, description, points };
+      }),
+  );
+}
+
 export function TeacherAssignmentModal({
   classId,
   open,
+  assignment,
   onClose,
   onSaved,
 }: {
   classId: string | null | undefined;
   open: boolean;
+  assignment?: AssignmentTask | null;
   onClose: () => void;
   onSaved?: (assignment: AssignmentTask) => void | Promise<void>;
 }) {
@@ -61,34 +115,33 @@ export function TeacherAssignmentModal({
   const [newAudienceType, setNewAudienceType] = useState<AudienceType>("all");
   const [newAudienceId, setNewAudienceId] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
-  const [gradingMode, setGradingMode] = useState<GradingMode>("manual");
-  const [manualSubmissionRequired, setManualSubmissionRequired] = useState(true);
+  const [allowLateSubmissions, setAllowLateSubmissions] = useState(true);
   const [newPointsPossible, setNewPointsPossible] = useState("100");
-  const [rubricRows, setRubricRows] = useState<RubricItem[]>([newRubricItem()]);
-  const [criteriaRows, setCriteriaRows] = useState<AutoCriteriaConfig[]>([]);
+  const [rubricRows, setRubricRows] = useState<RubricItem[]>([]);
+  const [assignmentAttachments, setAssignmentAttachments] = useState<DiscussionAttachment[]>([]);
   const [studentPickerQuery, setStudentPickerQuery] = useState("");
   const [audienceOptionQuery, setAudienceOptionQuery] = useState("");
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  const reset = () => {
-    setNewTitle("");
-    setNewDescription("");
-    setNewDueDate("");
-    setNewDueTime("");
-    setNewAudienceType("all");
-    setNewAudienceId("");
-    setSelectedStudentIds([]);
-    setGradingMode("manual");
-    setManualSubmissionRequired(true);
-    setNewPointsPossible("100");
-    setRubricRows([newRubricItem()]);
-    setCriteriaRows([]);
+  const reset = (source?: AssignmentTask | null) => {
+    setNewTitle(source?.title ?? "");
+    setNewDescription(source?.description ?? "");
+    setNewDueDate(localDateInput(source?.due_at ?? null));
+    setNewDueTime(localTimeInput(source?.due_at ?? null));
+    setNewAudienceType(source?.audience_type ?? "all");
+    setNewAudienceId(source?.audience_id ?? "");
+    setSelectedStudentIds(source?.audience_user_ids ?? []);
+    setAllowLateSubmissions(source?.allow_late_submissions ?? true);
+    setNewPointsPossible(String(source?.points_possible ?? 100));
+    setRubricRows(source?.rubric ?? []);
+    setAssignmentAttachments(source?.attachments ?? []);
     setStudentPickerQuery("");
     setAudienceOptionQuery("");
   };
 
   useEffect(() => {
     if (!open) return;
-    reset();
+    reset(assignment);
     if (!classId) return;
     const loadOptions = async () => {
       setLoadingOptions(true);
@@ -123,7 +176,7 @@ export function TeacherAssignmentModal({
     };
     void loadOptions();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, classId]);
+  }, [open, classId, assignment?.id]);
 
   const specificOptions =
     newAudienceType === "party" ? parties : newAudienceType === "committee" ? committees : newAudienceType === "caucus" ? caucuses : newAudienceType === "lobbyist" ? lobbyists : [];
@@ -136,12 +189,43 @@ export function TeacherAssignmentModal({
     return students.filter((student) => !q || student.display_name.toLowerCase().includes(q));
   }, [studentPickerQuery, students]);
 
+  const normalizedRubric = useMemo(() => normalizeRubric(rubricRows), [rubricRows]);
+  const rubricCriteria = useMemo(() => normalizeCriteria(criteriaFromRubric(normalizedRubric)), [normalizedRubric]);
+  const reflectedPoints = normalizedRubric.length ? rubricTotal(normalizedRubric) : Math.max(0, Number(newPointsPossible) || 0);
+
   const toggleSelectedStudent = (userId: string) => {
     setSelectedStudentIds((current) => current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]);
   };
 
-  const toggleCriteria = (id: string) => {
-    setCriteriaRows((current) => (current.some((row) => row.id === id) ? current.filter((row) => row.id !== id) : [...current, criterionFromOption(id)]));
+  const updateRubricItem = (id: string, patch: Partial<RubricItem>) => {
+    setRubricRows((rows) => rows.map((row) => (row.id === id ? { ...row, ...patch } : row)));
+  };
+
+  const toggleRubricAutomation = (item: RubricItem) => {
+    if (item.autoCriteriaId) {
+      updateRubricItem(item.id, { autoCriteriaId: "", autoTarget: 1, autoPoints: item.points, extraCredit: false });
+      return;
+    }
+    const defaultCriteria = criterionFromOption(AUTO_CRITERIA_OPTIONS[0].id);
+    updateRubricItem(item.id, {
+      autoCriteriaId: defaultCriteria.id,
+      autoTarget: defaultCriteria.target,
+      autoPoints: defaultCriteria.points,
+    });
+  };
+
+  const importRubric = async (file: File | null | undefined) => {
+    if (!file) return;
+    try {
+      const rows = parseRubricImport(await file.text());
+      if (!rows.length) return toast.error("No rubric rows found in that file");
+      setRubricRows(rows);
+      toast.success("Rubric imported");
+    } catch (error: any) {
+      toast.error(error.message || "Could not import rubric");
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const close = () => {
@@ -154,41 +238,37 @@ export function TeacherAssignmentModal({
     const audienceId = newAudienceType === "all" || newAudienceType === "selected_students" ? null : newAudienceId || null;
     if (newAudienceType !== "all" && newAudienceType !== "selected_students" && !audienceId) return toast.error("Select a target for this assignment");
     if (newAudienceType === "selected_students" && selectedStudentIds.length === 0) return toast.error("Select at least one student");
-    const normalizedRubric = gradingMode === "manual" ? normalizeRubric(rubricRows) : [];
-    const normalizedCriteria = gradingMode === "auto" ? normalizeCriteria(criteriaRows) : [];
-    if (gradingMode === "auto" && normalizedCriteria.length === 0) return toast.error("Choose at least one auto-graded rubric requirement");
     setSaving(true);
     try {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth.user?.id;
       if (!uid) throw new Error("Sign in required");
       const dueAt = newDueDate.trim() === "" ? null : new Date(`${newDueDate}T${(newDueTime || "23:59").trim()}:00`).toISOString();
-      const pointsPossible = gradingMode === "auto" ? autoCriteriaTotal(normalizedCriteria) : Math.max(0, Number(newPointsPossible) || 0);
-      const { data, error } = await supabase
-        .from("class_tasks")
-        .insert({
-          class_id: classId,
-          created_by: uid,
-          task_type: "assignment",
-          audience_type: newAudienceType,
-          audience_id: audienceId,
-          audience_user_ids: newAudienceType === "selected_students" ? selectedStudentIds : [],
-          title: newTitle.trim(),
-          description: newDescription.trim(),
-          due_at: dueAt,
-          points_possible: pointsPossible,
-          grading_mode: gradingMode,
-          manual_submission_required: manualSubmissionRequired,
-          rubric: normalizedRubric,
-          auto_criteria: normalizedCriteria,
-          integration_targets: [],
-        } as any)
-        .select(assignmentSelect)
-        .single();
+      const payload = {
+        task_type: "assignment",
+        audience_type: newAudienceType,
+        audience_id: audienceId,
+        audience_user_ids: newAudienceType === "selected_students" ? selectedStudentIds : [],
+        title: newTitle.trim(),
+        description: newDescription.trim(),
+        due_at: dueAt,
+        points_possible: reflectedPoints,
+        grading_mode: rubricCriteria.length ? "auto" : "manual",
+        manual_submission_required: true,
+        allow_late_submissions: allowLateSubmissions,
+        rubric: normalizedRubric,
+        auto_criteria: rubricCriteria,
+        attachments: assignmentAttachments,
+        integration_targets: [],
+      } as any;
+      const query = assignment?.id
+        ? supabase.from("class_tasks").update(payload).eq("id", assignment.id).select(assignmentSelect).single()
+        : supabase.from("class_tasks").insert({ ...payload, class_id: classId, created_by: uid }).select(assignmentSelect).single();
+      const { data, error } = await query;
       if (error) throw error;
       const saved = normalizeAssignment(data);
       await onSaved?.(saved);
-      toast.success("Assignment created");
+      toast.success(assignment?.id ? "Assignment updated" : "Assignment created");
       close();
     } catch (error: any) {
       toast.error(error.message || "Could not save assignment");
@@ -202,27 +282,33 @@ export function TeacherAssignmentModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
       <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-gray-200 p-6">
+        <div className="flex items-center justify-between border-b border-gray-200 p-5">
           <div className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">Add assignment</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{assignment?.id ? "Edit assignment" : "Add assignment"}</h2>
           </div>
           <button onClick={close} className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="grid gap-6 overflow-y-auto p-6 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,0.95fr)]">
-          <section className="space-y-5 rounded-lg border border-gray-200 p-4">
+        <div className="grid gap-5 overflow-y-auto p-5 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,0.95fr)]">
+          <section className="space-y-4 rounded-lg border border-gray-200 p-4">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Assignment details</h3>
-            <label className="block">
-              <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
-              <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Bill draft and committee memo" className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
-            </label>
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
+                <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Bill draft and committee memo" className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Due date</span>
+                <input type="date" value={newDueDate} onChange={(event) => setNewDueDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
+            </div>
 
-            <div>
-              <div className="mb-2 text-sm font-medium text-gray-700">Assigned to</div>
-              <div className="flex flex-wrap gap-1.5">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-sm font-medium text-gray-700">Assigned to</span>
                 {(["all", "selected_students", "party", "committee", "caucus", "lobbyist"] as AudienceType[]).map((type) => (
                   <button
                     key={type}
@@ -233,22 +319,25 @@ export function TeacherAssignmentModal({
                       setAudienceOptionQuery("");
                       if (type !== "selected_students") setSelectedStudentIds([]);
                     }}
-                    className={`rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${newAudienceType === type ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${newAudienceType === type ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
                   >
-                    {type === "all" ? "All students" : type === "selected_students" ? "Select students" : type === "party" ? "Parties" : type === "committee" ? "Committees" : type === "caucus" ? "Caucuses" : "Lobbyists"}
+                    {type === "all" ? "All" : type === "selected_students" ? "Select students" : type === "party" ? "Parties" : type === "committee" ? "Committees" : type === "caucus" ? "Caucuses" : "Lobbyists"}
                   </button>
                 ))}
               </div>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Due time</span>
+                <input type="time" value={newDueTime} onChange={(event) => setNewDueTime(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
             </div>
 
             {newAudienceType !== "all" && newAudienceType !== "selected_students" ? (
               <div className="rounded-lg border border-gray-200 p-3">
-                <div className="mb-2 text-sm font-medium text-gray-700">Target</div>
                 <div className="relative mb-2">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input value={audienceOptionQuery} onChange={(event) => setAudienceOptionQuery(event.target.value)} placeholder={`Search ${newAudienceType === "lobbyist" ? "lobbyist groups" : `${newAudienceType}s`}...`} className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <div className="max-h-48 space-y-1 overflow-y-auto">
+                <div className="max-h-44 space-y-1 overflow-y-auto">
                   {filteredSpecificOptions.map((option) => (
                     <button key={option.id} type="button" onClick={() => setNewAudienceId(option.id)} className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${newAudienceId === option.id ? "bg-blue-50 text-blue-800 ring-1 ring-blue-200" : "hover:bg-gray-50"}`}>
                       <span className="truncate">{option.name}</span>
@@ -270,7 +359,7 @@ export function TeacherAssignmentModal({
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
                   <input value={studentPickerQuery} onChange={(event) => setStudentPickerQuery(event.target.value)} placeholder="Search students..." className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <div className="max-h-56 space-y-1 overflow-y-auto">
+                <div className="max-h-48 space-y-1 overflow-y-auto">
                   {filteredStudents.map((student) => {
                     const selected = selectedStudentIds.includes(student.user_id);
                     return (
@@ -286,126 +375,136 @@ export function TeacherAssignmentModal({
               </div>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-3">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Due date</span>
-                <input type="date" value={newDueDate} onChange={(event) => setNewDueDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
-              </label>
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Due time</span>
-                <input type="time" value={newDueTime} onChange={(event) => setNewDueTime(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
-              </label>
-            </div>
-
             <label className="block">
               <span className="mb-1 block text-sm font-medium text-gray-700">Description</span>
-              <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} rows={4} placeholder="Instructions, resources, and what students should submit." className="w-full rounded-md border border-gray-300 px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-blue-500" />
+              <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} rows={3} placeholder="Instructions, resources, and what students should submit." className="w-full rounded-md border border-gray-300 px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-blue-500" />
+            </label>
+
+            <div className="rounded-lg border border-gray-200 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <div className="text-sm font-medium text-gray-900">Attached simulation work</div>
+                  <div className="text-xs text-gray-500">Attach bills, records, or letters students should reference.</div>
+                </div>
+                <AttachmentPicker value={assignmentAttachments} onChange={setAssignmentAttachments} />
+              </div>
+              <AttachmentList attachments={assignmentAttachments} />
+            </div>
+
+            <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
+              <input type="checkbox" checked={allowLateSubmissions} onChange={(event) => setAllowLateSubmissions(event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+              Allow late submissions
             </label>
           </section>
 
           <section className="rounded-lg border border-gray-200 p-4">
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h3 className="font-semibold text-gray-900">Grading</h3>
-                <p className="text-sm text-gray-600">Choose whether this assignment is graded by a manual rubric or quantitative simulation requirements.</p>
+                <p className="text-sm text-gray-600">Use points alone, or create a rubric with optional auto-graded criteria.</p>
               </div>
-              {gradingMode === "manual" ? (
-                <label className="block">
-                  <span className="mb-1 block text-xs font-medium text-gray-600">Points possible</span>
-                  <input type="number" min="0" value={newPointsPossible} onChange={(event) => setNewPointsPossible(event.target.value)} className="w-32 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                </label>
-              ) : (
-                <div className="text-right text-sm text-gray-600">
-                  <span className="block text-xs font-medium text-gray-500">Total</span>
-                  <span className="font-semibold text-gray-900">{autoCriteriaTotal(normalizeCriteria(criteriaRows))} pts</span>
-                </div>
-              )}
+              <label className="block">
+                <span className="mb-1 block text-xs font-medium text-gray-600">Points possible</span>
+                <input
+                  type="number"
+                  min="0"
+                  readOnly={normalizedRubric.length > 0}
+                  value={normalizedRubric.length ? reflectedPoints : newPointsPossible}
+                  onChange={(event) => setNewPointsPossible(event.target.value)}
+                  className={`w-32 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${normalizedRubric.length ? "bg-gray-100 text-gray-600" : ""}`}
+                />
+              </label>
             </div>
-            <div className="mb-4 flex flex-wrap gap-2">
-              {(["manual", "auto"] as GradingMode[]).map((mode) => (
-                <button key={mode} type="button" onClick={() => setGradingMode(mode)} className={`rounded-md px-3 py-2 text-sm font-medium ${gradingMode === mode ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}>
-                  {mode === "manual" ? "Manual grading" : "Auto-grading"}
-                </button>
-              ))}
-            </div>
-            <label className="mb-4 flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={manualSubmissionRequired} onChange={(event) => setManualSubmissionRequired(event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-              Student must manually submit this assignment
-            </label>
 
-            {gradingMode === "manual" ? (
-              <>
-                <div className="mb-3 flex items-center justify-between gap-3">
-                  <div>
-                    <h4 className="font-semibold text-gray-900">Rubric</h4>
-                    <p className="text-sm text-gray-600">Students can see these criteria before they submit.</p>
-                  </div>
-                  <span className="text-sm font-medium text-gray-600">{rubricTotal(normalizeRubric(rubricRows))} pts</span>
-                </div>
-                <div className="space-y-3">
-                  {rubricRows.map((item, index) => (
-                    <div key={item.id} className="grid gap-2 rounded-md bg-gray-50 p-3 sm:grid-cols-[1fr_88px_auto]">
-                      <input value={item.title} onChange={(event) => setRubricRows((rows) => rows.map((row) => (row.id === item.id ? { ...row, title: event.target.value } : row)))} placeholder={`Criterion ${index + 1}`} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                      <input type="number" min="0" value={item.points} onChange={(event) => setRubricRows((rows) => rows.map((row) => (row.id === item.id ? { ...row, points: Math.max(0, Number(event.target.value) || 0) } : row)))} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                      <button type="button" onClick={() => setRubricRows((rows) => rows.filter((row) => row.id !== item.id))} className="rounded-md p-2 text-gray-500 hover:bg-white">
-                        <X className="h-4 w-4" />
-                      </button>
-                      <textarea value={item.description} onChange={(event) => setRubricRows((rows) => rows.map((row) => (row.id === item.id ? { ...row, description: event.target.value } : row)))} placeholder="What earns credit for this criterion?" rows={2} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 sm:col-span-3" />
-                    </div>
-                  ))}
-                </div>
-                <button type="button" onClick={() => setRubricRows((rows) => [...rows, newRubricItem()])} className="mt-3 inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                  <Plus className="h-4 w-4" />
-                  Add rubric item
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h4 className="font-semibold text-gray-900">Rubric</h4>
+                <p className="text-sm text-gray-600">Auto-grade can be associated with any rubric item.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input ref={fileInputRef} type="file" accept=".json,.csv,.txt" className="hidden" onChange={(event) => void importRubric(event.target.files?.[0])} />
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  <Upload className="h-4 w-4" />
+                  Import rubric
                 </button>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <h4 className="font-semibold text-gray-900">Auto-graded rubric requirements</h4>
-                  <span className="text-sm font-medium text-gray-600">{autoCriteriaTotal(normalizeCriteria(criteriaRows))} pts</span>
-                </div>
-                <p className="mt-1 text-sm text-gray-600">Set the number required and points earned for each completed item.</p>
-                <div className="mt-3 grid gap-3 md:grid-cols-2">
-                  {AUTO_CRITERIA_OPTIONS.map((option) => {
-                    const selected = criteriaRows.find((row) => row.id === option.id);
-                    return (
-                      <div key={option.id} className={`rounded-md border p-3 ${selected ? "border-blue-300 bg-blue-50" : "border-gray-200 bg-white"}`}>
-                        <label className="flex cursor-pointer items-start gap-3">
-                          <input type="checkbox" checked={Boolean(selected)} onChange={() => toggleCriteria(option.id)} className="mt-1 h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-                          <span>
-                            <span className="block text-sm font-semibold text-gray-900">{option.label}</span>
-                            <span className="block text-xs text-gray-600">{option.description}</span>
-                          </span>
-                        </label>
-                        {selected ? (
-                          <div className="mt-3 grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => setRubricRows((rows) => [...rows, newRubricItem()])} className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
+                  <Plus className="h-4 w-4" />
+                  Add rubric
+                </button>
+              </div>
+            </div>
+
+            {rubricRows.length ? (
+              <div className="space-y-3">
+                {rubricRows.map((item, index) => {
+                  const option = AUTO_CRITERIA_OPTIONS.find((entry) => entry.id === item.autoCriteriaId);
+                  return (
+                    <div key={item.id} className="space-y-2 rounded-md bg-gray-50 p-3">
+                      <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_88px_auto]">
+                        <input value={item.title} onChange={(event) => updateRubricItem(item.id, { title: event.target.value })} placeholder={`Criterion ${index + 1}`} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                        <input type="number" min="0" value={item.points} onChange={(event) => updateRubricItem(item.id, { points: Math.max(0, Number(event.target.value) || 0), autoPoints: item.autoCriteriaId ? Math.max(0, Number(event.target.value) || 0) : item.autoPoints })} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                        <button type="button" onClick={() => setRubricRows((rows) => rows.filter((row) => row.id !== item.id))} className="rounded-md p-2 text-gray-500 hover:bg-white" aria-label="Remove rubric item">
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+                      <textarea value={item.description} onChange={(event) => updateRubricItem(item.id, { description: event.target.value })} placeholder="What earns credit for this criterion?" rows={2} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+
+                      <div className="rounded-md border border-gray-200 bg-white p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <div className="text-sm font-medium text-gray-900">Auto-grade association</div>
+                            <div className="text-xs text-gray-500">{option ? option.description : "No auto-graded criterion attached."}</div>
+                          </div>
+                          <button type="button" onClick={() => toggleRubricAutomation(item)} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${item.autoCriteriaId ? "bg-blue-50 text-blue-700 hover:bg-blue-100" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
+                            {item.autoCriteriaId ? "Remove auto-grade" : "Associate auto-grade"}
+                          </button>
+                        </div>
+                        {item.autoCriteriaId ? (
+                          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_7rem_auto]">
+                            <select
+                              value={item.autoCriteriaId}
+                              onChange={(event) => {
+                                const next = criterionFromOption(event.target.value);
+                                updateRubricItem(item.id, { autoCriteriaId: next.id, autoTarget: next.target, autoPoints: next.points });
+                              }}
+                              className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                            >
+                              {AUTO_CRITERIA_OPTIONS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
+                            </select>
                             <label className="block">
                               <span className="mb-1 block text-xs font-medium text-gray-600">#</span>
-                              <input type="number" min="1" value={selected.target} onChange={(event) => setCriteriaRows((rows) => rows.map((row) => (row.id === option.id ? { ...row, target: Math.max(1, Number(event.target.value) || 1) } : row)))} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                              <input type="number" min="1" value={item.autoTarget ?? 1} onChange={(event) => updateRubricItem(item.id, { autoTarget: Math.max(1, Number(event.target.value) || 1) })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                             </label>
                             <label className="block">
                               <span className="mb-1 block text-xs font-medium text-gray-600">Points per #</span>
-                              <input type="number" min="0" value={selected.points} onChange={(event) => setCriteriaRows((rows) => rows.map((row) => (row.id === option.id ? { ...row, points: Math.max(0, Number(event.target.value) || 0) } : row)))} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                              <input type="number" min="0" value={item.autoPoints ?? item.points} onChange={(event) => updateRubricItem(item.id, { autoPoints: Math.max(0, Number(event.target.value) || 0) })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                            </label>
+                            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-700">
+                              <input type="checkbox" checked={Boolean(item.extraCredit)} onChange={(event) => updateRubricItem(item.id, { extraCredit: event.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                              Extra credit
                             </label>
                           </div>
                         ) : null}
                       </div>
-                    );
-                  })}
-                </div>
-              </>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
+                No rubric yet. Use points possible alone, or add/import a rubric.
+              </div>
             )}
           </section>
         </div>
 
-        <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-6">
+        <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-5">
           <button onClick={close} className="px-4 py-2 text-gray-700 transition-colors hover:text-gray-900">
             Cancel
           </button>
           <button onClick={() => void save()} disabled={!newTitle.trim() || saving} className="flex items-center gap-2 rounded-md bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
             <Plus className="h-4 w-4" />
-            {saving ? "Saving..." : "Add assignment"}
+            {saving ? "Saving..." : assignment?.id ? "Save assignment" : "Add assignment"}
           </button>
         </div>
       </div>

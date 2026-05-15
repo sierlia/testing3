@@ -690,7 +690,21 @@ export function TessBills() {
                           <BillTracker bill={bill} />
                         </div>
                         <div className="flex flex-shrink-0 items-center gap-2 text-gray-400">
-                          {rowMode === "preview" ? <FileText className="h-4 w-4" /> : <ExternalLink className="h-4 w-4" />}
+                          {rowMode === "preview" ? (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate(`/bills/${bill.id}#bill-text`);
+                              }}
+                              className="rounded-md p-1 text-gray-500 hover:bg-blue-50 hover:text-blue-700"
+                              aria-label={`Open full text for ${bill.number}`}
+                            >
+                              <FileText className="h-4 w-4" />
+                            </button>
+                          ) : (
+                            <ExternalLink className="h-4 w-4" />
+                          )}
                           {isTeacher ? (
                             <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
                               <button

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router";
 import { Calendar, CheckCircle2, FileText, Paperclip, Send } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { AttachmentList } from "../components/DiscussionAttachments";
 import { supabase } from "../utils/supabase";
 import {
   AssignmentTask,
@@ -33,7 +34,7 @@ type SubmissionRow = {
 type DraftState = { body: string; attachmentIds: string[] };
 
 const assignmentSelect =
-  "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,rubric,auto_criteria,integration_targets";
+  "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,allow_late_submissions,rubric,auto_criteria,attachments,integration_targets";
 
 function formatDateTime(iso: string | null) {
   if (!iso) return "No due date";
@@ -377,6 +378,7 @@ function AssignmentDetail({
             </div>
             <h2 className="text-xl font-semibold text-gray-900">{assignment.title}</h2>
             {assignment.description ? <p className="mt-2 whitespace-pre-line text-sm text-gray-700">{assignment.description}</p> : null}
+            <AttachmentList attachments={assignment.attachments} />
           </div>
           <div className="flex items-center gap-2 text-sm text-gray-600">
             <Calendar className="h-4 w-4" />

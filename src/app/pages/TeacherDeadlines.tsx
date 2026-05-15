@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
+import { AttachmentList } from "../components/DiscussionAttachments";
+import { TeacherAssignmentModal } from "../components/TeacherAssignmentModal";
 import { supabase } from "../utils/supabase";
 import {
   AssignmentProvider,
@@ -72,7 +74,7 @@ type IntegrationRow = {
 };
 
 const assignmentSelect =
-  "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,rubric,auto_criteria,integration_targets";
+  "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,allow_late_submissions,rubric,auto_criteria,attachments,integration_targets";
 
 function displayPartyName(name: string) {
   const normalized = name.trim();
@@ -146,6 +148,8 @@ export function TeacherDeadlines() {
   const [loading, setLoading] = useState(true);
   const [classId, setClassId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskRow[]>([]);
+  const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [assignmentModalTask, setAssignmentModalTask] = useState<TaskRow | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
@@ -407,28 +411,14 @@ export function TeacherDeadlines() {
   };
 
   const openCreateModal = () => {
-    resetModal();
-    setShowModal(true);
+    setAssignmentModalTask(null);
+    setCreateModalOpen(true);
   };
 
   const openEditModal = (task: TaskRow) => {
-    setEditingTaskId(task.id);
-    setNewTitle(task.title);
-    setNewDescription(task.description);
-    setNewDueDate(localDateInput(task.due_at));
-    setNewDueTime(localTimeInput(task.due_at));
-    setNewAudienceType(task.audience_type);
-    setNewAudienceId(task.audience_id ?? "");
-    setSelectedStudentIds(task.audience_user_ids ?? []);
-    setStudentPickerQuery("");
-    setAudienceOptionQuery("");
-    setGradingMode(task.grading_mode);
-    setManualSubmissionRequired(task.manual_submission_required);
-    setNewPointsPossible(String(task.points_possible ?? 100));
-    setRubricRows(task.rubric.length ? task.rubric : [newRubricItem()]);
-    setCriteriaRows(task.auto_criteria);
+    setAssignmentModalTask(task);
     setActiveMenuId(null);
-    setShowModal(true);
+    setCreateModalOpen(true);
   };
 
   const toggleSelectedStudent = (userId: string) => {
@@ -805,6 +795,7 @@ export function TeacherDeadlines() {
                     <div className="min-w-0">
                       <h2 className="text-2xl font-semibold text-gray-900">{selectedAssignment.title}</h2>
                       {selectedAssignment.description ? <p className="mt-2 max-w-3xl whitespace-pre-line text-sm leading-6 text-gray-700">{selectedAssignment.description}</p> : null}
+                      <AttachmentList attachments={selectedAssignment.attachments} />
                     </div>
                     <div className="flex flex-wrap items-start justify-start gap-2 xl:justify-end">
                       <button
@@ -1018,6 +1009,21 @@ export function TeacherDeadlines() {
           </section>
         </div>
       </main>
+
+      <TeacherAssignmentModal
+        classId={classId}
+        open={createModalOpen}
+        assignment={assignmentModalTask}
+        onClose={() => {
+          setCreateModalOpen(false);
+          setAssignmentModalTask(null);
+        }}
+        onSaved={(saved) => {
+          setTasks((prev) => sortAssignments(prev.some((task) => task.id === saved.id) ? prev.map((task) => (task.id === saved.id ? saved : task)) : [...prev, saved]));
+          setSelectedAssignmentId(saved.id);
+          navigate(`/assignments/${saved.id}`);
+        }}
+      />
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

@@ -10,12 +10,18 @@ export type RubricItem = {
   title: string;
   description: string;
   points: number;
+  autoCriteriaId?: string;
+  autoTarget?: number;
+  autoPoints?: number;
+  extraCredit?: boolean;
 };
 
 export type AutoCriteriaConfig = {
   id: string;
   target: number;
   points: number;
+  extra_credit?: boolean;
+  rubric_item_id?: string;
 };
 
 export type AutoCriteriaResult = {
@@ -26,6 +32,15 @@ export type AutoCriteriaResult = {
   points: number;
   earned: number;
   complete: boolean;
+  extra_credit?: boolean;
+};
+
+export type AssignmentAttachment = {
+  type: "bill" | "record" | "letter";
+  id: string;
+  label: string;
+  href: string;
+  description?: string;
 };
 
 export type AttachmentOption = {
@@ -48,8 +63,10 @@ export type AssignmentTask = {
   points_possible: number;
   grading_mode: GradingMode;
   manual_submission_required: boolean;
+  allow_late_submissions: boolean;
   rubric: RubricItem[];
   auto_criteria: AutoCriteriaConfig[];
+  attachments: AssignmentAttachment[];
   integration_targets: AssignmentProvider[];
   created_at: string;
 };
@@ -267,7 +284,7 @@ export function newRubricItem(): RubricItem {
 
 export function criterionFromOption(id: string): AutoCriteriaConfig {
   const option = AUTO_CRITERIA_OPTIONS.find((entry) => entry.id === id) ?? AUTO_CRITERIA_OPTIONS[0];
-  return { id: option.id, target: option.defaultTarget, points: option.defaultPoints };
+  return { id: option.id, target: option.defaultTarget, points: option.defaultPoints, extra_credit: false };
 }
 
 export function normalizeRubric(value: unknown): RubricItem[] {
@@ -278,8 +295,12 @@ export function normalizeRubric(value: unknown): RubricItem[] {
       title: String(item?.title || ""),
       description: String(item?.description || ""),
       points: Math.max(0, Number(item?.points ?? 0) || 0),
+      autoCriteriaId: AUTO_CRITERIA_OPTIONS.some((option) => option.id === item?.autoCriteriaId) ? String(item.autoCriteriaId) : "",
+      autoTarget: Math.max(1, Number(item?.autoTarget ?? 1) || 1),
+      autoPoints: Math.max(0, Number(item?.autoPoints ?? item?.points ?? 0) || 0),
+      extraCredit: Boolean(item?.extraCredit),
     }))
-    .filter((item) => item.title.trim() || item.description.trim() || item.points > 0);
+    .filter((item) => item.title.trim() || item.description.trim() || item.points > 0 || item.autoCriteriaId);
 }
 
 export function normalizeCriteria(value: unknown): AutoCriteriaConfig[] {
@@ -289,17 +310,38 @@ export function normalizeCriteria(value: unknown): AutoCriteriaConfig[] {
       id: String(item?.id || ""),
       target: Math.max(1, Number(item?.target ?? 1) || 1),
       points: Math.max(0, Number(item?.points ?? 0) || 0),
+      extra_credit: Boolean(item?.extra_credit),
+      rubric_item_id: item?.rubric_item_id ? String(item.rubric_item_id) : undefined,
     }))
     .filter((item) => AUTO_CRITERIA_OPTIONS.some((option) => option.id === item.id));
 }
 
 export function autoCriteriaTotal(criteria: AutoCriteriaConfig[]) {
-  return criteria.reduce((sum, item) => sum + Math.max(0, Number(item.target ?? 0) || 0) * Math.max(0, Number(item.points ?? 0) || 0), 0);
+  return criteria.reduce((sum, item) => item.extra_credit ? sum : sum + Math.max(0, Number(item.target ?? 0) || 0) * Math.max(0, Number(item.points ?? 0) || 0), 0);
+}
+
+export function normalizeAssignmentAttachments(value: unknown): AssignmentAttachment[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item: any) => ({
+      type: item?.type === "record" || item?.type === "letter" ? item.type : "bill",
+      id: String(item?.id ?? ""),
+      label: String(item?.label ?? ""),
+      href: String(item?.href ?? ""),
+      description: item?.description ? String(item.description) : undefined,
+    }))
+    .filter((item) => item.id && item.label && item.href);
 }
 
 export function normalizeAssignment(row: any): AssignmentTask {
   const gradingMode = row.grading_mode === "auto" ? "auto" : "manual";
   const autoCriteria = normalizeCriteria(row.auto_criteria);
+  const rubric = normalizeRubric(row.rubric);
+  const pointsPossible = rubric.length
+    ? rubricTotal(rubric)
+    : gradingMode === "auto"
+      ? autoCriteriaTotal(autoCriteria)
+      : Number(row.points_possible ?? 100);
   return {
     id: row.id,
     task_type: row.task_type,
@@ -309,11 +351,13 @@ export function normalizeAssignment(row: any): AssignmentTask {
     audience_type: row.audience_type ?? "all",
     audience_id: row.audience_id ?? null,
     audience_user_ids: Array.isArray(row.audience_user_ids) ? row.audience_user_ids.map(String).filter(Boolean) : [],
-    points_possible: gradingMode === "auto" ? autoCriteriaTotal(autoCriteria) : Number(row.points_possible ?? 100),
+    points_possible: pointsPossible,
     grading_mode: gradingMode,
     manual_submission_required: row.manual_submission_required !== false,
-    rubric: normalizeRubric(row.rubric),
+    allow_late_submissions: row.allow_late_submissions !== false,
+    rubric,
     auto_criteria: autoCriteria,
+    attachments: normalizeAssignmentAttachments(row.attachments),
     integration_targets: Array.isArray(row.integration_targets) ? row.integration_targets.filter((id: string) => PROVIDERS.some((provider) => provider.id === id)) : [],
     created_at: row.created_at,
   };
@@ -329,7 +373,7 @@ export function autoScoreTotal(scores: Record<string, AutoCriteriaResult> | null
 }
 
 export function rubricTotal(rubric: RubricItem[]) {
-  return rubric.reduce((sum, item) => sum + Number(item.points ?? 0), 0);
+  return rubric.reduce((sum, item) => item.extraCredit ? sum : sum + Number(item.points ?? 0), 0);
 }
 
 async function countRows(query: PromiseLike<{ count: number | null; error: any }>) {
@@ -486,6 +530,7 @@ export async function computeAutoCriteriaScores(classId: string, userId: string,
         points,
         earned,
         complete,
+        extra_credit: Boolean(criterion.extra_credit),
       };
       return [criterion.id, result];
     }),

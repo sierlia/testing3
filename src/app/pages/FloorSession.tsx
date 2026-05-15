@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router";
-import { Check, ChevronDown, ExternalLink, MessageSquare, Minus, MonitorUp, Pencil, Plus, Search, Send, Trash2, Trophy, Vote, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Link, useSearchParams } from "react-router";
+import { Check, ExternalLink, MessageSquare, Minus, MonitorUp, Pencil, Plus, Search, Send, Trash2, Trophy, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { fetchCalendaredBillsForCurrentClass, getCurrentProfileClass } from "../services/bills";
@@ -87,6 +87,7 @@ function sessionLabel(session: SessionRow | null) {
 }
 
 export function FloorSession() {
+  const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [role, setRole] = useState<string | null>(null);
   const [meId, setMeId] = useState<string | null>(null);
@@ -126,10 +127,8 @@ export function FloorSession() {
   const [editingDiscussionId, setEditingDiscussionId] = useState<string | null>(null);
   const [editingDiscussionTitle, setEditingDiscussionTitle] = useState("");
   const [editingDiscussionPrompt, setEditingDiscussionPrompt] = useState("");
-  const [discussionMenuOpen, setDiscussionMenuOpen] = useState(false);
   const [draggingDiscussionId, setDraggingDiscussionId] = useState<string | null>(null);
   const [discussionDragTarget, setDiscussionDragTarget] = useState<{ visibility: NonNullable<DiscussionArea["visibility"]>; index: number } | null>(null);
-  const discussionMenuRef = useRef<HTMLDivElement | null>(null);
 
   const loadDiscussions = async (targetClassId: string) => {
     const { data: areaRows, error: areaError } = await supabase
@@ -218,15 +217,6 @@ export function FloorSession() {
   useEffect(() => {
     void load();
   }, []);
-
-  useEffect(() => {
-    if (!discussionMenuOpen) return;
-    const close = (event: PointerEvent) => {
-      if (!discussionMenuRef.current?.contains(event.target as Node)) setDiscussionMenuOpen(false);
-    };
-    document.addEventListener("pointerdown", close);
-    return () => document.removeEventListener("pointerdown", close);
-  }, [discussionMenuOpen]);
 
   useEffect(() => {
     if (!classId) return;
@@ -340,6 +330,9 @@ export function FloorSession() {
   const speakerConcluded = Boolean(classSettings?.elections?.speakerConcluded);
   const speakerOpen = classSettings?.elections?.speakerOpen ?? Boolean(classSettings?.elections?.open);
   const floorMode = (classSettings?.floor?.mode as FloorMode | undefined) ?? (speakerConcluded ? "bills" : "election");
+  const routeMode = searchParams.get("mode");
+  const displayFloorMode: FloorMode =
+    routeMode === "discussion" || routeMode === "bills" || routeMode === "election" ? routeMode : floorMode;
   const activeItem = useMemo(() => {
     if (items.length === 0) return null;
     const now = Date.now();
@@ -778,7 +771,6 @@ export function FloorSession() {
 
   const showDiscussionOnFloor = async (discussionId: string) => {
     setSelectedDiscussionId(discussionId);
-    setDiscussionMenuOpen(false);
     await activateDiscussionArea(discussionId);
     await setFloorMode("discussion");
   };
@@ -1209,6 +1201,7 @@ export function FloorSession() {
                 {([
                   ["election", "Speaker Election"],
                   ["bills", "Bills"],
+                  ["discussion", "Discussions"],
                 ] as Array<[FloorMode, string]>).map(([mode, label], index) => (
                   <button
                     key={mode}
@@ -1220,34 +1213,6 @@ export function FloorSession() {
                     {label}
                   </button>
                 ))}
-                <div className="relative border-l border-gray-200" ref={discussionMenuRef}>
-                  <button
-                    type="button"
-                    onClick={() => setDiscussionMenuOpen((open) => !open)}
-                    disabled={busy}
-                    className={`flex h-full items-center gap-2 px-5 py-2 text-sm font-semibold ${floorMode === "discussion" ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"} disabled:opacity-80`}
-                  >
-                    <span>Discussion: {liveDiscussion?.title ?? "Choose"}</span>
-                    <ChevronDown className="h-4 w-4" />
-                  </button>
-                  {discussionMenuOpen && (
-                    <div className="absolute right-0 top-full z-40 mt-2 max-h-72 w-72 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 text-left shadow-lg">
-                      {visibleDiscussionAreas.length ? visibleDiscussionAreas.map((area) => (
-                        <button
-                          key={area.id}
-                          type="button"
-                          onClick={() => void showDiscussionOnFloor(area.id)}
-                          className={`block w-full px-3 py-2 text-left text-sm ${liveDiscussion?.id === area.id ? "bg-blue-50 text-blue-800" : "text-gray-700 hover:bg-gray-50"}`}
-                        >
-                          <span className="block font-medium">{area.title}</span>
-                          <span className="block text-xs text-gray-500">{area.visibility === "live" || area.is_active ? "Current live discussion" : area.visibility === "invisible" ? "Invisible" : "Archive"}</span>
-                        </button>
-                      )) : (
-                        <div className="px-3 py-2 text-sm text-gray-500">No discussions yet.</div>
-                      )}
-                    </div>
-                  )}
-                </div>
               </div>
             )}
           </div>
@@ -1255,7 +1220,7 @@ export function FloorSession() {
 
         {loading ? (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">Loading floor...</div>
-        ) : floorMode === "election" ? (
+        ) : displayFloorMode === "election" ? (
           <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
             <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
               <div>
@@ -1342,7 +1307,7 @@ export function FloorSession() {
               </div>
             )}
           </div>
-        ) : floorMode === "discussion" ? (
+        ) : displayFloorMode === "discussion" ? (
           discussionBoard
         ) : items.length === 0 ? (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">No calendared bills are ready for floor session.</div>

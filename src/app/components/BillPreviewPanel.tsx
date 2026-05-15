@@ -115,15 +115,8 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
     <div ref={panelRef} className="flex max-h-[calc(100vh-5rem)] min-w-0 flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
       {/* Header */}
       <div className="flex-shrink-0 bg-blue-600 p-4 text-white">
-        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+        <div className="mb-2 flex flex-wrap items-center gap-2">
           <span className="font-mono text-sm font-semibold">{bill.number}</span>
-          <Link
-            to={fullBillTextHref}
-            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
-          >
-            <ExternalLink className="h-3.5 w-3.5" />
-            View Full Bill
-          </Link>
         </div>
         <h3 className="break-words font-semibold">{bill.title}</h3>
       </div>
@@ -190,13 +183,15 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
             {legislativePreview.text || "No legislative text available."}
           </p>
           {legislativePreview.truncated && <p className="mt-2 text-xs font-medium text-gray-500">Preview shows the first 750 words.</p>}
-          <Link
-            to={fullBillTextHref}
-            className="mt-3 inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
-          >
-            <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className="truncate">View Full Bill</span>
-          </Link>
+          <div className="mt-3 flex justify-end">
+            <Link
+              to={fullBillTextHref}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-gray-300 bg-white px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"
+            >
+              <ExternalLink className="h-3.5 w-3.5 flex-shrink-0" />
+              <span className="truncate">View Full Bill</span>
+            </Link>
+          </div>
         </div>
 
       </div>
