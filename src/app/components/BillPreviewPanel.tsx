@@ -60,7 +60,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
     return party.trim().slice(0, 1).toUpperCase() || "I";
   };
   const sponsorDescriptor = `Rep.-${partyAbbr(bill.sponsorParty)}-${bill.sponsorDistrict || "N/A"}`;
-  const textTooNarrow = panelWidth < 260;
+  const textTooNarrow = panelWidth < 200;
   const legislativePreview = useMemo(() => htmlToPreviewText(bill.legislativeText), [bill.legislativeText]);
 
   useEffect(() => {

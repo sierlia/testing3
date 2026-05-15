@@ -175,6 +175,13 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
   const formatEventDate = (date: Date) =>
     date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
+  const eventDisplayTitle = (event: CalendarEvent) => {
+    if (event.type === "assignment") return `Assignment: ${event.title}`;
+    if (event.type === "bill") return `Bill: ${event.title}`;
+    if (event.type === "deadline") return `Deadline: ${event.title}`;
+    return event.title;
+  };
+
   const getActivityIcon = (type: string) => {
     switch (type) {
       case "bill":
@@ -595,8 +602,8 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
 
         {workflowTimeline}
 
-        <div className="mb-8 grid gap-6 lg:grid-cols-3">
-          <div className="space-y-6 lg:col-span-2">
+        <div className="mb-8 grid gap-6 lg:grid-cols-[minmax(0,2.5fr)_18rem]">
+          <div className="space-y-6">
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -609,16 +616,21 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_20rem]">
+                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_15rem]">
                   <div className="min-w-0">
                     <div className="mb-2 flex items-center justify-between gap-3">
-                      <div className="text-sm font-semibold text-gray-900">Current week onward</div>
+                      <div className="text-sm font-semibold text-gray-900">Current six weeks</div>
                       <button type="button" onClick={() => setSelectedUpcomingDay(null)} className="text-xs font-medium text-blue-600 hover:text-blue-700">
                         Show all
                       </button>
                     </div>
-                    <div className="overflow-x-auto pb-2">
-                      <div className="grid auto-cols-[5.75rem] grid-flow-col gap-1.5">
+                    <div className="overflow-hidden rounded-md border border-gray-200 bg-white">
+                      <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase text-gray-500">
+                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                          <div key={day} className="px-2 py-1.5">{day}</div>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7">
                         {dashboardCalendarDays.map((day) => {
                           const key = dayKey(day);
                           const events = eventsByDay.get(key) ?? [];
@@ -629,15 +641,19 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                               key={key}
                               type="button"
                               onClick={() => setSelectedUpcomingDay(key)}
-                              className={`min-h-16 rounded-md border p-2 text-left transition-colors ${selected ? "border-blue-400 bg-blue-50" : isToday ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-white hover:bg-gray-50"}`}
+                              className={`min-h-24 border-b border-r border-gray-100 p-1.5 text-left transition-colors sm:min-h-28 ${selected ? "bg-blue-50 ring-1 ring-inset ring-blue-400" : isToday ? "bg-blue-50/70" : "bg-white hover:bg-gray-50"}`}
                             >
-                              <div className={`text-[11px] font-semibold uppercase ${isToday ? "text-blue-700" : "text-gray-500"}`}>{day.toLocaleDateString(undefined, { weekday: "short" })}</div>
-                              <div className="text-sm font-semibold text-gray-900">{day.getDate()}</div>
-                              <div className="mt-1 flex gap-1">
+                              <div className={`text-xs font-semibold ${isToday ? "text-blue-700" : "text-gray-900"}`}>{day.getDate()}</div>
+                              <div className="mt-1 space-y-1">
                                 {events.slice(0, 3).map((event) => (
-                                  <span key={event.id} className={`h-1.5 w-1.5 rounded-full ${event.type === "bill" || event.type === "assignment" ? "bg-blue-600" : "bg-gray-400"}`} />
+                                  <div
+                                    key={event.id}
+                                    className={`line-clamp-2 rounded px-1.5 py-1 text-[10px] font-medium leading-tight ${event.type === "bill" ? "bg-indigo-50 text-indigo-700" : event.type === "assignment" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700"}`}
+                                  >
+                                    {eventDisplayTitle(event)}
+                                  </div>
                                 ))}
-                                {events.length > 3 && <span className="text-[10px] leading-none text-gray-500">+{events.length - 3}</span>}
+                                {events.length > 3 && <div className="text-[10px] font-medium leading-none text-gray-500">+{events.length - 3} more</div>}
                               </div>
                             </button>
                           );
@@ -664,11 +680,11 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
                             <div className="min-w-0 flex-1">
                               {event.href ? (
-                                <Link to={event.href} className="text-sm font-semibold text-gray-900 hover:text-blue-600">
-                                  {event.title}
+                                <Link to={event.href} className="text-xs font-semibold text-gray-900 hover:text-blue-600">
+                                  {eventDisplayTitle(event)}
                                 </Link>
                               ) : (
-                                <h4 className="text-sm font-semibold text-gray-900">{event.title}</h4>
+                                <h4 className="text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>
                               )}
                               <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
                             </div>

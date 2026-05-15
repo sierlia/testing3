@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, ClipboardCheck, Plus, Search, Upload, X } from "lucide-react";
+import { Check, ChevronDown, ClipboardCheck, Plus, Search, Upload, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "../utils/supabase";
 import {
@@ -121,6 +121,7 @@ export function TeacherAssignmentModal({
   const [assignmentAttachments, setAssignmentAttachments] = useState<DiscussionAttachment[]>([]);
   const [studentPickerQuery, setStudentPickerQuery] = useState("");
   const [audienceOptionQuery, setAudienceOptionQuery] = useState("");
+  const [autoMenuRubricId, setAutoMenuRubricId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const reset = (source?: AssignmentTask | null) => {
@@ -137,6 +138,7 @@ export function TeacherAssignmentModal({
     setAssignmentAttachments(source?.attachments ?? []);
     setStudentPickerQuery("");
     setAudienceOptionQuery("");
+    setAutoMenuRubricId(null);
   };
 
   useEffect(() => {
@@ -212,6 +214,16 @@ export function TeacherAssignmentModal({
       autoTarget: defaultCriteria.target,
       autoPoints: defaultCriteria.points,
     });
+  };
+
+  const chooseRubricAutomation = (item: RubricItem, optionId: string) => {
+    const next = criterionFromOption(optionId);
+    updateRubricItem(item.id, {
+      autoCriteriaId: next.id,
+      autoTarget: next.target,
+      autoPoints: item.points || next.points,
+    });
+    setAutoMenuRubricId(null);
   };
 
   const importRubric = async (file: File | null | undefined) => {
@@ -295,40 +307,43 @@ export function TeacherAssignmentModal({
         <div className="grid gap-5 overflow-y-auto p-5 lg:grid-cols-[minmax(0,1fr)_minmax(26rem,0.95fr)]">
           <section className="space-y-4 rounded-lg border border-gray-200 p-4">
             <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Assignment details</h3>
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
-              <label className="block">
-                <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
-                <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Bill draft and committee memo" className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
-              </label>
+            <label className="block">
+              <span className="mb-1 block text-sm font-medium text-gray-700">Title</span>
+              <input value={newTitle} onChange={(event) => setNewTitle(event.target.value)} placeholder="Bill draft and committee memo" className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
+            </label>
+
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_9rem_auto] lg:items-end">
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">Due date</span>
                 <input type="date" value={newDueDate} onChange={(event) => setNewDueDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
               </label>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-sm font-medium text-gray-700">Assigned to</span>
-                {(["all", "selected_students", "party", "committee", "caucus", "lobbyist"] as AudienceType[]).map((type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => {
-                      setNewAudienceType(type);
-                      setNewAudienceId("");
-                      setAudienceOptionQuery("");
-                      if (type !== "selected_students") setSelectedStudentIds([]);
-                    }}
-                    className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${newAudienceType === type ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
-                  >
-                    {type === "all" ? "All" : type === "selected_students" ? "Select students" : type === "party" ? "Parties" : type === "committee" ? "Committees" : type === "caucus" ? "Caucuses" : "Lobbyists"}
-                  </button>
-                ))}
-              </div>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">Due time</span>
                 <input type="time" value={newDueTime} onChange={(event) => setNewDueTime(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
               </label>
+              <label className="flex cursor-pointer items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700">
+                <input type="checkbox" checked={allowLateSubmissions} onChange={(event) => setAllowLateSubmissions(event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
+                Allow late submissions
+              </label>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-medium text-gray-700">Assigned to</span>
+              {(["all", "selected_students", "party", "committee", "caucus", "lobbyist"] as AudienceType[]).map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => {
+                    setNewAudienceType(type);
+                    setNewAudienceId("");
+                    setAudienceOptionQuery("");
+                    if (type !== "selected_students") setSelectedStudentIds([]);
+                  }}
+                  className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${newAudienceType === type ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                >
+                  {type === "all" ? "All" : type === "selected_students" ? "Select students" : type === "party" ? "Parties" : type === "committee" ? "Committees" : type === "caucus" ? "Caucuses" : "Lobbyists"}
+                </button>
+              ))}
             </div>
 
             {newAudienceType !== "all" && newAudienceType !== "selected_students" ? (
@@ -375,26 +390,21 @@ export function TeacherAssignmentModal({
               </div>
             ) : null}
 
-            <label className="block">
+            <div className="block">
               <span className="mb-1 block text-sm font-medium text-gray-700">Description</span>
-              <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} rows={3} placeholder="Instructions, resources, and what students should submit." className="w-full rounded-md border border-gray-300 px-3 py-2 font-normal outline-none focus:ring-2 focus:ring-blue-500" />
-            </label>
-
-            <div className="rounded-lg border border-gray-200 p-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-medium text-gray-900">Attached simulation work</div>
-                  <div className="text-xs text-gray-500">Attach bills, records, or letters students should reference.</div>
+              <div className="overflow-hidden rounded-md border border-gray-300 bg-white focus-within:ring-2 focus-within:ring-blue-500">
+                <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} rows={5} placeholder="Instructions, resources, and what students should submit." className="w-full resize-y border-0 px-3 py-2 font-normal outline-none" />
+                <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-3 py-2">
+                  <span className="text-xs text-gray-500">Attach bills, records, or letters students should reference.</span>
+                  <AttachmentPicker value={assignmentAttachments} onChange={setAssignmentAttachments} />
                 </div>
-                <AttachmentPicker value={assignmentAttachments} onChange={setAssignmentAttachments} />
+                {assignmentAttachments.length ? (
+                  <div className="border-t border-gray-100 px-3 py-2">
+                    <AttachmentList attachments={assignmentAttachments} />
+                  </div>
+                ) : null}
               </div>
-              <AttachmentList attachments={assignmentAttachments} />
             </div>
-
-            <label className="flex cursor-pointer items-center gap-2 text-sm text-gray-700">
-              <input type="checkbox" checked={allowLateSubmissions} onChange={(event) => setAllowLateSubmissions(event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-              Allow late submissions
-            </label>
           </section>
 
           <section className="rounded-lg border border-gray-200 p-4">
@@ -423,54 +433,64 @@ export function TeacherAssignmentModal({
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <input ref={fileInputRef} type="file" accept=".json,.csv,.txt" className="hidden" onChange={(event) => void importRubric(event.target.files?.[0])} />
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                  <Upload className="h-4 w-4" />
-                  Import rubric
-                </button>
                 <button type="button" onClick={() => setRubricRows((rows) => [...rows, newRubricItem()])} className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
                   <Plus className="h-4 w-4" />
                   Add rubric
+                </button>
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                  <Upload className="h-4 w-4" />
+                  Import rubric
                 </button>
               </div>
             </div>
 
             {rubricRows.length ? (
-              <div className="space-y-3">
+              <div className="divide-y divide-gray-100">
                 {rubricRows.map((item, index) => {
                   const option = AUTO_CRITERIA_OPTIONS.find((entry) => entry.id === item.autoCriteriaId);
                   return (
-                    <div key={item.id} className="space-y-2 rounded-md bg-gray-50 p-3">
+                    <div key={item.id} className="space-y-2 py-3 first:pt-0 last:pb-0">
                       <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_88px_auto]">
                         <input value={item.title} onChange={(event) => updateRubricItem(item.id, { title: event.target.value })} placeholder={`Criterion ${index + 1}`} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                         <input type="number" min="0" value={item.points} onChange={(event) => updateRubricItem(item.id, { points: Math.max(0, Number(event.target.value) || 0), autoPoints: item.autoCriteriaId ? Math.max(0, Number(event.target.value) || 0) : item.autoPoints })} className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                        <button type="button" onClick={() => setRubricRows((rows) => rows.filter((row) => row.id !== item.id))} className="rounded-md p-2 text-gray-500 hover:bg-white" aria-label="Remove rubric item">
+                        <button type="button" onClick={() => setRubricRows((rows) => rows.filter((row) => row.id !== item.id))} className="rounded-md p-2 text-gray-500 hover:bg-gray-100" aria-label="Remove rubric item">
                           <X className="h-4 w-4" />
                         </button>
                       </div>
                       <textarea value={item.description} onChange={(event) => updateRubricItem(item.id, { description: event.target.value })} placeholder="What earns credit for this criterion?" rows={2} className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
 
-                      <div className="rounded-md border border-gray-200 bg-white p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <div className="text-sm font-medium text-gray-900">Auto-grade association</div>
-                            <div className="text-xs text-gray-500">{option ? option.description : "No auto-graded criterion attached."}</div>
-                          </div>
-                          <button type="button" onClick={() => toggleRubricAutomation(item)} className={`rounded-md px-3 py-1.5 text-xs font-semibold ${item.autoCriteriaId ? "bg-blue-50 text-blue-700 hover:bg-blue-100" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}>
-                            {item.autoCriteriaId ? "Remove auto-grade" : "Associate auto-grade"}
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-medium text-gray-900">Auto-grade</div>
+                          <div className="text-xs text-gray-500">{option ? option.description : "No auto-graded criterion attached."}</div>
+                        </div>
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={() => setAutoMenuRubricId((current) => (current === item.id ? null : item.id))}
+                            className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold ${item.autoCriteriaId ? "bg-blue-50 text-blue-700 hover:bg-blue-100" : "border border-gray-300 text-gray-700 hover:bg-gray-50"}`}
+                          >
+                            <span>{option ? option.label : "Auto-grade"}</span>
+                            <ChevronDown className="h-3.5 w-3.5" />
                           </button>
+                          {autoMenuRubricId === item.id ? (
+                            <div className="absolute right-0 top-full z-[160] mt-1 max-h-72 w-80 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-xl">
+                              {AUTO_CRITERIA_OPTIONS.map((entry) => (
+                                <button
+                                  key={entry.id}
+                                  type="button"
+                                  onClick={() => chooseRubricAutomation(item, entry.id)}
+                                  className={`block w-full px-3 py-2 text-left text-sm hover:bg-gray-50 ${item.autoCriteriaId === entry.id ? "bg-blue-50" : ""}`}
+                                >
+                                  <span className="block font-semibold text-gray-900">{entry.label}</span>
+                                  <span className="mt-0.5 block text-xs leading-4 text-gray-500">{entry.description}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ) : null}
                         </div>
                         {item.autoCriteriaId ? (
-                          <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_5rem_7rem_auto]">
-                            <select
-                              value={item.autoCriteriaId}
-                              onChange={(event) => {
-                                const next = criterionFromOption(event.target.value);
-                                updateRubricItem(item.id, { autoCriteriaId: next.id, autoTarget: next.target, autoPoints: next.points });
-                              }}
-                              className="rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                            >
-                              {AUTO_CRITERIA_OPTIONS.map((entry) => <option key={entry.id} value={entry.id}>{entry.label}</option>)}
-                            </select>
+                          <div className="basis-full grid gap-2 sm:grid-cols-[5rem_7rem_auto_auto]">
                             <label className="block">
                               <span className="mb-1 block text-xs font-medium text-gray-600">#</span>
                               <input type="number" min="1" value={item.autoTarget ?? 1} onChange={(event) => updateRubricItem(item.id, { autoTarget: Math.max(1, Number(event.target.value) || 1) })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
@@ -483,6 +503,9 @@ export function TeacherAssignmentModal({
                               <input type="checkbox" checked={Boolean(item.extraCredit)} onChange={(event) => updateRubricItem(item.id, { extraCredit: event.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                               Extra credit
                             </label>
+                            <button type="button" onClick={() => toggleRubricAutomation(item)} className="self-end rounded-md px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-100">
+                              Remove
+                            </button>
                           </div>
                         ) : null}
                       </div>

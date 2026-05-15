@@ -392,11 +392,11 @@ function AssignmentDetail({
           {assignment.auto_criteria.length ? (
             <section>
               <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Requirements</h3>
-              <div className="space-y-2">
+              <div className="divide-y divide-gray-100">
                 {assignment.auto_criteria.map((criterion) => {
                   const score = scores[criterion.id];
                   return (
-                    <div key={criterion.id} className="flex items-center justify-between gap-3 rounded-md border border-gray-200 px-3 py-2 text-sm">
+                    <div key={criterion.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className={`h-4 w-4 ${score?.complete ? "text-green-600" : "text-gray-300"}`} />
                         <span className="font-medium text-gray-900">{score?.label ?? criterion.id}</span>
@@ -417,9 +417,9 @@ function AssignmentDetail({
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Rubric</h3>
                 <span className="text-sm font-medium text-gray-600">{rubricTotal(assignment.rubric)} pts</span>
               </div>
-              <div className="divide-y divide-gray-100 rounded-md border border-gray-200">
+              <div className="space-y-3">
                 {assignment.rubric.map((item) => (
-                  <div key={item.id} className="p-3">
+                  <div key={item.id}>
                     <div className="flex justify-between gap-3">
                       <h4 className="font-semibold text-gray-900">{item.title || "Rubric item"}</h4>
                       <span className="text-sm font-semibold text-gray-700">{item.points} pts</span>

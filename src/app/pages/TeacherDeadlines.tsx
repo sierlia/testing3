@@ -153,7 +153,7 @@ export function TeacherDeadlines() {
   const [showModal, setShowModal] = useState(false);
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [selectedAssignmentId, setSelectedAssignmentId] = useState<string | null>(null);
-  const [assignmentReviewTab, setAssignmentReviewTab] = useState<"submissions" | "rubric">("submissions");
+  const [rubricModalOpen, setRubricModalOpen] = useState(false);
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [gradingDrafts, setGradingDrafts] = useState<Record<string, GradeDraft>>({});
@@ -692,14 +692,24 @@ export function TeacherDeadlines() {
             <h1 className="text-3xl font-bold text-gray-900">Assignments</h1>
             <p className="mt-1 text-gray-600">Create assignments, attach rubrics, auto-grade simulation work, and return feedback.</p>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowIntegrations(true)}
-            className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-          >
-            <Settings2 className="h-4 w-4" />
-            Gradebook integrations
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowIntegrations(true)}
+              className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+            >
+              <Settings2 className="h-4 w-4" />
+              Gradebook integrations
+            </button>
+            <button
+              type="button"
+              onClick={openSyncReview}
+              className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+            >
+              <CloudUpload className="h-4 w-4" />
+              Review sync ({returnedSubmissions.length})
+            </button>
+          </div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[360px_minmax(0,1fr)]">
@@ -809,12 +819,12 @@ export function TeacherDeadlines() {
                       </button>
                       <button
                         type="button"
-                        onClick={openSyncReview}
-                        disabled={!returnedSubmissions.length}
-                        className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                        onClick={() => setRubricModalOpen(true)}
+                        disabled={!selectedAssignment.rubric.length && !selectedAssignment.auto_criteria.length}
+                        className="inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                       >
-                        <CloudUpload className="h-4 w-4" />
-                        Review sync ({returnedSubmissions.length})
+                        <ClipboardCheck className="h-4 w-4" />
+                        View rubric
                       </button>
                       <button
                         type="button"
@@ -826,49 +836,18 @@ export function TeacherDeadlines() {
                       </button>
                     </div>
                   </div>
-                  <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Due</div>
-                      <div className="mt-1 flex items-center gap-2 text-sm font-medium text-gray-900">
-                        <Calendar className="h-4 w-4 text-gray-500" />
-                        {formatDateTime(selectedAssignment.due_at)}
-                      </div>
-                    </div>
-                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Assigned to</div>
-                      <div className="mt-1 text-sm font-medium text-gray-900">{targetLabel(selectedAssignment)}</div>
-                    </div>
-                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Grading</div>
-                      <div className="mt-1 text-sm font-medium text-gray-900">{selectedAssignment.grading_mode === "auto" ? "Auto-graded rubric" : "Manual rubric"}</div>
-                    </div>
-                    <div className="rounded-md border border-gray-200 bg-gray-50 px-3 py-2">
-                      <div className="text-xs font-medium uppercase tracking-wide text-gray-500">Points</div>
-                      <div className="mt-1 text-sm font-medium text-gray-900">{selectedAssignment.points_possible} possible</div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-b border-gray-200 px-5 py-3">
-                  <div className="inline-flex rounded-md border border-gray-200 bg-gray-50 p-1">
-                    <button
-                      type="button"
-                      onClick={() => setAssignmentReviewTab("submissions")}
-                      className={`rounded px-3 py-1.5 text-sm font-medium ${assignmentReviewTab === "submissions" ? "bg-white text-blue-700 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
-                    >
-                      Student submissions
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setAssignmentReviewTab("rubric")}
-                      className={`rounded px-3 py-1.5 text-sm font-medium ${assignmentReviewTab === "rubric" ? "bg-white text-blue-700 shadow-sm" : "text-gray-600 hover:text-gray-900"}`}
-                    >
-                      Rubric
-                    </button>
+                  <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
+                    <span className="inline-flex items-center gap-1 font-medium text-gray-800">
+                      <Calendar className="h-3.5 w-3.5 text-gray-500" />
+                      Due {formatDateTime(selectedAssignment.due_at)}
+                    </span>
+                    <span className="text-gray-300">|</span>
+                    <span>Assigned to {targetLabel(selectedAssignment)}</span>
+                    <span className="text-gray-300">|</span>
+                    <span>{selectedAssignment.points_possible} points</span>
                   </div>
                 </div>
                 <div className="p-5">
-                  {assignmentReviewTab === "submissions" ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <h3 className="font-semibold text-gray-900">Student submissions</h3>
@@ -881,126 +860,105 @@ export function TeacherDeadlines() {
                     ) : assignedStudents.length === 0 ? (
                       <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-500">No students are assigned to this assignment.</div>
                     ) : (
-                      <div className="max-h-[780px] space-y-3 overflow-y-auto pr-1">
-                        {assignedStudents.map((student) => {
-                          const submission = submissionMap.get(student.user_id);
-                          const draft = gradingDrafts[student.user_id] ?? { manual_score: "", manual_feedback: "" };
-                          const autoTotal = autoScoreTotal(submission?.auto_scores);
-                          return (
-                            <div key={student.user_id} className="rounded-md border border-gray-200 p-3">
-                              <div className="mb-2 flex items-start justify-between gap-3">
-                                <div>
-                                  <div className="font-semibold text-gray-900">{student.display_name}</div>
-                                  <div className="text-xs text-gray-500">
-                                    {submission?.status === "returned"
-                                      ? `Returned${submission.returned_at ? ` ${new Date(submission.returned_at).toLocaleDateString()}` : ""}`
-                                      : submission?.status === "submitted"
-                                        ? `Submitted${submission.submitted_at ? ` ${new Date(submission.submitted_at).toLocaleDateString()}` : ""}`
-                                        : submission
-                                          ? "Auto-grade draft"
-                                          : "Not submitted"}
-                                  </div>
-                                </div>
-                                <button type="button" onClick={() => void runAutoGrade(student.user_id)} className="rounded-md p-2 text-gray-500 hover:bg-gray-100" title="Refresh auto-grade">
-                                  <RefreshCw className="h-4 w-4" />
-                                </button>
-                              </div>
-                              {selectedAssignment.auto_criteria.length ? (
-                                <div className="mb-3 rounded-md bg-gray-50 p-2 text-xs text-gray-700">
-                                  <div className="mb-1 font-semibold text-gray-900">Auto score: {autoTotal} pts</div>
-                                  <div className="space-y-1">
-                                    {selectedAssignment.auto_criteria.map((criterion) => {
-                                      const score = submission?.auto_scores?.[criterion.id];
-                                      return (
-                                        <div key={criterion.id} className="flex items-center justify-between gap-3">
-                                          <span>{autoCriteriaLabel(criterion.id)}</span>
-                                          <span className={score?.complete ? "font-semibold text-green-700" : "text-gray-500"}>
-                                            {score ? `${score.value}/${score.target} - ${score.earned}/${score.points * score.target}` : `0/${criterion.target} - 0/${criterion.points * criterion.target}`}
-                                          </span>
-                                        </div>
-                                      );
-                                    })}
-                                  </div>
-                                </div>
-                              ) : null}
-                              {submission?.body ? <p className="mb-3 whitespace-pre-line rounded-md bg-gray-50 p-2 text-sm text-gray-700">{submission.body}</p> : null}
-                              {submission?.attachments?.length ? (
-                                <div className="mb-3 flex flex-wrap gap-2">
-                                  {submission.attachments.map((attachment) => (
-                                    <Link key={attachment.id} to={attachment.href} className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">
-                                      {attachment.label}
-                                    </Link>
-                                  ))}
-                                </div>
-                              ) : null}
-                              <div className="grid gap-2">
-                                <input
-                                  value={draft.manual_score}
-                                  onChange={(event) => setGradingDrafts((current) => ({ ...current, [student.user_id]: { ...draft, manual_score: event.target.value } }))}
-                                  placeholder={`Score out of ${selectedAssignment.points_possible}`}
-                                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <textarea
-                                  value={draft.manual_feedback}
-                                  onChange={(event) => setGradingDrafts((current) => ({ ...current, [student.user_id]: { ...draft, manual_feedback: event.target.value } }))}
-                                  rows={2}
-                                  placeholder="Feedback for the student"
-                                  className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <button
-                                  type="button"
-                                  onClick={() => void returnGrade(student)}
-                                  className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
-                                >
-                                  <Send className="h-4 w-4" />
-                                  Return grade
-                                </button>
-                              </div>
-                            </div>
-                          );
-                        })}
+                      <div className="max-h-[780px] overflow-auto rounded-md border border-gray-200">
+                        <table className="min-w-[1080px] w-full text-sm">
+                          <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                            <tr>
+                              <th className="px-3 py-2">Student</th>
+                              <th className="px-3 py-2">Status</th>
+                              <th className="px-3 py-2">Submission</th>
+                              <th className="px-3 py-2">Auto score</th>
+                              <th className="px-3 py-2">Score</th>
+                              <th className="px-3 py-2">Feedback</th>
+                              <th className="px-3 py-2 text-right">Return</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100 bg-white">
+                            {assignedStudents.map((student) => {
+                              const submission = submissionMap.get(student.user_id);
+                              const draft = gradingDrafts[student.user_id] ?? { manual_score: "", manual_feedback: "" };
+                              const autoTotal = autoScoreTotal(submission?.auto_scores);
+                              const statusText = submission?.status === "returned"
+                                ? `Returned${submission.returned_at ? ` ${new Date(submission.returned_at).toLocaleDateString()}` : ""}`
+                                : submission?.status === "submitted"
+                                  ? `Submitted${submission.submitted_at ? ` ${new Date(submission.submitted_at).toLocaleDateString()}` : ""}`
+                                  : submission
+                                    ? "Auto-grade draft"
+                                    : "Not submitted";
+                              return (
+                                <tr key={student.user_id} className="align-top">
+                                  <td className="px-3 py-3 font-semibold text-gray-900">{student.display_name}</td>
+                                  <td className="px-3 py-3 text-xs text-gray-600">{statusText}</td>
+                                  <td className="max-w-xs px-3 py-3">
+                                    {submission?.body ? <p className="line-clamp-4 whitespace-pre-line text-sm text-gray-700">{submission.body}</p> : <span className="text-xs text-gray-400">No note</span>}
+                                    {submission?.attachments?.length ? (
+                                      <div className="mt-2 flex flex-wrap gap-1.5">
+                                        {submission.attachments.map((attachment) => (
+                                          <Link key={attachment.id} to={attachment.href} className="rounded-full bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">
+                                            {attachment.label}
+                                          </Link>
+                                        ))}
+                                      </div>
+                                    ) : null}
+                                  </td>
+                                  <td className="px-3 py-3 text-xs text-gray-700">
+                                    <div className="flex items-center justify-between gap-2">
+                                      <span className="font-semibold text-gray-900">{autoTotal} pts</span>
+                                      <button type="button" onClick={() => void runAutoGrade(student.user_id)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100" title="Refresh auto-grade">
+                                        <RefreshCw className="h-4 w-4" />
+                                      </button>
+                                    </div>
+                                    {selectedAssignment.auto_criteria.length ? (
+                                      <div className="mt-1 space-y-1">
+                                        {selectedAssignment.auto_criteria.map((criterion) => {
+                                          const score = submission?.auto_scores?.[criterion.id];
+                                          return (
+                                            <div key={criterion.id} className="flex justify-between gap-3">
+                                              <span>{autoCriteriaLabel(criterion.id)}</span>
+                                              <span className={score?.complete ? "font-semibold text-green-700" : "text-gray-500"}>
+                                                {score ? `${score.value}/${score.target} - ${score.earned}/${score.points * score.target}` : `0/${criterion.target} - 0/${criterion.points * criterion.target}`}
+                                              </span>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+                                    ) : null}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <input
+                                      value={draft.manual_score}
+                                      onChange={(event) => setGradingDrafts((current) => ({ ...current, [student.user_id]: { ...draft, manual_score: event.target.value } }))}
+                                      placeholder={`/${selectedAssignment.points_possible}`}
+                                      className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <textarea
+                                      value={draft.manual_feedback}
+                                      onChange={(event) => setGradingDrafts((current) => ({ ...current, [student.user_id]: { ...draft, manual_feedback: event.target.value } }))}
+                                      rows={2}
+                                      placeholder="Feedback"
+                                      className="w-56 rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                  </td>
+                                  <td className="px-3 py-3 text-right">
+                                    <button
+                                      type="button"
+                                      onClick={() => void returnGrade(student)}
+                                      className="inline-flex items-center justify-center gap-2 rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800"
+                                    >
+                                      <Send className="h-4 w-4" />
+                                      Return
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       </div>
                     )}
                   </div>
-                  ) : (
-                  <aside className="max-w-3xl space-y-4">
-                    {selectedAssignment.rubric.length ? (
-                      <section>
-                        <div className="mb-2 flex items-center justify-between gap-3">
-                          <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Rubric</h3>
-                          <span className="text-sm font-medium text-gray-600">{rubricTotal(selectedAssignment.rubric)} pts</span>
-                        </div>
-                        <div className="divide-y divide-gray-100 rounded-md border border-gray-200">
-                          {selectedAssignment.rubric.map((item) => (
-                            <div key={item.id} className="p-3">
-                              <div className="flex justify-between gap-3">
-                                <h4 className="font-semibold text-gray-900">{item.title || "Rubric item"}</h4>
-                                <span className="text-sm font-semibold text-gray-700">{item.points} pts</span>
-                              </div>
-                              {item.description ? <p className="mt-1 text-sm text-gray-600">{item.description}</p> : null}
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    ) : null}
-
-                    {selectedAssignment.auto_criteria.length ? (
-                      <section>
-                        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">Auto-graded rubric</h3>
-                        <div className="space-y-2">
-                          {selectedAssignment.auto_criteria.map((criterion) => (
-                            <div key={criterion.id} className="rounded-md border border-gray-200 px-3 py-2 text-sm">
-                              <div className="font-medium text-gray-900">{autoCriteriaLabel(criterion.id)}</div>
-                              <div className="mt-1 text-xs text-gray-500">
-                                {criterion.target} required, {criterion.points} point{criterion.points === 1 ? "" : "s"} each
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </section>
-                    ) : null}
-                  </aside>
-                  )}
                 </div>
               </div>
             ) : (
@@ -1024,6 +982,63 @@ export function TeacherDeadlines() {
           navigate(`/assignments/${saved.id}`);
         }}
       />
+
+      {rubricModalOpen && selectedAssignment && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+            <div className="flex items-center justify-between border-b border-gray-200 p-5">
+              <div>
+                <h2 className="text-xl font-semibold text-gray-900">Rubric</h2>
+                <p className="mt-1 text-sm text-gray-600">{selectedAssignment.title}</p>
+              </div>
+              <button type="button" onClick={() => setRubricModalOpen(false)} className="rounded-md p-1 text-gray-500 hover:bg-gray-100" aria-label="Close rubric">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            <div className="space-y-5 overflow-y-auto p-5">
+              {selectedAssignment.rubric.length ? (
+                <section>
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500">Manual rubric</h3>
+                    <span className="text-sm font-medium text-gray-600">{rubricTotal(selectedAssignment.rubric)} pts</span>
+                  </div>
+                  <div className="space-y-3">
+                    {selectedAssignment.rubric.map((item) => (
+                      <div key={item.id}>
+                        <div className="flex justify-between gap-3">
+                          <h4 className="font-semibold text-gray-900">{item.title || "Rubric item"}</h4>
+                          <span className="text-sm font-semibold text-gray-700">{item.points} pts</span>
+                        </div>
+                        {item.description ? <p className="mt-1 text-sm text-gray-600">{item.description}</p> : null}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {selectedAssignment.auto_criteria.length ? (
+                <section>
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wide text-gray-500">Auto-graded requirements</h3>
+                  <div className="space-y-3">
+                    {selectedAssignment.auto_criteria.map((criterion) => (
+                      <div key={criterion.id} className="text-sm">
+                        <div className="font-medium text-gray-900">{autoCriteriaLabel(criterion.id)}</div>
+                        <div className="mt-0.5 text-xs text-gray-500">
+                          {criterion.target} required, {criterion.points} point{criterion.points === 1 ? "" : "s"} each
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : null}
+
+              {!selectedAssignment.rubric.length && !selectedAssignment.auto_criteria.length ? (
+                <div className="text-sm text-gray-500">No rubric has been added to this assignment.</div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">

@@ -270,7 +270,7 @@ function RecordPreviewPanel({ record }: { record: RecordItem }) {
   const newsletter = record.metadata?.newsletter;
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [panelWidth, setPanelWidth] = useState(480);
-  const textTooNarrow = panelWidth < 260;
+  const textTooNarrow = panelWidth < 200;
   const bodyPreview = useMemo(() => firstWordsPreview(record.body ?? ""), [record.body]);
 
   useEffect(() => {
@@ -1093,7 +1093,21 @@ export function RecordsPage() {
                                 )}
                               </div>
                             )}
-                            {rowMode === "preview" ? <FileText className="h-4 w-4" /> : <ExternalLink className="h-4 w-4" />}
+                            {rowMode === "preview" ? (
+                              <button
+                                type="button"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  navigate(record.href);
+                                }}
+                                className="rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+                                aria-label={`Open ${record.title}`}
+                              >
+                                <FileText className="h-4 w-4" />
+                              </button>
+                            ) : (
+                              <ExternalLink className="h-4 w-4" />
+                            )}
                           </div>
                         </div>
                       </div>
@@ -1113,7 +1127,7 @@ export function RecordsPage() {
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0 lg:w-full lg:max-w-[30rem]">
+            <div className="min-w-0 lg:w-full">
               <div className="lg:sticky lg:top-4">
                 {selectedRecord ? <RecordPreviewPanel record={selectedRecord} /> : <div className="rounded-lg border border-gray-200 bg-white p-8 text-center shadow-sm"><p className="text-gray-500">Select a record to preview</p></div>}
               </div>

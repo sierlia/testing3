@@ -697,7 +697,7 @@ export function TessBills() {
                                 event.stopPropagation();
                                 navigate(`/bills/${bill.id}#bill-text`);
                               }}
-                              className="rounded-md p-1 text-gray-500 hover:bg-blue-50 hover:text-blue-700"
+                              className="rounded-md p-1 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
                               aria-label={`Open full text for ${bill.number}`}
                             >
                               <FileText className="h-4 w-4" />
@@ -755,7 +755,7 @@ export function TessBills() {
           />
 
           {rowMode === "preview" && (
-            <div className="min-w-0 lg:w-full lg:max-w-[30rem]">
+            <div className="min-w-0 lg:w-full">
               <div className="lg:sticky lg:top-4">
                 {selectedBill ? (
                   <BillPreviewPanel bill={selectedBill} />
