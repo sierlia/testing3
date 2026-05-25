@@ -60,6 +60,7 @@ import { ClassActivityPage } from "./pages/ClassActivityPage";
 import { HelpPage } from "./pages/HelpPage";
 import { NewsletterDetailPage, RecordsPage } from "./pages/RecordsPage";
 import { AboutPage } from "./pages/AboutPage";
+import { CookiePolicyPage, FerpaCoppaCompliancePage, PrivacyPolicyPage, TermsOfUsePage } from "./pages/LegalPages";
 import { StorageFileRedirect } from "./pages/StorageFileRedirect";
 
 export const router = createHashRouter([
@@ -78,6 +79,22 @@ export const router = createHashRouter([
   {
     path: "/about",
     Component: AboutPage,
+  },
+  {
+    path: "/privacy",
+    Component: PrivacyPolicyPage,
+  },
+  {
+    path: "/terms",
+    Component: TermsOfUsePage,
+  },
+  {
+    path: "/cookies",
+    Component: CookiePolicyPage,
+  },
+  {
+    path: "/ferpa-coppa",
+    Component: FerpaCoppaCompliancePage,
   },
   {
     path: "/classes",

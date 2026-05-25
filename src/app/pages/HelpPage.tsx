@@ -1,25 +1,24 @@
 import type { ReactNode } from "react";
-import { BackButton } from "../components/BackButton";
+
 import { HelpContactForm } from "../components/HelpContactForm";
-import { Navigation } from "../components/Navigation";
+import { PublicPage } from "../components/PublicLayout";
 
 const sections = [
-  ["getting-started", "Getting Started"],
+  ["overview", "Overview"],
   ["classes", "Classes"],
-  ["dashboard", "Dashboard"],
+  ["constituencies-profiles", "Constituencies and Profiles"],
+  ["bills", "Bills"],
+  ["committees", "Committees"],
   ["organizations", "Organizations"],
-  ["announcements", "Announcements"],
-  ["legislation", "Legislation"],
-  ["committees", "Committee Work"],
+  ["communication", "Communication"],
   ["floor", "Floor"],
-  ["profiles", "Profiles"],
-  ["letters", "Dear Colleague Letters"],
-  ["activity", "Activity and Notifications"],
-  ["teacher-tools", "Teacher Tools"],
+  ["records", "Records and Newsletters"],
+  ["assignments", "Assignments and Grading"],
+  ["settings", "Customization"],
   ["faq", "FAQ"],
 ] as const;
 
-function Section({
+function ArticleSection({
   id,
   title,
   children,
@@ -29,18 +28,22 @@ function Section({
   children: ReactNode;
 }) {
   return (
-    <section id={id} className="scroll-mt-24 border-b border-gray-200 py-8 last:border-b-0">
-      <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
-      <div className="mt-4 space-y-4 leading-7 text-gray-700">{children}</div>
+    <section id={id} className="scroll-mt-24 border-t border-slate-200 py-10">
+      <h2 className="text-3xl font-black tracking-tight text-slate-950">{title}</h2>
+      <div className="mt-5 space-y-5 text-base leading-8 text-slate-700">{children}</div>
     </section>
   );
 }
 
-function FeatureList({ items }: { items: string[] }) {
+function ParagraphList({ items }: { items: Array<{ title: string; body: string }> }) {
   return (
-    <ul className="list-disc space-y-2 pl-6">
+    <ul className="space-y-4">
       {items.map((item) => (
-        <li key={item}>{item}</li>
+        <li key={item.title}>
+          <p>
+            <strong className="font-black text-slate-950">{item.title}.</strong> {item.body}
+          </p>
+        </li>
       ))}
     </ul>
   );
@@ -48,231 +51,338 @@ function FeatureList({ items }: { items: string[] }) {
 
 export function HelpPage() {
   return (
-    <div className="min-h-screen bg-gray-50">
-      <Navigation />
-      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
-        <BackButton className="mb-4" />
-        <article className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
-          <header className="border-b border-gray-200 pb-6">
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900">Help Guide</h1>
-            <p className="mt-3 max-w-3xl text-gray-600">
-              This guide explains the class simulation tools, student workflows, teacher controls, organization spaces, bill tracking, elections, floor sessions, profiles, and communication features.
+    <PublicPage active="features" className="bg-white">
+      <main className="bg-white">
+        <header className="border-b border-slate-200 bg-[#fbfaf7]">
+          <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
+            <p className="text-sm font-black uppercase tracking-wide text-blue-700">Features</p>
+            <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Gavel Feature Guide</h1>
+            <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-700">
+              This guide explains the main classroom workflows in Gavel: class setup, student profiles, legislation,
+              organizations, communication, floor procedure, records, assignments, grading, and customization.
             </p>
-          </header>
+          </div>
+        </header>
 
-          <nav className="my-6 rounded-lg border border-gray-200 bg-gray-50 p-3" aria-label="Help sections">
-            <div className="flex gap-2 overflow-x-auto pb-1">
+        <div className="mx-auto grid max-w-7xl gap-10 px-4 py-10 sm:px-6 lg:grid-cols-[17rem_minmax(0,1fr)] lg:px-8">
+          <aside className="lg:sticky lg:top-24 lg:self-start">
+            <nav className="border-y border-slate-200 py-3" aria-label="Feature sections">
               {sections.map(([id, label]) => (
-                <a
-                  key={id}
-                  href={`#${id}`}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    window.history.replaceState(null, "", `#${id}`);
-                  }}
-                  className="shrink-0 rounded-md bg-white px-3 py-2 text-sm font-medium text-blue-700 hover:text-blue-800"
-                >
+                <a key={id} href={`#${id}`} className="block rounded-md px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-700">
                   {label}
                 </a>
               ))}
-            </div>
-          </nav>
+            </nav>
+          </aside>
 
-          <Section id="getting-started" title="Getting Started">
-            <p>
-              Sierlia runs a classroom legislative simulation. Teachers create and configure classes, then students join with a class code. Each class has its own parties, committees, caucuses, legislation, calendars, elections, profiles, letters, and announcement boards.
-            </p>
-            <FeatureList
-              items={[
-                "Teachers start from the teacher dashboard, create a class, configure setup options, invite co-teachers, and guide the simulation timeline.",
-                "Students start by joining a class with a class code, then use the dashboard to create bills, visit organizations, cosponsor legislation, write profile sections, and participate in votes.",
-                "Only the active class is shown in most student areas. Switch classes from the class menu or settings when you are enrolled in more than one class.",
-              ]}
-            />
-          </Section>
-
-          <Section id="classes" title="Classes">
-            <p>
-              Classes are separate workspaces. Legislation, organizations, announcements, calendars, and membership do not automatically carry across classes.
-            </p>
-            <FeatureList
-              items={[
-                "Teachers can create, rename, and manage classes from Your Classes.",
-                "Teacher invitations appear as pending class cards with Accept and Decline. Accepting adds the invited teacher to that class as a teacher.",
-                "Students can join a class from settings or the join-class prompt. If approval is enabled, the join request appears in the teacher roster pending tab.",
-                "Teachers can enable or disable class joining, copy the join code, approve pending students, remove students, and view class membership.",
-                "Class settings include simulation rules, cosponsorship timing, committee assignment behavior, profile layout, setup defaults, and teacher invitations.",
-              ]}
-            />
-          </Section>
-
-          <Section id="dashboard" title="Dashboard">
-            <p>
-              The dashboard is the main work area for the active class. It highlights next actions, quick links, recent activity, announcements, and calendar information.
-            </p>
-            <FeatureList
-              items={[
-                "Student quick links include Create Bill, committees the student belongs to, and caucuses the student belongs to.",
-                "Student dashboards show recent announcements, My Bills, cosponsored bills, and a compact calendar preview.",
-                "Teacher class dashboards include the class timeline, recent student activity, action links, the student roster, settings, join controls, and upcoming events or deadlines.",
-                "The teacher timeline moves through setup, elections, committee assignment when enabled, and referring or calendaring bills.",
-                "Recent activity links back to the relevant bill, organization, profile, letter, or announcement whenever possible.",
-              ]}
-            />
-          </Section>
-
-          <Section id="organizations" title="Organizations">
-            <p>
-              Organizations are the social and procedural structure of the simulation. Parties, committees, and caucuses each have a dashboard, member list, announcement board, and elections where applicable.
-            </p>
-            <FeatureList
-              items={[
-                "Parties group students by political affiliation and can hold leadership elections for leader and whip.",
-                "Committees review referred bills, mark up text, write reports, and vote on whether to report bills.",
-                "Caucuses are interest or coalition groups with membership, announcements, and caucus leadership elections.",
-                "Teachers can create, rename, edit, delete, and manage organizations, including member roles and removals.",
-                "Organization member lists show role labels for leadership positions. Leadership profile links and reply names are purple; teacher profile links are green.",
-                "If committee self-join is disabled, students can submit committee preferences and teachers can assign students to committees.",
-              ]}
-            />
-          </Section>
-
-          <Section id="announcements" title="Announcements">
-            <p>
-              Announcement boards support organization communication. Posts can have comments, replies, reactions, and teacher moderation.
-            </p>
-            <FeatureList
-              items={[
-                "Eligible organization members can post announcements and comment in their organization spaces.",
-                "Teachers can post, comment, react, delete announcements, and delete comments anywhere in a class.",
-                "Teachers are marked with a green name and teacher indicator. Organization leaders are marked with purple profile links.",
-                "Reaction menus close after selection or when clicking elsewhere, and each user can only apply one of the same reaction to a post or comment.",
-                "Delete actions use confirmation prompts so posts and comments are not removed accidentally.",
-              ]}
-            />
-          </Section>
-
-          <Section id="legislation" title="Legislation">
-            <p>
-              Bills move through drafting, introduction, referral, committee markup, reporting, calendaring, floor action, and final status.
-            </p>
-            <FeatureList
-              items={[
-                "Students can create bills, write original text and supporting text, submit bills, and track authored bills from My Bills.",
-                "All Bills can be searched, filtered, sorted, previewed, opened, and highlighted when authored by the current user.",
-                "Bill pages show the bill number, title, sponsor, committees, committee reports, latest action, a horizontal tracker, text tabs, cosponsors, and dated actions.",
-                "Before committee amendments, bill text appears as Original Text and Supporting Text. After committee changes, Current or Revised Text appears alongside Original Text and Supporting Text.",
-                "Cosponsorship can be limited by teacher setting. Students can cosponsor, withdraw, and cosponsor again without creating duplicates.",
-                "Actions record introductions, referrals, markups, reports, calendaring, floor actions, final results, and teacher overrides.",
-              ]}
-            />
-          </Section>
-
-          <Section id="committees" title="Committee Work">
-            <p>
-              Committee pages use persistent tabs for Dashboard, Markup, Election, Letters, and Subcommittees when the viewer is a committee member or teacher. Nonmembers see only the public committee dashboard unless access is purchased.
-            </p>
-            <FeatureList
-              items={[
-                "Markup is the workspace for referred bills. Members can open a bill, edit collaboratively, and view edited, clean, and original text.",
-                "The live editor stores one shared edited document for the bill and committee so everyone sees the same current text.",
-                "Markup keeps formatting and tracks insertions, highlights, and strikeouts. Clean text removes markup and deleted text.",
-                "Any committee member can propose a reviewed bill for vote. Once proposed, editing is locked and voting appears in Markup.",
-                "Markup shows edited, clean, and original text, vote counts, real-time voting, and hoverable vote lists.",
-                "Committee reports are collaborative during the vote stage, can be popped out and resized, and become available from the bill page after submission.",
-                "Closing the vote prevents further votes. Finalizing sends approved bills toward calendaring and leaves rejected or tabled bills out of the calendar flow.",
-              ]}
-            />
-          </Section>
-
-          <Section id="floor" title="Floor">
-            <p>
-              The Floor page covers the Speaker of the House election and floor consideration of calendared bills.
-            </p>
-            <FeatureList
-              items={[
-                "The Speaker election includes a searchable candidate list, filters, live vote counts, opt-out, open or close controls, and Post Results.",
-                "Teachers can switch the floor between election mode and bill mode with a confirmation prompt.",
-                "In bill mode, the active calendared bill appears with vote controls above the bill text and a side list of next bills.",
-                "Teachers can open and close floor votes, post results, manually enter yea, nay, present, and not-voted counts, or directly choose pass or fail.",
-                "Posting floor results closes the vote and finalizes whether the bill passed or failed.",
-              ]}
-            />
-          </Section>
-
-          <Section id="profiles" title="Profiles">
-            <p>
-              Profiles show identity, class work, legislation, organizations, and Dear Colleague activity. Teacher profiles are styled distinctly and omit student-only district and party fields.
-            </p>
-            <FeatureList
-              items={[
-                "Students can edit their display name within the profile name limit and fill out assigned profile response sections.",
-                "Teachers can edit the profile layout for all students by adding, renaming, moving, resizing, or deleting sections.",
-                "Profile section types include long response, legislation written, organizations, and Dear Colleague letters.",
-                "Some profile sections can only be added once. Organization sections stay full width.",
-                "Teachers can write example profile responses. Students viewing a teacher profile see those entries marked as sample work.",
-                "Deleting a profile section with student work requires confirmation because it permanently removes submitted work.",
-              ]}
-            />
-          </Section>
-
-          <Section id="letters" title="Dear Colleague Letters">
-            <p>
-              Dear Colleague letters let students and teachers communicate with individuals or groups in the active class.
-            </p>
-            <FeatureList
-              items={[
-                "Recipients can be selected from individuals, parties, committees, caucuses, or All Members.",
-                "Selected recipients appear in the To field, and the search box filters available recipients.",
-                "Party recipient names use Democratic Party, Republican Party, and a Party suffix for other party names.",
-                "Profile Send Letter buttons open the composer with the profile owner ready as a recipient.",
-              ]}
-            />
-          </Section>
-
-          <Section id="activity" title="Activity and Notifications">
-            <p>
-              Activity and notifications help users track changes across the simulation.
-            </p>
-            <FeatureList
-              items={[
-                "Notifications can be marked read individually or all at once, and the notification menu closes when clicking elsewhere.",
-                "New indicators on committee review and vote tabs clear after unseen bills are opened.",
-                "The full activity page can be searched and filtered by student, organization, and activity type, then sorted ascending or descending by time.",
-                "Activity entries link to the underlying item whenever there is a destination page.",
-              ]}
-            />
-          </Section>
-
-          <Section id="teacher-tools" title="Teacher Tools">
-            <p>
-              Teacher tools are designed to keep the simulation moving without forcing every action through the student workflow.
-            </p>
-            <FeatureList
-              items={[
-                "Teachers can refer bills to committees, calendar reported bills, manage organizations, assign committees, invite co-teachers, and adjust simulation settings.",
-                "Teacher bill timeline overrides are integrated into the bill tracker and use confirmation prompts with appropriate committee or calendar selectors.",
-                "Teacher overrides create action history and use green override styling in the action list.",
-                "The student roster includes search, student counts, pending approvals when enabled, and a View Activity action for each student.",
-                "Calendars show deadlines and scheduled bills. Teachers can add deadlines, manage deadlines, and edit calendared bill times from the appropriate calendar views.",
-              ]}
-            />
-          </Section>
-
-          <Section id="faq" title="FAQ">
-            <div>
-              <h3 className="font-semibold text-gray-900">What if I want my classes to share legislation, committees, caucuses, or other class materials?</h3>
-              <p className="mt-2">
-                Shared materials across separate classes are not available. If you want students to work from the same legislation, organizations, announcements, calendar, and simulation history, enroll those students in a single class. Everyone in that class will share the same workspace.
+          <article className="min-w-0">
+            <ArticleSection id="overview" title="Overview">
+              <p>
+                Gavel is organized around a class workspace. A teacher creates a class, configures the simulation rules,
+                and students join that class. Everything a student does in that workspace is connected to the class: profile
+                work, bills, cosponsorships, committee activity, organization membership, letters, discussion posts, votes,
+                records, and assignment submissions.
               </p>
+              <p>
+                The app is intentionally modular. A teacher can use only the pieces needed for a particular course, or run a
+                larger simulation with parties, committees, caucuses, lobbyists, media records, newsletters, elections, floor
+                votes, assignments, and gradebook integrations.
+              </p>
+            </ArticleSection>
+
+            <ArticleSection id="classes" title="Classes">
+              <p>
+                Classes are separate simulation spaces. A bill, organization, discussion board, assignment, or record created
+                in one class does not automatically appear in another class. This lets different periods use different
+                committees, timelines, rules, and grading structures.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Teacher setup",
+                    body: "Teachers create classes from the teacher dashboard, rename and manage those classes, invite co-teachers, copy join codes, approve pending students when approval is enabled, and move between classes from the class switcher.",
+                  },
+                  {
+                    title: "Student joining",
+                    body: "Students join with a class code or invitation. If the teacher requires approval, students remain pending until the teacher approves the request. Students enrolled in more than one class can switch classes from settings.",
+                  },
+                  {
+                    title: "Class dashboard",
+                    body: "The dashboard acts as the starting point for the active class. It links students to bills, organizations, assignments, announcements, and recent activity, while teachers see setup, roster, timeline, and management controls.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="constituencies-profiles" title="Constituencies and Profiles">
+              <p>
+                Constituencies and profiles define who students are inside the simulation. A student can represent a district,
+                party, or other constituency, and the profile page becomes the public record of that student's identity and work.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Constituency selection",
+                    body: "Teachers can require students to select a constituency. Constituency details appear throughout the app where context matters, including member views, floor participation, and profile pages.",
+                  },
+                  {
+                    title: "Profile layout",
+                    body: "Teachers can edit the profile layout for the class. Sections can ask for written responses or display work such as authored legislation, cosponsored legislation, organizations, Dear Colleague letters, votes, and contributions received.",
+                  },
+                  {
+                    title: "Profile responses",
+                    body: "Students fill out teacher-defined profile prompts. Teachers can provide sample profile responses from their own profile, and assignments can check whether a profile is complete.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="bills" title="Bills">
+              <p>
+                Bills move from drafting to submission, referral, committee review, reporting, calendaring, floor action, and
+                final status. Bill pages show the text, supporting text, sponsor, cosponsors, committees, reports, actions,
+                and votes connected to the bill.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Drafting",
+                    body: "Students can write formatted bill text in the editor, preview the text, save drafts, and submit when ready. Teachers can configure bill text to use the site editor or PDF upload.",
+                  },
+                  {
+                    title: "Cosponsorship",
+                    body: "Students can cosponsor bills when class settings allow it. Teachers can decide whether cosponsorship is always open or limited by the bill's stage in the process.",
+                  },
+                  {
+                    title: "Bill tracking",
+                    body: "Each bill has a timeline of actions, including introduction, referral, markup, committee votes, reports, calendaring, floor votes, final results, and teacher overrides. The all-bills view can be searched, filtered, sorted, previewed, and opened.",
+                  },
+                  {
+                    title: "Teacher controls",
+                    body: "Teachers can refer bills to one or more committees, calendar reported bills, move work forward with overrides, and delete bills when class management requires it.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="committees" title="Committees">
+              <p>
+                Committees review referred bills. A committee can have members, chairs, ranking members, subcommittees, an
+                announcement board, a markup workspace, votes, reports, and a record of activity tied back to the bill.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Assignment modes",
+                    body: "Teachers can let students submit ranked committee preferences, run assignment logic, use random assignment, allow self-join, or assign students manually. Capacity settings help keep committee sizes balanced.",
+                  },
+                  {
+                    title: "Markup",
+                    body: "Committee members can revise referred bill text when committee editing is enabled. The committee workspace supports edited text, clean text, original text, reports, voting, and locks when a bill has been proposed for committee vote.",
+                  },
+                  {
+                    title: "Reports and votes",
+                    body: "Committees can vote on whether to report a bill. Reports remain attached to the bill, and finalized votes determine whether the bill is eligible for the calendar when the class uses committee voting.",
+                  },
+                  {
+                    title: "Subcommittees",
+                    body: "Teachers can enable subcommittees and seed them from configured committee options. Subcommittee work gives classes another layer of review without requiring every simulation to use it.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="organizations" title="Organizations">
+              <p>
+                Organizations create political structure. Gavel supports parties, committees, caucuses, lobbyist groups, and
+                media-style records or newsletters that can be used to simulate coverage and public pressure.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Parties",
+                    body: "Parties group students by political affiliation. Teachers can seed default parties, allow student-created parties, require approval, control join restrictions, and choose how party leaders are selected.",
+                  },
+                  {
+                    title: "Caucuses",
+                    body: "Caucuses let students organize by issue or coalition. They can have descriptions, member lists, leadership roles, announcements, comments, and join restrictions.",
+                  },
+                  {
+                    title: "Lobbyist groups",
+                    body: "Lobbyist groups are optional. When enabled, they can have members, starting balances, contributions, advertisement bids, and access purchases. Their money activity appears in records and can affect class discussion.",
+                  },
+                  {
+                    title: "Media work",
+                    body: "Media activity can be represented through records and newsletters. Teachers can generate newsletters from class activity, and students or groups can use records and ad bids to simulate public communication.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="communication" title="Communication">
+              <p>
+                Communication tools are built into the places where the work happens. Organization boards stay with the
+                organization, letters stay connected to their recipients, and class discussions stay connected to floor activity
+                and assignment requirements.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Organization message boards",
+                    body: "Parties, committees, caucuses, and lobbyist groups can use message boards for announcements and discussion. Teachers can enable boards, comments, reactions, word limits, and role permissions.",
+                  },
+                  {
+                    title: "Dear Colleague letters",
+                    body: "Students and teachers can send letters to individuals, organizations, or all members depending on class settings. Organization inboxes collect letters addressed to groups, and letters can be attached to assignments or viewed as records.",
+                  },
+                  {
+                    title: "Class discussion boards",
+                    body: "The floor discussion area lets teachers create discussion prompts, choose which prompt is live, archive old prompts, hide prompts from students, and allow posts, replies, reactions, and attachments.",
+                  },
+                  {
+                    title: "Attachments",
+                    body: "Discussion posts and assignments can reference existing bills, records, and letters. This keeps written participation connected to the evidence or legislation students are discussing.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="floor" title="Floor">
+              <p>
+                The floor area supports leadership elections, floor debate, voting, discussion, and a presentation display. A
+                class can use the full workflow or keep floor procedure simple.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Elections",
+                    body: "The floor can run a Speaker election with candidate search, party filters, vote counts, opt-outs, open and close controls, and posted results. Optional executive or senate-style features can be enabled in settings.",
+                  },
+                  {
+                    title: "Bills on the floor",
+                    body: "Calendared bills appear with vote controls, live or posted counts, bill text, next bills, and teacher controls to open votes, close votes, post results, or enter manual counts.",
+                  },
+                  {
+                    title: "Debate management",
+                    body: "Students can request to speak for or against a bill when the class uses speaker lists. Teachers can approve requests, assign opposition leaders, show presentation states, and manage motions such as the previous question.",
+                  },
+                  {
+                    title: "Discussion mode",
+                    body: "The floor can switch into discussion mode so the class can respond to prompts, attach source material, reply to classmates, and preserve written participation.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="records" title="Records and Newsletters">
+              <p>
+                Records collect the durable artifacts of the simulation. The records page can include letters, committee
+                reports, floor vote records, generated newsletters, campaign contributions, and teacher-created records.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Search and preview",
+                    body: "Records can be searched by title, type, author, or text. Teachers and students can filter by type or person, choose preview or open mode, and download generated newsletters as PDFs.",
+                  },
+                  {
+                    title: "Generated newsletters",
+                    body: "Teachers can generate newsletters that summarize referrals, committee meetings, committee reports and votes, cosponsor gains, fast-moving bills, and accepted advertisement bids.",
+                  },
+                  {
+                    title: "Teacher-created records",
+                    body: "Teachers can add custom records when the class needs a written source, public notice, press item, or archive entry that does not come from another workflow.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="assignments" title="Assignments and Grading">
+              <p>
+                Assignments connect grading to simulation artifacts. Teachers can create manual or auto-graded assignments,
+                target specific audiences, attach class materials, review student submissions, return feedback, and queue
+                gradebook sync records when integrations are configured.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "Audience targeting",
+                    body: "Assignments can go to all students, selected students, a party, a committee, a caucus, or a lobbyist group. This supports different expectations for different roles.",
+                  },
+                  {
+                    title: "Manual rubrics",
+                    body: "Manual grading supports rubric items with descriptions, point values, extra credit, submission notes, attachments, late-submission preferences, and returned feedback.",
+                  },
+                  {
+                    title: "Auto-graded requirements",
+                    body: "Auto-grading can count written bills, cosponsored bills, completed profiles, selected constituencies, party membership, committee membership, caucus membership, letters sent, committee votes, floor votes, committee preferences, discussion posts, and discussion replies.",
+                  },
+                  {
+                    title: "Gradebook integrations",
+                    body: "Gavel includes setup fields for Synergy, Schoology, PowerSchool, and Google Classroom grade passback. Integration secrets are referenced by name so actual credentials can be stored server-side.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="settings" title="Customization">
+              <p>
+                The settings area is the control center for the simulation. Teachers can start with a broad setup and then
+                refine individual rules as the class develops.
+              </p>
+              <ParagraphList
+                items={[
+                  {
+                    title: "General structure",
+                    body: "Teachers can enable or disable bills, organizations, floor sessions, elections, profiles, lobbyists, money, records, joining rules, and student permissions.",
+                  },
+                  {
+                    title: "Procedural rules",
+                    body: "Settings control bill submission, cosponsorship timing, referral authority, committee vote thresholds, floor vote thresholds, speaker signup behavior, live result visibility, and calendar publishing.",
+                  },
+                  {
+                    title: "Organization rules",
+                    body: "Teachers can choose default parties, committees, and subcommittees; allow or restrict student-created organizations; configure leadership elections; and set permissions for leaders and members.",
+                  },
+                  {
+                    title: "Formats and limits",
+                    body: "Teachers can configure word limits, bill composer format, committee revised text format, committee report format, profile layout, profile editing permissions, announcement boards, and discussion behavior.",
+                  },
+                ]}
+              />
+            </ArticleSection>
+
+            <ArticleSection id="faq" title="FAQ">
+              <div>
+                <h3 className="font-black text-slate-950">Can separate classes share the same simulation?</h3>
+                <p className="mt-2">
+                  Separate classes do not share work automatically. If students need to work from the same bills,
+                  organizations, records, and timeline, enroll them in one class. If periods need different rules or
+                  calendars, keep them separate.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-black text-slate-950">Can Gavel be used without online discussion?</h3>
+                <p className="mt-2">
+                  Yes. Teachers can disable organization boards or use them lightly, then rely on Gavel for bills, records,
+                  membership, voting, and grading while discussion happens in person.
+                </p>
+              </div>
+              <div>
+                <h3 className="font-black text-slate-950">Can students submit work from outside Gavel?</h3>
+                <p className="mt-2">
+                  Assignments can include manual submission notes and attachments from Gavel work. If a class needs outside
+                  documents, teachers can describe that requirement in the prompt and use the rubric fields for grading.
+                </p>
+              </div>
+            </ArticleSection>
+
+            <div className="border-t border-slate-200 py-10">
+              <HelpContactForm />
             </div>
-          </Section>
-          <div className="pt-8">
-            <HelpContactForm />
-          </div>
-        </article>
+          </article>
+        </div>
       </main>
-    </div>
+    </PublicPage>
   );
 }

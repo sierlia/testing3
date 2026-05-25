@@ -6,7 +6,7 @@ import { Toaster } from "./components/ui/sonner";
 import { DemoAccountSwitcher } from "./components/DemoAccountSwitcher";
 import { Gavel } from "lucide-react";
 
-const publicRoutes = ["/", "/signin", "/signup", "/about"];
+const publicRoutes = ["/", "/signin", "/signup", "/about", "/help", "/privacy", "/terms", "/cookies", "/ferpa-coppa"];
 
 function currentHashPath() {
   const hash = window.location.hash.replace(/^#/, "") || "/";

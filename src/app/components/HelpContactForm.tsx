@@ -3,7 +3,17 @@ import { toast } from "sonner";
 import { Button } from "./ui/button";
 import { supabase } from "../utils/supabase";
 
-export function HelpContactForm() {
+type HelpContactFormProps = {
+  title?: string;
+  description?: string;
+  submitLabel?: string;
+};
+
+export function HelpContactForm({
+  title = "Still have a question?",
+  description = "Send a question or message that is not answered here.",
+  submitLabel = "Submit message",
+}: HelpContactFormProps) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -43,8 +53,8 @@ export function HelpContactForm() {
   return (
     <form onSubmit={submit} className="space-y-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
       <div>
-        <h3 className="text-lg font-semibold text-gray-900">Still have a question?</h3>
-        <p className="mt-1 text-sm text-gray-600">Send a question or message that is not answered here.</p>
+        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <p className="mt-1 text-sm text-gray-600">{description}</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <input
@@ -69,7 +79,7 @@ export function HelpContactForm() {
         className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
       />
       <div className="flex justify-end">
-        <Button type="submit" disabled={busy}>{busy ? "Submitting" : "Submit message"}</Button>
+        <Button type="submit" disabled={busy}>{busy ? "Submitting" : submitLabel}</Button>
       </div>
     </form>
   );

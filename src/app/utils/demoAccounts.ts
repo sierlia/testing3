@@ -57,7 +57,7 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     if (launchDemo) setDemoLaunchProgress(65);
 
     const defaultTarget = "/dashboard";
-    const isPublicRoute = ["/", "/signin", "/signup", "/about"].includes(currentPath);
+    const isPublicRoute = ["/", "/signin", "/signup", "/about", "/help", "/privacy", "/terms", "/cookies", "/ferpa-coppa"].includes(currentPath);
     const studentDashboardOnlyRoute = currentPath === "/classes" || currentPath.startsWith("/classes?");
     const incompatibleRoleRoute =
       (credentials.role === "student" && (currentPath.startsWith("/teacher/") || studentDashboardOnlyRoute)) ||
