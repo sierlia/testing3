@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router";
 
 import { PublicPage } from "../components/PublicLayout";
@@ -7,25 +7,23 @@ const updated = "May 25, 2026";
 
 function LegalShell({
   title,
-  summary,
   children,
 }: {
   title: string;
-  summary: string;
   children: ReactNode;
 }) {
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+  }, [title]);
+
   return (
     <PublicPage active="legal" className="bg-white">
-      <main>
-        <header className="border-b border-slate-200 bg-[#fbfaf7]">
-          <div className="mx-auto max-w-4xl px-4 py-14 sm:px-6 lg:px-8">
-            <p className="text-sm font-black uppercase tracking-wide text-blue-700">Policy</p>
-            <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">{title}</h1>
-            <p className="mt-5 text-lg leading-8 text-slate-700">{summary}</p>
-            <p className="mt-4 text-sm font-semibold text-slate-500">Last updated: {updated}</p>
-          </div>
-        </header>
+      <main className="bg-white">
         <article className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
+          <header className="pb-8">
+            <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">{title}</h1>
+            <p className="mt-4 text-sm font-semibold text-slate-500">Last updated: {updated}</p>
+          </header>
           <div className="space-y-10 text-base leading-8 text-slate-700">{children}</div>
         </article>
       </main>
@@ -57,10 +55,7 @@ function PolicyList({ items }: { items: string[] }) {
 
 export function PrivacyPolicyPage() {
   return (
-    <LegalShell
-      title="Privacy Policy"
-      summary="This policy explains what information Gavel collects, how it is used, and how schools, teachers, students, and families can ask questions about it."
-    >
+    <LegalShell title="Privacy Policy">
       <Section title="1. Scope and Roles">
         <p>
           Gavel is an educational web application for classroom legislative simulations. In a school setting, the school,
@@ -176,10 +171,7 @@ export function PrivacyPolicyPage() {
 
 export function TermsOfUsePage() {
   return (
-    <LegalShell
-      title="Terms of Use"
-      summary="These terms describe the rules for using Gavel as a classroom simulation platform."
-    >
+    <LegalShell title="Terms of Use">
       <Section title="1. Acceptance">
         <p>
           By accessing or using Gavel, you agree to these Terms of Use and to the policies linked from the footer. If you use
@@ -282,10 +274,7 @@ export function TermsOfUsePage() {
 
 export function CookiePolicyPage() {
   return (
-    <LegalShell
-      title="Cookie Policy"
-      summary="This policy explains how Gavel uses cookies, local storage, and similar browser storage."
-    >
+    <LegalShell title="Cookie Policy">
       <Section title="1. Summary">
         <p>
           Gavel uses essential browser storage to keep users signed in, remember settings, operate demo access, preserve local
@@ -308,10 +297,10 @@ export function CookiePolicyPage() {
 
       <Section title="3. Essential vs. Optional">
         <p>
-          Most storage used by Gavel is essential to core app functionality. If you decline cookies in the banner, Gavel records
-          that preference and will not add nonessential advertising or analytics cookies. Because the app currently relies on
-          essential storage for sign-in, class access, preferences, and security, declining does not disable the storage required
-          to operate the service.
+          Browser storage used by Gavel is essential to core app functionality. The banner confirms that essential storage is
+          in use. Gavel does not add nonessential advertising or analytics cookies through that banner. Because the app relies
+          on essential storage for sign-in, class access, preferences, and security, disabling that storage in the browser can
+          prevent the service from working correctly.
         </p>
       </Section>
 
@@ -342,10 +331,7 @@ export function CookiePolicyPage() {
 
 export function FerpaCoppaCompliancePage() {
   return (
-    <LegalShell
-      title="FERPA/COPPA Compliance"
-      summary="This page describes how Gavel is designed to support school obligations under FERPA and COPPA when used in classroom settings."
-    >
+    <LegalShell title="FERPA/COPPA Compliance">
       <Section title="1. FERPA Role">
         <p>
           When Gavel is used by a school, district, teacher, or educational institution, Gavel is intended to act as a service

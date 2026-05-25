@@ -1,6 +1,6 @@
 import { type ReactNode, useState } from "react";
 import { Link } from "react-router";
-import { Gavel, Sparkles } from "lucide-react";
+import { Gavel } from "lucide-react";
 import { toast } from "sonner";
 
 import { switchDemoAccount } from "../utils/demoAccounts";
@@ -8,7 +8,7 @@ import { switchDemoAccount } from "../utils/demoAccounts";
 export type PublicNavActive = "home" | "about" | "features" | "legal";
 
 export function startDemo() {
-  switchDemoAccount("teacher1").catch((error) => {
+  switchDemoAccount("teacher1", { confetti: true }).catch((error) => {
     const message = error instanceof Error ? error.message : "Unable to open the demo.";
     toast.error(message);
   });
@@ -20,13 +20,13 @@ function readCookieChoice() {
     const value = window.localStorage.getItem("gavel:cookie-consent");
     if (!value) return "pending";
     const parsed = JSON.parse(value) as { choice?: string };
-    return parsed.choice === "accepted" || parsed.choice === "declined" ? parsed.choice : "pending";
+    return parsed.choice === "accepted" ? parsed.choice : "pending";
   } catch {
     return "pending";
   }
 }
 
-function writeCookieChoice(choice: "accepted" | "declined") {
+function writeCookieChoice(choice: "accepted") {
   try {
     window.localStorage.setItem(
       "gavel:cookie-consent",
@@ -42,9 +42,8 @@ export function OpenDemoButton({ className = "" }: { className?: string }) {
     <button
       type="button"
       onClick={startDemo}
-      className={`inline-flex items-center justify-center gap-2 rounded-md border border-amber-300 bg-amber-100 px-4 py-2 text-sm font-black text-slate-950 shadow-[inset_0_-2px_0_rgba(217,119,6,0.22)] hover:bg-amber-200 ${className}`}
+      className={`inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-700 ${className}`}
     >
-      <Sparkles className="h-4 w-4 text-amber-700" aria-hidden="true" />
       Open Demo
     </button>
   );
@@ -52,21 +51,19 @@ export function OpenDemoButton({ className = "" }: { className?: string }) {
 
 export function PublicNav({ active = "home" }: { active?: PublicNavActive }) {
   const linkClass = (key: PublicNavActive) =>
-    `rounded-md px-3 py-2 text-sm font-semibold ${
-      active === key ? "bg-slate-100 text-slate-950" : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
+    `px-2 py-2 text-sm font-semibold transition ${
+      active === key ? "text-slate-950" : "text-slate-600 hover:text-slate-950"
     }`;
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-4 py-3 sm:px-6 lg:px-8">
-        <Link to="/" className="flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-md bg-slate-950 text-white">
-            <Gavel className="h-5 w-5" aria-hidden="true" />
-          </span>
-          <span className="text-lg font-black tracking-tight text-slate-950">Gavel</span>
+      <div className="mx-auto grid max-w-7xl grid-cols-[1fr_auto] items-center gap-3 px-4 py-3 sm:px-6 md:grid-cols-[1fr_auto_1fr] lg:px-8">
+        <Link to="/" className="flex items-center gap-2 justify-self-start">
+          <Gavel className="h-6 w-6 text-blue-600" aria-hidden="true" />
+          <span className="text-xl font-semibold text-slate-950">Gavel</span>
         </Link>
 
-        <nav className="flex flex-wrap items-center justify-end gap-1">
+        <nav className="order-3 col-span-2 flex w-full items-center justify-center gap-5 border-t border-slate-200 pt-3 md:order-none md:col-span-1 md:w-auto md:border-t-0 md:pt-0">
           <Link to="/" className={linkClass("home")}>
             Home
           </Link>
@@ -76,8 +73,25 @@ export function PublicNav({ active = "home" }: { active?: PublicNavActive }) {
           <Link to="/help" className={linkClass("features")}>
             Features
           </Link>
-          <OpenDemoButton />
+          <button type="button" onClick={startDemo} className="px-2 py-2 text-sm font-semibold text-slate-600 transition hover:text-slate-950">
+            Open Demo
+          </button>
         </nav>
+
+        <div className="flex items-center gap-2 justify-self-end">
+          <Link
+            to="/signin"
+            className="rounded-md px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-100 hover:text-slate-950"
+          >
+            Sign in
+          </Link>
+          <Link
+            to="/signup"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-bold text-white transition hover:bg-blue-700"
+          >
+            Sign up
+          </Link>
+        </div>
       </div>
     </header>
   );
@@ -89,9 +103,7 @@ export function PublicFooter() {
       <div className="mx-auto grid max-w-7xl gap-10 px-4 py-12 sm:px-6 md:grid-cols-[1.35fr_1fr_1fr_1fr] lg:px-8">
         <div>
           <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-md bg-white text-slate-950">
-              <Gavel className="h-5 w-5" aria-hidden="true" />
-            </span>
+            <Gavel className="h-6 w-6 text-blue-400" aria-hidden="true" />
             <span className="text-lg font-black">Gavel</span>
           </div>
           <p className="mt-4 max-w-sm text-sm leading-6 text-slate-300">
@@ -105,7 +117,7 @@ export function PublicFooter() {
             <Link to="/" className="hover:text-white">Home</Link>
             <Link to="/about" className="hover:text-white">About</Link>
             <Link to="/help" className="hover:text-white">Features</Link>
-            <button type="button" onClick={startDemo} className="w-fit text-left hover:text-white">Open demo</button>
+            <button type="button" onClick={startDemo} className="w-fit text-left text-sm text-slate-200 hover:text-white">Open Demo</button>
           </div>
         </div>
 
@@ -119,7 +131,7 @@ export function PublicFooter() {
         </div>
 
         <div>
-          <h2 className="text-sm font-black uppercase tracking-wide text-slate-400">Policies</h2>
+          <h2 className="text-sm font-black uppercase tracking-wide text-slate-400">Legal</h2>
           <div className="mt-3 grid gap-2 text-sm text-slate-200">
             <Link to="/privacy" className="hover:text-white">Privacy policy</Link>
             <Link to="/terms" className="hover:text-white">Terms of use</Link>
@@ -140,7 +152,7 @@ export function CookieConsent() {
 
   if (choice !== "pending") return null;
 
-  const choose = (nextChoice: "accepted" | "declined") => {
+  const choose = (nextChoice: "accepted") => {
     writeCookieChoice(nextChoice);
     setChoice(nextChoice);
   };
@@ -149,23 +161,16 @@ export function CookieConsent() {
     <div className="fixed inset-x-0 bottom-0 z-[100] border-t border-slate-200 bg-white p-4 shadow-lg">
       <div className="mx-auto flex max-w-7xl flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <p className="max-w-3xl text-sm leading-6 text-slate-700">
-          Gavel uses essential cookies and local storage for sign-in, demo access, preferences, and security. We do not
-          use advertising cookies. Read the <Link to="/cookies" className="font-semibold text-blue-700 hover:text-blue-800">cookie policy</Link>.
+          Gavel uses essential cookies and local storage for sign-in, demo access, preferences, and security. These are
+          required for the app to work. Read the <Link to="/cookies" className="font-semibold text-blue-700 hover:text-blue-800">cookie policy</Link>.
         </p>
         <div className="flex shrink-0 gap-2">
           <button
             type="button"
-            onClick={() => choose("declined")}
-            className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50"
-          >
-            Decline
-          </button>
-          <button
-            type="button"
             onClick={() => choose("accepted")}
-            className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+            className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
           >
-            Accept
+            Got it
           </button>
         </div>
       </div>
@@ -176,7 +181,7 @@ export function CookieConsent() {
 export function PublicPage({
   active,
   children,
-  className = "bg-[#fbfaf7]",
+  className = "bg-white",
 }: {
   active?: PublicNavActive;
   children: ReactNode;

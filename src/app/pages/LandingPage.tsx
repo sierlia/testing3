@@ -195,7 +195,7 @@ function FeatureSection({
   tone?: string;
 }) {
   return (
-    <section id={id} className={`border-b border-slate-200 py-20 ${tone}`}>
+    <section id={id} className={`scroll-mt-24 border-b border-slate-200 py-20 ${tone}`}>
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.36fr_0.64fr] lg:px-8">
         <div>
           <p className="text-sm font-black uppercase tracking-wide text-blue-700">{label}</p>
@@ -228,24 +228,29 @@ function FeatureSection({
 
 function Hero() {
   const anchors = [
-    ["Representation", "#student-work"],
-    ["Organizations", "#organizations"],
-    ["Communication", "#communication"],
-    ["Customization", "#customization"],
-    ["Grading", "#grading"],
+    ["Representation", "student-work"],
+    ["Organizations", "organizations"],
+    ["Communication", "communication"],
+    ["Customization", "customization"],
+    ["Grading", "grading"],
   ];
 
   return (
-    <section className="border-b border-slate-200 bg-[#fbfaf7]">
+    <section className="border-b border-slate-200 bg-blue-50">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
-        <div className="max-w-4xl">
-          <p className="text-sm font-black uppercase tracking-[0.18em] text-blue-700">Classroom legislative simulation</p>
-          <h1 className="mt-5 text-6xl font-black tracking-tight text-slate-950 sm:text-7xl lg:text-8xl">Gavel</h1>
-          <p className="mt-6 max-w-3xl text-xl leading-9 text-slate-700">
+        <div className="mx-auto max-w-4xl text-center">
+          <h1 className="text-5xl font-black tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
+            Run Mock Congress from first bill to final grade.
+          </h1>
+          <p className="mx-auto mt-6 max-w-3xl text-xl leading-9 text-slate-700">
             Gavel is a teacher-run workspace for mock congress: constituencies, student profiles, bill drafting,
             organizations, discussion, floor procedure, records, assignments, and grading in one class.
           </p>
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <p className="mx-auto mt-4 max-w-3xl text-base leading-8 text-slate-600">
+            The page below walks through the feature areas in order, from representation and legislation through
+            organizations, communication, customization, grading, and common questions.
+          </p>
+          <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <OpenDemoButton className="px-6 py-3 text-base" />
             <Link
               to="/help"
@@ -257,11 +262,15 @@ function Hero() {
         </div>
 
         <div className="mt-14 grid gap-0 border-y border-slate-200 md:grid-cols-5">
-          {anchors.map(([label, href]) => (
+          {anchors.map(([label, id]) => (
             <a
-              key={href}
-              href={href}
-              className="border-b border-slate-200 px-4 py-4 text-sm font-black text-slate-700 hover:bg-white hover:text-blue-700 md:border-b-0 md:border-r md:last:border-r-0"
+              key={id}
+              href={`#${id}`}
+              onClick={(event) => {
+                event.preventDefault();
+                document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+              className="border-b border-slate-200 bg-white/50 px-4 py-4 text-center text-sm font-black text-slate-700 hover:bg-white hover:text-blue-700 md:border-b-0 md:border-r md:last:border-r-0"
             >
               {label}
             </a>
@@ -297,7 +306,7 @@ function GradingSection() {
   ];
 
   return (
-    <section id="grading" className="border-b border-slate-200 bg-white py-20">
+    <section id="grading" className="scroll-mt-24 border-b border-slate-200 bg-white py-20">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.36fr_0.64fr] lg:px-8">
         <div>
           <p className="text-sm font-black uppercase tracking-wide text-blue-700">Grading</p>
@@ -325,7 +334,7 @@ function GradingSection() {
 
 function FaqSection() {
   return (
-    <section id="faq" className="bg-[#fbfaf7] py-20">
+    <section id="faq" className="scroll-mt-24 bg-blue-50 py-20">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
         <p className="text-sm font-black uppercase tracking-wide text-blue-700">FAQ</p>
         <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Common questions</h2>
@@ -361,7 +370,7 @@ export function LandingPage() {
           title="Student organizations give the simulation structure."
           body="Gavel supports the organizations that make a legislature feel like a political system rather than a folder of separate assignments."
           groups={organizations}
-          tone="bg-[#f6f8f4]"
+          tone="bg-blue-50"
         />
         <FeatureSection
           id="communication"
@@ -377,7 +386,7 @@ export function LandingPage() {
           title="Teachers decide how much of the system to use."
           body="The settings area is detailed because different classes need different rules. A teacher can keep the simulation streamlined or make it procedurally rich."
           groups={customization}
-          tone="bg-[#f7f5ef]"
+          tone="bg-slate-50"
         />
         <GradingSection />
         <FaqSection />

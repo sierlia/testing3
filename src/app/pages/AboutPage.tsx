@@ -4,7 +4,7 @@ import { PublicPage } from "../components/PublicLayout";
 export function AboutPage() {
   return (
     <PublicPage active="about">
-      <main className="bg-[#fbfaf7]">
+      <main className="bg-blue-50">
         <section className="border-b border-slate-200">
           <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
             <p className="text-sm font-black uppercase tracking-wide text-blue-700">About</p>

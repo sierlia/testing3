@@ -53,7 +53,7 @@ export function HelpPage() {
   return (
     <PublicPage active="features" className="bg-white">
       <main className="bg-white">
-        <header className="border-b border-slate-200 bg-[#fbfaf7]">
+        <header className="border-b border-slate-200 bg-blue-50">
           <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
             <p className="text-sm font-black uppercase tracking-wide text-blue-700">Features</p>
             <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Gavel Feature Guide</h1>
@@ -68,7 +68,15 @@ export function HelpPage() {
           <aside className="lg:sticky lg:top-24 lg:self-start">
             <nav className="border-y border-slate-200 py-3" aria-label="Feature sections">
               {sections.map(([id, label]) => (
-                <a key={id} href={`#${id}`} className="block rounded-md px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-700">
+                <a
+                  key={id}
+                  href={`#${id}`}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
+                  }}
+                  className="block rounded-md px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-700"
+                >
                   {label}
                 </a>
               ))}
