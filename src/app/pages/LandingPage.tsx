@@ -240,15 +240,13 @@ function Hero() {
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
         <div className="mx-auto max-w-4xl text-center">
           <h1 className="text-5xl font-black tracking-tight text-slate-950 sm:text-6xl lg:text-7xl">
-            Run Mock Congress from first bill to final grade.
+            Mock Congress, from first bill to final grade.
           </h1>
           <p className="mx-auto mt-6 max-w-3xl text-xl leading-9 text-slate-700">
-            Gavel is a teacher-run workspace for mock congress: constituencies, student profiles, bill drafting,
-            organizations, discussion, floor procedure, records, assignments, and grading in one class.
-          </p>
-          <p className="mx-auto mt-4 max-w-3xl text-base leading-8 text-slate-600">
-            The page below walks through the feature areas in order, from representation and legislation through
-            organizations, communication, customization, grading, and common questions.
+            Gavel is a teacher-run workspace for mock congress with constituency selection, student profiles, bill drafting,
+            organizations, discussion, floor procedure, records, assignments, grading, and more. The page below walks through 
+            the feature areas in order, from representation and legislation through organizations, communication, 
+            customization, grading, and common questions.
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <OpenDemoButton className="px-6 py-3 text-base" />
@@ -359,7 +357,7 @@ export function LandingPage() {
         <FeatureSection
           id="student-work"
           label="Student work"
-          title="Constituencies, profiles, and bills come first."
+          title="Constituencies, profiles, and bills"
           body="The first layer of the simulation is student identity and legislative work: who each student represents, what they say about that role, and what legislation they introduce."
           groups={studentWork}
           tone="bg-white"
