@@ -1,11 +1,14 @@
-import { FormEvent, useEffect, useMemo, useState } from "react";
-import { Download, KeyRound, Mail, RotateCcw, Trash2 } from "lucide-react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { Check, Download, KeyRound, Pencil, RotateCcw, ShieldAlert, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { SettingsLayout } from "./SettingsLayout";
 import { Button } from "../components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
+import { SchoolSelector } from "../components/SchoolSelector";
+import { formatSchool, SchoolOption } from "../services/schools";
+import { fullNameFromParts } from "../utils/oauthSignup";
 import { supabase } from "../utils/supabase";
 
 type DeletionRequest = {
@@ -17,6 +20,17 @@ type DeletionRequest = {
   cancelled_at: string | null;
   completed_at: string | null;
   email_notice_status: "queued" | "sent" | "failed";
+};
+
+type AccountProfile = {
+  display_name: string | null;
+  first_name?: string | null;
+  last_name?: string | null;
+  schools?: unknown;
+  party?: string | null;
+  constituency_name?: string | null;
+  written_responses?: unknown;
+  class_id?: string | null;
 };
 
 function escapeHtml(value: unknown) {
@@ -47,18 +61,87 @@ function paragraphs(items: string[]) {
   return items.map((item) => `<p>${escapeHtml(item)}</p>`).join("");
 }
 
+function splitDisplayName(value: string | null | undefined) {
+  const raw = String(value ?? "").trim();
+  if (!raw) return { firstName: "", lastName: "" };
+  if (raw.includes(",")) {
+    const [first, ...rest] = raw.split(",");
+    return { firstName: first.trim(), lastName: rest.join(",").trim() };
+  }
+  const [first, ...rest] = raw.split(/\s+/);
+  return { firstName: first ?? "", lastName: rest.join(" ") };
+}
+
+function parseSchools(value: unknown): SchoolOption[] {
+  if (!value) return [];
+  if (typeof value === "string") {
+    return value
+      .split(",")
+      .map((name) => name.trim())
+      .filter(Boolean)
+      .map((name) => ({ id: `manual:${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`, name, source: "fallback" as const }));
+  }
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((school: any) => {
+      const name = String(school?.name ?? "").trim();
+      if (!name) return null;
+      return {
+        id: String(school?.id ?? `manual:${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`),
+        name,
+        city: school?.city ? String(school.city) : undefined,
+        state: school?.state ? String(school.state) : undefined,
+        url: school?.url ? String(school.url) : undefined,
+        source: school?.source === "scorecard" ? "scorecard" : "fallback",
+      } satisfies SchoolOption;
+    })
+    .filter(Boolean) as SchoolOption[];
+}
+
+function RowShell({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return (
+    <section className="border-b border-gray-200 p-5 last:border-b-0">
+      <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div>
+          <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+          {description && <p className="mt-1 text-sm text-gray-500">{description}</p>}
+        </div>
+        <div>{children}</div>
+      </div>
+    </section>
+  );
+}
+
 export function SettingsAccount() {
   const [loading, setLoading] = useState(true);
+  const [profileExists, setProfileExists] = useState(false);
+  const [role, setRole] = useState<"teacher" | "student">("student");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [savedFirstName, setSavedFirstName] = useState("");
+  const [savedLastName, setSavedLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [savedEmail, setSavedEmail] = useState("");
+  const [schools, setSchools] = useState<SchoolOption[]>([]);
+  const [savedSchools, setSavedSchools] = useState<SchoolOption[]>([]);
+  const [editingName, setEditingName] = useState(false);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
+  const [savingSchools, setSavingSchools] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [savingEmail, setSavingEmail] = useState(false);
   const [savingPassword, setSavingPassword] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deletionRequest, setDeletionRequest] = useState<DeletionRequest | null>(null);
   const [deletionBusy, setDeletionBusy] = useState(false);
+  const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
-  const pendingDeletion = useMemo(() => deletionRequest?.status === "pending" ? deletionRequest : null, [deletionRequest]);
+  const pendingDeletion = useMemo(() => (deletionRequest?.status === "pending" ? deletionRequest : null), [deletionRequest]);
+  const savedName = fullNameFromParts(savedFirstName, savedLastName) || "Member";
+  const schoolsChanged = JSON.stringify(schools) !== JSON.stringify(savedSchools);
 
   const load = async () => {
     setLoading(true);
@@ -66,14 +149,41 @@ export function SettingsAccount() {
       const { data: auth } = await supabase.auth.getUser();
       const user = auth.user;
       if (!user) return;
+
+      const metadata = user.user_metadata ?? {};
+      const metadataName = splitDisplayName(metadata.name);
+      const metadataSchools = parseSchools(metadata.schools ?? metadata.school);
+      const userRole = metadata.role === "teacher" ? "teacher" : "student";
+      setRole(userRole);
       setEmail(user.email ?? "");
-      const { data, error } = await supabase
-        .from("account_deletion_requests")
-        .select("*")
-        .eq("user_id", user.id)
-        .maybeSingle();
-      if (error && error.code !== "PGRST116") throw error;
-      setDeletionRequest((data as DeletionRequest | null) ?? null);
+      setSavedEmail(user.email ?? "");
+
+      const [{ data: profile, error: profileError }, { data: deletion, error: deletionError }] = await Promise.all([
+        supabase
+          .from("profiles")
+          .select("display_name,first_name,last_name,schools,party,constituency_name,written_responses,class_id")
+          .eq("user_id", user.id)
+          .maybeSingle(),
+        supabase.from("account_deletion_requests").select("*").eq("user_id", user.id).maybeSingle(),
+      ]);
+      if (profileError && profileError.code !== "PGRST116") throw profileError;
+      if (deletionError && deletionError.code !== "PGRST116") throw deletionError;
+
+      const profileRow = (profile as AccountProfile | null) ?? null;
+      const profileName = splitDisplayName(profileRow?.display_name);
+      const nextFirst = String(profileRow?.first_name ?? metadata.first_name ?? profileName.firstName ?? metadataName.firstName ?? "").trim();
+      const nextLast = String(profileRow?.last_name ?? metadata.last_name ?? profileName.lastName ?? metadataName.lastName ?? "").trim();
+      const profileSchools = parseSchools(profileRow?.schools);
+      const nextSchools = profileSchools.length ? profileSchools : metadataSchools;
+
+      setProfileExists(Boolean(profileRow));
+      setFirstName(nextFirst);
+      setLastName(nextLast);
+      setSavedFirstName(nextFirst);
+      setSavedLastName(nextLast);
+      setSchools(nextSchools);
+      setSavedSchools(nextSchools);
+      setDeletionRequest((deletion as DeletionRequest | null) ?? null);
     } catch (error: any) {
       toast.error(error.message || "Could not load account settings");
     } finally {
@@ -85,6 +195,72 @@ export function SettingsAccount() {
     void load();
   }, []);
 
+  const saveProfileDetails = async (next: { firstName?: string; lastName?: string; schools?: SchoolOption[] }) => {
+    const nextFirstName = next.firstName ?? firstName;
+    const nextLastName = next.lastName ?? lastName;
+    const nextSchools = next.schools ?? schools;
+    const nextName = fullNameFromParts(nextFirstName, nextLastName);
+    if (!nextName) throw new Error("Name is required.");
+    if (!nextSchools.length) throw new Error("Select at least one school.");
+
+    const { data: auth } = await supabase.auth.getUser();
+    const user = auth.user;
+    if (!user) throw new Error("Sign in to update account info.");
+
+    const metadata = {
+      ...(user.user_metadata ?? {}),
+      role,
+      name: nextName,
+      first_name: nextFirstName.trim(),
+      last_name: nextLastName.trim(),
+      schools: nextSchools,
+      school: nextSchools.map((school) => school.name).join(", "),
+    };
+    const { error: metadataError } = await supabase.auth.updateUser({ data: metadata });
+    if (metadataError) throw metadataError;
+
+    if (profileExists) {
+      const { error } = await supabase
+        .from("profiles")
+        .update({
+          display_name: nextName,
+          first_name: nextFirstName.trim(),
+          last_name: nextLastName.trim(),
+          schools: nextSchools,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq("user_id", user.id);
+      if (error) throw error;
+    } else if (role === "student") {
+      const { error } = await supabase.from("profiles").upsert({
+        user_id: user.id,
+        role: "student",
+        display_name: nextName,
+        first_name: nextFirstName.trim(),
+        last_name: nextLastName.trim(),
+        schools: nextSchools,
+      } as any);
+      if (error) throw error;
+      setProfileExists(true);
+    }
+  };
+
+  const saveName = async (event: FormEvent) => {
+    event.preventDefault();
+    setSavingName(true);
+    try {
+      await saveProfileDetails({ firstName: firstName.trim(), lastName: lastName.trim() });
+      setSavedFirstName(firstName.trim());
+      setSavedLastName(lastName.trim());
+      setEditingName(false);
+      toast.success("Name updated.");
+    } catch (error: any) {
+      toast.error(error.message || "Could not update name");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   const saveEmail = async (event: FormEvent) => {
     event.preventDefault();
     const nextEmail = email.trim();
@@ -93,11 +269,14 @@ export function SettingsAccount() {
     try {
       const { data: auth } = await supabase.auth.getUser();
       if (auth.user?.email === nextEmail) {
+        setEditingEmail(false);
         toast.info("That email is already on your account.");
         return;
       }
       const { error } = await supabase.auth.updateUser({ email: nextEmail });
       if (error) throw error;
+      setSavedEmail(nextEmail);
+      setEditingEmail(false);
       toast.success("Email change started. Check your inbox to confirm it.");
     } catch (error: any) {
       toast.error(error.message || "Could not update email");
@@ -106,17 +285,48 @@ export function SettingsAccount() {
     }
   };
 
+  const saveSchools = async () => {
+    setSavingSchools(true);
+    try {
+      await saveProfileDetails({ schools });
+      setSavedSchools(schools);
+      toast.success("Schools updated.");
+    } catch (error: any) {
+      toast.error(error.message || "Could not update schools");
+    } finally {
+      setSavingSchools(false);
+    }
+  };
+
   const savePassword = async (event: FormEvent) => {
     event.preventDefault();
+    if (!currentPassword) return toast.error("Enter your current password.");
     if (newPassword.length < 8) return toast.error("Password must be at least 8 characters.");
     if (newPassword !== confirmPassword) return toast.error("Passwords do not match.");
     setSavingPassword(true);
     try {
+      const { data: auth } = await supabase.auth.getUser();
+      const accountEmail = auth.user?.email ?? savedEmail;
+      if (!accountEmail) throw new Error("No email address is available for this account.");
+
+      const { error: currentPasswordError } = await supabase.auth.signInWithPassword({
+        email: accountEmail,
+        password: currentPassword,
+      });
+      if (currentPasswordError) throw new Error("Current password is incorrect.");
+
       const { error } = await supabase.auth.updateUser({ password: newPassword });
       if (error) throw error;
+
+      const { error: noticeError } = await supabase.rpc("queue_account_security_email", { event_type_input: "password_changed" });
+      setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      toast.success("Password updated.");
+      if (noticeError) {
+        toast.warning("Password updated, but the email notice could not be queued.");
+      } else {
+        toast.success("Password updated. A confirmation email has been queued.");
+      }
     } catch (error: any) {
       toast.error(error.message || "Could not update password");
     } finally {
@@ -142,7 +352,11 @@ export function SettingsAccount() {
       if (!user) return toast.error("Sign in to export your work.");
 
       const [profile, memberships, authoredBills, letters, submissions, preferences] = await Promise.all([
-        runQuery("Profile", supabase.from("profiles").select("display_name,party,constituency_name,written_responses,class_id").eq("user_id", user.id).maybeSingle(), null as any),
+        runQuery(
+          "Profile",
+          supabase.from("profiles").select("display_name,first_name,last_name,schools,party,constituency_name,written_responses,class_id").eq("user_id", user.id).maybeSingle(),
+          null as any,
+        ),
         runQuery("Classes", supabase.from("class_memberships").select("class_id,status,classes(name,class_code)").eq("user_id", user.id), [] as any[]),
         runQuery("Bills", supabase.from("bill_display").select("id,hr_label,title,status,created_at,legislative_text,supporting_text,class_id").eq("author_user_id", user.id).order("created_at", { ascending: false }), [] as any[]),
         runQuery("Dear Colleague letters", supabase.from("dear_colleague_letters").select("id,subject,body,created_at,class_id").eq("sender_user_id", user.id).order("created_at", { ascending: false }), [] as any[]),
@@ -156,33 +370,48 @@ export function SettingsAccount() {
         : [];
       const assignmentMap = new Map(assignmentRows.map((row: any) => [row.id, row]));
 
-      const profileResponses = (profile as any)?.written_responses && typeof (profile as any).written_responses === "object"
-        ? Object.entries((profile as any).written_responses).map(([key, value]) => `<h3>${escapeHtml(key)}</h3><p>${escapeHtml(value)}</p>`).join("")
-        : "";
+      const profileSchools = parseSchools((profile as any)?.schools);
+      const profileResponses =
+        (profile as any)?.written_responses && typeof (profile as any).written_responses === "object"
+          ? Object.entries((profile as any).written_responses)
+              .map(([key, value]) => `<h3>${escapeHtml(key)}</h3><p>${escapeHtml(value)}</p>`)
+              .join("")
+          : "";
 
-      const classBody = (memberships as any[]).map((membership) => {
-        const cls = membership.classes;
-        return `<p><strong>${escapeHtml(cls?.name ?? "Class")}</strong> (${escapeHtml(membership.status ?? "approved")})<br/>Code: ${escapeHtml(cls?.class_code ?? "N/A")}</p>`;
-      }).join("");
+      const classBody = (memberships as any[])
+        .map((membership) => {
+          const cls = membership.classes;
+          return `<p><strong>${escapeHtml(cls?.name ?? "Class")}</strong> (${escapeHtml(membership.status ?? "approved")})<br/>Code: ${escapeHtml(cls?.class_code ?? "N/A")}</p>`;
+        })
+        .join("");
 
-      const billBody = (authoredBills as any[]).map((bill) => `
+      const billBody = (authoredBills as any[])
+        .map(
+          (bill) => `
         <h3>${escapeHtml(bill.hr_label ?? "Bill")}: ${escapeHtml(bill.title)}</h3>
         <p>Status: ${escapeHtml(String(bill.status ?? "").replace(/_/g, " "))}<br/>Created: ${escapeHtml(formatDate(bill.created_at))}</p>
         <p><strong>Legislative text</strong></p>
         <p>${escapeHtml(bill.legislative_text)}</p>
         ${bill.supporting_text ? `<p><strong>Supporting text</strong></p><p>${escapeHtml(bill.supporting_text)}</p>` : ""}
-      `).join("");
+      `,
+        )
+        .join("");
 
-      const letterBody = (letters as any[]).map((letter) => `
+      const letterBody = (letters as any[])
+        .map(
+          (letter) => `
         <h3>${escapeHtml(letter.subject || "Untitled letter")}</h3>
         <p>Sent: ${escapeHtml(formatDate(letter.created_at))}</p>
         <p>${escapeHtml(letter.body)}</p>
-      `).join("");
+      `,
+        )
+        .join("");
 
-      const submissionBody = (submissions as any[]).map((submission) => {
-        const task = assignmentMap.get(submission.assignment_id);
-        const attachments = Array.isArray(submission.attachments) ? submission.attachments : [];
-        return `
+      const submissionBody = (submissions as any[])
+        .map((submission) => {
+          const task = assignmentMap.get(submission.assignment_id);
+          const attachments = Array.isArray(submission.attachments) ? submission.attachments : [];
+          return `
           <h3>${escapeHtml(task?.title ?? "Assignment")}</h3>
           <p>Status: ${escapeHtml(submission.status ?? "submitted")}<br/>Submitted: ${escapeHtml(formatDate(submission.submitted_at))}<br/>Returned: ${escapeHtml(formatDate(submission.returned_at))}</p>
           <p>${escapeHtml(submission.body)}</p>
@@ -190,7 +419,8 @@ export function SettingsAccount() {
           ${submission.manual_feedback ? `<p>Feedback: ${escapeHtml(submission.manual_feedback)}</p>` : ""}
           ${attachments.length ? `<p>Attachments: ${escapeHtml(attachments.map((item: any) => item.label ?? item.id).join(", "))}</p>` : ""}
         `;
-      }).join("");
+        })
+        .join("");
 
       const preferenceBody = (preferences as any[]).map((preference) => `<p>Submitted: ${escapeHtml(formatDate(preference.submitted_at))}</p>`).join("");
 
@@ -210,12 +440,16 @@ export function SettingsAccount() {
           <body>
             <h1>Gavel Work Export</h1>
             <p>Exported: ${escapeHtml(formatDate(new Date().toISOString()))}</p>
-            ${section("Account", paragraphs([
-              `Name: ${(profile as any)?.display_name ?? "N/A"}`,
-              `Email: ${user.email ?? "N/A"}`,
-              `Party: ${(profile as any)?.party ?? "N/A"}`,
-              `Constituency: ${(profile as any)?.constituency_name ?? "N/A"}`,
-            ]))}
+            ${section(
+              "Account",
+              paragraphs([
+                `Name: ${(profile as any)?.display_name ?? savedName}`,
+                `Email: ${user.email ?? "N/A"}`,
+                `Schools: ${profileSchools.length ? profileSchools.map(formatSchool).join("; ") : "N/A"}`,
+                `Party: ${(profile as any)?.party ?? "N/A"}`,
+                `Constituency: ${(profile as any)?.constituency_name ?? "N/A"}`,
+              ]),
+            )}
             ${section("Classes", classBody)}
             ${section("Profile Responses", profileResponses)}
             ${section("Bills", billBody)}
@@ -244,12 +478,13 @@ export function SettingsAccount() {
   };
 
   const requestDeletion = async () => {
-    if (!window.confirm("Schedule this account for deletion in three days? You can cancel from this page before the timer ends.")) return;
     setDeletionBusy(true);
     try {
       const { data, error } = await supabase.rpc("request_account_deletion");
       if (error) throw error;
       setDeletionRequest(normalizeRpcRow<DeletionRequest>(data));
+      setDeleteStep(0);
+      setDeleteConfirmation("");
       toast.success("Account deletion scheduled. A confirmation email has been queued.");
     } catch (error: any) {
       toast.error(error.message || "Could not schedule account deletion");
@@ -277,74 +512,118 @@ export function SettingsAccount() {
       {loading ? (
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">Loading account info...</div>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Mail className="h-5 w-5 text-blue-600" />
-                Email Address
-              </CardTitle>
-              <CardDescription>Update the email used for sign-in and account notices.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={saveEmail} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="account-email">Email</Label>
-                  <Input id="account-email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+        <div className="max-w-4xl overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm">
+          <RowShell title="Name" description="Shown on your profile by default.">
+            {editingName ? (
+              <form onSubmit={saveName} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
+                <Input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="First name" required autoComplete="off" />
+                <Input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Last name" required autoComplete="off" />
+                <div className="flex gap-2">
+                  <Button type="submit" size="icon" disabled={savingName} aria-label="Save name">
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Cancel name edit"
+                    onClick={() => {
+                      setFirstName(savedFirstName);
+                      setLastName(savedLastName);
+                      setEditingName(false);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
                 </div>
-                <Button type="submit" disabled={savingEmail}>{savingEmail ? "Saving..." : "Change Email"}</Button>
               </form>
-            </CardContent>
-          </Card>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <p className="min-w-0 truncate text-sm font-medium text-gray-900">{savedName}</p>
+                <Button type="button" variant="outline" size="icon" aria-label="Edit name" onClick={() => setEditingName(true)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </RowShell>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <KeyRound className="h-5 w-5 text-blue-600" />
-                Password
-              </CardTitle>
-              <CardDescription>Choose a new password for this account.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={savePassword} className="space-y-4">
+          <RowShell title="Email Address" description="Used for sign-in and account notices.">
+            {editingEmail ? (
+              <form onSubmit={saveEmail} className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto]">
+                <Input type="email" value={email} onChange={(event) => setEmail(event.target.value)} required autoComplete="off" />
+                <div className="flex gap-2">
+                  <Button type="submit" size="icon" disabled={savingEmail} aria-label="Save email">
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    aria-label="Cancel email edit"
+                    onClick={() => {
+                      setEmail(savedEmail);
+                      setEditingEmail(false);
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </form>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <p className="min-w-0 truncate text-sm font-medium text-gray-900">{savedEmail || "No email"}</p>
+                <Button type="button" variant="outline" size="icon" aria-label="Edit email" onClick={() => setEditingEmail(true)}>
+                  <Pencil className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </RowShell>
+
+          <RowShell title="Schools" description="Select one or more schools for this account.">
+            <div className="space-y-3">
+              <SchoolSelector value={schools} onChange={setSchools} placeholder="Search accredited schools..." required />
+              <div className="flex justify-end">
+                <Button type="button" onClick={() => void saveSchools()} disabled={!schoolsChanged || savingSchools}>
+                  {savingSchools ? "Saving..." : "Save Schools"}
+                </Button>
+              </div>
+            </div>
+          </RowShell>
+
+          <RowShell title="Password" description="Changing your password sends a security email.">
+            <form onSubmit={savePassword} className="grid gap-4">
+              <div className="grid gap-4 sm:grid-cols-3">
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">Current password</Label>
+                  <Input id="current-password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required />
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="new-password">New password</Label>
-                  <Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} required />
+                  <Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} autoComplete="new-password" required />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="confirm-password">Confirm password</Label>
-                  <Input id="confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} required />
+                  <Input id="confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} autoComplete="new-password" required />
                 </div>
-                <Button type="submit" disabled={savingPassword}>{savingPassword ? "Saving..." : "Change Password"}</Button>
-              </form>
-            </CardContent>
-          </Card>
+              </div>
+              <div>
+                <Button type="submit" disabled={savingPassword}>
+                  <KeyRound className="h-4 w-4" />
+                  {savingPassword ? "Saving..." : "Change Password"}
+                </Button>
+              </div>
+            </form>
+          </RowShell>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Download className="h-5 w-5 text-blue-600" />
-                Work Export
-              </CardTitle>
-              <CardDescription>Download a Word-compatible copy of your Gavel work.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button type="button" variant="outline" onClick={() => void downloadWorkDoc()} disabled={exporting}>
-                <Download className="mr-2 h-4 w-4" />
-                {exporting ? "Preparing..." : "Download Word Doc"}
-              </Button>
-            </CardContent>
-          </Card>
+          <RowShell title="Work Export" description="Download a Word-compatible copy of your Gavel work.">
+            <Button type="button" variant="outline" onClick={() => void downloadWorkDoc()} disabled={exporting}>
+              <Download className="h-4 w-4" />
+              {exporting ? "Preparing..." : "Download Word Doc"}
+            </Button>
+          </RowShell>
 
-          <Card className="border-red-200">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-700">
-                <Trash2 className="h-5 w-5" />
-                Delete Account
-              </CardTitle>
-              <CardDescription>Deletion starts a three-day timer and can be cancelled here before the timer ends.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <RowShell title="Delete Account" description="Deletion starts a three-day timer and can be cancelled here before it ends.">
+            <div className="space-y-4">
               {pendingDeletion ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
                   <p className="font-medium">Deletion scheduled for {formatDate(pendingDeletion.delete_after)}.</p>
@@ -358,19 +637,72 @@ export function SettingsAccount() {
 
               {pendingDeletion ? (
                 <Button type="button" variant="outline" onClick={() => void cancelDeletion()} disabled={deletionBusy}>
-                  <RotateCcw className="mr-2 h-4 w-4" />
+                  <RotateCcw className="h-4 w-4" />
                   {deletionBusy ? "Cancelling..." : "Cancel Deletion"}
                 </Button>
               ) : (
-                <Button type="button" variant="destructive" onClick={() => void requestDeletion()} disabled={deletionBusy}>
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  {deletionBusy ? "Scheduling..." : "Delete Account"}
+                <Button type="button" variant="destructive" onClick={() => setDeleteStep(1)} disabled={deletionBusy}>
+                  <Trash2 className="h-4 w-4" />
+                  Delete Account
                 </Button>
               )}
-            </CardContent>
-          </Card>
+            </div>
+          </RowShell>
         </div>
       )}
+
+      <Dialog
+        open={deleteStep > 0}
+        onOpenChange={(open) => {
+          if (!open && !deletionBusy) {
+            setDeleteStep(0);
+            setDeleteConfirmation("");
+          }
+        }}
+      >
+        <DialogContent>
+          {deleteStep === 1 ? (
+            <>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2 text-red-700">
+                  <ShieldAlert className="h-5 w-5" />
+                  Delete account?
+                </DialogTitle>
+                <DialogDescription>
+                  This schedules your account for deletion in three days. You can still cancel from this page before the timer ends.
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDeleteStep(0)}>
+                  Cancel
+                </Button>
+                <Button type="button" variant="destructive" onClick={() => setDeleteStep(2)}>
+                  Continue
+                </Button>
+              </DialogFooter>
+            </>
+          ) : (
+            <>
+              <DialogHeader>
+                <DialogTitle>Confirm account deletion</DialogTitle>
+                <DialogDescription>Type DELETE to schedule the three-day deletion timer.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-2">
+                <Label htmlFor="delete-confirmation">Confirmation</Label>
+                <Input id="delete-confirmation" value={deleteConfirmation} onChange={(event) => setDeleteConfirmation(event.target.value)} autoComplete="off" />
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setDeleteStep(1)} disabled={deletionBusy}>
+                  Back
+                </Button>
+                <Button type="button" variant="destructive" onClick={() => void requestDeletion()} disabled={deletionBusy || deleteConfirmation !== "DELETE"}>
+                  {deletionBusy ? "Scheduling..." : "Schedule Deletion"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </SettingsLayout>
   );
 }

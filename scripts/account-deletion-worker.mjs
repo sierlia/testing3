@@ -55,6 +55,24 @@ function messageFor(row) {
   const deleteAfter = row.payload?.delete_after;
   const cancelledAt = row.payload?.cancelled_at;
   const completedAt = row.payload?.completed_at;
+  const changedAt = row.payload?.changed_at;
+  if (row.event_type === "password_changed") {
+    return {
+      subject: "Gavel password changed",
+      text: [
+        "The password for your Gavel account was changed.",
+        `Changed time: ${formatDate(changedAt)}`,
+        "If you made this change, no action is needed.",
+        `If you did not make this change, review your account immediately: ${ACCOUNT_APP_URL}`,
+      ].join("\n\n"),
+      html: `
+        <p>The password for your Gavel account was changed.</p>
+        <p><strong>Changed time:</strong> ${escapeHtml(formatDate(changedAt))}</p>
+        <p>If you made this change, no action is needed.</p>
+        <p>If you did not make this change, review your account immediately from <a href="${escapeHtml(ACCOUNT_APP_URL)}">Account Info</a>.</p>
+      `,
+    };
+  }
   if (row.event_type === "account_deletion_requested") {
     return {
       subject: "Gavel account deletion scheduled",
@@ -112,8 +130,8 @@ async function sendEmail(row) {
   return body;
 }
 
-async function markQueueRow(id, patch) {
-  await supabaseFetch(`/rest/v1/account_deletion_email_queue?id=eq.${encodeURIComponent(id)}`, {
+async function markQueueRow(tableName, id, patch) {
+  await supabaseFetch(`/rest/v1/${tableName}?id=eq.${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify(patch),
@@ -150,7 +168,7 @@ async function main() {
     try {
       if (!row.recipient_email) throw new Error("Missing recipient email");
       await sendEmail(row);
-      await markQueueRow(row.id, {
+      await markQueueRow("account_deletion_email_queue", row.id, {
         status: "sent",
         sent_at: new Date().toISOString(),
         error_message: null,
@@ -160,7 +178,7 @@ async function main() {
     } catch (error) {
       failedCount += 1;
       const errorMessage = error instanceof Error ? error.message : String(error);
-      await markQueueRow(row.id, {
+      await markQueueRow("account_deletion_email_queue", row.id, {
         status: "failed",
         error_message: errorMessage.slice(0, 1000),
       });
@@ -169,7 +187,42 @@ async function main() {
     }
   }
 
-  console.log(JSON.stringify({ deletedCount, queuedEmails: queueRows.length, sentCount, failedCount }));
+  const securityQueueRows = await supabaseFetch(
+    `/rest/v1/account_security_email_queue?status=eq.queued&select=id,user_id,recipient_email,event_type,payload,created_at&order=created_at.asc&limit=${BATCH_LIMIT}`,
+  );
+
+  let securitySentCount = 0;
+  let securityFailedCount = 0;
+  for (const row of securityQueueRows) {
+    try {
+      if (!row.recipient_email) throw new Error("Missing recipient email");
+      await sendEmail(row);
+      await markQueueRow("account_security_email_queue", row.id, {
+        status: "sent",
+        sent_at: new Date().toISOString(),
+        error_message: null,
+      });
+      securitySentCount += 1;
+    } catch (error) {
+      securityFailedCount += 1;
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      await markQueueRow("account_security_email_queue", row.id, {
+        status: "failed",
+        error_message: errorMessage.slice(0, 1000),
+      });
+      console.error(`Failed to send account security email ${row.id}: ${errorMessage}`);
+    }
+  }
+
+  console.log(JSON.stringify({
+    deletedCount,
+    queuedDeletionEmails: queueRows.length,
+    sentCount,
+    failedCount,
+    queuedSecurityEmails: securityQueueRows.length,
+    securitySentCount,
+    securityFailedCount,
+  }));
 }
 
 main().catch((error) => {

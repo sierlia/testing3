@@ -56,12 +56,13 @@ export async function switchDemoAccount(key: DemoAccountKey, options?: { confett
     window.localStorage.removeItem("gavel:demoAuthSwitch");
     if (launchDemo) setDemoLaunchProgress(65);
 
-    const defaultTarget = "/dashboard";
+    const defaultTarget = credentials.role === "teacher" ? "/classes" : "/dashboard";
     const isPublicRoute = ["/", "/signin", "/signup", "/about", "/help", "/privacy", "/terms", "/cookies", "/ferpa-coppa"].includes(currentPath);
-    const studentDashboardOnlyRoute = currentPath === "/classes" || currentPath.startsWith("/classes?");
+    const teacherOnlyRoute = currentPath === "/classes" || currentPath.startsWith("/classes?") || currentPath.startsWith("/teacher/");
+    const studentOnlyRoute = currentPath === "/dashboard" || currentPath === "/join-class" || currentPath === "/my-classes" || currentPath.startsWith("/class/");
     const incompatibleRoleRoute =
-      (credentials.role === "student" && (currentPath.startsWith("/teacher/") || studentDashboardOnlyRoute)) ||
-      (credentials.role === "teacher" && currentPath.startsWith("/class/"));
+      (credentials.role === "student" && teacherOnlyRoute) ||
+      (credentials.role === "teacher" && studentOnlyRoute);
     const target = options?.preserveLocation && !isPublicRoute && !incompatibleRoleRoute ? currentPath : defaultTarget;
     window.location.hash = target;
     if (launchDemo) setDemoLaunchProgress(80);

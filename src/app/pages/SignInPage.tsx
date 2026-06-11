@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label';
 import { Gavel } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
+import { GoogleAuthButton } from '../components/GoogleAuthButton';
 
 export function SignInPage() {
   const navigate = useNavigate();
@@ -84,10 +85,11 @@ export function SignInPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button type="button" variant="outline" className="mb-5 w-full" onClick={() => void handleGoogleSignIn()} disabled={googleLoading}>
-              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-xs font-bold text-blue-600">G</span>
-              {googleLoading ? 'Redirecting...' : 'Log in with Google'}
-            </Button>
+            <div className="mb-5">
+              <GoogleAuthButton onClick={() => void handleGoogleSignIn()} loading={googleLoading}>
+                Log in with Google
+              </GoogleAuthButton>
+            </div>
 
             <div className="mb-5 flex items-center gap-3">
               <div className="h-px flex-1 bg-gray-200" />
@@ -113,7 +115,7 @@ export function SignInPage() {
                 <Input
                   id="password"
                   type="password"
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required

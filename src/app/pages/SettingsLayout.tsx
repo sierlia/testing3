@@ -9,8 +9,8 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const path = location.pathname;
   const tabs = [
-    { label: "Notifications", to: "/settings" },
     { label: "Account Info", to: "/settings/account" },
+    { label: "Notifications", to: "/settings" },
   ];
 
   return (

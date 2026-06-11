@@ -5,6 +5,8 @@ import { AuthProvider, useAuth } from "./utils/AuthContext";
 import { Toaster } from "./components/ui/sonner";
 import { DemoAccountSwitcher } from "./components/DemoAccountSwitcher";
 import { Gavel } from "lucide-react";
+import { toast } from "sonner";
+import { clearPendingOAuthSignup, completePendingOAuthSignup, getPendingOAuthSignup } from "./utils/oauthSignup";
 
 const publicRoutes = ["/", "/signin", "/signup", "/about", "/help", "/privacy", "/terms", "/cookies", "/ferpa-coppa"];
 
@@ -34,6 +36,7 @@ function AppRouterGate() {
   const { user, loading, sessionExpired, clearSessionExpired } = useAuth();
   const [hash, setHash] = useState(window.location.hash.replace(/^#/, "") || "/");
   const [demoAuthSwitching, setDemoAuthSwitching] = useState(() => window.localStorage.getItem("gavel:demoAuthSwitch") === "1");
+  const [oauthCompleting, setOauthCompleting] = useState(false);
 
   useEffect(() => {
     const update = () => setHash(window.location.hash.replace(/^#/, "") || "/");
@@ -55,17 +58,39 @@ function AppRouterGate() {
   const isPublic = isPublicPath(path);
 
   useEffect(() => {
+    if (loading || !user || oauthCompleting || !getPendingOAuthSignup()) return;
+    let cancelled = false;
+    setOauthCompleting(true);
+    completePendingOAuthSignup(user)
+      .then((completed) => {
+        if (cancelled || !completed) return;
+        toast.success("Google sign up completed.");
+        window.location.hash = completed.redirectPath;
+      })
+      .catch((error) => {
+        clearPendingOAuthSignup();
+        toast.error(error?.message || "Could not finish Google sign up");
+      })
+      .finally(() => {
+        if (!cancelled) setOauthCompleting(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loading, oauthCompleting, user]);
+
+  useEffect(() => {
     if (loading || user || isPublic || demoAuthSwitching) return;
     const target = hash.startsWith("/") ? hash : `/${hash}`;
     window.location.hash = `/signin?redirect=${encodeURIComponent(target)}`;
   }, [demoAuthSwitching, hash, isPublic, loading, user]);
 
-  if (loading) {
+  if (loading || oauthCompleting) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-gray-50 text-gray-600">
         <div className="flex items-center gap-2 text-sm font-medium">
           <Gavel className="h-5 w-5 text-blue-600" />
-          Loading...
+          {oauthCompleting ? "Finishing sign up..." : "Loading..."}
         </div>
       </div>
     );

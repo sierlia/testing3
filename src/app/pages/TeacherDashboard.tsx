@@ -45,8 +45,8 @@ export function TeacherDashboard() {
   const [dragOverPosition, setDragOverPosition] = useState<"before" | "after">("before");
 
   const applyClassOrder = (rows: ClassData[]) => {
-    if (!reorderEnabled) return [...rows].sort(createdDesc);
     const order = savedClassOrder();
+    if (!order.length) return [...rows].sort(createdDesc);
     const index = new Map(order.map((id, orderIndex) => [id, orderIndex]));
     return [...rows].sort((a, b) => {
       const ai = index.has(a.id) ? index.get(a.id)! : Number.MAX_SAFE_INTEGER;
@@ -240,7 +240,7 @@ export function TeacherDashboard() {
                   <GripVertical className="h-4 w-4" />
                   {reorderEnabled ? "Class reordering enabled" : "Enable class reordering"}
                 </button>
-                <span className="text-xs text-gray-500">{reorderEnabled ? (searchQuery.trim() ? "Clear search to drag classes." : "Drag classes by their rows.") : "Uses the newest-created order until enabled."}</span>
+                <span className="text-xs text-gray-500">{reorderEnabled ? (searchQuery.trim() ? "Clear search to drag classes." : "Drag classes by their rows.") : "Saved order stays in place; enable to drag."}</span>
               </div>
             )}
           </div>
