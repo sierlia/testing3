@@ -55,8 +55,8 @@ export function CreateDearColleagueLetter() {
         if (pErr) throw pErr;
         const classId = (pRow as any)?.class_id as string | null;
         if (!classId) {
-          toast.error("Select a class first (Settings â†’ Classes)");
-          return navigate("/settings/classes");
+          toast.error("Select a class first from My Classes");
+          return navigate("/my-classes");
         }
 
         const [{ data: directory, error: dirErr }, { data: cau }, { data: par }, { data: com }] = await Promise.all([

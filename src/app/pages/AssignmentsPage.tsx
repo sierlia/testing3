@@ -140,7 +140,7 @@ function StudentAssignmentsPage() {
       const { data: profile } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
       const activeClassId = (profile as any)?.class_id as string | null;
       if (!activeClassId) {
-        navigate("/settings/classes");
+        navigate("/my-classes");
         return;
       }
       setClassId(activeClassId);

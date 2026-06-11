@@ -102,6 +102,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
   const [countData, setCountData] = useState<CountData>(() => readCachedCountData(committeeId));
   const [seenVersion, setSeenVersion] = useState(0);
   const [access, setAccess] = useState(() => membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, dashboardAccess: false, reviewAccess: false, loaded: false });
+  const [electionOpen, setElectionOpen] = useState<boolean | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -109,7 +110,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     setAccess(membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, dashboardAccess: false, reviewAccess: false, loaded: false });
     const load = async () => {
       const uid = (await getCurrentUser())?.id;
-      const [{ data: announcements }, { data: refs }, { data: membership }, { data: profile }, { data: paidAccess }] = await Promise.all([
+      const [{ data: announcements }, { data: refs }, { data: membership }, { data: profile }, { data: paidAccess }, { data: committeeRow }] = await Promise.all([
         supabase
           .from("committee_announcements")
           .select("id")
@@ -120,7 +121,17 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
           : ({ data: null } as any),
         uid ? supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle() : ({ data: null } as any),
         uid ? supabase.from("committee_paid_access").select("access_type").eq("committee_id", committeeId).eq("user_id", uid) : ({ data: [] } as any),
+        supabase.from("committees").select("class_id").eq("id", committeeId).maybeSingle(),
       ]);
+      const committeeClassId = (committeeRow as any)?.class_id as string | undefined;
+      if (committeeClassId) {
+        const { data: classRow } = await supabase.from("classes").select("settings").eq("id", committeeClassId).maybeSingle();
+        const settings = (classRow as any)?.settings ?? {};
+        const nextElectionOpen = settings?.elections?.committeeOpenById?.[committeeId] ?? Boolean(settings?.elections?.open);
+        if (!cancelled) setElectionOpen(Boolean(nextElectionOpen));
+      } else if (!cancelled) {
+        setElectionOpen(false);
+      }
       if (!cancelled) {
         const paid = new Set(((paidAccess ?? []) as any[]).map((row) => row.access_type));
         const nextAccess = { isMember: Boolean(membership), isTeacher: (profile as any)?.role === "teacher", dashboardAccess: paid.has("dashboard"), reviewAccess: paid.has("review"), loaded: true };
@@ -211,15 +222,20 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
 
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-      {tabs.map((tab) => (
+      {tabs.map((tab) => {
+        const inactiveElection = tab.id === "election" && electionOpen !== true;
+        return (
         <Link
           key={tab.id}
           to={tab.to}
+          aria-disabled={inactiveElection}
           className={`inline-flex items-center gap-2 rounded-md px-4 py-2.5 text-sm font-medium transition-colors ${
-            active === tab.id ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
+            inactiveElection
+              ? active === tab.id ? "bg-gray-100 text-gray-500" : "text-gray-400 hover:bg-gray-50"
+              : active === tab.id ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
           }`}
         >
-          {tab.label}
+          {inactiveElection ? `${tab.label} (inactive)` : tab.label}
           {(tab.id === "dashboard" || tab.id === "review") && (
             <>
               <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
@@ -233,7 +249,8 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
             </>
           )}
         </Link>
-      ))}
+        );
+      })}
     </div>
   );
 }

@@ -40,7 +40,9 @@ import { CreateDearColleagueLetter } from "./pages/CreateDearColleagueLetter";
 import { Notifications } from "./pages/Notifications";
 import { NotificationSettings } from "./pages/NotificationSettings";
 import { SettingsNotifications } from "./pages/SettingsNotifications";
+import { SettingsAccount } from "./pages/SettingsAccount";
 import { SettingsClasses } from "./pages/SettingsClasses";
+import { MyClassesPage } from "./pages/MyClassesPage";
 import { TeacherProfileLayoutEditor } from "./pages/TeacherProfileLayoutEditor";
 import { TeacherStudentView } from "./pages/TeacherStudentView";
 import { TeacherCaucusManagement } from "./pages/TeacherCaucusManagement";
@@ -341,8 +343,16 @@ export const router = createHashRouter([
     Component: SettingsNotifications,
   },
   {
+    path: "/settings/account",
+    Component: SettingsAccount,
+  },
+  {
     path: "/settings/classes",
     Component: SettingsClasses,
+  },
+  {
+    path: "/my-classes",
+    Component: MyClassesPage,
   },
   {
     path: "/help",

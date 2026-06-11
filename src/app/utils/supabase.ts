@@ -69,7 +69,9 @@ function createDisabledSupabaseClient(): SupabaseClient {
     onAuthStateChange: () => authSubscription,
     signOut: async () => ({ error: null }),
     signInWithPassword: async () => ({ data: { user: null, session: null }, error: missingSupabaseError() }),
+    signInWithOAuth: async () => ({ data: { provider: null, url: null }, error: missingSupabaseError() }),
     signUp: async () => ({ data: { user: null, session: null }, error: missingSupabaseError() }),
+    updateUser: async () => ({ data: { user: null }, error: missingSupabaseError() }),
   };
   const storageBucket = {
     upload: async () => ({ data: null, error: missingSupabaseError() }),

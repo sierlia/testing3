@@ -978,18 +978,23 @@ export function TessCaucusDetail() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white p-3 shadow-sm">
-          {(["dashboard", "letters", "election"] as const).map((tab) => (
-            <button
-              key={tab}
-              type="button"
-              onClick={() => setActiveTab(tab)}
-              className={`rounded-md px-4 py-2.5 text-sm font-medium capitalize transition-colors ${
-                activeTab === tab ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
-              }`}
-            >
-              {tab}
-            </button>
-          ))}
+          {(["dashboard", "letters", "election"] as const).map((tab) => {
+            const inactiveElection = tab === "election" && !electionOpen;
+            return (
+              <button
+                key={tab}
+                type="button"
+                onClick={() => setActiveTab(tab)}
+                className={`rounded-md px-4 py-2.5 text-sm font-medium capitalize transition-colors ${
+                  inactiveElection
+                    ? activeTab === tab ? "bg-gray-100 text-gray-500" : "text-gray-400 hover:bg-gray-50"
+                    : activeTab === tab ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"
+                }`}
+              >
+                {inactiveElection ? "Election (inactive)" : tab}
+              </button>
+            );
+          })}
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">

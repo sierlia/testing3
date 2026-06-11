@@ -7,6 +7,7 @@ import { useAuth } from "../utils/AuthContext";
 import { supabase } from "../utils/supabase";
 import { profilePath } from "../utils/profileRoute";
 import { SecureAvatar } from "./SecureAvatar";
+import { ACTIVE_CLASS_CHANGED_EVENT, readActiveClassPreference, saveActiveClassPreference } from "../utils/activeClass";
 
 type TeacherClass = { id: string; name: string };
 type OrgVisibility = { parties: boolean; committees: boolean; caucuses: boolean; lobbyists: boolean };
@@ -193,6 +194,10 @@ export function Navigation() {
       setAvatarUrl(nextAvatar);
       cacheAvatar(user.id, nextAvatar);
       let classId = routeClassId ?? (data as any)?.class_id ?? null;
+      if ((user.user_metadata as any)?.role !== "teacher") {
+        const preferredClassId = readActiveClassPreference(user.id);
+        if (preferredClassId) classId = preferredClassId;
+      }
       if (classId) {
         setOrgVisibility(readCachedOrgVisibility(classId));
         const { data: cls } = await supabase.from("classes").select("settings").eq("id", classId).maybeSingle();
@@ -277,6 +282,21 @@ export function Navigation() {
     };
     void load();
   }, [user?.id, location.pathname]);
+
+  useEffect(() => {
+    if (!user?.id || (user.user_metadata as any)?.role === "teacher") return;
+    const onActiveClassChanged = async () => {
+      const preferredClassId = readActiveClassPreference(user.id);
+      if (!preferredClassId || preferredClassId === activeClassId) return;
+      setActiveClassId(preferredClassId);
+      const { data: cls } = await supabase.from("classes").select("name").eq("id", preferredClassId).maybeSingle();
+      const nextName = (cls as any)?.name ?? "";
+      setActiveClassName(nextName);
+      if (nextName) saveActiveClassPreference(user.id, preferredClassId, nextName);
+    };
+    window.addEventListener(ACTIVE_CLASS_CHANGED_EVENT, onActiveClassChanged);
+    return () => window.removeEventListener(ACTIVE_CLASS_CHANGED_EVENT, onActiveClassChanged);
+  }, [activeClassId, user?.id, user?.user_metadata?.role]);
 
   useEffect(() => {
     if (!classMenuOpen) return;
@@ -544,7 +564,7 @@ export function Navigation() {
         : "/classes"
       : activeClassId
         ? "/dashboard"
-        : "/settings/classes";
+        : "/my-classes";
   const showLobbyists = orgVisibility.lobbyists || isActivePath(["/lobbyists"]);
   const organizationLinks = [
     orgVisibility.parties ? { to: "/parties", label: "Parties", active: isActivePath(["/parties"]) } : null,
@@ -810,6 +830,16 @@ export function Navigation() {
                     <Settings className="w-4 h-4" />
                     Settings
                   </Link>
+                  {user?.user_metadata?.role !== "teacher" && (
+                    <Link
+                      to="/my-classes"
+                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                      onClick={() => setUserMenuOpen(false)}
+                    >
+                      <Layers className="w-4 h-4" />
+                      My Classes
+                    </Link>
+                  )}
                   <Link
                     to="/help"
                     className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"

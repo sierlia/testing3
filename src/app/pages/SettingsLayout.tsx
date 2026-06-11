@@ -8,10 +8,9 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { user } = useAuth();
   const path = location.pathname;
-  const isTeacher = (user?.user_metadata as any)?.role === "teacher";
   const tabs = [
     { label: "Notifications", to: "/settings" },
-    ...(!isTeacher ? [{ label: "Classes", to: "/settings/classes" }] : []),
+    { label: "Account Info", to: "/settings/account" },
   ];
 
   return (

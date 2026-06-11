@@ -14,6 +14,12 @@ export function SignInPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  const safeRedirectPath = () => {
+    const redirect = searchParams.get('redirect');
+    return redirect && redirect.startsWith('/') && !redirect.startsWith('/signin') && !redirect.startsWith('/signup') ? redirect : null;
+  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,14 +40,28 @@ export function SignInPage() {
 
         toast.success('Successfully signed in!');
         
-        const redirect = searchParams.get('redirect');
-        const safeRedirect = redirect && redirect.startsWith('/') && !redirect.startsWith('/signin') && !redirect.startsWith('/signup') ? redirect : null;
-        navigate(safeRedirect ?? (role === 'teacher' ? '/classes' : '/dashboard'));
+        navigate(safeRedirectPath() ?? (role === 'teacher' ? '/classes' : '/dashboard'));
       }
     } catch (error: any) {
       toast.error(error.message || 'Failed to sign in');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const redirectPath = safeRedirectPath() ?? '/dashboard';
+      const redirectTo = `${window.location.origin}${window.location.pathname}#${redirectPath}`;
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo },
+      });
+      if (error) throw error;
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to start Google sign in');
+      setGoogleLoading(false);
     }
   };
 
@@ -64,6 +84,17 @@ export function SignInPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            <Button type="button" variant="outline" className="mb-5 w-full" onClick={() => void handleGoogleSignIn()} disabled={googleLoading}>
+              <span className="flex h-5 w-5 items-center justify-center rounded-full border border-gray-300 text-xs font-bold text-blue-600">G</span>
+              {googleLoading ? 'Redirecting...' : 'Log in with Google'}
+            </Button>
+
+            <div className="mb-5 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs font-medium uppercase text-gray-500">or</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+
             <form onSubmit={handleSignIn} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>

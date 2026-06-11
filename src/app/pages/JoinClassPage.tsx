@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { supabase } from '../utils/supabase';
+import { saveActiveClassPreference } from '../utils/activeClass';
 import { toast } from 'sonner';
 
 export function JoinClassPage() {
@@ -23,15 +24,16 @@ export function JoinClassPage() {
         join_code_input: joinCode.toUpperCase(),
       });
       if (joinError) throw joinError;
-      const row = joined?.[0];
+      const row = Array.isArray(joined) ? joined[0] : joined;
       if (!row) throw new Error('Invalid class code');
 
       if ((row as any).joined_status === "pending") {
         toast.info(`Requested to join ${row.joined_class_name}`);
-        navigate('/settings/classes');
+        navigate('/my-classes');
         return;
       }
 
+      saveActiveClassPreference(user.id, row.joined_class_id, row.joined_class_name);
       toast.success(`Joined ${row.joined_class_name}`);
       navigate('/dashboard');
     } catch (error: any) {

@@ -65,7 +65,7 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
           .maybeSingle();
         if ((membership as any)?.status === "pending") {
           toast.info("Your class join request is waiting for teacher approval.");
-          navigate("/settings/classes");
+          navigate("/my-classes");
           return;
         }
 
