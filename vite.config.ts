@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite'
 import path from 'path'
+import fs from 'node:fs/promises'
 import tailwindcss from '@tailwindcss/vite'
 import react from '@vitejs/plugin-react'
 
@@ -16,6 +17,16 @@ function figmaAssetResolver() {
   }
 }
 
+function staticHostFallback() {
+  return {
+    name: 'static-host-fallback',
+    async writeBundle(options) {
+      const outputDir = options.dir ?? path.dirname(options.file ?? 'dist/index.html')
+      await fs.copyFile(path.resolve(__dirname, outputDir, 'index.html'), path.resolve(__dirname, outputDir, '404.html'))
+    },
+  }
+}
+
 export default defineConfig({
   base: process.env.VITE_BASE_PATH ?? "./",
   plugins: [
@@ -24,6 +35,7 @@ export default defineConfig({
     // Tailwind is not being actively used – do not remove them
     react(),
     tailwindcss(),
+    staticHostFallback(),
   ],
   resolve: {
     alias: {
