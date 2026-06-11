@@ -18,6 +18,8 @@ const AuthContext = createContext<AuthContextType>({
   signOut: async () => {},
 });
 
+const AUTH_INIT_TIMEOUT_MS = 8000;
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
@@ -26,12 +28,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hadSessionRef = useRef(false);
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      hadSessionRef.current = Boolean(session?.user);
+    let cancelled = false;
+    let initialSessionSettled = false;
+
+    const finishInitialSession = (nextUser: User | null) => {
+      if (cancelled) return;
+      setUser(nextUser);
+      hadSessionRef.current = Boolean(nextUser);
       setLoading(false);
-    });
+    };
+
+    const timeoutId = window.setTimeout(() => {
+      if (initialSessionSettled || cancelled) return;
+      console.warn("Supabase auth session initialization timed out; continuing without an active session.");
+      finishInitialSession(null);
+    }, AUTH_INIT_TIMEOUT_MS);
+
+    supabase.auth
+      .getSession()
+      .then(({ data: { session } }) => {
+        initialSessionSettled = true;
+        window.clearTimeout(timeoutId);
+        finishInitialSession(session?.user ?? null);
+      })
+      .catch((error) => {
+        initialSessionSettled = true;
+        window.clearTimeout(timeoutId);
+        console.error("Unable to initialize Supabase auth session.", error);
+        finishInitialSession(null);
+      });
 
     // Listen for auth changes
     const {
@@ -55,7 +80,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(session?.user ?? null);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signOut = async () => {

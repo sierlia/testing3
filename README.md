@@ -6,7 +6,7 @@
 2. Configure frontend env vars:
    - `VITE_SUPABASE_URL`
    - `VITE_SUPABASE_ANON_KEY`
-3. (Optional) For GitHub Pages-like local path behavior: set `VITE_BASE_PATH=/REPO_NAME/`
+3. (Optional) Set `VITE_BASE_PATH` only when a host requires absolute asset URLs. By default, builds use relative asset URLs so the same `dist/` works at a domain root, under a subpath, or on GitHub Pages.
 4. Run app: `npm run dev`
 
 - Routing is configured with hash URLs (`/#/route`) for static-host compatibility, including GitHub Pages SPA refresh behavior.
@@ -36,4 +36,4 @@ supabase db push
 ### Deployment workflows
 
 - `supabase-migrations.yml` (on `main` migration changes): links project and runs `supabase db push` with GitHub Secrets.
-- `deploy-pages.yml` (on every `main` push): builds and deploys `dist/` to GitHub Pages and sets `VITE_BASE_PATH=/<repo-name>/` so routing works on Pages.
+- `deploy-pages.yml` (on every `main` push): builds and deploys `dist/` to GitHub Pages. The app uses hash routing and relative asset URLs for static-host compatibility.
