@@ -16,6 +16,7 @@ import { profilePath } from "../utils/profileRoute";
 import { getCurrentUser } from "../utils/currentUser";
 import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
 import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
+import { VerticalMenuPlacement, verticalMenuPlacementClass, verticalMenuPlacementForButton } from "../utils/menuPlacement";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -121,6 +122,7 @@ export function TessCaucusDetail() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "letters" | "election">("dashboard");
   const [classSettings, setClassSettings] = useState<any>({});
   const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null);
+  const [memberMenuPlacement, setMemberMenuPlacement] = useState<VerticalMenuPlacement>("down");
 
   const isLeader = myRole === "chair" || myRole === "co_chair";
   const isChair = myRole === "chair";
@@ -228,7 +230,16 @@ export function TessCaucusDetail() {
           const candidateUserIds = ((candidateRows ?? []) as any[]).map((row) => row.user_id);
           const { data: lobbyistRows } = await supabase.from("lobbyist_group_members").select("user_id").in("user_id", candidateUserIds.length ? candidateUserIds : ["00000000-0000-0000-0000-000000000000"]);
           const lobbyistUserIds = new Set(((lobbyistRows ?? []) as any[]).map((row) => row.user_id));
-          setMemberCandidates(((candidateRows ?? []) as any[]).filter((row) => !memberIdSet.has(row.user_id)).map((row) => ({ user_id: row.user_id, display_name: row.display_name, party: row.party, constituency_name: row.constituency_name, avatar_url: row.avatar_url, role: row.role, disabledReason: lobbyistUserIds.has(row.user_id) ? "Already in a lobbyist group." : null })));
+          setMemberCandidates(((candidateRows ?? []) as any[]).filter((row) => !memberIdSet.has(row.user_id)).map((row) => ({
+            user_id: row.user_id,
+            display_name: row.display_name,
+            party: row.party,
+            constituency_name: row.constituency_name,
+            avatar_url: row.avatar_url,
+            role: row.role,
+            membershipNote: row.party ? `Party: ${row.party}` : null,
+            disabledReason: lobbyistUserIds.has(row.user_id) ? "Already in a lobbyist group." : null,
+          })));
         } else {
           setMemberCandidates([]);
         }
@@ -1251,14 +1262,17 @@ export function TessCaucusDetail() {
                         <div className="relative" data-caucus-member-menu onPointerDown={(event) => event.stopPropagation()}>
                           <button
                             type="button"
-                            onClick={() => setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id))}
+                            onClick={(event) => {
+                              setMemberMenuPlacement(verticalMenuPlacementForButton(event.currentTarget));
+                              setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id));
+                            }}
                             className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                             aria-label="Member actions"
                           >
                             <MoreHorizontal className="h-4 w-4" />
                           </button>
                           {memberMenuOpen === m.user_id && (
-                            <div className="absolute right-0 top-full z-20 mt-1 w-44 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
+                            <div className={`absolute right-0 z-20 w-44 rounded-md border border-gray-200 bg-white p-1 shadow-lg ${verticalMenuPlacementClass(memberMenuPlacement)}`}>
                               <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Modify position</div>
                               {(["member", "chair", "co_chair"] as MembershipRole[]).map((role) => (
                                 <button

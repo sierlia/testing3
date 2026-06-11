@@ -6,7 +6,6 @@ import { Button } from "../components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "../components/ui/dialog";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
-import { SchoolSelector } from "../components/SchoolSelector";
 import { formatSchool, SchoolOption } from "../services/schools";
 import { fullNameFromParts } from "../utils/oauthSignup";
 import { supabase } from "../utils/supabase";
@@ -98,6 +97,22 @@ function parseSchools(value: unknown): SchoolOption[] {
     .filter(Boolean) as SchoolOption[];
 }
 
+function schoolOptionsFromText(value: string): SchoolOption[] {
+  return value
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => ({
+      id: `manual:${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      name,
+      source: "fallback" as const,
+    }));
+}
+
+function schoolsTextFromOptions(value: SchoolOption[]) {
+  return value.map((school) => school.name).join(", ");
+}
+
 function RowShell({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
     <section className="border-b border-gray-200 p-5 last:border-b-0">
@@ -118,12 +133,14 @@ export function SettingsAccount() {
   const [role, setRole] = useState<"teacher" | "student">("student");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
+  const [preferredName, setPreferredName] = useState("");
   const [savedFirstName, setSavedFirstName] = useState("");
   const [savedLastName, setSavedLastName] = useState("");
+  const [savedPreferredName, setSavedPreferredName] = useState("");
   const [email, setEmail] = useState("");
   const [savedEmail, setSavedEmail] = useState("");
-  const [schools, setSchools] = useState<SchoolOption[]>([]);
-  const [savedSchools, setSavedSchools] = useState<SchoolOption[]>([]);
+  const [schoolText, setSchoolText] = useState("");
+  const [savedSchoolText, setSavedSchoolText] = useState("");
   const [editingName, setEditingName] = useState(false);
   const [editingEmail, setEditingEmail] = useState(false);
   const [savingName, setSavingName] = useState(false);
@@ -133,6 +150,7 @@ export function SettingsAccount() {
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [savingPassword, setSavingPassword] = useState(false);
+  const [passwordDialogOpen, setPasswordDialogOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deletionRequest, setDeletionRequest] = useState<DeletionRequest | null>(null);
   const [deletionBusy, setDeletionBusy] = useState(false);
@@ -141,7 +159,7 @@ export function SettingsAccount() {
 
   const pendingDeletion = useMemo(() => (deletionRequest?.status === "pending" ? deletionRequest : null), [deletionRequest]);
   const savedName = fullNameFromParts(savedFirstName, savedLastName) || "Member";
-  const schoolsChanged = JSON.stringify(schools) !== JSON.stringify(savedSchools);
+  const schoolsChanged = schoolText.trim() !== savedSchoolText.trim();
 
   const load = async () => {
     setLoading(true);
@@ -175,14 +193,18 @@ export function SettingsAccount() {
       const nextLast = String(profileRow?.last_name ?? metadata.last_name ?? profileName.lastName ?? metadataName.lastName ?? "").trim();
       const profileSchools = parseSchools(profileRow?.schools);
       const nextSchools = profileSchools.length ? profileSchools : metadataSchools;
+      const nextPreferred = String(profileRow?.display_name ?? metadata.name ?? fullNameFromParts(nextFirst, nextLast) ?? "").trim();
+      const nextSchoolText = schoolsTextFromOptions(nextSchools);
 
       setProfileExists(Boolean(profileRow));
       setFirstName(nextFirst);
       setLastName(nextLast);
+      setPreferredName(nextPreferred);
       setSavedFirstName(nextFirst);
       setSavedLastName(nextLast);
-      setSchools(nextSchools);
-      setSavedSchools(nextSchools);
+      setSavedPreferredName(nextPreferred);
+      setSchoolText(nextSchoolText);
+      setSavedSchoolText(nextSchoolText);
       setDeletionRequest((deletion as DeletionRequest | null) ?? null);
     } catch (error: any) {
       toast.error(error.message || "Could not load account settings");
@@ -195,13 +217,17 @@ export function SettingsAccount() {
     void load();
   }, []);
 
-  const saveProfileDetails = async (next: { firstName?: string; lastName?: string; schools?: SchoolOption[] }) => {
+  const saveProfileDetails = async (next: { firstName?: string; lastName?: string; preferredName?: string; schoolText?: string }) => {
     const nextFirstName = next.firstName ?? firstName;
     const nextLastName = next.lastName ?? lastName;
-    const nextSchools = next.schools ?? schools;
-    const nextName = fullNameFromParts(nextFirstName, nextLastName);
-    if (!nextName) throw new Error("Name is required.");
-    if (!nextSchools.length) throw new Error("Select at least one school.");
+    const nextPreferredName = (next.preferredName ?? preferredName).trim();
+    const nextSchoolText = (next.schoolText ?? schoolText).trim();
+    const nextSchools = schoolOptionsFromText(nextSchoolText);
+    const legalName = fullNameFromParts(nextFirstName, nextLastName);
+    const nextName = nextPreferredName || legalName;
+    if (!nextFirstName.trim() || !nextLastName.trim()) throw new Error("First and last name are required.");
+    if (!nextName) throw new Error("Preferred name is required.");
+    if (!nextSchools.length) throw new Error("Enter at least one school.");
 
     const { data: auth } = await supabase.auth.getUser();
     const user = auth.user;
@@ -214,7 +240,7 @@ export function SettingsAccount() {
       first_name: nextFirstName.trim(),
       last_name: nextLastName.trim(),
       schools: nextSchools,
-      school: nextSchools.map((school) => school.name).join(", "),
+      school: nextSchoolText,
     };
     const { error: metadataError } = await supabase.auth.updateUser({ data: metadata });
     if (metadataError) throw metadataError;
@@ -249,9 +275,10 @@ export function SettingsAccount() {
     event.preventDefault();
     setSavingName(true);
     try {
-      await saveProfileDetails({ firstName: firstName.trim(), lastName: lastName.trim() });
+      await saveProfileDetails({ firstName: firstName.trim(), lastName: lastName.trim(), preferredName: preferredName.trim() });
       setSavedFirstName(firstName.trim());
       setSavedLastName(lastName.trim());
+      setSavedPreferredName(preferredName.trim());
       setEditingName(false);
       toast.success("Name updated.");
     } catch (error: any) {
@@ -288,8 +315,8 @@ export function SettingsAccount() {
   const saveSchools = async () => {
     setSavingSchools(true);
     try {
-      await saveProfileDetails({ schools });
-      setSavedSchools(schools);
+      await saveProfileDetails({ schoolText });
+      setSavedSchoolText(schoolText.trim());
       toast.success("Schools updated.");
     } catch (error: any) {
       toast.error(error.message || "Could not update schools");
@@ -322,6 +349,7 @@ export function SettingsAccount() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      setPasswordDialogOpen(false);
       if (noticeError) {
         toast.warning("Password updated, but the email notice could not be queued.");
       } else {
@@ -512,13 +540,23 @@ export function SettingsAccount() {
       {loading ? (
         <div className="rounded-lg border border-gray-200 bg-white p-6 text-sm text-gray-600 shadow-sm">Loading account info...</div>
       ) : (
-        <div className="max-w-4xl overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm">
+        <div className="w-full overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm">
           <RowShell title="Name" description="Shown on your profile by default.">
             {editingName ? (
-              <form onSubmit={saveName} className="grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
-                <Input value={firstName} onChange={(event) => setFirstName(event.target.value)} placeholder="First name" required autoComplete="off" />
-                <Input value={lastName} onChange={(event) => setLastName(event.target.value)} placeholder="Last name" required autoComplete="off" />
-                <div className="flex gap-2">
+              <form onSubmit={saveName} className="grid gap-4 lg:grid-cols-[1fr_1fr_1.25fr_auto]">
+                <div className="space-y-2">
+                  <Label htmlFor="account-first-name">First name</Label>
+                  <Input id="account-first-name" value={firstName} onChange={(event) => setFirstName(event.target.value)} required autoComplete="off" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account-last-name">Last name</Label>
+                  <Input id="account-last-name" value={lastName} onChange={(event) => setLastName(event.target.value)} required autoComplete="off" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="account-preferred-name">Preferred name</Label>
+                  <Input id="account-preferred-name" value={preferredName} onChange={(event) => setPreferredName(event.target.value)} placeholder={fullNameFromParts(firstName, lastName)} required autoComplete="off" />
+                </div>
+                <div className="flex items-end gap-2">
                   <Button type="submit" size="icon" disabled={savingName} aria-label="Save name">
                     <Check className="h-4 w-4" />
                   </Button>
@@ -530,6 +568,7 @@ export function SettingsAccount() {
                     onClick={() => {
                       setFirstName(savedFirstName);
                       setLastName(savedLastName);
+                      setPreferredName(savedPreferredName);
                       setEditingName(false);
                     }}
                   >
@@ -539,7 +578,20 @@ export function SettingsAccount() {
               </form>
             ) : (
               <div className="flex items-center justify-between gap-3">
-                <p className="min-w-0 truncate text-sm font-medium text-gray-900">{savedName}</p>
+                <div className="grid min-w-0 flex-1 gap-3 text-sm sm:grid-cols-3">
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-gray-500">First</div>
+                    <div className="truncate font-medium text-gray-900">{savedFirstName || "N/A"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-gray-500">Last</div>
+                    <div className="truncate font-medium text-gray-900">{savedLastName || "N/A"}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs font-semibold uppercase text-gray-500">Preferred</div>
+                    <div className="truncate font-medium text-gray-900">{savedPreferredName || savedName}</div>
+                  </div>
+                </div>
                 <Button type="button" variant="outline" size="icon" aria-label="Edit name" onClick={() => setEditingName(true)}>
                   <Pencil className="h-4 w-4" />
                 </Button>
@@ -579,50 +631,25 @@ export function SettingsAccount() {
             )}
           </RowShell>
 
-          <RowShell title="Schools" description="Select one or more schools for this account.">
+          <RowShell title="School/Institution" description="Use commas to list more than one school.">
             <div className="space-y-3">
-              <SchoolSelector value={schools} onChange={setSchools} placeholder="Search accredited schools..." required />
+              <Input value={schoolText} onChange={(event) => setSchoolText(event.target.value)} placeholder="Lincoln High School" autoComplete="off" required />
               <div className="flex justify-end">
                 <Button type="button" onClick={() => void saveSchools()} disabled={!schoolsChanged || savingSchools}>
-                  {savingSchools ? "Saving..." : "Save Schools"}
+                  {savingSchools ? "Saving..." : "Save School"}
                 </Button>
               </div>
             </div>
           </RowShell>
 
           <RowShell title="Password" description="Changing your password sends a security email.">
-            <form onSubmit={savePassword} className="grid gap-4">
-              <div className="grid gap-4 sm:grid-cols-3">
-                <div className="space-y-2">
-                  <Label htmlFor="current-password">Current password</Label>
-                  <Input id="current-password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="new-password">New password</Label>
-                  <Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} autoComplete="new-password" required />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="confirm-password">Confirm password</Label>
-                  <Input id="confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} autoComplete="new-password" required />
-                </div>
-              </div>
-              <div>
-                <Button type="submit" disabled={savingPassword}>
-                  <KeyRound className="h-4 w-4" />
-                  {savingPassword ? "Saving..." : "Change Password"}
-                </Button>
-              </div>
-            </form>
-          </RowShell>
-
-          <RowShell title="Work Export" description="Download a Word-compatible copy of your Gavel work.">
-            <Button type="button" variant="outline" onClick={() => void downloadWorkDoc()} disabled={exporting}>
-              <Download className="h-4 w-4" />
-              {exporting ? "Preparing..." : "Download Word Doc"}
+            <Button type="button" onClick={() => setPasswordDialogOpen(true)}>
+              <KeyRound className="h-4 w-4" />
+              Change Password
             </Button>
           </RowShell>
 
-          <RowShell title="Delete Account" description="Deletion starts a three-day timer and can be cancelled here before it ends.">
+          <RowShell title="Account Actions" description="Export work or manage the account deletion timer.">
             <div className="space-y-4">
               {pendingDeletion ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -635,21 +662,58 @@ export function SettingsAccount() {
                 </div>
               ) : null}
 
-              {pendingDeletion ? (
-                <Button type="button" variant="outline" onClick={() => void cancelDeletion()} disabled={deletionBusy}>
-                  <RotateCcw className="h-4 w-4" />
-                  {deletionBusy ? "Cancelling..." : "Cancel Deletion"}
+              <div className="flex flex-wrap justify-end gap-3">
+                <Button type="button" variant="outline" onClick={() => void downloadWorkDoc()} disabled={exporting}>
+                  <Download className="h-4 w-4" />
+                  {exporting ? "Preparing..." : "Download Word Doc"}
                 </Button>
-              ) : (
-                <Button type="button" variant="destructive" onClick={() => setDeleteStep(1)} disabled={deletionBusy}>
-                  <Trash2 className="h-4 w-4" />
-                  Delete Account
-                </Button>
-              )}
+                {pendingDeletion ? (
+                  <Button type="button" variant="outline" onClick={() => void cancelDeletion()} disabled={deletionBusy}>
+                    <RotateCcw className="h-4 w-4" />
+                    {deletionBusy ? "Cancelling..." : "Cancel Deletion"}
+                  </Button>
+                ) : (
+                  <Button type="button" variant="destructive" onClick={() => setDeleteStep(1)} disabled={deletionBusy}>
+                    <Trash2 className="h-4 w-4" />
+                    Delete Account
+                  </Button>
+                )}
+              </div>
             </div>
           </RowShell>
         </div>
       )}
+
+      <Dialog open={passwordDialogOpen} onOpenChange={setPasswordDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change password</DialogTitle>
+            <DialogDescription>Enter your current password before choosing a new one.</DialogDescription>
+          </DialogHeader>
+          <form onSubmit={savePassword} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="current-password">Current password</Label>
+              <Input id="current-password" type="password" value={currentPassword} onChange={(event) => setCurrentPassword(event.target.value)} autoComplete="current-password" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="new-password">New password</Label>
+              <Input id="new-password" type="password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} minLength={8} autoComplete="new-password" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirm-password">Confirm password</Label>
+              <Input id="confirm-password" type="password" value={confirmPassword} onChange={(event) => setConfirmPassword(event.target.value)} minLength={8} autoComplete="new-password" required />
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setPasswordDialogOpen(false)} disabled={savingPassword}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={savingPassword}>
+                {savingPassword ? "Saving..." : "Change Password"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog
         open={deleteStep > 0}

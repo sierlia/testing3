@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Navigation } from "../components/Navigation";
-import { BackButton } from "../components/BackButton";
 import { Search } from "lucide-react";
 import { Link } from "react-router";
 import { supabase } from "../utils/supabase";
@@ -10,6 +9,7 @@ import { formatConstituency } from "../utils/constituency";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { profilePath } from "../utils/profileRoute";
+import { OrganizationsLayout } from "./OrganizationsLayout";
 
 type Member = {
   user_id: string;
@@ -227,119 +227,118 @@ export function Members() {
       <Navigation />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <BackButton className="mb-4" />
-        <div className="mb-8">
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-bold text-gray-900">{loading ? "Members" : `Members (${memberCount})`}</h1>
-            <InfoTooltip label="What are members?">
-              <p>Members of the House of Representatives are elected to represent congressional districts in the federal legislature. They introduce and debate legislation, vote on bills and resolutions, and serve on committees that study issues in detail. Members also conduct oversight of the executive branch, help shape the federal budget, and respond to concerns from constituents. Their work combines lawmaking, public representation, investigation, and negotiation with other members of Congress.</p>
-            </InfoTooltip>
-          </div>
-          <p className="mt-1 text-gray-600">{countLabel}</p>
-        </div>
-
-        {/* Search and filters */}
-        <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-              <input
-                type="text"
-                placeholder="Search members..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-md border border-gray-300 py-3 pl-10 pr-3 text-base outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-            <FilterSelect value={filterParty} onChange={setFilterParty}>
-              <SelectItem value="all">All Parties</SelectItem>
-              {parties.map((p) => (
-                <SelectItem key={p} value={p}>
-                  {p}
-                </SelectItem>
-                ))}
-            </FilterSelect>
-            <FilterSelect value={filterState} onChange={setFilterState} className="w-32">
-              <SelectItem value="all">All States</SelectItem>
-              {states.map((state) => (
-                <SelectItem key={state} value={state}>{state}</SelectItem>
-              ))}
-            </FilterSelect>
-            <FilterSelect value={filterCommittee} onChange={setFilterCommittee} className="w-44">
-              <SelectItem value="all">All Committees</SelectItem>
-              {committees.map((committee) => (
-                <SelectItem key={committee} value={committee}>{committee}</SelectItem>
-              ))}
-            </FilterSelect>
-            <FilterSelect value={filterCaucus} onChange={setFilterCaucus} className="w-40">
-              <SelectItem value="all">All Caucuses</SelectItem>
-              {caucuses.map((caucus) => (
-                <SelectItem key={caucus} value={caucus}>{caucus}</SelectItem>
-              ))}
-            </FilterSelect>
-            <FilterSelect value={sortBy} onChange={(value) => setSortBy(value as SortKey)} className="w-40">
-              <SelectItem value="name">Sort by name</SelectItem>
-              <SelectItem value="party">Sort by party</SelectItem>
-              <SelectItem value="state">Sort by state</SelectItem>
-              <SelectItem value="passed">Most passed bills</SelectItem>
-              <SelectItem value="cosponsors">Most cosponsors</SelectItem>
-              {moneyEnabled && <SelectItem value="campaign">Campaign funds</SelectItem>}
-            </FilterSelect>
-            <button type="button" onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
-            </div>
-          </div>
-        </div>
-
-        {/* Members grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {filteredMembers.map((member) => (
-            <Link
-              key={member.user_id}
-              to={profilePath(member.user_id)}
-              className={`rounded-lg border p-6 shadow-sm transition-shadow hover:shadow-md ${
-                member.role === "teacher" ? "border-green-200 bg-green-50 hover:bg-green-100" : "border-gray-200 bg-white"
-              }`}
-            >
-              <div className="flex items-start gap-4 mb-4">
-                <SecureAvatar src={member.avatar_url} alt={member.display_name ?? "Member"} className="w-16 h-16 rounded-full object-cover flex-shrink-0" fallbackClassName="w-16 h-16 flex-shrink-0" iconClassName="w-8 h-8 text-gray-500" />
-                <div className="flex-1 min-w-0">
-                  <h3 className={`mb-1 truncate font-semibold ${member.role === "teacher" ? "text-green-800" : "text-gray-900"}`}>
-                    {member.display_name ?? "Member"}
-                  </h3>
-                  {member.role === "teacher" ? (
-                    <div className="text-sm font-medium text-green-700">Teacher</div>
-                  ) : (
-                    <div className="text-sm text-gray-600">Rep.-{partyAbbr(member.party)}-{formatConstituency(member.constituency_name) || "N/A"}</div>
-                  )}
-                  {member.leadershipRoles.length > 0 && (
-                    <div className="mt-1 truncate text-xs text-purple-700" title={member.leadershipRoles.join("; ")}>
-                      {member.leadershipRoles.join("; ")}
-                    </div>
-                  )}
+        <OrganizationsLayout active="members">
+          <div className="mb-6 rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-lg font-semibold text-gray-900">{loading ? "Members" : `Members (${memberCount})`}</h2>
+                  <InfoTooltip label="What are members?">
+                    <p>Members of the House of Representatives are elected to represent congressional districts in the federal legislature. They introduce and debate legislation, vote on bills and resolutions, and serve on committees that study issues in detail. Members also conduct oversight of the executive branch, help shape the federal budget, and respond to concerns from constituents. Their work combines lawmaking, public representation, investigation, and negotiation with other members of Congress.</p>
+                  </InfoTooltip>
                 </div>
+                <p className="mt-1 text-sm text-gray-600">{countLabel}</p>
               </div>
-              {member.role !== "teacher" && (
-                <div className={`grid gap-2 border-t border-gray-100 pt-4 text-center text-sm ${moneyEnabled ? "grid-cols-3" : "grid-cols-2"}`}>
-                  <div>
-                    <div className="font-semibold text-gray-900">{member.passedBills}</div>
-                    <div className="text-xs text-gray-500">Passed</div>
+            </div>
+            <div className="space-y-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search members..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="h-10 w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <FilterSelect value={filterParty} onChange={setFilterParty}>
+                  <SelectItem value="all">All Parties</SelectItem>
+                  {parties.map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {p}
+                    </SelectItem>
+                  ))}
+                </FilterSelect>
+                <FilterSelect value={filterState} onChange={setFilterState} className="w-32">
+                  <SelectItem value="all">All States</SelectItem>
+                  {states.map((state) => (
+                    <SelectItem key={state} value={state}>{state}</SelectItem>
+                  ))}
+                </FilterSelect>
+                <FilterSelect value={filterCommittee} onChange={setFilterCommittee} className="w-44">
+                  <SelectItem value="all">All Committees</SelectItem>
+                  {committees.map((committee) => (
+                    <SelectItem key={committee} value={committee}>{committee}</SelectItem>
+                  ))}
+                </FilterSelect>
+                <FilterSelect value={filterCaucus} onChange={setFilterCaucus} className="w-40">
+                  <SelectItem value="all">All Caucuses</SelectItem>
+                  {caucuses.map((caucus) => (
+                    <SelectItem key={caucus} value={caucus}>{caucus}</SelectItem>
+                  ))}
+                </FilterSelect>
+                <FilterSelect value={sortBy} onChange={(value) => setSortBy(value as SortKey)} className="w-40">
+                  <SelectItem value="name">Sort by name</SelectItem>
+                  <SelectItem value="party">Sort by party</SelectItem>
+                  <SelectItem value="state">Sort by state</SelectItem>
+                  <SelectItem value="passed">Most passed bills</SelectItem>
+                  <SelectItem value="cosponsors">Most cosponsors</SelectItem>
+                  {moneyEnabled && <SelectItem value="campaign">Campaign funds</SelectItem>}
+                </FilterSelect>
+                <button type="button" onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filteredMembers.map((member) => (
+              <Link
+                key={member.user_id}
+                to={profilePath(member.user_id)}
+                className={`rounded-lg border p-6 shadow-sm transition-shadow hover:shadow-md ${
+                  member.role === "teacher" ? "border-green-200 bg-green-50 hover:bg-green-100" : "border-gray-200 bg-white"
+                }`}
+              >
+                <div className="flex items-start gap-4 mb-4">
+                  <SecureAvatar src={member.avatar_url} alt={member.display_name ?? "Member"} className="w-16 h-16 rounded-full object-cover flex-shrink-0" fallbackClassName="w-16 h-16 flex-shrink-0" iconClassName="w-8 h-8 text-gray-500" />
+                  <div className="flex-1 min-w-0">
+                    <h3 className={`mb-1 truncate font-semibold ${member.role === "teacher" ? "text-green-800" : "text-gray-900"}`}>
+                      {member.display_name ?? "Member"}
+                    </h3>
+                    {member.role === "teacher" ? (
+                      <div className="text-sm font-medium text-green-700">Teacher</div>
+                    ) : (
+                      <div className="text-sm text-gray-600">Rep.-{partyAbbr(member.party)}-{formatConstituency(member.constituency_name) || "N/A"}</div>
+                    )}
+                    {member.leadershipRoles.length > 0 && (
+                      <div className="mt-1 truncate text-xs text-purple-700" title={member.leadershipRoles.join("; ")}>
+                        {member.leadershipRoles.join("; ")}
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <div className="font-semibold text-gray-900">{member.cosponsors}</div>
-                    <div className="text-xs text-gray-500">Cosponsors</div>
-                  </div>
-                  {moneyEnabled && (
-                    <div>
-                      <div className="font-semibold text-gray-900">${member.campaignFunds.toLocaleString()}</div>
-                      <div className="text-xs text-gray-500">Campaign</div>
-                    </div>
-                  )}
                 </div>
-              )}
-            </Link>
-          ))}
-        </div>
+                {member.role !== "teacher" && (
+                  <div className={`grid gap-2 border-t border-gray-100 pt-4 text-center text-sm ${moneyEnabled ? "grid-cols-3" : "grid-cols-2"}`}>
+                    <div>
+                      <div className="font-semibold text-gray-900">{member.passedBills}</div>
+                      <div className="text-xs text-gray-500">Passed</div>
+                    </div>
+                    <div>
+                      <div className="font-semibold text-gray-900">{member.cosponsors}</div>
+                      <div className="text-xs text-gray-500">Cosponsors</div>
+                    </div>
+                    {moneyEnabled && (
+                      <div>
+                        <div className="font-semibold text-gray-900">${member.campaignFunds.toLocaleString()}</div>
+                        <div className="text-xs text-gray-500">Campaign</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </Link>
+            ))}
+          </div>
 
         {loading && (
           <div className="text-center py-12 text-gray-500">
@@ -351,6 +350,7 @@ export function Members() {
             No members found
           </div>
         )}
+        </OrganizationsLayout>
       </main>
     </div>
   );

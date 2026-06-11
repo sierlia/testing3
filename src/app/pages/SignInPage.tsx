@@ -9,6 +9,17 @@ import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 import { GoogleAuthButton } from '../components/GoogleAuthButton';
 
+function LegalConsentText() {
+  return (
+    <p className="text-center text-xs leading-5 text-gray-500">
+      By continuing, you acknowledge that you understand and agree to the{" "}
+      <Link to="/terms" className="font-medium text-blue-600 hover:underline">Terms and Conditions</Link>
+      {" "}and{" "}
+      <Link to="/privacy" className="font-medium text-blue-600 hover:underline">Privacy Policy</Link>.
+    </p>
+  );
+}
+
 export function SignInPage() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -74,7 +85,6 @@ export function SignInPage() {
             <Gavel className="w-10 h-10 text-blue-600" />
             <h1 className="text-3xl font-bold text-gray-900">Gavel</h1>
           </div>
-          <p className="text-gray-600">Sign in to your account</p>
         </div>
 
         <Card>
@@ -85,18 +95,6 @@ export function SignInPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="mb-5">
-              <GoogleAuthButton onClick={() => void handleGoogleSignIn()} loading={googleLoading}>
-                Log in with Google
-              </GoogleAuthButton>
-            </div>
-
-            <div className="mb-5 flex items-center gap-3">
-              <div className="h-px flex-1 bg-gray-200" />
-              <span className="text-xs font-medium uppercase text-gray-500">or</span>
-              <div className="h-px flex-1 bg-gray-200" />
-            </div>
-
             <form onSubmit={handleSignIn} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
@@ -126,6 +124,20 @@ export function SignInPage() {
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
             </form>
+
+            <div className="my-5 flex items-center gap-3">
+              <div className="h-px flex-1 bg-gray-200" />
+              <span className="text-xs font-medium uppercase text-gray-500">or</span>
+              <div className="h-px flex-1 bg-gray-200" />
+            </div>
+
+            <GoogleAuthButton onClick={() => void handleGoogleSignIn()} loading={googleLoading}>
+              Log in with Google
+            </GoogleAuthButton>
+
+            <div className="mt-5">
+              <LegalConsentText />
+            </div>
 
             <div className="mt-6 text-center text-sm">
               <span className="text-gray-600">Don't have an account? </span>

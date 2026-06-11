@@ -602,23 +602,23 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
 
         {workflowTimeline}
 
-        <div className="mb-8 grid gap-6 lg:grid-cols-[minmax(0,2.5fr)_18rem]">
+        <div className="mb-8 grid gap-5 lg:grid-cols-[minmax(0,2.5fr)_18rem]">
           <div className="space-y-6">
             <Card>
-              <CardHeader>
+              <CardHeader className="py-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <CardTitle>Calendar</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button onClick={() => setAssignmentModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Assignment</Button>
+                    <Button size="sm" onClick={() => setAssignmentModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Assignment</Button>
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_15rem]">
+              <CardContent className="pt-0">
+                <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem]">
                   <div className="min-w-0">
-                    <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="mb-1.5 flex items-center justify-between gap-3">
                       <div className="text-sm font-semibold text-gray-900">Current six weeks</div>
                       <button type="button" onClick={() => setSelectedUpcomingDay(null)} className="text-xs font-medium text-blue-600 hover:text-blue-700">
                         Show all
@@ -627,7 +627,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                     <div className="overflow-hidden rounded-md border border-gray-200 bg-white">
                       <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase text-gray-500">
                         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                          <div key={day} className="px-2 py-1.5">{day}</div>
+                          <div key={day} className="px-2 py-1">{day}</div>
                         ))}
                       </div>
                       <div className="grid grid-cols-7">
@@ -641,19 +641,19 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                               key={key}
                               type="button"
                               onClick={() => setSelectedUpcomingDay(key)}
-                              className={`min-h-24 border-b border-r border-gray-100 p-1.5 text-left transition-colors sm:min-h-28 ${selected ? "bg-blue-50 ring-1 ring-inset ring-blue-400" : isToday ? "bg-blue-50/70" : "bg-white hover:bg-gray-50"}`}
+                              className={`min-h-14 border-b border-r border-gray-100 p-1 text-left transition-colors sm:min-h-16 ${selected ? "bg-blue-50 ring-1 ring-inset ring-blue-400" : isToday ? "bg-blue-50/70" : "bg-white hover:bg-gray-50"}`}
                             >
                               <div className={`text-xs font-semibold ${isToday ? "text-blue-700" : "text-gray-900"}`}>{day.getDate()}</div>
-                              <div className="mt-1 space-y-1">
-                                {events.slice(0, 3).map((event) => (
+                              <div className="mt-0.5 space-y-0.5">
+                                {events.slice(0, 1).map((event) => (
                                   <div
                                     key={event.id}
-                                    className={`line-clamp-2 rounded px-1.5 py-1 text-[10px] font-medium leading-tight ${event.type === "bill" ? "bg-indigo-50 text-indigo-700" : event.type === "assignment" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700"}`}
+                                    className={`line-clamp-1 rounded px-1 py-0.5 text-[9px] font-medium leading-tight ${event.type === "bill" ? "bg-indigo-50 text-indigo-700" : event.type === "assignment" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700"}`}
                                   >
                                     {eventDisplayTitle(event)}
                                   </div>
                                 ))}
-                                {events.length > 3 && <div className="text-[10px] font-medium leading-none text-gray-500">+{events.length - 3} more</div>}
+                                {events.length > 1 && <div className="text-[9px] font-medium leading-none text-gray-500">+{events.length - 1} more</div>}
                               </div>
                             </button>
                           );
@@ -661,30 +661,30 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                       </div>
                     </div>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2">
                     {selectedUpcomingDate && (
-                      <div className="flex items-center justify-between border-b border-gray-100 pb-2 text-sm">
+                      <div className="flex items-center justify-between border-b border-gray-100 pb-1.5 text-sm">
                         <span className="font-semibold text-gray-900">
                           {selectedUpcomingDate.toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" })}
                         </span>
                       </div>
                     )}
-                    <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+                    <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
                       {displayedUpcomingEvents.length === 0 ? (
-                        <div className="rounded-md border border-dashed border-gray-300 p-4 text-sm text-gray-500">
+                        <div className="rounded-md border border-dashed border-gray-300 p-3 text-sm text-gray-500">
                           {selectedUpcomingDate ? "No events for this day." : "No scheduled events."}
                         </div>
                       ) : (
                         displayedUpcomingEvents.map((event) => (
-                          <div key={event.id} className={`flex items-start gap-3 rounded-lg border p-3 transition-colors ${eventToneClass(event.date)}`}>
-                            <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
+                          <div key={event.id} className={`flex items-start gap-2 rounded-lg border p-2 transition-colors ${eventToneClass(event.date)}`}>
+                            <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
                             <div className="min-w-0 flex-1">
                               {event.href ? (
-                                <Link to={event.href} className="text-xs font-semibold text-gray-900 hover:text-blue-600">
+                                <Link to={event.href} className="line-clamp-1 text-xs font-semibold text-gray-900 hover:text-blue-600">
                                   {eventDisplayTitle(event)}
                                 </Link>
                               ) : (
-                                <h4 className="text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>
+                                <h4 className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>
                               )}
                               <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
                             </div>
@@ -692,9 +692,9 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                         ))
                       )}
                     </div>
-                    <div className="grid gap-2">
-                      <Button variant="outline" onClick={() => navigate("/assignments")}>Manage assignments</Button>
-                      <Button variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
+                    <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
+                      <Button size="sm" variant="outline" onClick={() => navigate("/assignments")}>Manage assignments</Button>
+                      <Button size="sm" variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
                     </div>
                   </div>
                 </div>

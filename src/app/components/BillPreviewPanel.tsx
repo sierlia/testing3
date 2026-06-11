@@ -60,6 +60,7 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
     return party.trim().slice(0, 1).toUpperCase() || "I";
   };
   const sponsorDescriptor = `Rep.-${partyAbbr(bill.sponsorParty)}-${bill.sponsorDistrict || "N/A"}`;
+  const textCollapsed = panelWidth < 120;
   const textTooNarrow = panelWidth < 200;
   const legislativePreview = useMemo(() => htmlToPreviewText(bill.legislativeText), [bill.legislativeText]);
 
@@ -97,6 +98,10 @@ export function BillPreviewPanel({ bill }: BillPreviewPanelProps) {
     };
     return colors[status] || "bg-gray-100 text-gray-700";
   };
+
+  if (textCollapsed) {
+    return <div ref={panelRef} className="min-h-[18rem] min-w-0 rounded-lg border border-gray-200 bg-gray-200" aria-label="Bill preview collapsed" />;
+  }
 
   if (textTooNarrow) {
     return (

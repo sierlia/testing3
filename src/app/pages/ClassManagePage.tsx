@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Activity, ArrowDown, ArrowUp, Check, Copy, Download, Eye, EyeOff, FileUp, GripVertical, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
+import { Activity, ArrowDown, ArrowLeft, ArrowUp, Check, Copy, Download, Eye, EyeOff, FileUp, GripVertical, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
@@ -881,7 +881,7 @@ export function ClassManagePage() {
       </div>
     );
   }
-  if (!classDetails) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Button onClick={() => navigate("/classes")}>Back</Button></div>;
+  if (!classDetails) return <div className="min-h-screen bg-gray-50 flex items-center justify-center"><Button variant="ghost" onClick={() => navigate("/classes")}><ArrowLeft className="h-4 w-4" />Back</Button></div>;
 
   return (
     <div className="min-h-screen bg-gray-50">

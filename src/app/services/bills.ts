@@ -225,23 +225,27 @@ export async function fetchBillDetail(billId: string) {
     .in('user_id', cosponsorIds.length ? cosponsorIds : ['00000000-0000-0000-0000-000000000000']);
   const cosponsorMap = new Map((cosponsors ?? []).map((p: any) => [p.user_id, p]));
 
-  const { data: referral } = await supabase
+  const { data: referralRows } = await supabase
     .from('bill_referrals')
     .select('committee_id,referred_at,committees(name)')
     .eq('bill_id', billId)
-    .order('referred_at', { ascending: true })
-    .limit(1)
-    .maybeSingle();
+    .order('referred_at', { ascending: false });
 
-  const referralCommitteeId = (referral as any)?.committee_id as string | undefined;
-  const [{ data: committeeDoc }, { data: committeeVotes }, { data: calendar }, { data: floorSession }, { data: floorVotes }] = await Promise.all([
+  const referrals = ((referralRows ?? []) as any[]).map((row) => ({
+    committee_id: row.committee_id as string,
+    committee_name: row.committees?.name as string | undefined,
+    referred_at: row.referred_at as string,
+  }));
+  const referral = referrals[0] ?? null;
+  const referralCommitteeId = referral?.committee_id as string | undefined;
+  const referralCommitteeIds = [...new Set(referrals.map((row) => row.committee_id).filter(Boolean))];
+  const [{ data: committeeDocRows }, { data: committeeVotes }, { data: calendar }, { data: floorSession }, { data: floorVotes }] = await Promise.all([
     referralCommitteeId
       ? supabase
           .from('committee_bill_docs')
-          .select('updated_at,committee_markup_posted_at,committee_report_submitted_at,committee_vote_closed_at,committee_vote_finalized_at,ydoc_base64,committee_report_ydoc_base64,revised_pdf_path,committee_report_pdf_path,subcommittee_reports')
+          .select('committee_id,updated_at,committee_markup_posted_at,committee_report_submitted_at,committee_vote_closed_at,committee_vote_finalized_at,ydoc_base64,committee_report_ydoc_base64,revised_pdf_path,committee_report_pdf_path,subcommittee_reports')
           .eq('bill_id', billId)
-          .eq('committee_id', referralCommitteeId)
-          .maybeSingle()
+          .in('committee_id', referralCommitteeIds.length ? referralCommitteeIds : ['00000000-0000-0000-0000-000000000000'])
       : ({ data: null } as any),
     referralCommitteeId
       ? supabase
@@ -277,14 +281,13 @@ export async function fetchBillDetail(billId: string) {
       cosponsored_at: row.created_at,
     })),
     cosponsorIds,
-    referral: referral
-      ? {
-          committee_id: (referral as any).committee_id as string,
-          committee_name: (referral as any).committees?.name as string | undefined,
-          referred_at: (referral as any).referred_at as string,
-        }
-      : null,
-    committeeDoc: (committeeDoc as any) ?? null,
+    referral,
+    referrals,
+    committeeDocs: ((committeeDocRows ?? []) as any[]).map((doc) => {
+      const docReferral = referrals.find((row) => row.committee_id === doc.committee_id);
+      return { ...doc, committee_id: doc.committee_id, committee_name: docReferral?.committee_name, referred_at: docReferral?.referred_at };
+    }),
+    committeeDoc: ((committeeDocRows ?? []) as any[]).find((doc) => doc.committee_id === referralCommitteeId) ?? null,
     committeeVotes: (committeeVotes ?? []) as any[],
     calendar: (calendar as any) ?? null,
     floorSession: (floorSession as any) ?? null,

@@ -340,7 +340,7 @@ export const router = createHashRouter([
   },
   {
     path: "/settings",
-    Component: SettingsNotifications,
+    Component: SettingsAccount,
   },
   {
     path: "/settings/account",

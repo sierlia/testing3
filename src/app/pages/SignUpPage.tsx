@@ -7,7 +7,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../co
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { GoogleAuthButton } from "../components/GoogleAuthButton";
-import { SchoolSelector } from "../components/SchoolSelector";
 import { SchoolOption } from "../services/schools";
 import { fullNameFromParts, savePendingOAuthSignup } from "../utils/oauthSignup";
 import { supabase } from "../utils/supabase";
@@ -20,7 +19,7 @@ type SignupFormState = {
   email: string;
   password: string;
   confirmPassword: string;
-  schools: SchoolOption[];
+  school: string;
 };
 
 const emptyForm: SignupFormState = {
@@ -29,8 +28,31 @@ const emptyForm: SignupFormState = {
   email: "",
   password: "",
   confirmPassword: "",
-  schools: [],
+  school: "",
 };
+
+function LegalConsentText() {
+  return (
+    <p className="text-center text-xs leading-5 text-gray-500">
+      By continuing, you acknowledge that you understand and agree to the{" "}
+      <Link to="/terms" className="font-medium text-blue-600 hover:underline">Terms and Conditions</Link>
+      {" "}and{" "}
+      <Link to="/privacy" className="font-medium text-blue-600 hover:underline">Privacy Policy</Link>.
+    </p>
+  );
+}
+
+function schoolOptionsFromText(value: string): SchoolOption[] {
+  return value
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean)
+    .map((name) => ({
+      id: `manual:${name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      name,
+      source: "fallback" as const,
+    }));
+}
 
 function autofillProps(name: string) {
   return {
@@ -50,8 +72,8 @@ function validateIdentity(formData: SignupFormState) {
     toast.error("Enter your last name.");
     return false;
   }
-  if (formData.schools.length === 0) {
-    toast.error("Select at least one school.");
+  if (!formData.school.trim()) {
+    toast.error("Enter your school or institution.");
     return false;
   }
   return true;
@@ -131,6 +153,10 @@ export function SignUpPage() {
           </Link>
         </div>
 
+        <div className="mt-4">
+          <LegalConsentText />
+        </div>
+
         <div className="mt-4 text-center">
           <Link to="/" className="text-sm text-gray-600 hover:underline">
             Back to home
@@ -164,13 +190,14 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
 
     setLoading(true);
     try {
+      const schools = schoolOptionsFromText(formData.school);
       const userMetadata = {
         name: displayName,
         first_name: formData.firstName.trim(),
         last_name: formData.lastName.trim(),
         role,
-        schools: formData.schools,
-        school: formData.schools.map((school) => school.name).join(", "),
+        schools,
+        school: formData.school.trim(),
       };
 
       const { data, error } = await supabase.auth.signUp({
@@ -187,7 +214,7 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
           display_name: displayName,
           first_name: formData.firstName.trim(),
           last_name: formData.lastName.trim(),
-          schools: formData.schools,
+          schools,
         } as any);
         if (profileError) throw profileError;
       }
@@ -209,7 +236,7 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
         role,
         firstName: formData.firstName.trim(),
         lastName: formData.lastName.trim(),
-        schools: formData.schools,
+        schools: schoolOptionsFromText(formData.school),
         redirectPath,
       });
       const redirectTo = `${window.location.origin}${window.location.pathname}#${redirectPath}`;
@@ -226,7 +253,7 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50 p-4">
-      <div className="w-full max-w-lg">
+      <div className="w-full max-w-4xl">
         <Button variant="ghost" onClick={onBack} className="mb-4">
           <ArrowLeft className="h-4 w-4" />
           Back
@@ -265,72 +292,79 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
                     {...autofillProps(`gavel_${role}_family_name`)}
                   />
                 </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor={`${role}-school`}>School/Institution</Label>
+                  <Input
+                    id={`${role}-school`}
+                    placeholder="Lincoln High School"
+                    value={formData.school}
+                    onChange={(event) => setField("school", event.target.value)}
+                    required
+                    {...autofillProps(`gavel_${role}_school`)}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor={`${role}-schools`}>School(s)</Label>
-                <SchoolSelector
-                  id={`${role}-schools`}
-                  value={formData.schools}
-                  onChange={(schools) => setField("schools", schools)}
-                  placeholder="Search accredited schools..."
-                  required
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor={`${role}-email`}>Email</Label>
+                  <Input
+                    id={`${role}-email`}
+                    type="email"
+                    placeholder="you@school.edu"
+                    value={formData.email}
+                    onChange={(event) => setField("email", event.target.value)}
+                    required
+                    {...autofillProps(`gavel_${role}_contact`)}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor={`${role}-password`}>Password</Label>
+                  <Input
+                    id={`${role}-password`}
+                    type="password"
+                    placeholder="Create a password"
+                    value={formData.password}
+                    onChange={(event) => setField("password", event.target.value)}
+                    required
+                    minLength={8}
+                    name={`gavel_${role}_new_secret`}
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-form-type="other"
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor={`${role}-email`}>Email</Label>
-                <Input
-                  id={`${role}-email`}
-                  type="email"
-                  placeholder="you@school.edu"
-                  value={formData.email}
-                  onChange={(event) => setField("email", event.target.value)}
-                  required
-                  {...autofillProps(`gavel_${role}_contact`)}
-                />
-              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor={`${role}-confirm-password`}>Confirm Password</Label>
+                  <Input
+                    id={`${role}-confirm-password`}
+                    type="password"
+                    placeholder="Confirm your password"
+                    value={formData.confirmPassword}
+                    onChange={(event) => setField("confirmPassword", event.target.value)}
+                    required
+                    minLength={8}
+                    name={`gavel_${role}_new_secret_confirm`}
+                    autoComplete="new-password"
+                    data-lpignore="true"
+                    data-form-type="other"
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label htmlFor={`${role}-password`}>Password</Label>
-                <Input
-                  id={`${role}-password`}
-                  type="password"
-                  placeholder="Create a password"
-                  value={formData.password}
-                  onChange={(event) => setField("password", event.target.value)}
-                  required
-                  minLength={8}
-                  name={`gavel_${role}_new_secret`}
-                  autoComplete="new-password"
-                  data-lpignore="true"
-                  data-form-type="other"
-                />
+                <div className="flex items-end">
+                  <Button type="submit" className="w-full" disabled={loading || googleLoading}>
+                    {loading ? "Creating Account..." : title}
+                  </Button>
+                </div>
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor={`${role}-confirm-password`}>Confirm Password</Label>
-                <Input
-                  id={`${role}-confirm-password`}
-                  type="password"
-                  placeholder="Confirm your password"
-                  value={formData.confirmPassword}
-                  onChange={(event) => setField("confirmPassword", event.target.value)}
-                  required
-                  minLength={8}
-                  name={`gavel_${role}_new_secret_confirm`}
-                  autoComplete="new-password"
-                  data-lpignore="true"
-                  data-form-type="other"
-                />
-              </div>
-
-              <Button type="submit" className="w-full" disabled={loading || googleLoading}>
-                {loading ? "Creating Account..." : title}
-              </Button>
             </form>
 
-            <div className="my-5 flex items-center gap-3">
+            <div className="my-4 flex items-center gap-3">
               <div className="h-px flex-1 bg-gray-200" />
               <span className="text-xs font-medium uppercase text-gray-500">or</span>
               <div className="h-px flex-1 bg-gray-200" />
@@ -339,6 +373,14 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
             <GoogleAuthButton onClick={() => void handleGoogleSignUp()} loading={googleLoading} disabled={loading}>
               Sign up with Google
             </GoogleAuthButton>
+
+            <div className="mt-5 space-y-3">
+              <LegalConsentText />
+              <div className="text-center text-sm">
+                <span className="text-gray-600">Already have an account? </span>
+                <Link to="/signin" className="font-medium text-blue-600 hover:underline">Log in</Link>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

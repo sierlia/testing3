@@ -12,6 +12,7 @@ import { InfoTooltip } from "../components/InfoTooltip";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
 import { ContributionButton } from "../components/ContributionButton";
 import { profilePath } from "../utils/profileRoute";
+import { VerticalMenuPlacement, verticalMenuPlacementClass, verticalMenuPlacementForButton } from "../utils/menuPlacement";
 import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
 import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
 
@@ -114,6 +115,7 @@ export function PartyDetail() {
   const [optOuts, setOptOuts] = useState<Array<{ position: "chair" | "whip"; user_id: string }>>([]);
   const [partyRoles, setPartyRoles] = useState<PartyMemberRoleRow[]>([]);
   const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null);
+  const [memberMenuPlacement, setMemberMenuPlacement] = useState<VerticalMenuPlacement>("down");
   const [majorPartyAlignment, setMajorPartyAlignment] = useState<"majority" | "minority" | "tie" | null>(null);
   const [editingAbout, setEditingAbout] = useState(false);
   const [aboutDraft, setAboutDraft] = useState("");
@@ -127,6 +129,16 @@ export function PartyDetail() {
   const isTeacher = viewerRole === "teacher";
   const canUseBoard = isMember || isTeacher;
   const selectedAnnouncement = announcements.find((a) => a.id === selectedAnnouncementId) ?? null;
+
+  useEffect(() => {
+    if (!memberMenuOpen) return;
+    const closeMenu = (event: PointerEvent) => {
+      if ((event.target as HTMLElement | null)?.closest("[data-party-member-menu]")) return;
+      setMemberMenuOpen(null);
+    };
+    document.addEventListener("pointerdown", closeMenu);
+    return () => document.removeEventListener("pointerdown", closeMenu);
+  }, [memberMenuOpen]);
 
   const load = async () => {
     setLoading(true);
@@ -177,7 +189,16 @@ export function PartyDetail() {
       const { data: lobbyistRows } = await supabase.from("lobbyist_group_members").select("user_id").in("user_id", candidateUserIds.length ? candidateUserIds : ["00000000-0000-0000-0000-000000000000"]);
       const lobbyistUserIds = new Set(((lobbyistRows ?? []) as any[]).map((row) => row.user_id));
       setMemberCandidates(
-        candidateRows.map((member) => ({ user_id: member.user_id, display_name: member.display_name, party: member.party, constituency_name: member.constituency_name, avatar_url: member.avatar_url, role: member.role, disabledReason: lobbyistUserIds.has(member.user_id) ? "Already in a lobbyist group." : null })),
+        candidateRows.map((member) => ({
+          user_id: member.user_id,
+          display_name: member.display_name,
+          party: member.party,
+          constituency_name: member.constituency_name,
+          avatar_url: member.avatar_url,
+          role: member.role,
+          membershipNote: member.party ? `Currently in ${displayPartyName(member.party)}` : null,
+          disabledReason: lobbyistUserIds.has(member.user_id) ? "Already in a lobbyist group." : null,
+        })),
       );
 
       const { data: aRows, error: aErr } = await supabase
@@ -1035,17 +1056,20 @@ export function PartyDetail() {
                           {roleLabel && <div className="mt-1 inline-flex rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">{roleLabel}</div>}
                         </div>
                         {isTeacher && (
-                          <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                          <div className="relative" data-party-member-menu onPointerDown={(event) => event.stopPropagation()}>
                             <button
                               type="button"
-                              onClick={() => setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id))}
+                              onClick={(event) => {
+                                setMemberMenuPlacement(verticalMenuPlacementForButton(event.currentTarget));
+                                setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id));
+                              }}
                               className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                               aria-label="Member actions"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </button>
                             {memberMenuOpen === m.user_id && (
-                              <div className="absolute right-0 top-full z-20 mt-1 w-52 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
+                              <div className={`absolute right-0 z-20 w-52 rounded-md border border-gray-200 bg-white p-1 shadow-lg ${verticalMenuPlacementClass(memberMenuPlacement)}`}>
                                 <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Modify position</div>
                                 {partyRoleOptions().map((option) => (
                                   <button

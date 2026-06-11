@@ -10,7 +10,7 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
   const path = location.pathname;
   const tabs = [
     { label: "Account Info", to: "/settings/account" },
-    { label: "Notifications", to: "/settings" },
+    { label: "Notifications", to: "/settings/notifications" },
   ];
 
   return (
@@ -25,14 +25,16 @@ export function SettingsLayout({ children }: { children: ReactNode }) {
         </div>
 
         <div className="border-b border-gray-200 mb-6">
-          <nav className="-mb-px flex gap-6">
+          <nav className="-mb-px flex w-full gap-2 sm:gap-6">
             {tabs.map((tab) => {
-              const active = path === tab.to || (tab.to === "/settings" && path === "/settings/notifications");
+              const active =
+                (tab.to === "/settings/account" && (path === "/settings" || path === "/settings/account")) ||
+                (tab.to === "/settings/notifications" && path === "/settings/notifications");
               return (
                 <Link
                   key={tab.to}
                   to={tab.to}
-                  className={`py-2 text-sm font-medium border-b-2 transition-colors ${
+                  className={`flex-1 py-2 text-center text-sm font-medium border-b-2 transition-colors sm:flex-none sm:px-1 ${
                     active
                       ? "border-blue-600 text-blue-600"
                       : "border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300"

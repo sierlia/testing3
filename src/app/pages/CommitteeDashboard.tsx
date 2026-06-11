@@ -17,6 +17,7 @@ import { ContributionButton } from "../components/ContributionButton";
 import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
 import { profilePath } from "../utils/profileRoute";
 import { committeeDisplayName } from "../utils/committeeNames";
+import { VerticalMenuPlacement, verticalMenuPlacementClass, verticalMenuPlacementForButton } from "../utils/menuPlacement";
 import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
@@ -129,6 +130,7 @@ export function CommitteeDashboard() {
   const [draggingSplit, setDraggingSplit] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<ConfirmDialogState | null>(null);
   const [memberMenuOpen, setMemberMenuOpen] = useState<string | null>(null);
+  const [memberMenuPlacement, setMemberMenuPlacement] = useState<VerticalMenuPlacement>("down");
 
   const isLeader = myRole === "chair" || myRole === "co_chair" || myRole === "ranking_member";
   const isTeacher = viewerRole === "teacher";
@@ -204,14 +206,15 @@ export function CommitteeDashboard() {
         const classId = (prof as any)?.class_id ?? null;
         setViewerRole(((prof as any)?.role ?? null) as any);
         let nextAllowSelfJoin = false;
+        let committeeSettings: any = {};
         if ((c as any).class_id) {
           const { data: cls } = await supabase.from("classes").select("settings").eq("id", (c as any).class_id).maybeSingle();
-          const settings = (cls as any)?.settings ?? {};
-          setMoneySettings(settings?.money ?? {});
-          nextAllowSelfJoin = !!settings?.committees?.allowSelfJoin || settings?.committees?.assignmentMode === "self-join";
-          setCommitteeCapacity(Number(settings?.committees?.capacities?.[committeeId] ?? settings?.committees?.capacitiesByName?.[(c as any).name] ?? 0));
-          if ((prof as any)?.role === "teacher" && settings?.committees?.subcommitteesEnabled) {
-            const configuredRows = ((settings?.committees?.enabledSubcommittees ?? []) as string[])
+          committeeSettings = (cls as any)?.settings ?? {};
+          setMoneySettings(committeeSettings?.money ?? {});
+          nextAllowSelfJoin = !!committeeSettings?.committees?.allowSelfJoin || committeeSettings?.committees?.assignmentMode === "self-join";
+          setCommitteeCapacity(Number(committeeSettings?.committees?.capacities?.[committeeId] ?? committeeSettings?.committees?.capacitiesByName?.[(c as any).name] ?? 0));
+          if ((prof as any)?.role === "teacher" && committeeSettings?.committees?.subcommitteesEnabled) {
+            const configuredRows = ((committeeSettings?.committees?.enabledSubcommittees ?? []) as string[])
               .filter((key) => key.startsWith(`${(c as any).name}::`))
               .map((key) => ({
                 committee_id: committeeId,
@@ -258,9 +261,34 @@ export function CommitteeDashboard() {
             .eq("class_id", (c as any).class_id)
             .order("display_name", { ascending: true });
           const candidateUserIds = ((candidateRows ?? []) as any[]).map((row) => row.user_id);
-          const { data: lobbyistRows } = await supabase.from("lobbyist_group_members").select("user_id").in("user_id", candidateUserIds.length ? candidateUserIds : ["00000000-0000-0000-0000-000000000000"]);
+          const [{ data: lobbyistRows }, { data: candidateCommitteeRows }] = await Promise.all([
+            supabase.from("lobbyist_group_members").select("user_id").in("user_id", candidateUserIds.length ? candidateUserIds : ["00000000-0000-0000-0000-000000000000"]),
+            supabase.from("committee_members").select("user_id,role,committees(name,class_id)").in("user_id", candidateUserIds.length ? candidateUserIds : ["00000000-0000-0000-0000-000000000000"]),
+          ]);
           const lobbyistUserIds = new Set(((lobbyistRows ?? []) as any[]).map((row) => row.user_id));
-          setMemberCandidates(((candidateRows ?? []) as any[]).filter((row) => !memberIdSet.has(row.user_id)).map((row) => ({ user_id: row.user_id, display_name: row.display_name, party: row.party, constituency_name: row.constituency_name, avatar_url: row.avatar_url, role: row.role, disabledReason: lobbyistUserIds.has(row.user_id) ? "Already in a lobbyist group." : null })));
+          const committeesByUser = new Map<string, string[]>();
+          for (const row of (candidateCommitteeRows ?? []) as any[]) {
+            if (row.committees?.class_id !== (c as any).class_id) continue;
+            committeesByUser.set(row.user_id, [...(committeesByUser.get(row.user_id) ?? []), row.committees?.name ?? "Committee"]);
+          }
+          const maxCommittees = Math.max(1, Number(committeeSettings?.committees?.assignmentsPerStudent ?? 1) || 1);
+          setMemberCandidates(((candidateRows ?? []) as any[]).filter((row) => !memberIdSet.has(row.user_id)).map((row) => {
+            const committeeNames = committeesByUser.get(row.user_id) ?? [];
+            return {
+              user_id: row.user_id,
+              display_name: row.display_name,
+              party: row.party,
+              constituency_name: row.constituency_name,
+              avatar_url: row.avatar_url,
+              role: row.role,
+              membershipNote: committeeNames.length ? `Currently in ${committeeNames.join(", ")}` : null,
+              disabledReason: lobbyistUserIds.has(row.user_id)
+                ? "Already in a lobbyist group."
+                : committeeNames.length >= maxCommittees
+                  ? `Already in ${committeeNames.length}/${maxCommittees} committees.`
+                  : null,
+            };
+          }));
         } else {
           setMemberCandidates([]);
         }
@@ -448,7 +476,10 @@ export function CommitteeDashboard() {
 
   useEffect(() => {
     if (!memberMenuOpen) return;
-    const close = () => setMemberMenuOpen(null);
+    const close = (event: PointerEvent) => {
+      if ((event.target as HTMLElement | null)?.closest("[data-committee-member-menu]")) return;
+      setMemberMenuOpen(null);
+    };
     document.addEventListener("pointerdown", close);
     return () => document.removeEventListener("pointerdown", close);
   }, [memberMenuOpen]);
@@ -1401,17 +1432,20 @@ export function CommitteeDashboard() {
                     {m.role !== "member" && <div className="mt-1 inline-flex rounded bg-purple-50 px-2 py-0.5 text-xs font-medium text-purple-700">{leadershipLabel(m.role)}</div>}
                   </div>
                   {isTeacher ? (
-                    <div className="relative" onPointerDown={(event) => event.stopPropagation()}>
+                    <div className="relative" data-committee-member-menu onPointerDown={(event) => event.stopPropagation()}>
                       <button
                         type="button"
-                        onClick={() => setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id))}
+                        onClick={(event) => {
+                          setMemberMenuPlacement(verticalMenuPlacementForButton(event.currentTarget));
+                          setMemberMenuOpen((open) => (open === m.user_id ? null : m.user_id));
+                        }}
                         className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-900"
                         aria-label="Member actions"
                       >
                         <MoreHorizontal className="h-4 w-4" />
                       </button>
                       {memberMenuOpen === m.user_id && (
-                        <div className="absolute right-0 top-full z-20 mt-1 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-lg">
+                        <div className={`absolute right-0 z-20 w-48 rounded-md border border-gray-200 bg-white p-1 shadow-lg ${verticalMenuPlacementClass(memberMenuPlacement)}`}>
                           <div className="px-3 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wide text-gray-500">Modify position</div>
                           {(["member", "chair", "ranking_member"] as MembershipRole[]).map((role) => (
                             <button

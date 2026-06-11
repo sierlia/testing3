@@ -17,7 +17,7 @@ import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { committeeDisplayName } from "../utils/committeeNames";
 import { storageFileHashUrl } from "../utils/privateStorage";
 
-type TextTab = "revised" | "original" | "supporting";
+type TextTab = string;
 type TrackerStatus = "completed" | "current" | "upcoming";
 type TrackerStep = { label: string; status: TrackerStatus; date?: string | null; note?: string; overrideFilled?: boolean };
 type TrackerItem = TrackerStep | { kind: "split"; steps: [TrackerStep, TrackerStep] };
@@ -208,6 +208,7 @@ export function BillDetail() {
   const [cosponsorIds, setCosponsorIds] = useState<string[]>([]);
   const [referral, setReferral] = useState<any>(null);
   const [committeeDoc, setCommitteeDoc] = useState<any>(null);
+  const [committeeDocs, setCommitteeDocs] = useState<any[]>([]);
   const [committeeVotes, setCommitteeVotes] = useState<any[]>([]);
   const [calendar, setCalendar] = useState<any>(null);
   const [floorSession, setFloorSession] = useState<any>(null);
@@ -243,6 +244,7 @@ export function BillDetail() {
         setCosponsorIds(res.cosponsorIds);
         setReferral(res.referral);
         setCommitteeDoc(res.committeeDoc);
+        setCommitteeDocs(res.committeeDocs ?? []);
         setCommitteeVotes(res.committeeVotes);
         setCalendar(res.calendar);
         setFloorSession(res.floorSession);
@@ -283,7 +285,6 @@ export function BillDetail() {
   const postFloorStatuses = ["passed", "senate", "senate_passed", "signed", "vetoed"];
   const finalStatuses = ["passed", "failed", "signed", "vetoed"];
   const committeePassed = bill ? ["reported", "calendared", "floor", ...postFloorStatuses].includes(bill.status) || (bill.status === "failed" && committeeCounts.yea > committeeCounts.nay) : false;
-  const showRevisedText = Boolean(committeePassed && referral?.committee_id && (committeeDoc?.ydoc_base64 || committeeDoc?.revised_pdf_path || committeeDoc?.committee_markup_posted_at));
   const cosponsorshipMode = classSettings?.bills?.cosponsorshipMode ?? (classSettings?.bills?.cosponsorAfterCommitteeReport ? "after_report" : "always");
   const reportSubmitted = Boolean(committeeDoc?.committee_report_submitted_at);
   const subcommitteeReports = Array.isArray(committeeDoc?.subcommittee_reports) ? committeeDoc.subcommittee_reports : [];
@@ -309,15 +310,21 @@ export function BillDetail() {
         return cosponsorSort === "oldest" ? aTime - bTime : bTime - aTime;
       });
   }, [cosponsorPartyFilter, cosponsorSearch, cosponsorSort, cosponsors]);
-  const revisedHtml = useMemo(() => revisedHtmlFromSnapshot(committeeDoc?.ydoc_base64) ?? bill?.legislative_text ?? "", [bill?.legislative_text, committeeDoc?.ydoc_base64]);
+  const revisionTabs = useMemo(() => {
+    return (committeeDocs ?? [])
+      .filter((doc) => doc?.ydoc_base64 || doc?.revised_pdf_path || doc?.committee_markup_posted_at)
+      .sort((a, b) => new Date(b.updated_at || b.committee_markup_posted_at || b.referred_at || 0).getTime() - new Date(a.updated_at || a.committee_markup_posted_at || a.referred_at || 0).getTime());
+  }, [committeeDocs]);
+  const activeRevision = activeTab.startsWith("revision:") ? revisionTabs.find((doc) => `revision:${doc.committee_id}` === activeTab) : null;
+  const revisedHtml = useMemo(() => revisedHtmlFromSnapshot(activeRevision?.ydoc_base64 ?? committeeDoc?.ydoc_base64) ?? bill?.legislative_text ?? "", [activeRevision?.ydoc_base64, bill?.legislative_text, committeeDoc?.ydoc_base64]);
 
   useEffect(() => {
     if (!bill) return;
     setActiveTab((prev) => {
-      if (showRevisedText) return "revised";
-      return prev === "revised" ? "original" : prev;
+      if (revisionTabs.length) return prev.startsWith("revision:") || prev === "supporting" ? prev : `revision:${revisionTabs[0].committee_id}`;
+      return prev.startsWith("revision:") ? "original" : prev;
     });
-  }, [bill, showRevisedText]);
+  }, [bill, revisionTabs]);
 
   useEffect(() => {
     if (!bill || location.hash !== "#bill-text") return;
@@ -462,6 +469,7 @@ export function BillDetail() {
     setCosponsorIds(res.cosponsorIds);
     setReferral(res.referral);
     setCommitteeDoc(res.committeeDoc);
+    setCommitteeDocs(res.committeeDocs ?? []);
     setCommitteeVotes(res.committeeVotes);
     setCalendar(res.calendar);
     setFloorSession(res.floorSession);
@@ -700,7 +708,7 @@ export function BillDetail() {
 
       <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <button type="button" onClick={handleBack} className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:bg-gray-50">
+          <button type="button" onClick={handleBack} className="inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-100 hover:text-gray-900">
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
@@ -809,16 +817,17 @@ export function BillDetail() {
           <div className="space-y-6">
             <div id="bill-text" className="scroll-mt-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-200">
-                <div className="flex">
-                  {showRevisedText && (
+                <div className="flex flex-wrap">
+                  {revisionTabs.map((doc) => (
                     <button
-                      onClick={() => setActiveTab("revised")}
-                      className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === "revised" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
+                      key={doc.committee_id}
+                      onClick={() => setActiveTab(`revision:${doc.committee_id}`)}
+                      className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === `revision:${doc.committee_id}` ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
                     >
                       <FileText className="h-4 w-4" />
-                      Revised Text
+                      {committeeDisplayName(doc.committee_name) || "Revised Text"}
                     </button>
-                  )}
+                  ))}
                   <button
                     onClick={() => setActiveTab("original")}
                     className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === "original" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
@@ -828,7 +837,7 @@ export function BillDetail() {
                   </button>
                   <button
                     onClick={() => setActiveTab("supporting")}
-                    className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === "supporting" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
+                    className={`ml-auto flex items-center gap-2 border-l border-gray-200 px-6 py-3 font-medium transition-colors ${activeTab === "supporting" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
                   >
                     <BookOpen className="h-4 w-4" />
                     Supporting Text
@@ -837,11 +846,11 @@ export function BillDetail() {
               </div>
 
               <div className="p-6">
-                {activeTab === "revised" && showRevisedText && (
-                  committeeDoc?.revised_pdf_path ? (
+                {activeRevision && (
+                  activeRevision?.revised_pdf_path ? (
                     <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
                       <div className="text-sm font-semibold text-gray-900">Committee revised text PDF</div>
-                      <a href={storageFileHashUrl("simulation-pdfs", committeeDoc.revised_pdf_path)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-sm font-medium text-blue-600 hover:underline">
+                      <a href={storageFileHashUrl("simulation-pdfs", activeRevision.revised_pdf_path)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-sm font-medium text-blue-600 hover:underline">
                         Open uploaded PDF
                       </a>
                     </div>

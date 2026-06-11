@@ -9,6 +9,7 @@ export type MemberCandidate = {
   avatar_url?: string | null;
   role?: string | null;
   disabledReason?: string | null;
+  membershipNote?: string | null;
 };
 
 export function TeacherAddMembersPopover({
@@ -23,6 +24,8 @@ export function TeacherAddMembersPopover({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirming, setConfirming] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -34,6 +37,13 @@ export function TeacherAddMembersPopover({
     return () => document.removeEventListener("pointerdown", close);
   }, [open]);
 
+  useEffect(() => {
+    if (open) return;
+    setConfirming(false);
+    setSelectedIds(new Set());
+    setQuery("");
+  }, [open]);
+
   const visibleCandidates = useMemo(() => {
     const normalized = query.trim().toLowerCase();
     return candidates
@@ -41,12 +51,33 @@ export function TeacherAddMembersPopover({
       .sort((a, b) => (a.display_name ?? "Member").localeCompare(b.display_name ?? "Member"));
   }, [candidates, query]);
 
-  const add = async (candidate: MemberCandidate) => {
+  const selectedCandidates = useMemo(
+    () => candidates.filter((candidate) => selectedIds.has(candidate.user_id)),
+    [candidates, selectedIds],
+  );
+
+  const toggleCandidate = (candidate: MemberCandidate) => {
     if (candidate.disabledReason) return;
-    setBusyId(candidate.user_id);
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(candidate.user_id)) next.delete(candidate.user_id);
+      else next.add(candidate.user_id);
+      return next;
+    });
+  };
+
+  const inviteSelected = async () => {
+    const selectable = selectedCandidates.filter((candidate) => !candidate.disabledReason);
+    if (!selectable.length) return;
     try {
-      await Promise.resolve(onAdd(candidate));
+      for (const candidate of selectable) {
+        setBusyId(candidate.user_id);
+        await Promise.resolve(onAdd(candidate));
+      }
+      setSelectedIds(new Set());
+      setConfirming(false);
       setQuery("");
+      setOpen(false);
     } finally {
       setBusyId(null);
     }
@@ -74,17 +105,23 @@ export function TeacherAddMembersPopover({
               className="w-full rounded-md border border-gray-300 py-2 pl-8 pr-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
+          {!confirming ? (
+          <>
           <div className="max-h-64 overflow-y-auto">
             {visibleCandidates.length ? (
               visibleCandidates.map((candidate) => (
                 <button
                   key={candidate.user_id}
                   type="button"
-                  onClick={() => void add(candidate)}
+                  onClick={() => toggleCandidate(candidate)}
                   disabled={Boolean(candidate.disabledReason) || busyId === candidate.user_id}
-                  className="block w-full rounded px-3 py-2 text-left text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 disabled:cursor-default disabled:bg-gray-50 disabled:text-gray-400"
+                  className={`block w-full rounded px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 disabled:cursor-default disabled:bg-gray-50 disabled:text-gray-400 ${selectedIds.has(candidate.user_id) ? "bg-blue-50 text-blue-700" : "text-gray-700"}`}
                 >
-                  <div className="font-medium">{candidate.display_name ?? "Member"}</div>
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-medium">{candidate.display_name ?? "Member"}</div>
+                    {selectedIds.has(candidate.user_id) && <div className="text-xs font-semibold text-blue-700">Selected</div>}
+                  </div>
+                  {candidate.membershipNote ? <div className="text-xs text-gray-500">{candidate.membershipNote}</div> : null}
                   {candidate.disabledReason ? <div className="text-xs text-gray-500">{candidate.disabledReason}</div> : null}
                 </button>
               ))
@@ -92,6 +129,41 @@ export function TeacherAddMembersPopover({
               <div className="px-3 py-6 text-center text-sm text-gray-500">No members found.</div>
             )}
           </div>
+          <div className="mt-2 flex items-center justify-between gap-2 border-t border-gray-100 pt-2">
+            <div className="text-xs text-gray-500">{selectedCandidates.length} selected</div>
+            <button
+              type="button"
+              onClick={() => setConfirming(true)}
+              disabled={selectedCandidates.length === 0}
+              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Invite
+            </button>
+          </div>
+          </>
+          ) : (
+            <div className="space-y-3">
+              <div>
+                <div className="text-sm font-semibold text-gray-900">Confirm invitations</div>
+                <div className="text-xs text-gray-500">These users will be added when you save.</div>
+              </div>
+              <div className="max-h-56 overflow-y-auto rounded-md border border-gray-200">
+                {selectedCandidates.map((candidate) => (
+                  <div key={candidate.user_id} className="border-b border-gray-100 px-3 py-2 text-sm last:border-b-0">
+                    <div className="font-medium text-gray-900">{candidate.display_name ?? "Member"}</div>
+                    {candidate.membershipNote ? <div className="text-xs text-gray-500">{candidate.membershipNote}</div> : null}
+                    {candidate.disabledReason ? <div className="text-xs text-red-600">{candidate.disabledReason}</div> : null}
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button type="button" onClick={() => setConfirming(false)} className="rounded-md px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100">Back</button>
+                <button type="button" onClick={() => void inviteSelected()} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                  Save invites
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       ) : null}
     </div>
