@@ -232,12 +232,11 @@ export function Members() {
             <div className="mb-3 flex items-center justify-between gap-3">
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg font-semibold text-gray-900">{loading ? "Members" : `Members (${memberCount})`}</h2>
+                  <p className="text-sm font-semibold text-gray-700">{countLabel}</p>
                   <InfoTooltip label="What are members?">
                     <p>Members of the House of Representatives are elected to represent congressional districts in the federal legislature. They introduce and debate legislation, vote on bills and resolutions, and serve on committees that study issues in detail. Members also conduct oversight of the executive branch, help shape the federal budget, and respond to concerns from constituents. Their work combines lawmaking, public representation, investigation, and negotiation with other members of Congress.</p>
                   </InfoTooltip>
                 </div>
-                <p className="mt-1 text-sm text-gray-600">{countLabel}</p>
               </div>
             </div>
             <div className="space-y-3">
@@ -291,17 +290,17 @@ export function Members() {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredMembers.map((member) => (
               <Link
                 key={member.user_id}
                 to={profilePath(member.user_id)}
-                className={`rounded-lg border p-6 shadow-sm transition-shadow hover:shadow-md ${
+                className={`rounded-lg border p-4 shadow-sm transition-shadow hover:shadow-md ${
                   member.role === "teacher" ? "border-green-200 bg-green-50 hover:bg-green-100" : "border-gray-200 bg-white"
                 }`}
               >
-                <div className="flex items-start gap-4 mb-4">
-                  <SecureAvatar src={member.avatar_url} alt={member.display_name ?? "Member"} className="w-16 h-16 rounded-full object-cover flex-shrink-0" fallbackClassName="w-16 h-16 flex-shrink-0" iconClassName="w-8 h-8 text-gray-500" />
+                <div className="mb-4 flex items-start gap-3">
+                  <SecureAvatar src={member.avatar_url} alt={member.display_name ?? "Member"} className="h-12 w-12 flex-shrink-0 rounded-full object-cover" fallbackClassName="h-12 w-12 flex-shrink-0" iconClassName="h-6 w-6 text-gray-500" />
                   <div className="flex-1 min-w-0">
                     <h3 className={`mb-1 truncate font-semibold ${member.role === "teacher" ? "text-green-800" : "text-gray-900"}`}>
                       {member.display_name ?? "Member"}

@@ -20,6 +20,8 @@ import { Navigation } from "../components/Navigation";
 import { AttachmentList } from "../components/DiscussionAttachments";
 import { TeacherAssignmentModal } from "../components/TeacherAssignmentModal";
 import { supabase } from "../utils/supabase";
+import { profilePath } from "../utils/profileRoute";
+import { sanitizeHtml } from "../utils/sanitizeHtml";
 import {
   AssignmentProvider,
   AssignmentTask,
@@ -62,6 +64,8 @@ type SubmissionRow = {
   updated_at: string;
 };
 type GradeDraft = { manual_score: string; manual_feedback: string };
+type AutoEvidenceItem = { label: string; body?: string };
+type AutoEvidenceMap = Record<string, Record<string, AutoEvidenceItem[]>>;
 type IntegrationRow = {
   id?: string;
   provider: AssignmentProvider;
@@ -157,6 +161,7 @@ export function TeacherDeadlines() {
   const [students, setStudents] = useState<StudentRow[]>([]);
   const [submissions, setSubmissions] = useState<SubmissionRow[]>([]);
   const [gradingDrafts, setGradingDrafts] = useState<Record<string, GradeDraft>>({});
+  const [autoEvidence, setAutoEvidence] = useState<AutoEvidenceMap>({});
   const [reviewLoading, setReviewLoading] = useState(false);
   const [autoBusy, setAutoBusy] = useState(false);
   const [syncBusy, setSyncBusy] = useState(false);
@@ -310,9 +315,19 @@ export function TeacherDeadlines() {
     else {
       setSubmissions([]);
       setGradingDrafts({});
+      setAutoEvidence({});
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedAssignmentId, classId]);
+
+  useEffect(() => {
+    if (!selectedAssignment || !classId || !assignedStudents.length) {
+      setAutoEvidence({});
+      return;
+    }
+    void loadAutoEvidence();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedAssignment?.id, selectedAssignment?.auto_criteria.length, classId, assignedStudents.length]);
 
   useEffect(() => {
     if (!activeMenuId) return;
@@ -347,10 +362,11 @@ export function TeacherDeadlines() {
         Object.fromEntries(
           students.map((student) => {
             const submission = byStudent.get(student.user_id);
+            const autoTotal = autoScoreTotal(submission?.auto_scores);
             return [
               student.user_id,
               {
-                manual_score: submission?.manual_score != null ? String(submission.manual_score) : "",
+                manual_score: submission?.manual_score != null ? String(submission.manual_score) : autoTotal > 0 ? String(autoTotal) : "",
                 manual_feedback: submission?.manual_feedback ?? "",
               },
             ];
@@ -413,6 +429,65 @@ export function TeacherDeadlines() {
   const openCreateModal = () => {
     setAssignmentModalTask(null);
     setCreateModalOpen(true);
+  };
+
+  const loadAutoEvidence = async () => {
+    if (!classId || !selectedAssignment || !selectedAssignment.auto_criteria.length) {
+      setAutoEvidence({});
+      return;
+    }
+    const studentIds = assignedStudents.map((student) => student.user_id);
+    if (!studentIds.length) return;
+    const needed = new Set(selectedAssignment.auto_criteria.map((criterion) => criterion.id));
+    const next: AutoEvidenceMap = Object.fromEntries(studentIds.map((id) => [id, {}]));
+    const push = (userId: string, criterionId: string, item: AutoEvidenceItem) => {
+      next[userId] = next[userId] ?? {};
+      next[userId][criterionId] = [...(next[userId][criterionId] ?? []), item];
+    };
+
+    try {
+      const queries: Array<Promise<void>> = [];
+      if (needed.has("write_bills")) {
+        queries.push((async () => {
+          const { data } = await supabase.from("bill_display").select("author_user_id,hr_label,title,legislative_text").eq("class_id", classId).in("author_user_id", studentIds).neq("status", "draft").neq("status", "deleted");
+          for (const bill of data ?? []) push((bill as any).author_user_id, "write_bills", { label: `${(bill as any).hr_label}: ${(bill as any).title}`, body: (bill as any).legislative_text ?? "" });
+        })());
+      }
+      if (needed.has("cosponsor_bills")) {
+        queries.push((async () => {
+          const { data } = await supabase.from("bill_cosponsors").select("user_id,bills!inner(bill_number,title,status,class_id)").in("user_id", studentIds).eq("bills.class_id", classId).neq("bills.status", "deleted");
+          for (const row of data ?? []) push((row as any).user_id, "cosponsor_bills", { label: `H.R. ${(row as any).bills?.bill_number}: ${(row as any).bills?.title}` });
+        })());
+      }
+      if (needed.has("join_committee")) {
+        queries.push((async () => {
+          const { data } = await supabase.from("committee_members").select("user_id,committees!inner(name,class_id)").in("user_id", studentIds).eq("committees.class_id", classId);
+          for (const row of data ?? []) push((row as any).user_id, "join_committee", { label: (row as any).committees?.name ?? "Committee" });
+        })());
+      }
+      if (needed.has("join_caucus")) {
+        queries.push((async () => {
+          const { data } = await supabase.from("caucus_members").select("user_id,caucuses!inner(title,class_id)").in("user_id", studentIds).eq("caucuses.class_id", classId);
+          for (const row of data ?? []) push((row as any).user_id, "join_caucus", { label: (row as any).caucuses?.title ?? "Caucus" });
+        })());
+      }
+      if (needed.has("join_party")) {
+        queries.push((async () => {
+          const { data } = await supabase.from("profiles").select("user_id,party").in("user_id", studentIds);
+          for (const row of data ?? []) if ((row as any).party) push((row as any).user_id, "join_party", { label: displayPartyName((row as any).party) });
+        })());
+      }
+      if (needed.has("send_letters")) {
+        queries.push((async () => {
+          const { data } = await supabase.from("dear_colleague_letters").select("sender_user_id,subject").eq("class_id", classId).in("sender_user_id", studentIds);
+          for (const row of data ?? []) push((row as any).sender_user_id, "send_letters", { label: (row as any).subject || "Untitled letter" });
+        })());
+      }
+      await Promise.all(queries);
+      setAutoEvidence(next);
+    } catch {
+      setAutoEvidence(next);
+    }
   };
 
   const openEditModal = (task: TaskRow) => {
@@ -618,6 +693,13 @@ export function TeacherDeadlines() {
     }
   };
 
+  const returnAllGrades = async () => {
+    if (!selectedAssignment || !assignedStudents.length) return;
+    for (const student of assignedStudents) {
+      await returnGrade(student);
+    }
+  };
+
   const openSyncReview = () => {
     if (!returnedSubmissions.length) {
       toast.error("No returned grades to sync");
@@ -722,7 +804,7 @@ export function TeacherDeadlines() {
                   className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700"
                 >
                   <Plus className="h-4 w-4" />
-                  Add Assignment
+                  Create
                 </button>
               </div>
             </div>
@@ -850,10 +932,21 @@ export function TeacherDeadlines() {
                 <div className="p-5">
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
-                      <h3 className="font-semibold text-gray-900">Student submissions</h3>
-                      <span className="text-sm text-gray-500">
-                        {submissions.filter((submission) => submission.status === "submitted" || submission.status === "returned").length} of {assignedStudents.length}
-                      </span>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">Student Progress</h3>
+                        <span className="text-sm text-gray-500">
+                          {submissions.filter((submission) => submission.status === "submitted" || submission.status === "returned").length} of {assignedStudents.length}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void returnAllGrades()}
+                        disabled={!assignedStudents.length}
+                        className="inline-flex items-center gap-2 rounded-md bg-gray-900 px-3 py-2 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+                      >
+                        <Send className="h-4 w-4" />
+                        Return all
+                      </button>
                     </div>
                     {reviewLoading ? (
                       <div className="rounded-md border border-gray-200 p-4 text-sm text-gray-600">Loading submissions...</div>
@@ -861,7 +954,7 @@ export function TeacherDeadlines() {
                       <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-500">No students are assigned to this assignment.</div>
                     ) : (
                       <div className="max-h-[780px] overflow-auto rounded-md border border-gray-200">
-                        <table className="min-w-[1080px] w-full text-sm">
+                        <table className="min-w-[1120px] w-full text-sm">
                           <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                             <tr>
                               <th className="px-3 py-2">Student</th>
@@ -870,7 +963,7 @@ export function TeacherDeadlines() {
                               <th className="px-3 py-2">Auto score</th>
                               <th className="px-3 py-2">Score</th>
                               <th className="px-3 py-2">Feedback</th>
-                              <th className="px-3 py-2 text-right">Return</th>
+                              <th className="sticky right-0 z-20 bg-gray-50 px-3 py-2 text-right">Return</th>
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-100 bg-white">
@@ -878,16 +971,16 @@ export function TeacherDeadlines() {
                               const submission = submissionMap.get(student.user_id);
                               const draft = gradingDrafts[student.user_id] ?? { manual_score: "", manual_feedback: "" };
                               const autoTotal = autoScoreTotal(submission?.auto_scores);
-                              const statusText = submission?.status === "returned"
-                                ? `Returned${submission.returned_at ? ` ${new Date(submission.returned_at).toLocaleDateString()}` : ""}`
-                                : submission?.status === "submitted"
-                                  ? `Submitted${submission.submitted_at ? ` ${new Date(submission.submitted_at).toLocaleDateString()}` : ""}`
-                                  : submission
-                                    ? "Auto-grade draft"
-                                    : "Not submitted";
+                              const statusText = submission?.status === "submitted" || submission?.status === "returned"
+                                ? "Submitted"
+                                : submission
+                                  ? "Viewed"
+                                  : "Unopened";
                               return (
                                 <tr key={student.user_id} className="align-top">
-                                  <td className="px-3 py-3 font-semibold text-gray-900">{student.display_name}</td>
+                                  <td className="px-3 py-3 font-semibold text-gray-900">
+                                    <Link to={profilePath(student.user_id)} className="hover:text-blue-600 hover:underline">{student.display_name}</Link>
+                                  </td>
                                   <td className="px-3 py-3 text-xs text-gray-600">{statusText}</td>
                                   <td className="max-w-xs px-3 py-3">
                                     {submission?.body ? <p className="line-clamp-4 whitespace-pre-line text-sm text-gray-700">{submission.body}</p> : <span className="text-xs text-gray-400">No note</span>}
@@ -903,7 +996,7 @@ export function TeacherDeadlines() {
                                   </td>
                                   <td className="px-3 py-3 text-xs text-gray-700">
                                     <div className="flex items-center justify-between gap-2">
-                                      <span className="font-semibold text-gray-900">{autoTotal} pts</span>
+                                      <span className="font-semibold text-gray-900">{autoTotal}/{selectedAssignment.points_possible} pts</span>
                                       <button type="button" onClick={() => void runAutoGrade(student.user_id)} className="rounded-md p-1.5 text-gray-500 hover:bg-gray-100" title="Refresh auto-grade">
                                         <RefreshCw className="h-4 w-4" />
                                       </button>
@@ -913,11 +1006,31 @@ export function TeacherDeadlines() {
                                         {selectedAssignment.auto_criteria.map((criterion) => {
                                           const score = submission?.auto_scores?.[criterion.id];
                                           return (
-                                            <div key={criterion.id} className="flex justify-between gap-3">
+                                            <div key={criterion.id} className="group relative flex justify-between gap-3 rounded px-1 py-0.5 hover:bg-gray-50">
                                               <span>{autoCriteriaLabel(criterion.id)}</span>
                                               <span className={score?.complete ? "font-semibold text-green-700" : "text-gray-500"}>
                                                 {score ? `${score.value}/${score.target} - ${score.earned}/${score.points * score.target}` : `0/${criterion.target} - 0/${criterion.points * criterion.target}`}
                                               </span>
+                                              <div className="pointer-events-none absolute left-0 top-full z-30 hidden w-96 rounded-lg border border-gray-200 bg-white p-3 text-left text-xs shadow-xl group-hover:block">
+                                                {(autoEvidence[student.user_id]?.[criterion.id] ?? []).length ? (
+                                                  criterion.id === "write_bills" ? (
+                                                    <div className="flex gap-2 overflow-x-auto pb-1">
+                                                      {(autoEvidence[student.user_id]?.[criterion.id] ?? []).map((item, index) => (
+                                                        <div key={`${item.label}-${index}`} className="h-36 w-56 flex-shrink-0 rounded-md border border-gray-200 bg-gray-50 p-2">
+                                                          <div className="mb-1 line-clamp-2 font-semibold text-gray-900">{item.label}</div>
+                                                          <div className="max-h-24 overflow-y-auto whitespace-pre-wrap text-gray-600" dangerouslySetInnerHTML={{ __html: sanitizeHtml(item.body ?? "") }} />
+                                                        </div>
+                                                      ))}
+                                                    </div>
+                                                  ) : (
+                                                    <ul className="space-y-1 text-gray-700">
+                                                      {(autoEvidence[student.user_id]?.[criterion.id] ?? []).map((item, index) => <li key={`${item.label}-${index}`}>{item.label}</li>)}
+                                                    </ul>
+                                                  )
+                                                ) : (
+                                                  <div className="text-gray-500">No matching items yet.</div>
+                                                )}
+                                              </div>
                                             </div>
                                           );
                                         })}
@@ -925,12 +1038,14 @@ export function TeacherDeadlines() {
                                     ) : null}
                                   </td>
                                   <td className="px-3 py-3">
-                                    <input
-                                      value={draft.manual_score}
-                                      onChange={(event) => setGradingDrafts((current) => ({ ...current, [student.user_id]: { ...draft, manual_score: event.target.value } }))}
-                                      placeholder={`/${selectedAssignment.points_possible}`}
-                                      className="w-24 rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                    />
+                                    <div className="flex items-center gap-1">
+                                      <input
+                                        value={draft.manual_score}
+                                        onChange={(event) => setGradingDrafts((current) => ({ ...current, [student.user_id]: { ...draft, manual_score: event.target.value } }))}
+                                        className="w-20 rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                      />
+                                      <span className="text-xs text-gray-500">/{selectedAssignment.points_possible}</span>
+                                    </div>
                                   </td>
                                   <td className="px-3 py-3">
                                     <textarea
@@ -941,7 +1056,7 @@ export function TeacherDeadlines() {
                                       className="w-56 rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                   </td>
-                                  <td className="px-3 py-3 text-right">
+                                  <td className="sticky right-0 bg-white px-3 py-3 text-right shadow-[-8px_0_10px_-12px_rgba(0,0,0,0.35)]">
                                     <button
                                       type="button"
                                       onClick={() => void returnGrade(student)}
@@ -1191,8 +1306,8 @@ export function TeacherDeadlines() {
               <section className="rounded-lg border border-gray-200 p-4">
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <h3 className="font-semibold text-gray-900">Grading</h3>
-                    <p className="text-sm text-gray-600">Choose whether this assignment is graded by a manual rubric or quantitative simulation requirements.</p>
+                    <h3 className="font-semibold text-gray-900">Rubric</h3>
+                    <p className="text-sm text-gray-600">Attach no rubric and just use points, upload a rubric, or create a rubric on Gavel with optional auto-graded criteria.</p>
                   </div>
                   {gradingMode === "manual" ? (
                     <label className="block">
@@ -1238,7 +1353,7 @@ export function TeacherDeadlines() {
                   <>
                     <div className="mb-3 flex items-center justify-between gap-3">
                       <div>
-                        <h4 className="font-semibold text-gray-900">Rubric</h4>
+                        <h4 className="font-semibold text-gray-900">Criteria</h4>
                         <p className="text-sm text-gray-600">Students can see these criteria before they submit.</p>
                       </div>
                       <span className="text-sm font-medium text-gray-600">{rubricTotal(normalizeRubric(rubricRows))} pts</span>
@@ -1274,7 +1389,7 @@ export function TeacherDeadlines() {
                     </div>
                     <button type="button" onClick={() => setRubricRows((rows) => [...rows, newRubricItem()])} className="mt-3 inline-flex items-center gap-2 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
                       <Plus className="h-4 w-4" />
-                      Add rubric item
+                      Add criterion
                     </button>
                   </>
                 ) : (

@@ -17,8 +17,9 @@ import {
 import { AttachmentList, AttachmentPicker, DiscussionAttachment } from "./DiscussionAttachments";
 
 type AudienceType = AssignmentTask["audience_type"];
-type OrgOption = { id: string; name: string };
-type StudentRow = { user_id: string; display_name: string };
+type OrgOption = { id: string; name: string; userIds?: string[] };
+type StudentRow = { user_id: string; display_name: string; party?: string | null };
+type AudienceOption = { key: string; label: string; description: string; userIds: string[]; tone: string };
 
 const assignmentSelect =
   "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,allow_late_submissions,rubric,auto_criteria,attachments,integration_targets";
@@ -116,28 +117,31 @@ export function TeacherAssignmentModal({
   const [newAudienceId, setNewAudienceId] = useState("");
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([]);
   const [allowLateSubmissions, setAllowLateSubmissions] = useState(true);
-  const [newPointsPossible, setNewPointsPossible] = useState("100");
+  const [newPointsPossible, setNewPointsPossible] = useState("");
   const [rubricRows, setRubricRows] = useState<RubricItem[]>([]);
   const [assignmentAttachments, setAssignmentAttachments] = useState<DiscussionAttachment[]>([]);
   const [studentPickerQuery, setStudentPickerQuery] = useState("");
   const [audienceOptionQuery, setAudienceOptionQuery] = useState("");
+  const [selectedAudienceKeys, setSelectedAudienceKeys] = useState<string[]>([]);
   const [autoMenuRubricId, setAutoMenuRubricId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const autoMenuRef = useRef<HTMLDivElement | null>(null);
 
   const reset = (source?: AssignmentTask | null) => {
     setNewTitle(source?.title ?? "");
     setNewDescription(source?.description ?? "");
     setNewDueDate(localDateInput(source?.due_at ?? null));
     setNewDueTime(localTimeInput(source?.due_at ?? null));
-    setNewAudienceType(source?.audience_type ?? "all");
+    setNewAudienceType(!source || source.audience_type === "all" ? "all" : "selected_students");
     setNewAudienceId(source?.audience_id ?? "");
     setSelectedStudentIds(source?.audience_user_ids ?? []);
     setAllowLateSubmissions(source?.allow_late_submissions ?? true);
-    setNewPointsPossible(String(source?.points_possible ?? 100));
+    setNewPointsPossible(source?.points_possible != null && source.points_possible > 0 ? String(source.points_possible) : "");
     setRubricRows(source?.rubric ?? []);
     setAssignmentAttachments(source?.attachments ?? []);
     setStudentPickerQuery("");
     setAudienceOptionQuery("");
+    setSelectedAudienceKeys([]);
     setAutoMenuRubricId(null);
   };
 
@@ -160,16 +164,49 @@ export function TeacherAssignmentModal({
             .eq("role", "student")
             .eq("status", "approved"),
         ]);
-        setParties(sortByName(((pRows ?? []) as any[]).map((party) => ({ id: party.id, name: displayPartyName(party.name) }))));
-        setCommittees(sortByName(((cRows ?? []) as any[]).map((committee) => ({ id: committee.id, name: committee.name }))));
-        setCaucuses(sortByName(((caRows ?? []) as any[]).map((caucus) => ({ id: caucus.id, name: caucus.title ?? "Caucus" }))));
-        setLobbyists(sortByName(((lRows ?? []) as any[]).map((group) => ({ id: group.id, name: group.name }))));
         const studentIds = ((memberRows ?? []) as any[]).map((row) => row.user_id);
-        const { data: profileRows } = studentIds.length
-          ? await supabase.from("profiles").select("user_id,display_name").in("user_id", studentIds)
-          : ({ data: [] } as any);
-        const profileMap = new Map(((profileRows ?? []) as any[]).map((row) => [row.user_id, row.display_name ?? "Student"]));
-        setStudents(sortByName(studentIds.map((userId) => ({ user_id: userId, display_name: profileMap.get(userId) ?? "Student", name: profileMap.get(userId) ?? "Student" }))).map(({ user_id, display_name }) => ({ user_id, display_name })));
+        const [{ data: profileRows }, { data: committeeMemberRows }, { data: caucusMemberRows }, { data: lobbyistMemberRows }] = studentIds.length
+          ? await Promise.all([
+              supabase.from("profiles").select("user_id,display_name,party").in("user_id", studentIds),
+              supabase.from("committee_members").select("user_id,committee_id,committees!inner(class_id)").in("user_id", studentIds).eq("committees.class_id", classId),
+              supabase.from("caucus_members").select("user_id,caucus_id,caucuses!inner(class_id)").in("user_id", studentIds).eq("caucuses.class_id", classId),
+              supabase.from("lobbyist_group_members").select("user_id,group_id,lobbyist_groups!inner(class_id)").in("user_id", studentIds).eq("lobbyist_groups.class_id", classId),
+            ])
+          : ([{ data: [] }, { data: [] }, { data: [] }, { data: [] }] as any);
+        const profiles = ((profileRows ?? []) as any[]) as Array<{ user_id: string; display_name?: string | null; party?: string | null }>;
+        const profileMap = new Map(profiles.map((row) => [row.user_id, row]));
+        const nextStudents = sortByName(
+          studentIds.map((userId) => {
+            const profile = profileMap.get(userId);
+            return {
+              user_id: userId,
+              display_name: profile?.display_name ?? "Student",
+              party: profile?.party ?? null,
+              name: profile?.display_name ?? "Student",
+            };
+          }),
+        ).map(({ user_id, display_name, party }) => ({ user_id, display_name, party }));
+        const usersByParty = new Map<string, string[]>();
+        for (const student of nextStudents) {
+          if (!student.party) continue;
+          const name = displayPartyName(student.party);
+          usersByParty.set(name, [...(usersByParty.get(name) ?? []), student.user_id]);
+        }
+        const usersByCommittee = new Map<string, string[]>();
+        for (const row of committeeMemberRows ?? []) usersByCommittee.set((row as any).committee_id, [...(usersByCommittee.get((row as any).committee_id) ?? []), (row as any).user_id]);
+        const usersByCaucus = new Map<string, string[]>();
+        for (const row of caucusMemberRows ?? []) usersByCaucus.set((row as any).caucus_id, [...(usersByCaucus.get((row as any).caucus_id) ?? []), (row as any).user_id]);
+        const usersByLobbyist = new Map<string, string[]>();
+        for (const row of lobbyistMemberRows ?? []) usersByLobbyist.set((row as any).group_id, [...(usersByLobbyist.get((row as any).group_id) ?? []), (row as any).user_id]);
+
+        setStudents(nextStudents);
+        setParties(sortByName(((pRows ?? []) as any[]).map((party) => {
+          const name = displayPartyName(party.name);
+          return { id: party.id, name, userIds: usersByParty.get(name) ?? [] };
+        })));
+        setCommittees(sortByName(((cRows ?? []) as any[]).map((committee) => ({ id: committee.id, name: committee.name, userIds: usersByCommittee.get(committee.id) ?? [] }))));
+        setCaucuses(sortByName(((caRows ?? []) as any[]).map((caucus) => ({ id: caucus.id, name: caucus.title ?? "Caucus", userIds: usersByCaucus.get(caucus.id) ?? [] }))));
+        setLobbyists(sortByName(((lRows ?? []) as any[]).map((group) => ({ id: group.id, name: group.name, userIds: usersByLobbyist.get(group.id) ?? [] }))));
       } catch (error: any) {
         toast.error(error.message || "Could not load assignment options");
       } finally {
@@ -180,12 +217,41 @@ export function TeacherAssignmentModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, classId, assignment?.id]);
 
-  const specificOptions =
-    newAudienceType === "party" ? parties : newAudienceType === "committee" ? committees : newAudienceType === "caucus" ? caucuses : newAudienceType === "lobbyist" ? lobbyists : [];
-  const filteredSpecificOptions = useMemo(() => {
+  useEffect(() => {
+    if (!autoMenuRubricId) return;
+    const close = (event: PointerEvent) => {
+      if (autoMenuRef.current?.contains(event.target as Node)) return;
+      setAutoMenuRubricId(null);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [autoMenuRubricId]);
+
+  const audienceOptions = useMemo<AudienceOption[]>(() => {
+    const unique = (ids: string[]) => Array.from(new Set(ids.filter(Boolean)));
+    const groupOptions = [
+      { key: "all-parties", label: "All parties", description: `${unique(parties.flatMap((party) => party.userIds ?? [])).length} students`, userIds: unique(parties.flatMap((party) => party.userIds ?? [])), tone: "bg-blue-50 text-blue-800 border-blue-200" },
+      { key: "all-committees", label: "All committees", description: `${unique(committees.flatMap((committee) => committee.userIds ?? [])).length} students`, userIds: unique(committees.flatMap((committee) => committee.userIds ?? [])), tone: "bg-orange-50 text-orange-800 border-orange-200" },
+      { key: "all-caucuses", label: "All caucuses", description: `${unique(caucuses.flatMap((caucus) => caucus.userIds ?? [])).length} students`, userIds: unique(caucuses.flatMap((caucus) => caucus.userIds ?? [])), tone: "bg-purple-50 text-purple-800 border-purple-200" },
+      { key: "all-lobbyists", label: "All lobbyist groups", description: `${unique(lobbyists.flatMap((group) => group.userIds ?? [])).length} students`, userIds: unique(lobbyists.flatMap((group) => group.userIds ?? [])), tone: "bg-emerald-50 text-emerald-800 border-emerald-200" },
+      ...parties.map((party) => ({ key: `party:${party.id}`, label: party.name, description: `Party - ${(party.userIds ?? []).length} students`, userIds: party.userIds ?? [], tone: "bg-blue-50 text-blue-800 border-blue-200" })),
+      ...committees.map((committee) => ({ key: `committee:${committee.id}`, label: committee.name, description: `Committee - ${(committee.userIds ?? []).length} students`, userIds: committee.userIds ?? [], tone: "bg-orange-50 text-orange-800 border-orange-200" })),
+      ...caucuses.map((caucus) => ({ key: `caucus:${caucus.id}`, label: caucus.name, description: `Caucus - ${(caucus.userIds ?? []).length} students`, userIds: caucus.userIds ?? [], tone: "bg-purple-50 text-purple-800 border-purple-200" })),
+      ...lobbyists.map((group) => ({ key: `lobbyist:${group.id}`, label: group.name, description: `Lobbyist group - ${(group.userIds ?? []).length} students`, userIds: group.userIds ?? [], tone: "bg-emerald-50 text-emerald-800 border-emerald-200" })),
+      ...students.map((student) => ({ key: `student:${student.user_id}`, label: student.display_name, description: "Individual student", userIds: [student.user_id], tone: "bg-gray-50 text-gray-800 border-gray-200" })),
+    ];
+    return groupOptions.filter((option) => option.key.startsWith("student:") || option.userIds.length > 0);
+  }, [caucuses, committees, lobbyists, parties, students]);
+
+  const filteredAudienceOptions = useMemo(() => {
     const q = audienceOptionQuery.trim().toLowerCase();
-    return specificOptions.filter((option) => !q || option.name.toLowerCase().includes(q));
-  }, [audienceOptionQuery, specificOptions]);
+    if (!q) return [];
+    return audienceOptions.filter((option) => option.label.toLowerCase().includes(q) || option.description.toLowerCase().includes(q)).slice(0, 40);
+  }, [audienceOptionQuery, audienceOptions]);
+  const selectedStudents = useMemo(() => {
+    const ids = new Set(selectedStudentIds);
+    return students.filter((student) => ids.has(student.user_id));
+  }, [selectedStudentIds, students]);
   const filteredStudents = useMemo(() => {
     const q = studentPickerQuery.trim().toLowerCase();
     return students.filter((student) => !q || student.display_name.toLowerCase().includes(q));
@@ -197,6 +263,15 @@ export function TeacherAssignmentModal({
 
   const toggleSelectedStudent = (userId: string) => {
     setSelectedStudentIds((current) => current.includes(userId) ? current.filter((id) => id !== userId) : [...current, userId]);
+  };
+
+  const toggleAudienceOption = (option: AudienceOption) => {
+    setSelectedAudienceKeys((current) => {
+      const nextKeys = current.includes(option.key) ? current.filter((key) => key !== option.key) : [...current, option.key];
+      const selectedOptions = audienceOptions.filter((entry) => nextKeys.includes(entry.key));
+      setSelectedStudentIds(Array.from(new Set(selectedOptions.flatMap((entry) => entry.userIds))));
+      return nextKeys;
+    });
   };
 
   const updateRubricItem = (id: string, patch: Partial<RubricItem>) => {
@@ -247,9 +322,8 @@ export function TeacherAssignmentModal({
 
   const save = async () => {
     if (!classId || !newTitle.trim()) return;
-    const audienceId = newAudienceType === "all" || newAudienceType === "selected_students" ? null : newAudienceId || null;
-    if (newAudienceType !== "all" && newAudienceType !== "selected_students" && !audienceId) return toast.error("Select a target for this assignment");
-    if (newAudienceType === "selected_students" && selectedStudentIds.length === 0) return toast.error("Select at least one student");
+    const audienceType = newAudienceType === "all" ? "all" : "selected_students";
+    if (audienceType === "selected_students" && selectedStudentIds.length === 0) return toast.error("Select at least one student or group");
     setSaving(true);
     try {
       const { data: auth } = await supabase.auth.getUser();
@@ -258,9 +332,9 @@ export function TeacherAssignmentModal({
       const dueAt = newDueDate.trim() === "" ? null : new Date(`${newDueDate}T${(newDueTime || "23:59").trim()}:00`).toISOString();
       const payload = {
         task_type: "assignment",
-        audience_type: newAudienceType,
-        audience_id: audienceId,
-        audience_user_ids: newAudienceType === "selected_students" ? selectedStudentIds : [],
+        audience_type: audienceType,
+        audience_id: null,
+        audience_user_ids: audienceType === "selected_students" ? selectedStudentIds : [],
         title: newTitle.trim(),
         description: newDescription.trim(),
         due_at: dueAt,
@@ -297,7 +371,7 @@ export function TeacherAssignmentModal({
         <div className="flex items-center justify-between border-b border-gray-200 p-5">
           <div className="flex items-center gap-2">
             <ClipboardCheck className="h-5 w-5 text-blue-600" />
-            <h2 className="text-xl font-semibold text-gray-900">{assignment?.id ? "Edit assignment" : "Add assignment"}</h2>
+            <h2 className="text-xl font-semibold text-gray-900">{assignment?.id ? "Edit assignment" : "Create assignment"}</h2>
           </div>
           <button onClick={close} className="rounded-md p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600" aria-label="Close">
             <X className="h-5 w-5" />
@@ -315,11 +389,11 @@ export function TeacherAssignmentModal({
             <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_9rem_auto] lg:items-end">
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">Due date</span>
-                <input type="date" value={newDueDate} onChange={(event) => setNewDueDate(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="date" value={newDueDate} onChange={(event) => setNewDueDate(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               </label>
               <label className="block">
                 <span className="mb-1 block text-sm font-medium text-gray-700">Due time</span>
-                <input type="time" value={newDueTime} onChange={(event) => setNewDueTime(event.target.value)} className="w-full rounded-md border border-gray-300 px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500" />
+                <input type="time" value={newDueTime} onChange={(event) => setNewDueTime(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
               </label>
               <label className="flex cursor-pointer items-center gap-2 rounded-md border border-gray-200 px-3 py-2 text-sm text-gray-700">
                 <input type="checkbox" checked={allowLateSubmissions} onChange={(event) => setAllowLateSubmissions(event.target.checked)} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
@@ -327,72 +401,72 @@ export function TeacherAssignmentModal({
               </label>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm font-medium text-gray-700">Assigned to</span>
-              {(["all", "selected_students", "party", "committee", "caucus", "lobbyist"] as AudienceType[]).map((type) => (
+            <div className="space-y-3">
+              <div className="text-sm font-medium text-gray-700">Assigned to</div>
+              <div className="grid gap-2 sm:grid-cols-2">
                 <button
-                  key={type}
                   type="button"
                   onClick={() => {
-                    setNewAudienceType(type);
+                    setNewAudienceType("all");
                     setNewAudienceId("");
                     setAudienceOptionQuery("");
-                    if (type !== "selected_students") setSelectedStudentIds([]);
+                    setSelectedStudentIds([]);
+                    setSelectedAudienceKeys([]);
                   }}
-                  className={`rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors ${newAudienceType === type ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                  className={`rounded-md border px-3 py-2 text-left text-sm font-medium transition-colors ${newAudienceType === "all" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
                 >
-                  {type === "all" ? "All" : type === "selected_students" ? "Select students" : type === "party" ? "Parties" : type === "committee" ? "Committees" : type === "caucus" ? "Caucuses" : "Lobbyists"}
+                  All
                 </button>
-              ))}
-            </div>
-
-            {newAudienceType !== "all" && newAudienceType !== "selected_students" ? (
-              <div className="rounded-lg border border-gray-200 p-3">
-                <div className="relative mb-2">
-                  <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input value={audienceOptionQuery} onChange={(event) => setAudienceOptionQuery(event.target.value)} placeholder={`Search ${newAudienceType === "lobbyist" ? "lobbyist groups" : `${newAudienceType}s`}...`} className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="max-h-44 space-y-1 overflow-y-auto">
-                  {filteredSpecificOptions.map((option) => (
-                    <button key={option.id} type="button" onClick={() => setNewAudienceId(option.id)} className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${newAudienceId === option.id ? "bg-blue-50 text-blue-800 ring-1 ring-blue-200" : "hover:bg-gray-50"}`}>
-                      <span className="truncate">{option.name}</span>
-                      {newAudienceId === option.id ? <Check className="h-4 w-4 flex-shrink-0 text-blue-600" /> : null}
-                    </button>
-                  ))}
-                  {!filteredSpecificOptions.length ? <div className="p-2 text-sm text-gray-500">{loadingOptions ? "Loading..." : "No matches."}</div> : null}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewAudienceType("selected_students")}
+                  className={`rounded-md border px-3 py-2 text-left text-sm font-medium transition-colors ${newAudienceType === "selected_students" ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-700 hover:bg-gray-50"}`}
+                >
+                  Select students or groups
+                </button>
               </div>
-            ) : null}
 
             {newAudienceType === "selected_students" ? (
               <div className="rounded-lg border border-gray-200 p-3">
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <div className="text-sm font-medium text-gray-700">Students</div>
+                  <div className="text-sm font-medium text-gray-700">Search students or groups</div>
                   <div className="text-xs text-gray-500">{selectedStudentIds.length} selected</div>
                 </div>
                 <div className="relative mb-2">
                   <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                  <input value={studentPickerQuery} onChange={(event) => setStudentPickerQuery(event.target.value)} placeholder="Search students..." className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={audienceOptionQuery} onChange={(event) => setAudienceOptionQuery(event.target.value)} placeholder="Search a student, party, committee, caucus, or lobbyist group..." className="w-full rounded-md border border-gray-300 py-2 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div className="max-h-48 space-y-1 overflow-y-auto">
-                  {filteredStudents.map((student) => {
-                    const selected = selectedStudentIds.includes(student.user_id);
+                  {filteredAudienceOptions.map((option) => {
+                    const selected = selectedAudienceKeys.includes(option.key);
                     return (
-                      <button key={student.user_id} type="button" onClick={() => toggleSelectedStudent(student.user_id)} className={`flex w-full items-center justify-between rounded-md px-3 py-2 text-left text-sm ${selected ? "bg-blue-50 text-blue-800 ring-1 ring-blue-200" : "hover:bg-gray-50"}`}>
-                        <span className="truncate">{student.display_name}</span>
+                      <button key={option.key} type="button" onClick={() => toggleAudienceOption(option)} className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${selected ? "border-blue-300 bg-blue-50 text-blue-800" : `${option.tone} hover:brightness-[0.98]`}`}>
+                        <span className="min-w-0">
+                          <span className="block truncate font-medium">{option.label}</span>
+                          <span className="block text-xs opacity-80">{option.description}</span>
+                        </span>
                         {selected ? <Check className="h-4 w-4 flex-shrink-0 text-blue-600" /> : null}
                       </button>
                     );
                   })}
-                  {students.length === 0 ? <div className="p-2 text-sm text-gray-500">{loadingOptions ? "Loading..." : "No approved students yet."}</div> : null}
-                  {students.length > 0 && filteredStudents.length === 0 ? <div className="p-2 text-sm text-gray-500">No matches.</div> : null}
+                  {!audienceOptionQuery.trim() ? <div className="p-2 text-sm text-gray-500">Start typing to find students or groups.</div> : null}
+                  {audienceOptionQuery.trim() && filteredAudienceOptions.length === 0 ? <div className="p-2 text-sm text-gray-500">{loadingOptions ? "Loading..." : "No matches."}</div> : null}
                 </div>
+                {selectedStudents.length ? (
+                  <div className="mt-3 flex flex-wrap gap-1.5">
+                    {selectedStudents.slice(0, 12).map((student) => (
+                      <span key={student.user_id} className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{student.display_name}</span>
+                    ))}
+                    {selectedStudents.length > 12 ? <span className="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">+{selectedStudents.length - 12} more</span> : null}
+                  </div>
+                ) : null}
               </div>
             ) : null}
+            </div>
 
             <div className="block">
               <span className="mb-1 block text-sm font-medium text-gray-700">Description</span>
-              <div className="overflow-hidden rounded-md border border-gray-300 bg-white focus-within:ring-2 focus-within:ring-blue-500">
+              <div className="rounded-md border border-gray-300 bg-white focus-within:ring-2 focus-within:ring-blue-500">
                 <textarea value={newDescription} onChange={(event) => setNewDescription(event.target.value)} rows={5} placeholder="Instructions, resources, and what students should submit." className="w-full resize-y border-0 px-3 py-2 font-normal outline-none" />
                 <div className="flex items-center justify-between gap-3 border-t border-gray-200 px-3 py-2">
                   <span className="text-xs text-gray-500">Attach bills, records, or letters students should reference.</span>
@@ -410,8 +484,8 @@ export function TeacherAssignmentModal({
           <section className="rounded-lg border border-gray-200 p-4">
             <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
               <div>
-                <h3 className="font-semibold text-gray-900">Grading</h3>
-                <p className="text-sm text-gray-600">Use points alone, or create a rubric with optional auto-graded criteria.</p>
+                <h3 className="font-semibold text-gray-900">Rubric</h3>
+                <p className="text-sm text-gray-600">Attach no rubric and just use points, upload a rubric, or create a rubric on Gavel with optional auto-graded criteria.</p>
               </div>
               <label className="block">
                 <span className="mb-1 block text-xs font-medium text-gray-600">Points possible</span>
@@ -426,20 +500,16 @@ export function TeacherAssignmentModal({
               </label>
             </div>
 
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <h4 className="font-semibold text-gray-900">Rubric</h4>
-                <p className="text-sm text-gray-600">Auto-grade can be associated with any rubric item.</p>
-              </div>
+            <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
               <div className="flex flex-wrap items-center gap-2">
                 <input ref={fileInputRef} type="file" accept=".json,.csv,.txt" className="hidden" onChange={(event) => void importRubric(event.target.files?.[0])} />
                 <button type="button" onClick={() => setRubricRows((rows) => [...rows, newRubricItem()])} className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
                   <Plus className="h-4 w-4" />
-                  Add rubric
+                  Add criterion
                 </button>
                 <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex items-center gap-1.5 rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
                   <Upload className="h-4 w-4" />
-                  Import rubric
+                  Upload rubric
                 </button>
               </div>
             </div>
@@ -464,7 +534,7 @@ export function TeacherAssignmentModal({
                           <div className="text-sm font-medium text-gray-900">Auto-grade</div>
                           <div className="text-xs text-gray-500">{option ? option.description : "No auto-graded criterion attached."}</div>
                         </div>
-                        <div className="relative">
+                        <div ref={autoMenuRubricId === item.id ? autoMenuRef : null} className="relative">
                           <button
                             type="button"
                             onClick={() => setAutoMenuRubricId((current) => (current === item.id ? null : item.id))}
@@ -474,7 +544,7 @@ export function TeacherAssignmentModal({
                             <ChevronDown className="h-3.5 w-3.5" />
                           </button>
                           {autoMenuRubricId === item.id ? (
-                            <div className="absolute right-0 top-full z-[160] mt-1 max-h-72 w-80 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-xl">
+                            <div className="absolute bottom-full right-0 z-[160] mb-1 max-h-72 w-80 overflow-y-auto rounded-md border border-gray-200 bg-white py-1 shadow-xl">
                               {AUTO_CRITERIA_OPTIONS.map((entry) => (
                                 <button
                                   key={entry.id}
@@ -515,7 +585,7 @@ export function TeacherAssignmentModal({
               </div>
             ) : (
               <div className="rounded-md border border-dashed border-gray-300 p-6 text-center text-sm text-gray-500">
-                No rubric yet. Use points possible alone, or add/import a rubric.
+                No rubric yet. Use points possible alone, add criteria, or upload a rubric.
               </div>
             )}
           </section>
@@ -527,7 +597,7 @@ export function TeacherAssignmentModal({
           </button>
           <button onClick={() => void save()} disabled={!newTitle.trim() || saving} className="flex items-center gap-2 rounded-md bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
             <Plus className="h-4 w-4" />
-            {saving ? "Saving..." : assignment?.id ? "Save assignment" : "Add assignment"}
+            {saving ? "Saving..." : assignment?.id ? "Save assignment" : "Create"}
           </button>
         </div>
       </div>

@@ -113,7 +113,7 @@ function schoolsTextFromOptions(value: SchoolOption[]) {
   return value.map((school) => school.name).join(", ");
 }
 
-function RowShell({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+function RowShell({ title, description, children }: { title: ReactNode; description?: string; children: ReactNode }) {
   return (
     <section className="border-b border-gray-200 p-5 last:border-b-0">
       <div className="grid gap-4 lg:grid-cols-[220px_minmax(0,1fr)]">
@@ -643,13 +643,24 @@ export function SettingsAccount() {
           </RowShell>
 
           <RowShell title="Password" description="Changing your password sends a security email.">
-            <Button type="button" onClick={() => setPasswordDialogOpen(true)}>
-              <KeyRound className="h-4 w-4" />
-              Change Password
-            </Button>
+            <div className="flex justify-end">
+              <Button type="button" onClick={() => setPasswordDialogOpen(true)}>
+                <KeyRound className="h-4 w-4" />
+                Change Password
+              </Button>
+            </div>
           </RowShell>
 
-          <RowShell title="Account Actions" description="Export work or manage the account deletion timer.">
+          <RowShell title="Work Export" description="Download a Word-compatible copy of your Gavel work.">
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" onClick={() => void downloadWorkDoc()} disabled={exporting}>
+                <Download className="h-4 w-4" />
+                {exporting ? "Preparing..." : "Download Word Doc"}
+              </Button>
+            </div>
+          </RowShell>
+
+          <RowShell title={<span className="text-red-700">Delete Account</span>} description="Deletion starts a three-day timer and can be cancelled here before it ends.">
             <div className="space-y-4">
               {pendingDeletion ? (
                 <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
@@ -663,10 +674,6 @@ export function SettingsAccount() {
               ) : null}
 
               <div className="flex flex-wrap justify-end gap-3">
-                <Button type="button" variant="outline" onClick={() => void downloadWorkDoc()} disabled={exporting}>
-                  <Download className="h-4 w-4" />
-                  {exporting ? "Preparing..." : "Download Word Doc"}
-                </Button>
                 {pendingDeletion ? (
                   <Button type="button" variant="outline" onClick={() => void cancelDeletion()} disabled={deletionBusy}>
                     <RotateCcw className="h-4 w-4" />

@@ -11,6 +11,7 @@ import {
   FileText,
   Lock,
   MessageSquare,
+  MoreVertical,
   Pencil,
   Pin,
   Plus,
@@ -29,7 +30,7 @@ import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { TeacherAssignmentModal } from "../components/TeacherAssignmentModal";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
-import { fetchCalendaredBillsForCurrentClass } from "../services/bills";
+import { fetchCalendaredBillsForCurrentClass, saveBillCalendarEntry } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
 import { useUnsavedChangesPrompt } from "../hooks/useUnsavedChangesPrompt";
@@ -37,6 +38,7 @@ import { profilePath } from "../utils/profileRoute";
 
 interface CalendarEvent {
   id: string;
+  sourceId: string;
   title: string;
   date: Date;
   type: "assignment" | "deadline" | "session" | "election" | "bill";
@@ -63,8 +65,15 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
   const [teacherCount, setTeacherCount] = useState(0);
   const [recentActivity, setRecentActivity] = useState<ClassActivity[]>([]);
   const [upcomingEvents, setUpcomingEvents] = useState<CalendarEvent[]>([]);
-  const [selectedUpcomingDay, setSelectedUpcomingDay] = useState<string | null>(null);
+  const [selectedUpcomingDay, setSelectedUpcomingDay] = useState<string | null>(() => {
+    const today = new Date();
+    return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  });
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+  const [activeCalendarMenuId, setActiveCalendarMenuId] = useState<string | null>(null);
+  const [rescheduleTarget, setRescheduleTarget] = useState<CalendarEvent | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("");
   const [timelineExpanded, setTimelineExpanded] = useState(false);
   const [billStats, setBillStats] = useState({ total: 0, waitingReferral: 0, waitingCalendar: 0 });
   const [workflowBusy, setWorkflowBusy] = useState(false);
@@ -76,6 +85,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
   const [postingAnnouncement, setPostingAnnouncement] = useState(false);
   const currentTimelineCardRef = useRef<HTMLDivElement | null>(null);
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
+  const calendarScrollRef = useRef<HTMLDivElement | null>(null);
   useUnsavedChangesPrompt(editingClassName && classNameDraft.trim() !== className);
 
   useEffect(() => {
@@ -116,10 +126,8 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
       });
 
       const now = new Date();
-      const calendarStart = new Date(now);
-      calendarStart.setDate(now.getDate() - 30);
-      const calendarEnd = new Date(now);
-      calendarEnd.setDate(now.getDate() + 120);
+      const calendarStart = new Date(now.getFullYear() - 1, 0, 1);
+      const calendarEnd = new Date(now.getFullYear() + 2, 0, 1);
       const { data: taskRows } = await supabase
         .from("class_tasks")
         .select("id,title,task_type,due_at")
@@ -134,6 +142,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
         [
           ...(taskRows ?? []).map((task: any) => ({
           id: task.id,
+          sourceId: task.id,
           title: task.title,
           date: new Date(task.due_at),
           type: task.task_type === "assignment" ? "assignment" : "deadline",
@@ -141,6 +150,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
         })),
           ...calendaredBills.map((item) => ({
             id: `bill-${item.id}`,
+            sourceId: item.bill_id,
             title: `${item.bill.hr_label}: ${item.bill.title}`,
             date: new Date(item.scheduled_at),
             type: "bill" as const,
@@ -176,8 +186,8 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
   const eventDisplayTitle = (event: CalendarEvent) => {
-    if (event.type === "assignment") return `Assignment: ${event.title}`;
-    if (event.type === "bill") return `Bill: ${event.title}`;
+    if (event.type === "assignment") return `Assignment Deadline: ${event.title}`;
+    if (event.type === "bill") return `Floor Debate: ${event.title}`;
     if (event.type === "deadline") return `Deadline: ${event.title}`;
     return event.title;
   };
@@ -220,14 +230,18 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     return `${year}-${month}-${day}`;
   };
 
-  const dashboardCalendarDays = useMemo(() => {
+  const dashboardCalendarMonths = useMemo(() => {
     const today = new Date();
-    const start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    start.setDate(start.getDate() - start.getDay());
-    return Array.from({ length: 42 }, (_, index) => {
-      const day = new Date(start);
-      day.setDate(start.getDate() + index);
-      return day;
+    return Array.from({ length: 36 }, (_, monthIndex) => {
+      const month = new Date(today.getFullYear() - 1, monthIndex, 1);
+      const firstGridDay = new Date(month);
+      firstGridDay.setDate(month.getDate() - month.getDay());
+      const days = Array.from({ length: 42 }, (_, index) => {
+        const day = new Date(firstGridDay);
+        day.setDate(firstGridDay.getDate() + index);
+        return day;
+      });
+      return { month, days };
     });
   }, []);
 
@@ -242,6 +256,57 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
 
   const displayedUpcomingEvents = selectedUpcomingDay ? eventsByDay.get(selectedUpcomingDay) ?? [] : upcomingEvents;
   const selectedUpcomingDate = selectedUpcomingDay ? new Date(`${selectedUpcomingDay}T00:00:00`) : null;
+  const overdueEvents = useMemo(() => {
+    const today = dayKey(new Date());
+    return upcomingEvents.filter((event) => dayKey(event.date) < today).sort((a, b) => b.date.getTime() - a.date.getTime());
+  }, [upcomingEvents]);
+
+  useEffect(() => {
+    const current = calendarScrollRef.current?.querySelector("[data-current-month='true']");
+    current?.scrollIntoView({ block: "start" });
+  }, [dashboardCalendarMonths.length]);
+
+  const localDateInput = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const localTimeInput = (date: Date) => `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+
+  const openRescheduler = (event: CalendarEvent) => {
+    setRescheduleTarget(event);
+    setRescheduleDate(localDateInput(event.date));
+    setRescheduleTime(localTimeInput(event.date));
+    setActiveCalendarMenuId(null);
+  };
+
+  const saveEventDate = async (event: CalendarEvent, nextDate: Date) => {
+    if (!classId) return;
+    try {
+      if (event.type === "assignment" || event.type === "deadline") {
+        const { error } = await supabase.from("class_tasks").update({ due_at: nextDate.toISOString() } as any).eq("id", event.sourceId).eq("class_id", classId);
+        if (error) throw error;
+      } else if (event.type === "bill") {
+        await saveBillCalendarEntry(event.sourceId, nextDate.toISOString());
+      }
+      setUpcomingEvents((current) => current.map((item) => item.id === event.id ? { ...item, date: nextDate } : item).sort((a, b) => a.date.getTime() - b.date.getTime()));
+      setSelectedUpcomingDay(dayKey(nextDate));
+      toast.success("Event rescheduled");
+    } catch (error: any) {
+      toast.error(error.message || "Could not reschedule event");
+    }
+  };
+
+  const saveRescheduleTarget = async () => {
+    if (!rescheduleTarget || !rescheduleDate) return;
+    await saveEventDate(rescheduleTarget, new Date(`${rescheduleDate}T${rescheduleTime || localTimeInput(rescheduleTarget.date)}:00`));
+    setRescheduleTarget(null);
+  };
+
+  const dropEventOnDay = async (eventId: string, targetDay: Date) => {
+    const event = upcomingEvents.find((item) => item.id === eventId);
+    if (!event) return;
+    const next = new Date(targetDay);
+    next.setHours(event.date.getHours(), event.date.getMinutes(), 0, 0);
+    await saveEventDate(event, next);
+  };
 
   const saveClassName = async () => {
     if (!classId || !classNameDraft.trim()) return;
@@ -611,7 +676,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                     <CardTitle>Calendar</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={() => setAssignmentModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Assignment</Button>
+                    <Button size="sm" onClick={() => setAssignmentModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Create</Button>
                   </div>
                 </div>
               </CardHeader>
@@ -619,46 +684,67 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                 <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem]">
                   <div className="min-w-0">
                     <div className="mb-1.5 flex items-center justify-between gap-3">
-                      <div className="text-sm font-semibold text-gray-900">Current six weeks</div>
-                      <button type="button" onClick={() => setSelectedUpcomingDay(null)} className="text-xs font-medium text-blue-600 hover:text-blue-700">
-                        Show all
+                      <div />
+                      <button type="button" onClick={() => navigate("/calendar")} className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
+                        View full calendar
+                        <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <div className="overflow-hidden rounded-md border border-gray-200 bg-white">
-                      <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase text-gray-500">
-                        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                          <div key={day} className="px-2 py-1">{day}</div>
-                        ))}
-                      </div>
-                      <div className="grid grid-cols-7">
-                        {dashboardCalendarDays.map((day) => {
-                          const key = dayKey(day);
-                          const events = eventsByDay.get(key) ?? [];
-                          const isToday = key === dayKey(new Date());
-                          const selected = selectedUpcomingDay === key;
-                          return (
-                            <button
-                              key={key}
-                              type="button"
-                              onClick={() => setSelectedUpcomingDay(key)}
-                              className={`min-h-14 border-b border-r border-gray-100 p-1 text-left transition-colors sm:min-h-16 ${selected ? "bg-blue-50 ring-1 ring-inset ring-blue-400" : isToday ? "bg-blue-50/70" : "bg-white hover:bg-gray-50"}`}
-                            >
-                              <div className={`text-xs font-semibold ${isToday ? "text-blue-700" : "text-gray-900"}`}>{day.getDate()}</div>
-                              <div className="mt-0.5 space-y-0.5">
-                                {events.slice(0, 1).map((event) => (
+                    <div ref={calendarScrollRef} className="max-h-[32rem] overflow-y-auto rounded-md border border-gray-200 bg-white">
+                      {dashboardCalendarMonths.map(({ month, days }) => {
+                        const today = new Date();
+                        const currentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
+                        return (
+                          <section key={`${month.getFullYear()}-${month.getMonth()}`} data-current-month={currentMonth ? "true" : undefined} className="border-b border-gray-200 last:border-b-0">
+                            <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-2 py-1.5 text-sm font-semibold text-gray-900 backdrop-blur">
+                              {month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                            </div>
+                            <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase text-gray-500">
+                              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                                <div key={day} className="px-2 py-1">{day}</div>
+                              ))}
+                            </div>
+                            <div className="grid grid-cols-7">
+                              {days.map((day) => {
+                                const key = dayKey(day);
+                                const events = eventsByDay.get(key) ?? [];
+                                const isToday = key === dayKey(new Date());
+                                const selected = selectedUpcomingDay === key;
+                                const inMonth = day.getMonth() === month.getMonth();
+                                const dayLabel = day.getDate() === 1 ? day.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : String(day.getDate());
+                                return (
                                   <div
-                                    key={event.id}
-                                    className={`line-clamp-1 rounded px-1 py-0.5 text-[9px] font-medium leading-tight ${event.type === "bill" ? "bg-indigo-50 text-indigo-700" : event.type === "assignment" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700"}`}
+                                    key={key}
+                                    onClick={() => setSelectedUpcomingDay(key)}
+                                    onDragOver={(event) => event.preventDefault()}
+                                    onDrop={(drop) => {
+                                      drop.preventDefault();
+                                      const eventId = drop.dataTransfer.getData("text/plain");
+                                      if (eventId) void dropEventOnDay(eventId, day);
+                                    }}
+                                    className={`min-h-14 border-b border-r border-gray-100 p-1 text-left transition-colors sm:min-h-16 ${selected ? "bg-blue-50 ring-1 ring-inset ring-blue-400" : isToday ? "bg-blue-50/70" : "bg-white hover:bg-gray-50"} ${inMonth ? "" : "text-gray-300"}`}
                                   >
-                                    {eventDisplayTitle(event)}
+                                    <div className={`text-xs font-semibold ${isToday ? "text-blue-700" : "text-gray-900"}`}>{dayLabel}</div>
+                                    <div className="mt-0.5 space-y-0.5">
+                                      {events.slice(0, 1).map((event) => (
+                                        <div
+                                          key={event.id}
+                                          draggable
+                                          onDragStart={(drag) => drag.dataTransfer.setData("text/plain", event.id)}
+                                          className={`line-clamp-1 cursor-grab rounded px-1 py-0.5 text-[9px] font-medium leading-tight active:cursor-grabbing ${event.type === "bill" ? "bg-indigo-50 text-indigo-700" : event.type === "assignment" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700"}`}
+                                        >
+                                          {eventDisplayTitle(event)}
+                                        </div>
+                                      ))}
+                                      {events.length > 1 && <div className="text-[9px] font-medium leading-none text-gray-500">+{events.length - 1} more</div>}
+                                    </div>
                                   </div>
-                                ))}
-                                {events.length > 1 && <div className="text-[9px] font-medium leading-none text-gray-500">+{events.length - 1} more</div>}
-                              </div>
-                            </button>
-                          );
-                        })}
-                      </div>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        );
+                      })}
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -676,11 +762,11 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                         </div>
                       ) : (
                         displayedUpcomingEvents.map((event) => (
-                          <div key={event.id} className={`flex items-start gap-2 rounded-lg border p-2 transition-colors ${eventToneClass(event.date)}`}>
+                          <div key={event.id} draggable onDragStart={(drag) => drag.dataTransfer.setData("text/plain", event.id)} className={`group relative flex cursor-grab items-start gap-2 rounded-lg border p-2 transition-all hover:-translate-y-0.5 hover:shadow-sm active:cursor-grabbing ${eventToneClass(event.date)}`}>
                             <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
                             <div className="min-w-0 flex-1">
                               {event.href ? (
-                                <Link to={event.href} className="line-clamp-1 text-xs font-semibold text-gray-900 hover:text-blue-600">
+                                <Link to={event.href} className="line-clamp-1 text-xs font-semibold text-gray-900">
                                   {eventDisplayTitle(event)}
                                 </Link>
                               ) : (
@@ -688,13 +774,47 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                               )}
                               <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
                             </div>
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={(click) => {
+                                  click.preventDefault();
+                                  click.stopPropagation();
+                                  setActiveCalendarMenuId((current) => current === event.id ? null : event.id);
+                                }}
+                                className="rounded-md p-1 text-gray-500 hover:bg-white hover:text-gray-900"
+                                aria-label="Event actions"
+                              >
+                                <MoreVertical className="h-4 w-4" />
+                              </button>
+                              {activeCalendarMenuId === event.id ? (
+                                <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
+                                  <button type="button" onClick={() => openRescheduler(event)} className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">Reschedule</button>
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
                         ))
                       )}
+                      {overdueEvents.length ? (
+                        <div className="pt-2">
+                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Past due</div>
+                          <div className="space-y-1.5">
+                            {overdueEvents.slice(0, 8).map((event) => (
+                              <div key={`overdue-${event.id}`} className={`flex items-start gap-2 rounded-lg border p-2 transition-all hover:-translate-y-0.5 hover:shadow-sm ${eventToneClass(event.date)}`}>
+                                <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
+                                <div className="min-w-0 flex-1">
+                                  {event.href ? <Link to={event.href} className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</Link> : <h4 className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>}
+                                  <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
                     </div>
-                    <div className="grid grid-cols-2 gap-2 xl:grid-cols-1">
+                    <div className="grid gap-2">
                       <Button size="sm" variant="outline" onClick={() => navigate("/assignments")}>Manage assignments</Button>
-                      <Button size="sm" variant="outline" onClick={() => navigate("/calendar")}>View full calendar</Button>
                     </div>
                   </div>
                 </div>
@@ -818,6 +938,30 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
           </div>
         </div>
       </main>
+      {rescheduleTarget ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+            <div className="border-b border-gray-200 p-5">
+              <h2 className="text-lg font-semibold text-gray-900">Reschedule event</h2>
+              <p className="mt-1 line-clamp-2 text-sm text-gray-600">{eventDisplayTitle(rescheduleTarget)}</p>
+            </div>
+            <div className="grid gap-4 p-5 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Date</span>
+                <input type="date" value={rescheduleDate} onChange={(event) => setRescheduleDate(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
+              <label className="block">
+                <span className="mb-1 block text-sm font-medium text-gray-700">Time</span>
+                <input type="time" value={rescheduleTime} onChange={(event) => setRescheduleTime(event.target.value)} className="h-10 w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
+              </label>
+            </div>
+            <div className="flex items-center justify-end gap-3 border-t border-gray-200 p-5">
+              <Button type="button" variant="outline" onClick={() => setRescheduleTarget(null)}>Cancel</Button>
+              <Button type="button" onClick={() => void saveRescheduleTarget()}>Save</Button>
+            </div>
+          </div>
+        </div>
+      ) : null}
       <TeacherAssignmentModal
         classId={classId}
         open={assignmentModalOpen}

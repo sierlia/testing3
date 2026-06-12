@@ -341,7 +341,7 @@ export function normalizeAssignment(row: any): AssignmentTask {
     ? rubricTotal(rubric)
     : gradingMode === "auto"
       ? autoCriteriaTotal(autoCriteria)
-      : Number(row.points_possible ?? 100);
+      : Number(row.points_possible ?? 0);
   return {
     id: row.id,
     task_type: row.task_type,

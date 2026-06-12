@@ -213,6 +213,38 @@ function StudentAssignmentsPage() {
     setSelectedAssignmentId(routeAssignment ?? selectedAssignmentId ?? assignments[0]?.id ?? null);
   }, [assignmentId, assignments, selectedAssignmentId]);
 
+  useEffect(() => {
+    if (!selectedAssignment || !classId || !userId) return;
+    if (submissionMap.has(selectedAssignment.id)) return;
+    const markViewed = async () => {
+      const { data, error } = await supabase
+        .from("assignment_submissions")
+        .upsert(
+          {
+            assignment_id: selectedAssignment.id,
+            class_id: classId,
+            student_user_id: userId,
+            body: "",
+            attachments: [],
+            auto_scores: {},
+            status: "draft",
+            submitted_at: null,
+          } as any,
+          { onConflict: "assignment_id,student_user_id" },
+        )
+        .select("id,assignment_id,body,attachments,auto_scores,manual_score,manual_feedback,status,submitted_at,returned_at")
+        .single();
+      if (error || !data) return;
+      const row = {
+        ...(data as any),
+        attachments: Array.isArray((data as any).attachments) ? (data as any).attachments : [],
+        auto_scores: (data as any).auto_scores && typeof (data as any).auto_scores === "object" ? (data as any).auto_scores : {},
+      } as SubmissionRow;
+      setSubmissions((current) => current.some((submission) => submission.assignment_id === row.assignment_id) ? current : [...current, row]);
+    };
+    void markViewed();
+  }, [classId, selectedAssignment, submissionMap, userId]);
+
   const setDraft = (assignmentIdToPatch: string, patch: Partial<DraftState>) => {
     setDrafts((current) => {
       const existing = current[assignmentIdToPatch] ?? { body: "", attachmentIds: [] };
@@ -309,7 +341,7 @@ function StudentAssignmentsPage() {
                         {submission?.status ? (
                           <>
                             <span aria-hidden="true">|</span>
-                            <span>{submission.status === "returned" ? "Returned" : submission.status === "submitted" ? "Submitted" : "Draft"}</span>
+                            <span>{submission.status === "returned" ? "Returned" : submission.status === "submitted" ? "Submitted" : "Viewed"}</span>
                           </>
                         ) : null}
                       </div>

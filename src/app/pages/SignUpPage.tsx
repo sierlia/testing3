@@ -102,7 +102,8 @@ export function SignUpPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <Card className="cursor-pointer border-2 transition-shadow hover:border-blue-500 hover:shadow-lg" onClick={() => setSelectedRole("teacher")}>
+          <button type="button" className="text-left" onClick={() => setSelectedRole("teacher")}>
+          <Card className="h-full cursor-pointer border-2 border-transparent transition-shadow hover:shadow-md focus-within:border-blue-500">
             <CardHeader>
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
                 <GraduationCap className="h-8 w-8 text-blue-600" />
@@ -117,13 +118,12 @@ export function SignUpPage() {
                 <li>Manage parties, committees, and caucuses</li>
                 <li>Track student progress with assignments</li>
               </ul>
-              <Button className="w-full" size="lg">
-                Sign Up as Teacher
-              </Button>
             </CardContent>
           </Card>
+          </button>
 
-          <Card className="cursor-pointer border-2 transition-shadow hover:border-green-500 hover:shadow-lg" onClick={() => setSelectedRole("student")}>
+          <button type="button" className="text-left" onClick={() => setSelectedRole("student")}>
+          <Card className="h-full cursor-pointer border-2 border-transparent transition-shadow hover:shadow-md focus-within:border-green-500">
             <CardHeader>
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
                 <BookOpen className="h-8 w-8 text-green-600" />
@@ -139,11 +139,9 @@ export function SignUpPage() {
                 <li>Participate in committees, caucuses, and elections</li>
                 <li>Vote on legislation</li>
               </ul>
-              <Button className="w-full" size="lg" variant="outline">
-                Sign Up as Student
-              </Button>
             </CardContent>
           </Card>
+          </button>
         </div>
 
         <div className="mt-6 text-center text-sm">
@@ -153,14 +151,14 @@ export function SignUpPage() {
           </Link>
         </div>
 
-        <div className="mt-4">
-          <LegalConsentText />
-        </div>
-
         <div className="mt-4 text-center">
           <Link to="/" className="text-sm text-gray-600 hover:underline">
             Back to home
           </Link>
+        </div>
+
+        <div className="mt-4">
+          <LegalConsentText />
         </div>
       </div>
     </div>
@@ -292,18 +290,6 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
                     {...autofillProps(`gavel_${role}_family_name`)}
                   />
                 </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor={`${role}-school`}>School/Institution</Label>
-                  <Input
-                    id={`${role}-school`}
-                    placeholder="Lincoln High School"
-                    value={formData.school}
-                    onChange={(event) => setField("school", event.target.value)}
-                    required
-                    {...autofillProps(`gavel_${role}_school`)}
-                  />
-                </div>
               </div>
 
               <div className="grid gap-4 sm:grid-cols-2">
@@ -319,7 +305,20 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
                     {...autofillProps(`gavel_${role}_contact`)}
                   />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor={`${role}-school`}>School/Institution</Label>
+                  <Input
+                    id={`${role}-school`}
+                    placeholder="Lincoln High School"
+                    value={formData.school}
+                    onChange={(event) => setField("school", event.target.value)}
+                    required
+                    {...autofillProps(`gavel_${role}_school`)}
+                  />
+                </div>
+              </div>
 
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor={`${role}-password`}>Password</Label>
                   <Input
@@ -336,9 +335,6 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
                     data-form-type="other"
                   />
                 </div>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor={`${role}-confirm-password`}>Confirm Password</Label>
                   <Input
@@ -355,12 +351,12 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
                     data-form-type="other"
                   />
                 </div>
+              </div>
 
-                <div className="flex items-end">
-                  <Button type="submit" className="w-full" disabled={loading || googleLoading}>
-                    {loading ? "Creating Account..." : title}
-                  </Button>
-                </div>
+              <div>
+                <Button type="submit" className="w-full" disabled={loading || googleLoading}>
+                  {loading ? "Creating Account..." : title}
+                </Button>
               </div>
             </form>
 
@@ -375,14 +371,21 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
             </GoogleAuthButton>
 
             <div className="mt-5 space-y-3">
-              <LegalConsentText />
               <div className="text-center text-sm">
                 <span className="text-gray-600">Already have an account? </span>
                 <Link to="/signin" className="font-medium text-blue-600 hover:underline">Log in</Link>
               </div>
+              <div className="text-center">
+                <Link to="/" className="text-sm text-gray-600 hover:underline">
+                  Back to home
+                </Link>
+              </div>
             </div>
           </CardContent>
         </Card>
+        <div className="mt-4">
+          <LegalConsentText />
+        </div>
       </div>
     </div>
   );

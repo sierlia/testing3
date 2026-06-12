@@ -124,6 +124,7 @@ export function FloorSession() {
   const [selectedDiscussionId, setSelectedDiscussionId] = useState<string | null>(null);
   const [discussionListCollapsed, setDiscussionListCollapsed] = useState(false);
   const [expandedReplyRails, setExpandedReplyRails] = useState<Record<string, boolean>>({});
+  const [expandedDiscussionPosts, setExpandedDiscussionPosts] = useState<Record<string, boolean>>({});
   const [creatingDiscussion, setCreatingDiscussion] = useState(false);
   const [newDiscussionTitle, setNewDiscussionTitle] = useState("");
   const [newDiscussionPrompt, setNewDiscussionPrompt] = useState("");
@@ -1200,6 +1201,8 @@ export function FloorSession() {
                   const postComments = discussionCommentsByPost.get(post.id) ?? [];
                   const postReactions = discussionReactionsByPost.get(post.id) ?? [];
                   const repliesExpanded = Boolean(expandedReplyRails[post.id]);
+                  const postExpanded = Boolean(expandedDiscussionPosts[post.id]);
+                  const postHasOverflow = post.body.length > 700 || post.body.split(/\r?\n/).length > 8;
                   const replyRailHasOverflow = postComments.length > 3 || postComments.some((comment) => comment.body.length > 220 || (comment.attachments?.length ?? 0) > 0);
                   return (
                     <article key={post.id} className="grid gap-3 rounded-md border border-gray-200 bg-white p-4 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_23rem]">
@@ -1218,7 +1221,19 @@ export function FloorSession() {
                             </button>
                           )}
                         </div>
-                        <p className="whitespace-pre-wrap text-sm leading-6 text-gray-800">{post.body}</p>
+                        <div className="relative">
+                          <p className={`whitespace-pre-wrap text-sm leading-6 text-gray-800 ${postHasOverflow && !postExpanded ? "max-h-40 overflow-hidden" : ""}`}>{post.body}</p>
+                          {postHasOverflow && !postExpanded ? <div className="pointer-events-none absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white to-white/0" /> : null}
+                        </div>
+                        {postHasOverflow ? (
+                          <button
+                            type="button"
+                            onClick={() => setExpandedDiscussionPosts((prev) => ({ ...prev, [post.id]: !postExpanded }))}
+                            className="mt-2 text-xs font-semibold text-blue-600 hover:text-blue-700"
+                          >
+                            {postExpanded ? "Show less" : "Show more"}
+                          </button>
+                        ) : null}
                         <AttachmentList attachments={post.attachments} />
                         <div className="mt-4 flex flex-wrap gap-2">
                           {DISCUSSION_REACTIONS.map((reaction) => {
@@ -1373,7 +1388,7 @@ export function FloorSession() {
     <div className={`min-h-screen ${displayFloorMode === "discussion" ? "bg-white" : "bg-gray-50"}`}>
       <Navigation />
       <main className={displayFloorMode === "discussion" ? "px-3 py-4 sm:px-4 lg:px-6" : "mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"}>
-        {(displayFloorMode !== "discussion" || role === "teacher") && <div className={displayFloorMode === "discussion" ? "mb-4" : "mb-8"}>
+        {displayFloorMode !== "discussion" && <div className="mb-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
             {displayFloorMode !== "discussion" ? (
               <div>
@@ -1382,18 +1397,18 @@ export function FloorSession() {
               </div>
             ) : <div />}
             {role === "teacher" && (
-              <div className="inline-flex overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
+              <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
                 {([
                   ["election", "Speaker Election"],
                   ["bills", "Bills"],
                   ["discussion", "Discussions"],
-                ] as Array<[FloorMode, string]>).map(([mode, label], index) => (
+                ] as Array<[FloorMode, string]>).map(([mode, label]) => (
                   <button
                     key={mode}
                     type="button"
                     onClick={() => confirmFloorMode(mode)}
                     disabled={busy || floorMode === mode}
-                    className={`${index > 0 ? "border-l border-gray-200" : ""} px-5 py-2 text-sm font-semibold ${floorMode === mode ? "bg-blue-600 text-white" : "text-gray-700 hover:bg-gray-50"} disabled:opacity-80`}
+                    className={`rounded px-3 py-1.5 text-sm font-semibold transition ${floorMode === mode ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"} disabled:opacity-80`}
                   >
                     {label}
                   </button>

@@ -66,29 +66,37 @@ export function PartyCreateForm({
 
         <div>
           <label className="mb-1 block text-sm font-medium text-gray-700">Party Color *</label>
-          <div className="flex flex-wrap items-center gap-2">
-            {DEFAULT_PARTY_COLORS.map((color) => (
-              <button
-                key={color}
-                type="button"
-                onClick={() => onChange({ ...value, color })}
-                className={`h-8 w-8 rounded-full border-2 ${value.color === color ? "border-gray-900" : "border-white shadow ring-1 ring-gray-300"}`}
-                style={{ backgroundColor: color }}
-                aria-label={`Use party color ${color}`}
-              />
-            ))}
-            <input
-              type="color"
-              value={value.color}
-              onChange={(event) => onChange({ ...value, color: event.target.value })}
-              className="h-8 w-8 cursor-pointer rounded-full border border-gray-300 bg-[conic-gradient(red,orange,yellow,green,cyan,blue,violet,red)] p-0 opacity-0"
-              aria-label="Custom party color"
-            />
-            <span
-              className="-ml-10 pointer-events-none h-8 w-8 rounded-full border-2 border-white shadow ring-1 ring-gray-300"
-              style={{ background: "conic-gradient(red, orange, yellow, green, cyan, blue, violet, red)" }}
-              aria-hidden="true"
-            />
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+            <div className="mb-3 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full border-2 border-white shadow ring-1 ring-gray-300" style={{ backgroundColor: value.color }} />
+              <div className="min-w-0">
+                <div className="text-sm font-semibold text-gray-900">{value.color.toUpperCase()}</div>
+                <div className="text-xs text-gray-500">Used for party accents and profile labels.</div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {DEFAULT_PARTY_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  onClick={() => onChange({ ...value, color })}
+                  className={`h-8 w-8 rounded-full border-2 transition-transform hover:scale-105 ${value.color === color ? "border-gray-900" : "border-white shadow ring-1 ring-gray-300"}`}
+                  style={{ backgroundColor: color }}
+                  aria-label={`Use party color ${color}`}
+                />
+              ))}
+              <label className="relative inline-flex h-8 cursor-pointer items-center gap-2 rounded-full border border-gray-300 bg-white px-3 text-xs font-semibold text-gray-700 shadow-sm hover:bg-gray-50">
+                Custom
+                <span className="h-4 w-4 rounded-full" style={{ background: "conic-gradient(red, orange, yellow, green, cyan, blue, violet, red)" }} />
+                <input
+                  type="color"
+                  value={value.color}
+                  onChange={(event) => onChange({ ...value, color: event.target.value })}
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  aria-label="Custom party color"
+                />
+              </label>
+            </div>
           </div>
         </div>
 

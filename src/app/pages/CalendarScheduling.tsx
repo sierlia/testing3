@@ -443,13 +443,16 @@ export function CalendarScheduling() {
                   </Link>
                   <div className="mt-1 text-xs text-gray-500">{bill.committee_name || "No committee listed"}</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="datetime-local"
-                    value={draftTimes[bill.id] ?? ""}
-                    onChange={(event) => setDraftTimes((prev) => ({ ...prev, [bill.id]: event.target.value }))}
-                    className="rounded-md border border-gray-300 px-3 py-2 text-sm"
-                  />
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+                    <Clock className="h-4 w-4 text-gray-400" />
+                    <input
+                      type="datetime-local"
+                      value={draftTimes[bill.id] ?? ""}
+                      onChange={(event) => setDraftTimes((prev) => ({ ...prev, [bill.id]: event.target.value }))}
+                      className="bg-transparent text-sm outline-none"
+                    />
+                  </label>
                   <button
                     type="button"
                     onClick={() => void saveSchedule(bill.id)}

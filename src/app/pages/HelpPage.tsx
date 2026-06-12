@@ -55,8 +55,7 @@ export function HelpPage() {
       <main className="bg-white">
         <header className="border-b border-slate-200 bg-blue-50">
           <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
-            <p className="text-sm font-black uppercase tracking-wide text-blue-700">Features</p>
-            <h1 className="mt-3 text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Gavel Feature Guide</h1>
+            <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Gavel Feature Guide</h1>
             <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-700">
               This guide explains the main classroom workflows in Gavel: class setup, student profiles, legislation,
               organizations, communication, floor procedure, records, assignments, grading, and customization.
@@ -361,28 +360,28 @@ export function HelpPage() {
             </ArticleSection>
 
             <ArticleSection id="faq" title="FAQ">
-              <div>
-                <h3 className="font-black text-slate-950">Can separate classes share the same simulation?</h3>
-                <p className="mt-2">
+              <details className="rounded-lg border border-slate-200 bg-white p-4">
+                <summary className="cursor-pointer font-black text-slate-950">Can separate classes share the same simulation?</summary>
+                <p className="mt-3">
                   Separate classes do not share work automatically. If students need to work from the same bills,
                   organizations, records, and timeline, enroll them in one class. If periods need different rules or
                   calendars, keep them separate.
                 </p>
-              </div>
-              <div>
-                <h3 className="font-black text-slate-950">Can Gavel be used without online discussion?</h3>
-                <p className="mt-2">
+              </details>
+              <details className="rounded-lg border border-slate-200 bg-white p-4">
+                <summary className="cursor-pointer font-black text-slate-950">Can Gavel be used without online discussion?</summary>
+                <p className="mt-3">
                   Yes. Teachers can disable organization boards or use them lightly, then rely on Gavel for bills, records,
                   membership, voting, and grading while discussion happens in person.
                 </p>
-              </div>
-              <div>
-                <h3 className="font-black text-slate-950">Can students submit work from outside Gavel?</h3>
-                <p className="mt-2">
+              </details>
+              <details className="rounded-lg border border-slate-200 bg-white p-4">
+                <summary className="cursor-pointer font-black text-slate-950">Can students submit work from outside Gavel?</summary>
+                <p className="mt-3">
                   Assignments can include manual submission notes and attachments from Gavel work. If a class needs outside
                   documents, teachers can describe that requirement in the prompt and use the rubric fields for grading.
                 </p>
-              </div>
+              </details>
             </ArticleSection>
 
             <div className="border-t border-slate-200 py-10">

@@ -135,10 +135,6 @@ export function SignInPage() {
               Log in with Google
             </GoogleAuthButton>
 
-            <div className="mt-5">
-              <LegalConsentText />
-            </div>
-
             <div className="mt-6 text-center text-sm">
               <span className="text-gray-600">Don't have an account? </span>
               <Link to="/signup" className="text-blue-600 hover:underline font-medium">
@@ -153,6 +149,10 @@ export function SignInPage() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="mt-4">
+          <LegalConsentText />
+        </div>
       </div>
     </div>
   );
