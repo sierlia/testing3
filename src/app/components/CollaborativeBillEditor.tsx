@@ -405,7 +405,12 @@ function createEditAttributionExtension({
           key: editAttributionPluginKey,
           filterTransaction: (transaction, state) => {
             if (!editor.isEditable || shouldSuppress() || !trackDeletes) return true;
-            if (!transaction.docChanged || transaction.getMeta(editAttributionPluginKey) || transaction.getMeta("restoreDeleteHighlight")) return true;
+            if (
+              !transaction.docChanged ||
+              isChangeOrigin(transaction) ||
+              transaction.getMeta(editAttributionPluginKey) ||
+              transaction.getMeta("restoreDeleteHighlight")
+            ) return true;
 
             let touchesDeletedText = false;
             transaction.mapping.maps.forEach((stepMap) => {
@@ -703,7 +708,8 @@ export function CollaborativeBillEditor({
     };
     void setup();
     const fallbackTimer = window.setTimeout(() => {
-      if (!mounted || providerRef.current?.getSubscribed()) return;
+      const provider = providerRef.current;
+      if (!mounted || provider?.getSubscribed() || (provider && !provider.getInitialSynced())) return;
       setCollabStatus("fallback");
       setReady(true);
     }, 3500);

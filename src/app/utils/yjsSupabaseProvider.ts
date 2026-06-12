@@ -45,6 +45,9 @@ export class YjsSupabaseProvider {
   private onSynced?: () => void;
   private hadSnapshot = false;
   private isSubscribed = false;
+  private initialSyncPromise: Promise<void> | null = null;
+  private initialSynced = false;
+  private notifiedSynced = false;
   private pendingSends: Array<{ event: string; b64: string; extra?: Record<string, any> }> = [];
 
   constructor({ doc, awareness, key, user }: { doc: Y.Doc; awareness: Awareness; key: DocKey; user: { id: string; name: string; color: string } }, onSynced?: () => void) {
@@ -134,8 +137,8 @@ export class YjsSupabaseProvider {
         if (status !== "SUBSCRIBED") return;
         if (this.destroyed) return;
         this.isSubscribed = true;
-        this.hadSnapshot = await this.hydrateFromDb();
-        this.startDbPolling();
+        await this.ensureInitialSync();
+        if (this.destroyed) return;
         this.startConsistencyLoop();
         // Flush any queued broadcasts that happened before subscription.
         for (const msg of this.pendingSends.splice(0, this.pendingSends.length)) {
@@ -143,7 +146,7 @@ export class YjsSupabaseProvider {
         }
         this.requestPeerSync();
         this.scheduleStateBroadcast(1000);
-        this.onSynced?.();
+        this.notifySynced();
         this.broadcastAwareness();
       });
 
@@ -162,6 +165,27 @@ export class YjsSupabaseProvider {
       if (this.destroyed) return;
       this.broadcastAwareness();
     });
+
+    void this.ensureInitialSync();
+  }
+
+  private ensureInitialSync() {
+    if (!this.initialSyncPromise) {
+      this.initialSyncPromise = (async () => {
+        this.hadSnapshot = await this.hydrateFromDb();
+        if (this.destroyed) return;
+        this.initialSynced = true;
+        this.startDbPolling();
+        this.notifySynced();
+      })();
+    }
+    return this.initialSyncPromise;
+  }
+
+  private notifySynced() {
+    if (this.notifiedSynced || this.destroyed) return;
+    this.notifiedSynced = true;
+    this.onSynced?.();
   }
 
   private broadcastAwareness() {
@@ -275,6 +299,10 @@ export class YjsSupabaseProvider {
 
   getHydratedFromSnapshot() {
     return this.hadSnapshot;
+  }
+
+  getInitialSynced() {
+    return this.initialSynced;
   }
 
   private async persistToDb() {
