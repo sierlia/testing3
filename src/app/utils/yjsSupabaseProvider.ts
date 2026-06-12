@@ -24,6 +24,10 @@ function fromBase64(b64: string) {
 type DocKey = { committeeId: string; billId: string; classId: string; documentId?: string; storageColumn?: string };
 const docSnapshotCache = new Map<string, string>();
 
+function channelPart(value: string) {
+  return encodeURIComponent(value);
+}
+
 export class YjsSupabaseProvider {
   doc: Y.Doc;
   awareness: Awareness;
@@ -33,7 +37,7 @@ export class YjsSupabaseProvider {
   private destroyed = false;
   private persistTimer: number | null = null;
   private pollTimer: number | null = null;
-  private syncRequestTimer: number | null = null;
+  private syncRequestTimers: number[] = [];
   private lastPersistedB64: string | null = null;
   private lastSeenUpdatedAt: string | null = null;
   private onSynced?: () => void;
@@ -48,7 +52,11 @@ export class YjsSupabaseProvider {
     this.onSynced = onSynced;
 
     const documentId = key.documentId ?? key.billId;
-    this.channel = supabase.channel(`doc:${key.committeeId}:${documentId}`, { config: { broadcast: { ack: true } } });
+    const storageColumn = key.storageColumn ?? "ydoc_base64";
+    this.channel = supabase.channel(
+      `doc:${channelPart(key.classId)}:${channelPart(key.committeeId)}:${channelPart(documentId)}:${channelPart(storageColumn)}`,
+      { config: { broadcast: { ack: true } } },
+    );
 
     this.awareness.setLocalStateField("user", { id: user.id, name: user.name, color: user.color });
 
@@ -103,7 +111,14 @@ export class YjsSupabaseProvider {
         // y-protocols awareness update format
         applyAwarenessUpdate(this.awareness, update, "remote");
       })
+      .on("postgres_changes", { event: "*", schema: "public", table: "committee_bill_docs", filter: `bill_id=eq.${key.billId}` }, () => {
+        void this.syncFromDb();
+      })
       .subscribe(async (status) => {
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") {
+          this.isSubscribed = false;
+          return;
+        }
         if (status !== "SUBSCRIBED") return;
         if (this.destroyed) return;
         this.isSubscribed = true;
@@ -154,14 +169,16 @@ export class YjsSupabaseProvider {
   }
 
   private requestPeerSync() {
-    if (this.syncRequestTimer) window.clearTimeout(this.syncRequestTimer);
+    for (const timer of this.syncRequestTimers) window.clearTimeout(timer);
+    this.syncRequestTimers = [];
     const sendRequest = () => {
       if (this.destroyed || !this.isSubscribed) return;
       const stateVector = Y.encodeStateVector(this.doc);
       void this.sendBroadcast("yjs-sync-request", "", { stateVectorB64: toBase64(stateVector) });
     };
     sendRequest();
-    this.syncRequestTimer = window.setTimeout(sendRequest, 500);
+    this.syncRequestTimers.push(window.setTimeout(sendRequest, 500));
+    this.syncRequestTimers.push(window.setTimeout(sendRequest, 1500));
   }
 
   private schedulePersist() {
@@ -294,7 +311,8 @@ export class YjsSupabaseProvider {
     }
     if (this.persistTimer) window.clearTimeout(this.persistTimer);
     if (this.pollTimer) window.clearInterval(this.pollTimer);
-    if (this.syncRequestTimer) window.clearTimeout(this.syncRequestTimer);
+    for (const timer of this.syncRequestTimers) window.clearTimeout(timer);
+    this.syncRequestTimers = [];
     void supabase.removeChannel(this.channel);
   }
 

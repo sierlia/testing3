@@ -242,6 +242,26 @@ function normalizedRangeText(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+function stableYjsClientId(value: string) {
+  let hash = 2166136261;
+  for (let i = 0; i < value.length; i += 1) {
+    hash ^= value.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  // Keep this away from 0 while staying in a compact positive integer range.
+  return (hash >>> 0) % 2147483646 + 1;
+}
+
+function withYjsClientId<T>(doc: Y.Doc, clientId: number, fn: () => T) {
+  const previousClientId = doc.clientID;
+  doc.clientID = clientId;
+  try {
+    return fn();
+  } finally {
+    doc.clientID = previousClientId;
+  }
+}
+
 function sameMarkAttrs(a: any, b: any) {
   const aDeletionId = String(a?.deletionId ?? "");
   const bDeletionId = String(b?.deletionId ?? "");
@@ -621,9 +641,11 @@ export function CollaborativeBillEditor({
       setCollabStatus("connecting");
 
       const user = await getCurrentUser();
+      if (!mounted) return;
       const uid = user?.id;
       if (!uid) return;
       const { data: p } = await supabase.from("profiles").select("display_name,role").eq("user_id", uid).maybeSingle();
+      if (!mounted) return;
       const name = (p as any)?.display_name ?? user?.user_metadata?.name ?? "Member";
       // Keep authorName in highlights consistent: prefer a concrete non-empty name.
       const baseName = String(name || "").trim() || "Member";
@@ -641,6 +663,7 @@ export function CollaborativeBillEditor({
       } catch {
         // ignore
       }
+      if (!mounted) return;
       try {
         // Backfill if missing.
         const { data: assigned, error: cErr } = await supabase.rpc("ensure_committee_member_color", { target_committee: committeeId } as any);
@@ -648,6 +671,7 @@ export function CollaborativeBillEditor({
       } catch {
         // ignore; fall back to deterministic colorFromId
       }
+      if (!mounted) return;
       setLocalUser({ id: uid, name: normalizedName, color });
 
       const ydoc = new Y.Doc();
@@ -663,11 +687,18 @@ export function CollaborativeBillEditor({
           user: { id: uid, name: normalizedName, color },
         },
         () => {
+          if (!mounted) return;
           hydratedFromSnapshotRef.current = provider.getHydratedFromSnapshot();
           setCollabStatus(provider.getSubscribed() ? "live" : "connecting");
-          mounted && setReady(true);
+          setReady(true);
         },
       );
+      if (!mounted) {
+        provider.destroy();
+        awareness.destroy();
+        ydoc.destroy();
+        return;
+      }
       providerRef.current = provider;
     };
     void setup();
@@ -836,7 +867,13 @@ export function CollaborativeBillEditor({
       }
       suppressAttributionRef.current = true;
       try {
-        editor.commands.setContent(sourceHtml, false);
+        const ydoc = ydocRef.current;
+        const seedClientId = stableYjsClientId(`${classId}:${committeeId}:${billId}:${documentId ?? billId}:${storageColumn ?? "ydoc_base64"}`);
+        if (ydoc) {
+          withYjsClientId(ydoc, seedClientId, () => editor.commands.setContent(sourceHtml, false));
+        } else {
+          editor.commands.setContent(sourceHtml, false);
+        }
         lastSeededInitialHtmlRef.current = sourceHtml;
       } finally {
         suppressAttributionRef.current = false;
