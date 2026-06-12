@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Bell, MessageSquare, Settings, ThumbsUp, Trash2 } from "lucide-react";
+import { Bell, Check, MessageSquare, Settings, ThumbsUp, Trash2, UserPlus, X } from "lucide-react";
+import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
 import { CompactPager } from "../components/CompactPager";
@@ -12,9 +13,13 @@ type NotificationItem = {
   title: string;
   message: string;
   href: string;
+  class_id: string;
+  org_type: "party" | "committee" | "caucus" | "system";
+  org_id: string | null;
+  event_key: string;
   created_at: string;
   read_at: string | null;
-  kind: "comment" | "reaction";
+  kind: "comment" | "reaction" | "invite";
 };
 
 export function Notifications() {
@@ -29,7 +34,7 @@ export function Notifications() {
     setLoading(true);
     const { data } = await supabase
       .from("notifications")
-      .select("id,title,message,href,created_at,read_at,event_key")
+      .select("id,class_id,title,message,href,created_at,read_at,event_key,org_type,org_id")
       .eq("recipient_user_id", user.id)
       .order("created_at", { ascending: false })
       .limit(200);
@@ -38,9 +43,13 @@ export function Notifications() {
       title: row.title,
       message: row.message,
       href: row.href || "/notifications",
+      class_id: row.class_id,
+      org_type: row.org_type,
+      org_id: row.org_id,
+      event_key: row.event_key,
       created_at: row.created_at,
       read_at: row.read_at,
-      kind: row.event_key?.includes("reactions") ? "reaction" : "comment",
+      kind: row.event_key === "organization.invite" ? "invite" : row.event_key?.includes("reactions") ? "reaction" : "comment",
     })));
     setLoading(false);
   };
@@ -90,6 +99,27 @@ export function Notifications() {
     setItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const acceptInvite = async (item: NotificationItem) => {
+    if (!user?.id || item.event_key !== "organization.invite" || !item.org_id) return;
+    try {
+      if (item.org_type === "party") {
+        const { data: party, error } = await supabase.from("parties").select("name").eq("id", item.org_id).maybeSingle();
+        if (error) throw error;
+        await supabase.from("profiles").update({ party: (party as any)?.name ?? item.title.replace(/^Invitation to /, "") } as any).eq("user_id", user.id);
+      } else if (item.org_type === "committee") {
+        const { error } = await supabase.from("committee_members").upsert({ committee_id: item.org_id, user_id: user.id, role: "member" } as any, { onConflict: "committee_id,user_id" });
+        if (error) throw error;
+      } else if (item.org_type === "caucus") {
+        const { error } = await supabase.from("caucus_members").upsert({ caucus_id: item.org_id, user_id: user.id, role: "member" } as any, { onConflict: "caucus_id,user_id" });
+        if (error) throw error;
+      }
+      await markRead(item.id);
+      toast.success("Invitation accepted");
+    } catch (e: any) {
+      toast.error(e.message || "Could not accept invitation");
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
@@ -103,7 +133,7 @@ export function Notifications() {
           <div className="flex items-center gap-2">
             {items.some((item) => !item.read_at) && (
               <button type="button" onClick={() => void markAllRead()} className="rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
-                Mark all read
+                Mark as read
               </button>
             )}
             <Link to="/settings" className="inline-flex items-center gap-2 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
@@ -127,8 +157,8 @@ export function Notifications() {
               {pageItems.map((item) => (
                 <div key={item.id} className={`p-4 transition-colors ${!item.read_at ? "bg-blue-50" : "bg-white"}`}>
                   <div className="flex items-start gap-3">
-                    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${item.kind === "comment" ? "bg-blue-100" : "bg-purple-100"}`}>
-                      {item.kind === "comment" ? <MessageSquare className="h-5 w-5 text-blue-600" /> : <ThumbsUp className="h-5 w-5 text-purple-600" />}
+                    <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full ${item.kind === "invite" ? "bg-green-100" : item.kind === "comment" ? "bg-blue-100" : "bg-purple-100"}`}>
+                      {item.kind === "invite" ? <UserPlus className="h-5 w-5 text-green-700" /> : item.kind === "comment" ? <MessageSquare className="h-5 w-5 text-blue-600" /> : <ThumbsUp className="h-5 w-5 text-purple-600" />}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="text-sm font-semibold text-gray-900">{item.title}</div>
@@ -143,6 +173,18 @@ export function Notifications() {
                         <Link to={item.href} onClick={() => void markRead(item.id)} className="text-xs font-medium text-blue-600 hover:text-blue-700">
                           View
                         </Link>
+                        {item.kind === "invite" && (
+                          <>
+                            <button type="button" onClick={() => void acceptInvite(item)} className="inline-flex items-center gap-1 text-xs font-medium text-green-700 hover:text-green-800">
+                              <Check className="h-3.5 w-3.5" />
+                              Accept
+                            </button>
+                            <button type="button" onClick={() => void remove(item.id)} className="inline-flex items-center gap-1 text-xs font-medium text-gray-600 hover:text-gray-800">
+                              <X className="h-3.5 w-3.5" />
+                              Decline
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                     <button type="button" onClick={() => void remove(item.id)} className="rounded p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-700" aria-label="Remove notification">

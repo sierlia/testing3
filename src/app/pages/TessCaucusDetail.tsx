@@ -17,6 +17,8 @@ import { getCurrentUser } from "../utils/currentUser";
 import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
 import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
 import { VerticalMenuPlacement, verticalMenuPlacementClass, verticalMenuPlacementForButton } from "../utils/menuPlacement";
+import { sendOrganizationInvite } from "../utils/organizationInvites";
+import { ANNOUNCEMENT_WORD_LIMIT, COMMENT_WORD_LIMIT, wordCount, wordLimitClass, withinWordLimit } from "../utils/wordLimits";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 
@@ -106,6 +108,7 @@ export function TessCaucusDetail() {
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
+  const [seenAnnouncementIds, setSeenAnnouncementIds] = useState<Set<string>>(new Set());
   const [newAnnouncement, setNewAnnouncement] = useState("");
   const [newAnnouncementAttachments, setNewAnnouncementAttachments] = useState<DiscussionAttachment[]>([]);
 
@@ -134,6 +137,17 @@ export function TessCaucusDetail() {
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
     [announcements, selectedAnnouncementId],
   );
+  const newAnnouncementWordCount = wordCount(newAnnouncement);
+  const newCommentWordCount = wordCount(newComment);
+  const markAnnouncementSeen = (announcementId: string) => {
+    const storageKey = `gavel:caucus-announcements-seen:${caucusId}`;
+    setSeenAnnouncementIds((current) => {
+      const next = new Set(current);
+      next.add(announcementId);
+      window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+      return next;
+    });
+  };
   const electionOpen = classSettings?.elections?.caucusOpenById?.[caucusId] ?? Boolean(classSettings?.elections?.open);
   const electionConcluded = Boolean(classSettings?.elections?.caucusConcludedById?.[caucusId]);
 
@@ -169,6 +183,11 @@ export function TessCaucusDetail() {
   };
 
   useEffect(() => {
+    try {
+      setSeenAnnouncementIds(new Set(JSON.parse(window.localStorage.getItem(`gavel:caucus-announcements-seen:${caucusId}`) || "[]")));
+    } catch {
+      setSeenAnnouncementIds(new Set());
+    }
     const load = async () => {
       setLoading(true);
       try {
@@ -645,9 +664,27 @@ export function TessCaucusDetail() {
     toast.success("Member added");
   };
 
+  const inviteMemberToCaucus = async (candidate: MemberCandidate) => {
+    if (!caucus) return;
+    try {
+      await sendOrganizationInvite({
+        classId: caucus.class_id,
+        recipientUserId: candidate.user_id,
+        orgType: "caucus",
+        orgId: caucus.id,
+        orgName: caucus.title,
+        href: `/caucuses/${caucus.id}`,
+      });
+      toast.success("Invite sent");
+    } catch (e: any) {
+      toast.error(e.message || "Could not send invite");
+    }
+  };
+
   const postAnnouncement = async () => {
     if (!meId) return;
     if (!newAnnouncement.trim()) return;
+    if (!withinWordLimit(newAnnouncement, ANNOUNCEMENT_WORD_LIMIT)) return toast.error(`Announcements must be ${ANNOUNCEMENT_WORD_LIMIT} words or fewer`);
     try {
       const { error } = await supabase.from("caucus_announcements").insert({
         caucus_id: caucusId,
@@ -670,6 +707,7 @@ export function TessCaucusDetail() {
     if (!selectedAnnouncementId) return;
     const trimmed = body.trim();
     if (!trimmed) return;
+    if (!withinWordLimit(trimmed, COMMENT_WORD_LIMIT)) return toast.error(`Comments must be ${COMMENT_WORD_LIMIT} words or fewer`);
     try {
       const { data: inserted, error } = await supabase
         .from("caucus_comments")
@@ -1021,19 +1059,24 @@ export function TessCaucusDetail() {
               {canPostAnnouncements && (
                 <div className="p-6 border-b border-gray-200">
                   <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
-                    <textarea
-                      value={newAnnouncement}
-                      onChange={(e) => setNewAnnouncement(e.target.value)}
-                      placeholder="Post an announcement..."
-                      rows={3}
-                      className="w-full resize-y border-0 p-0 text-sm outline-none"
-                    />
+                    <div className="relative">
+                      <textarea
+                        value={newAnnouncement}
+                        onChange={(e) => setNewAnnouncement(e.target.value)}
+                        placeholder="Post an announcement..."
+                        rows={3}
+                        className="w-full resize-y border-0 p-0 pr-24 text-sm outline-none"
+                      />
+                      <span className={`pointer-events-none absolute bottom-0 right-0 text-[11px] ${wordLimitClass(newAnnouncementWordCount, ANNOUNCEMENT_WORD_LIMIT)}`}>
+                        {newAnnouncementWordCount}/{ANNOUNCEMENT_WORD_LIMIT}
+                      </span>
+                    </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <AttachmentPicker value={newAnnouncementAttachments} onChange={setNewAnnouncementAttachments} />
                     <button
                       onClick={() => void postAnnouncement()}
                       className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium"
-                      disabled={!newAnnouncement.trim()}
+                      disabled={!newAnnouncement.trim() || !withinWordLimit(newAnnouncement, ANNOUNCEMENT_WORD_LIMIT)}
                     >
                       <Send className="w-4 h-4" />
                       Post
@@ -1054,12 +1097,13 @@ export function TessCaucusDetail() {
                     announcements.map((a) => (
                       <button
                         key={a.id}
-                        onClick={() => setSelectedAnnouncementId(a.id)}
+                        onClick={() => { setSelectedAnnouncementId(a.id); markAnnouncementSeen(a.id); }}
                         className={`relative w-full text-left p-4 border-b border-gray-100 bg-white hover:bg-gray-50 ${
                           selectedAnnouncementId === a.id ? `border-l-4 ${a.author?.role === "teacher" ? "border-l-green-500" : "border-l-blue-500"}` : ""
                         }`}
                       >
                         {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
+                        {!seenAnnouncementIds.has(a.id) && <span className="mb-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">New</span>}
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
                           <Link to={profilePath(a.author_user_id)} className={authorLinkClass(a.author)}>
@@ -1127,17 +1171,22 @@ export function TessCaucusDetail() {
                       {canComment && (
                         <div className="pt-2 border-t border-gray-200">
                           <div className="flex items-start gap-2">
-                            <textarea
-                              value={newComment}
-                              onChange={(e) => setNewComment(e.target.value)}
-                              rows={2}
-                              placeholder="Write a comment..."
-                              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
+                            <div className="relative flex-1">
+                              <textarea
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                rows={2}
+                                placeholder="Write a comment..."
+                                className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                              />
+                              <span className={`pointer-events-none absolute bottom-2 right-3 text-[11px] ${wordLimitClass(newCommentWordCount, COMMENT_WORD_LIMIT)}`}>
+                                {newCommentWordCount}/{COMMENT_WORD_LIMIT}
+                              </span>
+                            </div>
                             <button
                               onClick={() => void postComment()}
                               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors font-medium disabled:opacity-50"
-                              disabled={!newComment.trim()}
+                              disabled={!newComment.trim() || !withinWordLimit(newComment, COMMENT_WORD_LIMIT)}
                             >
                               Send
                             </button>
@@ -1163,12 +1212,12 @@ export function TessCaucusDetail() {
                   </div>
                   {isTeacher && (
                     <div className="flex flex-wrap items-center gap-2">
-                      <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                      <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
                         <button
                           type="button"
                           onClick={() => void setCaucusElectionOpen(true)}
                           disabled={electionConcluded}
-                          className={`px-3 py-2 text-sm font-medium disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                          className={`rounded px-3 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
                         >
                           Open
                         </button>
@@ -1176,7 +1225,7 @@ export function TessCaucusDetail() {
                           type="button"
                           onClick={() => void setCaucusElectionOpen(false)}
                           disabled={electionConcluded}
-                          className={`border-l border-gray-300 px-3 py-2 text-sm font-medium disabled:opacity-50 ${!electionOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                          className={`rounded px-3 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${!electionOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
                         >
                           Close
                         </button>
@@ -1226,7 +1275,15 @@ export function TessCaucusDetail() {
                 <UsersIcon className="w-5 h-5 text-blue-600" />
                 <h2 className="text-lg font-semibold text-gray-900">Members</h2>
               </div>
-              {isTeacher ? <TeacherAddMembersPopover candidates={memberCandidates} onAdd={addMemberToCaucus} /> : null}
+              {(isTeacher || isLeader) ? (
+                <TeacherAddMembersPopover
+                  candidates={memberCandidates}
+                  onAdd={isTeacher ? addMemberToCaucus : undefined}
+                  onInvite={inviteMemberToCaucus}
+                  inviteOnly={!isTeacher}
+                  buttonLabel={isTeacher ? "Add or invite member" : "Invite member"}
+                />
+              ) : null}
             </div>
             <div className="flex gap-2 mb-4">
               <input

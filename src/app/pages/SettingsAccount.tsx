@@ -633,7 +633,7 @@ export function SettingsAccount() {
 
           <RowShell title="School/Institution" description="Use commas to list more than one school.">
             <div className="space-y-3">
-              <Input value={schoolText} onChange={(event) => setSchoolText(event.target.value)} placeholder="Lincoln High School" autoComplete="off" required />
+              <Input value={schoolText} onChange={(event) => setSchoolText(event.target.value)} placeholder="Bellevue High School" autoComplete="off" required />
               <div className="flex justify-end">
                 <Button type="button" onClick={() => void saveSchools()} disabled={!schoolsChanged || savingSchools}>
                   {savingSchools ? "Saving..." : "Save School"}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
-import { Calendar, CheckCircle, Mail, PenSquare } from "lucide-react";
+import { Calendar, CheckCircle, ExternalLink, Mail, PenSquare } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { BackButton } from "../components/BackButton";
@@ -32,6 +32,10 @@ export function DearColleagueInbox() {
   const [items, setItems] = useState<LetterItem[]>([]);
   const [selected, setSelected] = useState<LetterItem | null>(null);
   const [mailbox, setMailbox] = useState<Mailbox>("inbox");
+  const [replyOpen, setReplyOpen] = useState(false);
+  const [replyBody, setReplyBody] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
+  const [expandedHistory, setExpandedHistory] = useState<Record<string, boolean>>({});
 
   const load = async () => {
     setLoading(true);
@@ -116,7 +120,7 @@ export function DearColleagueInbox() {
         parent_letter_id: l.parent_letter_id ?? null,
         mailbox: "sent",
         from_user_id: l.sender_user_id,
-        from_name: "You",
+        from_name: profileMap.get(l.sender_user_id)?.display_name ?? "You",
         from_district: null,
         from_avatar: profileMap.get(l.sender_user_id)?.avatar_url ?? null,
         to_names: recipientsByLetter.get(l.letter_id) ?? [],
@@ -153,6 +157,8 @@ export function DearColleagueInbox() {
 
   const selectLetter = (it: LetterItem) => {
     setSelected(it);
+    setReplyOpen(false);
+    setReplyBody("");
   };
 
   const setReadState = async (it: LetterItem, read: boolean) => {
@@ -204,6 +210,35 @@ export function DearColleagueInbox() {
   const switchMailbox = (next: Mailbox) => {
     setMailbox(next);
     setSelected(items.find((it) => it.mailbox === next) ?? null);
+  };
+
+  const sendInlineReply = async () => {
+    if (!selected || !replyBody.trim()) return;
+    setSendingReply(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const uid = auth.user?.id;
+      if (!uid) return navigate("/signin");
+      const { data: profile } = await supabase.from("profiles").select("class_id").eq("user_id", uid).maybeSingle();
+      const classId = (profile as any)?.class_id as string | null;
+      if (!classId) throw new Error("Select a class first");
+      const { data: letter, error } = await supabase
+        .from("dear_colleague_letters")
+        .insert({ class_id: classId, sender_user_id: uid, subject: replySubject.toLowerCase().startsWith("re:") ? replySubject : `Re: ${replySubject}`, body: replyBody.trim(), parent_letter_id: selected.letter_id } as any)
+        .select("id")
+        .single();
+      if (error) throw error;
+      const { error: recipientError } = await supabase.from("dear_colleague_recipients").insert({ letter_id: (letter as any).id, recipient_user_id: selected.from_user_id } as any);
+      if (recipientError) throw recipientError;
+      setReplyBody("");
+      setReplyOpen(false);
+      await load();
+      toast.success("Reply sent");
+    } catch (e: any) {
+      toast.error(e.message || "Could not send reply");
+    } finally {
+      setSendingReply(false);
+    }
   };
 
   return (
@@ -304,9 +339,11 @@ export function DearColleagueInbox() {
                     <div className="flex items-center gap-2">
                       <Link
                         to={`/letters/${selected.letter_id}`}
-                        className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+                        className="rounded-md border border-gray-300 bg-white p-2 text-gray-700 hover:bg-gray-50"
+                        aria-label="Open letter page"
+                        title="Open letter page"
                       >
-                        Open page
+                        <ExternalLink className="h-4 w-4" />
                       </Link>
                       {selected.mailbox === "inbox" && (
                         <>
@@ -320,7 +357,7 @@ export function DearColleagueInbox() {
                           </button>
                         <button
                           type="button"
-                          onClick={() => navigate(`/dear-colleague/compose?to=${encodeURIComponent(selected.from_user_id)}&subject=${encodeURIComponent(replySubject)}&replyTo=${encodeURIComponent(selected.letter_id)}`)}
+                          onClick={() => setReplyOpen((open) => !open)}
                           className="flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
                         >
                           <PenSquare className="w-4 h-4" />
@@ -336,24 +373,49 @@ export function DearColleagueInbox() {
                     <p className="whitespace-pre-wrap text-gray-700">{selected.body}</p>
                   </div>
 
+                  {replyOpen ? (
+                    <div className="mt-6 rounded-md border border-blue-200 bg-blue-50 p-4">
+                      <textarea
+                        value={replyBody}
+                        onChange={(event) => setReplyBody(event.target.value)}
+                        rows={5}
+                        placeholder="Write a reply..."
+                        className="w-full resize-y rounded-md border border-gray-300 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button type="button" onClick={() => setReplyOpen(false)} className="rounded-md px-3 py-2 text-sm font-medium text-gray-700 hover:bg-white">Cancel</button>
+                        <button type="button" onClick={() => void sendInlineReply()} disabled={!replyBody.trim() || sendingReply} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50">
+                          {sendingReply ? "Sending..." : "Send reply"}
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   {threadItems.length > 1 && (
                     <div className="mt-8 border-t border-gray-200 pt-6">
                       <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500">Reply history</h3>
-                      <div className="space-y-4">
+                      <div className="divide-y divide-gray-200">
                         {threadItems.map((it) => (
-                          <div
+                          <button
+                            type="button"
                             key={`${it.mailbox}:${it.letter_id}:history`}
-                            className={`rounded-md border p-4 ${it.letter_id === selected.letter_id ? "border-blue-200 bg-blue-50" : "border-gray-200 bg-gray-50"}`}
+                            onClick={() => setExpandedHistory((prev) => ({ ...prev, [it.letter_id]: !prev[it.letter_id] }))}
+                            className={`block w-full py-3 text-left ${it.letter_id === selected.letter_id ? "bg-blue-50 px-3" : ""}`}
                           >
-                            <div className="mb-2 flex items-center justify-between gap-3">
-                              <div className="text-sm font-medium text-gray-900">
-                                {it.from_name}
-                                {it.mailbox === "sent" && it.to_names.length ? ` to ${it.to_names.join(", ")}` : ""}
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="flex min-w-0 items-center gap-2">
+                                <SecureAvatar src={it.from_avatar} alt={it.from_name} className="h-8 w-8 rounded-full object-cover" fallbackClassName="h-8 w-8" iconClassName="h-4 w-4 text-gray-500" />
+                                <div className="min-w-0">
+                                  <div className="truncate text-sm font-medium text-gray-900">
+                                    {it.from_name}
+                                    {it.mailbox === "sent" && it.to_names.length ? ` to ${it.to_names.join(", ")}` : ""}
+                                  </div>
+                                  <div className="text-xs text-gray-500">{formatDate(it.created_at)}</div>
+                                </div>
                               </div>
-                              <div className="text-xs text-gray-500">{formatDate(it.created_at)}</div>
                             </div>
-                            <p className="whitespace-pre-wrap text-sm text-gray-700">{it.body}</p>
-                          </div>
+                            {(expandedHistory[it.letter_id] || it.letter_id === selected.letter_id) && <p className="mt-2 whitespace-pre-wrap text-sm text-gray-700">{it.body}</p>}
+                          </button>
                         ))}
                       </div>
                     </div>

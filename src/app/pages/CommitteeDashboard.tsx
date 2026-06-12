@@ -9,7 +9,7 @@ import { ReactionEmoji, ReactionsSummary, ReactionsBar, addReactionToSummary, re
 import { ThreadedComments, ThreadComment } from "../components/ThreadedComments";
 import { SecureAvatar } from "../components/SecureAvatar";
 import { formatConstituency } from "../utils/constituency";
-import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds } from "../components/CommitteeTabs";
+import { CommitteeTabs, committeeNameStorageKey, markCommitteeSeenIds, readCommitteeSeenIds } from "../components/CommitteeTabs";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { SubcommitteeRolesPanel } from "../components/SubcommitteeRolesPanel";
 import { OrganizationLettersInbox } from "../components/OrganizationLettersInbox";
@@ -19,6 +19,8 @@ import { profilePath } from "../utils/profileRoute";
 import { committeeDisplayName } from "../utils/committeeNames";
 import { VerticalMenuPlacement, verticalMenuPlacementClass, verticalMenuPlacementForButton } from "../utils/menuPlacement";
 import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
+import { sendOrganizationInvite } from "../utils/organizationInvites";
+import { ANNOUNCEMENT_WORD_LIMIT, COMMENT_WORD_LIMIT, wordCount, wordLimitClass, withinWordLimit } from "../utils/wordLimits";
 
 type MembershipRole = "member" | "chair" | "co_chair" | "ranking_member";
 type Subcommittee = { id: string; committee_id: string; class_id: string; name: string; description: string | null; created_at: string };
@@ -115,6 +117,7 @@ export function CommitteeDashboard() {
 
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
+  const [seenDashboardIds, setSeenDashboardIds] = useState<Set<string>>(() => new Set(readCommitteeSeenIds(committeeId, "dashboard")));
   const [newAnnouncement, setNewAnnouncement] = useState("");
   const [newAnnouncementAttachments, setNewAnnouncementAttachments] = useState<DiscussionAttachment[]>([]);
   const [editingAnnouncementId, setEditingAnnouncementId] = useState<string | null>(null);
@@ -145,6 +148,8 @@ export function CommitteeDashboard() {
     () => announcements.find((a) => a.id === selectedAnnouncementId) ?? null,
     [announcements, selectedAnnouncementId],
   );
+  const newAnnouncementWordCount = wordCount(newAnnouncement);
+  const newCommentWordCount = wordCount(newComment);
   const majorityParty = useMemo(() => {
     const counts = new Map<string, number>();
     for (const member of members) counts.set(memberParty(member), (counts.get(memberParty(member)) ?? 0) + 1);
@@ -154,6 +159,10 @@ export function CommitteeDashboard() {
     const sorted = entries.sort((a, b) => b[1] - a[1]);
     return sorted[0][1] > (sorted[1]?.[1] ?? 0) ? sorted[0][0] : null;
   }, [members]);
+
+  useEffect(() => {
+    setSeenDashboardIds(new Set(readCommitteeSeenIds(committeeId, "dashboard")));
+  }, [committeeId]);
 
   useEffect(() => {
     const load = async () => {
@@ -651,6 +660,7 @@ export function CommitteeDashboard() {
   const postAnnouncement = async () => {
     if (!meId) return;
     if (!newAnnouncement.trim()) return;
+    if (!withinWordLimit(newAnnouncement, ANNOUNCEMENT_WORD_LIMIT)) return toast.error(`Announcements must be ${ANNOUNCEMENT_WORD_LIMIT} words or fewer`);
     try {
       const { error } = await supabase.from("committee_announcements").insert({
         committee_id: committeeId,
@@ -672,6 +682,7 @@ export function CommitteeDashboard() {
     if (!selectedAnnouncementId) return;
     const trimmed = body.trim();
     if (!trimmed) return;
+    if (!withinWordLimit(trimmed, COMMENT_WORD_LIMIT)) return toast.error(`Comments must be ${COMMENT_WORD_LIMIT} words or fewer`);
     try {
       const { data: inserted, error } = await supabase
         .from("committee_comments")
@@ -1074,6 +1085,23 @@ export function CommitteeDashboard() {
     toast.success("Member added");
   };
 
+  const inviteMemberToCommittee = async (candidate: MemberCandidate) => {
+    if (!committee) return;
+    try {
+      await sendOrganizationInvite({
+        classId: committee.class_id,
+        recipientUserId: candidate.user_id,
+        orgType: "committee",
+        orgId: committee.id,
+        orgName: committeeDisplayName(committee.name),
+        href: `/committees/${committee.id}`,
+      });
+      toast.success("Invite sent");
+    } catch (e: any) {
+      toast.error(e.message || "Could not send invite");
+    }
+  };
+
   if (loading || !committee) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -1178,7 +1206,7 @@ export function CommitteeDashboard() {
                       </div>
                     </div>
                   ) : (
-                    <p className="mt-1 text-gray-700 whitespace-pre-line">{committee.description || "No description yet."}</p>
+                    <p className="mt-1 max-h-28 overflow-y-auto whitespace-pre-line text-sm leading-6 text-gray-700">{committee.description || "No description yet."}</p>
                   )}
                 </div>
                 <div className="mt-8 w-4">
@@ -1188,7 +1216,7 @@ export function CommitteeDashboard() {
                     </button>
                   )}
                 </div>
-                <div className="max-h-64 overflow-y-auto border-l border-gray-300 pl-3 text-left">
+                <div className="max-h-40 overflow-y-auto border-l border-gray-300 pl-3 text-left">
                     <div className="mb-1 text-xs font-semibold text-gray-700">Subcommittees</div>
                     {(isLeader || isTeacher) && (
                       <div className="flex gap-1.5">
@@ -1230,10 +1258,15 @@ export function CommitteeDashboard() {
               {canPostAnnouncements && (
                 <div className="p-6 border-b border-gray-200">
                   <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
-                    <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} placeholder="Post an announcement..." rows={3} className="w-full resize-y border-0 p-0 text-sm outline-none" />
+                    <div className="relative">
+                      <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} placeholder="Post an announcement..." rows={3} className="w-full resize-y border-0 p-0 pr-24 text-sm outline-none" />
+                      <span className={`pointer-events-none absolute bottom-0 right-0 text-[11px] ${wordLimitClass(newAnnouncementWordCount, ANNOUNCEMENT_WORD_LIMIT)}`}>
+                        {newAnnouncementWordCount}/{ANNOUNCEMENT_WORD_LIMIT}
+                      </span>
+                    </div>
                     <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                     <AttachmentPicker value={newAnnouncementAttachments} onChange={setNewAnnouncementAttachments} />
-                    <button onClick={() => void postAnnouncement()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50" disabled={!newAnnouncement.trim()}>
+                    <button onClick={() => void postAnnouncement()} className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50" disabled={!newAnnouncement.trim() || !withinWordLimit(newAnnouncement, ANNOUNCEMENT_WORD_LIMIT)}>
                       <Send className="w-4 h-4" />
                       Post
                     </button>
@@ -1255,12 +1288,14 @@ export function CommitteeDashboard() {
                           const cached = dashboardCache.get(committeeId);
                           if (cached) dashboardCache.set(committeeId, { ...cached, selectedAnnouncementId: a.id });
                           markCommitteeSeenIds(committeeId, "dashboard", [a.id]);
+                          setSeenDashboardIds(new Set(readCommitteeSeenIds(committeeId, "dashboard")));
                         }}
                         className={`relative w-full text-left p-4 border-b border-gray-100 bg-white hover:bg-gray-50 ${
                           selectedAnnouncementId === a.id ? `border-l-4 ${a.author?.role === "teacher" ? "border-l-green-500" : "border-l-blue-500"}` : ""
                         }`}
                       >
                         {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
+                        {!seenDashboardIds.has(a.id) && <span className="mb-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">New</span>}
                         <div className="text-sm text-gray-900 font-medium line-clamp-2">{a.body}</div>
                         <div className="text-xs text-gray-500 mt-1">
                           <Link to={profilePath(a.author_user_id)} className={authorLinkClass(a.author)}>
@@ -1354,14 +1389,19 @@ export function CommitteeDashboard() {
                       {canComment && (
                         <div className="pt-2 border-t border-gray-200">
                           <div className="flex items-start gap-2">
-                            <textarea
-                              value={newComment}
-                              onChange={(e) => setNewComment(e.target.value)}
-                              rows={2}
-                              placeholder="Write a comment..."
-                              className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                            />
-                            <button onClick={() => void postComment()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50" disabled={!newComment.trim()}>
+                            <div className="relative flex-1">
+                              <textarea
+                                value={newComment}
+                                onChange={(e) => setNewComment(e.target.value)}
+                                rows={2}
+                                placeholder="Write a comment..."
+                                className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
+                              />
+                              <span className={`pointer-events-none absolute bottom-2 right-3 text-[11px] ${wordLimitClass(newCommentWordCount, COMMENT_WORD_LIMIT)}`}>
+                                {newCommentWordCount}/{COMMENT_WORD_LIMIT}
+                              </span>
+                            </div>
+                            <button onClick={() => void postComment()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium disabled:opacity-50" disabled={!newComment.trim() || !withinWordLimit(newComment, COMMENT_WORD_LIMIT)}>
                               Send
                             </button>
                           </div>
@@ -1403,7 +1443,15 @@ export function CommitteeDashboard() {
                 <Users className="w-5 h-5 text-blue-600" />
                 <h2 className="text-lg font-semibold text-gray-900">Members ({committeeCapacity > 0 ? `${members.length}/${committeeCapacity}` : members.length})</h2>
               </div>
-              {isTeacher ? <TeacherAddMembersPopover candidates={memberCandidates} onAdd={addMemberToCommittee} /> : null}
+              {(isTeacher || isLeader) ? (
+                <TeacherAddMembersPopover
+                  candidates={memberCandidates}
+                  onAdd={isTeacher ? addMemberToCommittee : undefined}
+                  onInvite={inviteMemberToCommittee}
+                  inviteOnly={!isTeacher}
+                  buttonLabel={isTeacher ? "Add or invite member" : "Invite member"}
+                />
+              ) : null}
             </div>
             <div className="flex gap-2 mb-4">
               <input

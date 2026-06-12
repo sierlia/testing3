@@ -518,7 +518,7 @@ export function ClassSimulationDashboard({ classIdOverride }: { classIdOverride?
                             <div key={`${event.kind}:${event.item.id}`} className={`rounded px-1 py-0.5 ${event.kind === "deadline" ? "bg-sky-50 text-sky-800" : ""}`}>
                               {event.kind === "bill" ? (
                                 <>
-                                  <span className="font-mono">{event.item.bill.hr_label}</span> at {new Date(event.item.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                                  <span className="font-mono">{event.item.bill.hr_label}</span>{event.item.duration_minutes === 0 ? "" : ` at ${new Date(event.item.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`}
                                 </>
                               ) : (
                                 <>

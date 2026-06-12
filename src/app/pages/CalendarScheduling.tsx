@@ -41,6 +41,23 @@ function localDateTimeValue(iso?: string | null) {
   return local.toISOString().slice(0, 16);
 }
 
+function localDateValue(iso?: string | null) {
+  const value = localDateTimeValue(iso);
+  return value ? value.slice(0, 10) : "";
+}
+
+function localTimeValue(iso?: string | null) {
+  const value = localDateTimeValue(iso);
+  return value ? value.slice(11, 16) : "";
+}
+
+function scheduleDisplay(iso: string, durationMinutes?: number | null) {
+  const date = new Date(iso);
+  return durationMinutes === 0
+    ? date.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })
+    : date.toLocaleString();
+}
+
 async function fetchSpeakerSignups(classId: string): Promise<SpeakerSignup[]> {
   const { data: signupRows, error } = await supabase
     .from("bill_floor_speakers")
@@ -70,7 +87,9 @@ export function CalendarScheduling() {
   const [role, setRole] = useState<string | null>(null);
   const [teacherBills, setTeacherBills] = useState<TeacherBill[]>([]);
   const [studentItems, setStudentItems] = useState<Array<{ id: string; bill_id: string; scheduled_at: string; duration_minutes: number; bill: any }>>([]);
+  const [draftDates, setDraftDates] = useState<Record<string, string>>({});
   const [draftTimes, setDraftTimes] = useState<Record<string, string>>({});
+  const [draftNoTimes, setDraftNoTimes] = useState<Record<string, boolean>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [calendarMonth, setCalendarMonth] = useState(() => new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => new Date());
@@ -100,9 +119,19 @@ export function CalendarScheduling() {
       if (profile.role === "teacher") {
         const rows = await fetchReportedBillsForTeacherCalendar();
         setTeacherBills(rows as any);
+        setDraftDates(
+          Object.fromEntries(
+            (rows as TeacherBill[]).map((bill) => [bill.id, localDateValue(bill.calendar?.scheduled_at)]),
+          ),
+        );
         setDraftTimes(
           Object.fromEntries(
-            (rows as TeacherBill[]).map((bill) => [bill.id, localDateTimeValue(bill.calendar?.scheduled_at)]),
+            (rows as TeacherBill[]).map((bill) => [bill.id, bill.calendar?.duration_minutes === 0 ? "" : localTimeValue(bill.calendar?.scheduled_at)]),
+          ),
+        );
+        setDraftNoTimes(
+          Object.fromEntries(
+            (rows as TeacherBill[]).map((bill) => [bill.id, bill.calendar?.duration_minutes === 0]),
           ),
         );
       } else {
@@ -193,11 +222,14 @@ export function CalendarScheduling() {
   const selectedTasks = tasksByDay.get(selectedDateKey) ?? [];
 
   const saveSchedule = async (billId: string) => {
-    const value = draftTimes[billId];
-    if (!value) return toast.error("Choose a date and time first");
+    const dateValue = draftDates[billId];
+    const noTime = draftNoTimes[billId];
+    const timeValue = draftTimes[billId];
+    if (!dateValue) return toast.error("Choose a date first");
+    if (!noTime && !timeValue) return toast.error("Choose a time or select no time");
     setSavingId(billId);
     try {
-      await saveBillCalendarEntry(billId, new Date(value).toISOString());
+      await saveBillCalendarEntry(billId, new Date(`${dateValue}T${noTime ? "12:00" : timeValue}:00`).toISOString(), noTime ? 0 : 30);
       toast.success("Bill calendared");
       await load();
     } catch (e: any) {
@@ -292,7 +324,7 @@ export function CalendarScheduling() {
                   <div className="mt-1 space-y-1">
                     {events.slice(0, 2).map((event) => (
                       <div key={event.id} className="truncate rounded bg-white/80 px-1 py-0.5 text-[10px] text-blue-800">
-                        {new Date(event.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} {event.bill.hr_label}
+                        {event.duration_minutes === 0 ? "" : `${new Date(event.scheduled_at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} `}{event.bill.hr_label}
                       </div>
                     ))}
                     {tasks.slice(0, Math.max(0, 2 - events.length)).map((task) => (
@@ -335,7 +367,7 @@ export function CalendarScheduling() {
                   </div>
                   <Clock className="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-600" />
                 </div>
-                <div className="mt-2 text-xs font-medium text-gray-500">{new Date(item.scheduled_at).toLocaleString()}</div>
+                <div className="mt-2 text-xs font-medium text-gray-500">{scheduleDisplay(item.scheduled_at, item.duration_minutes)}</div>
                 {item.status && <div className="mt-1 text-xs capitalize text-gray-500">{item.status.replace("_", " ")}</div>}
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   {(["for", "against"] as const).map((side) => {
@@ -412,7 +444,7 @@ export function CalendarScheduling() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">{teacherListMode === "uncalendared" ? "Uncalendared Bills" : "Calendared Bills"}</h2>
-            <p className="mt-1 text-sm text-gray-500">Set or update floor date and time.</p>
+            <p className="mt-1 text-sm text-gray-500">Set or update the floor date and optional time.</p>
           </div>
           <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
             {(["uncalendared", "calendared"] as const).map((mode) => (
@@ -444,14 +476,37 @@ export function CalendarScheduling() {
                   <div className="mt-1 text-xs text-gray-500">{bill.committee_name || "No committee listed"}</div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <label className="flex items-center gap-2 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
-                    <Clock className="h-4 w-4 text-gray-400" />
+                  <label className="flex h-10 items-center gap-2 rounded-md border border-gray-300 bg-white px-3 text-sm shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20">
+                    <Calendar className="h-4 w-4 text-gray-400" />
                     <input
-                      type="datetime-local"
-                      value={draftTimes[bill.id] ?? ""}
-                      onChange={(event) => setDraftTimes((prev) => ({ ...prev, [bill.id]: event.target.value }))}
+                      type="date"
+                      value={draftDates[bill.id] ?? ""}
+                      onChange={(event) => setDraftDates((prev) => ({ ...prev, [bill.id]: event.target.value }))}
                       className="bg-transparent text-sm outline-none"
                     />
+                  </label>
+                  <label className={`flex h-10 items-center gap-2 rounded-md border px-3 text-sm shadow-sm focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 ${draftNoTimes[bill.id] ? "border-gray-200 bg-gray-100 text-gray-400" : "border-gray-300 bg-white"}`}>
+                    <Clock className="h-4 w-4 text-gray-400" />
+                    <input
+                      type="time"
+                      value={draftTimes[bill.id] ?? ""}
+                      disabled={draftNoTimes[bill.id]}
+                      onChange={(event) => setDraftTimes((prev) => ({ ...prev, [bill.id]: event.target.value }))}
+                      className="bg-transparent text-sm outline-none disabled:text-gray-400"
+                    />
+                  </label>
+                  <label className="inline-flex h-10 cursor-pointer items-center gap-2 rounded-md border border-gray-300 bg-white px-3 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50">
+                    <input
+                      type="checkbox"
+                      checked={!!draftNoTimes[bill.id]}
+                      onChange={(event) => {
+                        const checked = event.target.checked;
+                        setDraftNoTimes((prev) => ({ ...prev, [bill.id]: checked }));
+                        if (checked) setDraftTimes((prev) => ({ ...prev, [bill.id]: "" }));
+                      }}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    No time
                   </label>
                   <button
                     type="button"

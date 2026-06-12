@@ -15,6 +15,8 @@ import { profilePath } from "../utils/profileRoute";
 import { VerticalMenuPlacement, verticalMenuPlacementClass, verticalMenuPlacementForButton } from "../utils/menuPlacement";
 import { TeacherAddMembersPopover, MemberCandidate } from "../components/TeacherAddMembersPopover";
 import { AttachmentList, AttachmentPicker, DiscussionAttachment, parseDiscussionAttachments } from "../components/DiscussionAttachments";
+import { sendOrganizationInvite } from "../utils/organizationInvites";
+import { ANNOUNCEMENT_WORD_LIMIT, COMMENT_WORD_LIMIT, wordCount, wordLimitClass, withinWordLimit } from "../utils/wordLimits";
 
 type PartyRow = { id: string; class_id: string; name: string; platform: string; color: string; created_at: string };
 type PartyRole = "majority_leader" | "majority_whip" | "minority_leader" | "minority_whip" | "leader" | "whip" | "chair" | "vice_chair";
@@ -101,6 +103,7 @@ export function PartyDetail() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [comments, setComments] = useState<Record<string, CommentRow[]>>({});
   const [selectedAnnouncementId, setSelectedAnnouncementId] = useState<string | null>(null);
+  const [seenAnnouncementIds, setSeenAnnouncementIds] = useState<Set<string>>(new Set());
   const [newAnnouncement, setNewAnnouncement] = useState("");
   const [newAnnouncementAttachments, setNewAnnouncementAttachments] = useState<DiscussionAttachment[]>([]);
   const [newComment, setNewComment] = useState("");
@@ -129,6 +132,20 @@ export function PartyDetail() {
   const isTeacher = viewerRole === "teacher";
   const canUseBoard = isMember || isTeacher;
   const selectedAnnouncement = announcements.find((a) => a.id === selectedAnnouncementId) ?? null;
+  const newAnnouncementWordCount = wordCount(newAnnouncement);
+  const newCommentWordCount = wordCount(newComment);
+  const myPartyRole = partyRoles.find((row) => row.user_id === meId)?.role ?? null;
+  const isPartyLeader = Boolean(myPartyRole);
+
+  const markAnnouncementSeen = (announcementId: string) => {
+    const storageKey = `gavel:party-announcements-seen:${partyId}`;
+    setSeenAnnouncementIds((current) => {
+      const next = new Set(current);
+      next.add(announcementId);
+      window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!memberMenuOpen) return;
@@ -252,6 +269,11 @@ export function PartyDetail() {
 
   useEffect(() => {
     if (!partyId) return;
+    try {
+      setSeenAnnouncementIds(new Set(JSON.parse(window.localStorage.getItem(`gavel:party-announcements-seen:${partyId}`) || "[]")));
+    } catch {
+      setSeenAnnouncementIds(new Set());
+    }
     void load();
   }, [partyId]);
 
@@ -387,6 +409,23 @@ export function PartyDetail() {
     toast.success("Member added");
   };
 
+  const inviteMemberToParty = async (candidate: MemberCandidate) => {
+    if (!party) return;
+    try {
+      await sendOrganizationInvite({
+        classId: party.class_id,
+        recipientUserId: candidate.user_id,
+        orgType: "party",
+        orgId: party.id,
+        orgName: displayPartyName(party.name),
+        href: `/parties/${party.id}`,
+      });
+      toast.success("Invite sent");
+    } catch (e: any) {
+      toast.error(e.message || "Could not send invite");
+    }
+  };
+
   const saveName = async () => {
     if (!party || !nameDraft.trim()) return;
     const nextName = displayPartyName(nameDraft);
@@ -500,6 +539,7 @@ export function PartyDetail() {
 
   const postAnnouncement = async () => {
     if (!party || !meId || !newAnnouncement.trim()) return;
+    if (!withinWordLimit(newAnnouncement, ANNOUNCEMENT_WORD_LIMIT)) return toast.error(`Announcements must be ${ANNOUNCEMENT_WORD_LIMIT} words or fewer`);
     try {
       const { error } = await supabase.from("party_announcements").insert({
         party_id: party.id,
@@ -519,6 +559,7 @@ export function PartyDetail() {
 
   const postComment = async () => {
     if (!selectedAnnouncementId || !meId || !newComment.trim()) return;
+    if (!withinWordLimit(newComment, COMMENT_WORD_LIMIT)) return toast.error(`Comments must be ${COMMENT_WORD_LIMIT} words or fewer`);
     try {
       const { error } = await supabase.from("party_comments").insert({
         announcement_id: selectedAnnouncementId,
@@ -814,10 +855,15 @@ export function PartyDetail() {
                   {canUseBoard && (
                     <div className="border-b border-gray-200 p-5">
                       <div className="rounded-md border border-gray-300 bg-white p-3 focus-within:ring-2 focus-within:ring-blue-500">
-                        <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} rows={3} placeholder="Post an announcement..." className="w-full resize-y border-0 p-0 text-sm outline-none" />
+                        <div className="relative">
+                          <textarea value={newAnnouncement} onChange={(e) => setNewAnnouncement(e.target.value)} rows={3} placeholder="Post an announcement..." className="w-full resize-y border-0 p-0 pr-24 text-sm outline-none" />
+                          <span className={`pointer-events-none absolute bottom-0 right-0 text-[11px] ${wordLimitClass(newAnnouncementWordCount, ANNOUNCEMENT_WORD_LIMIT)}`}>
+                            {newAnnouncementWordCount}/{ANNOUNCEMENT_WORD_LIMIT}
+                          </span>
+                        </div>
                         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
                           <AttachmentPicker value={newAnnouncementAttachments} onChange={setNewAnnouncementAttachments} />
-                          <button onClick={() => void postAnnouncement()} disabled={!newAnnouncement.trim()} className="inline-flex items-center gap-2 rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Send className="h-4 w-4" />Post</button>
+                          <button onClick={() => void postAnnouncement()} disabled={!newAnnouncement.trim() || !withinWordLimit(newAnnouncement, ANNOUNCEMENT_WORD_LIMIT)} className="inline-flex items-center gap-2 rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"><Send className="h-4 w-4" />Post</button>
                         </div>
                       </div>
                     </div>
@@ -828,8 +874,9 @@ export function PartyDetail() {
                         <div className="p-5 text-sm text-gray-500">No announcements yet.</div>
                       ) : (
                         announcements.map((a) => (
-                          <button key={a.id} onClick={() => setSelectedAnnouncementId(a.id)} style={selectedAnnouncementId === a.id && a.author?.role !== "teacher" ? { borderLeftColor: party.color || "#2563eb" } : undefined} className={`relative w-full border-b border-gray-100 bg-white p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? `border-l-4 ${a.author?.role === "teacher" ? "border-l-green-500" : ""}` : ""}`}>
+                          <button key={a.id} onClick={() => { setSelectedAnnouncementId(a.id); markAnnouncementSeen(a.id); }} style={selectedAnnouncementId === a.id && a.author?.role !== "teacher" ? { borderLeftColor: party.color || "#2563eb" } : undefined} className={`relative w-full border-b border-gray-100 bg-white p-4 text-left hover:bg-gray-50 ${selectedAnnouncementId === a.id ? `border-l-4 ${a.author?.role === "teacher" ? "border-l-green-500" : ""}` : ""}`}>
                             {a.author?.role === "teacher" && <GraduationCap className="absolute right-3 top-3 h-4 w-4 text-green-600" />}
+                            {!seenAnnouncementIds.has(a.id) && <span className="mb-2 inline-flex rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-700">New</span>}
                             <div className="line-clamp-2 text-sm font-medium text-gray-900">{a.body}</div>
                             <div className="mt-1 text-xs text-gray-500">
                               <Link to={profilePath(a.author_user_id)} className={partyAuthorLinkClass(a.author)}>{displayAuthorName(a.author)}</Link> • {new Date(a.created_at).toLocaleDateString()}
@@ -928,8 +975,13 @@ export function PartyDetail() {
                           {canUseBoard && (
                             <>
                             <div className="flex gap-2 border-t border-gray-200 pt-3">
-                              <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={2} placeholder="Write a comment..." className="flex-1 rounded-md border border-gray-300 px-3 py-2" />
-                              <button onClick={() => void postComment()} disabled={!newComment.trim()} className="rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">Send</button>
+                              <div className="relative flex-1">
+                                <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} rows={2} placeholder="Write a comment..." className="w-full rounded-md border border-gray-300 px-3 py-2 pr-20" />
+                                <span className={`pointer-events-none absolute bottom-2 right-3 text-[11px] ${wordLimitClass(newCommentWordCount, COMMENT_WORD_LIMIT)}`}>
+                                  {newCommentWordCount}/{COMMENT_WORD_LIMIT}
+                                </span>
+                              </div>
+                              <button onClick={() => void postComment()} disabled={!newComment.trim() || !withinWordLimit(newComment, COMMENT_WORD_LIMIT)} className="rounded-md bg-[var(--party-color)] px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">Send</button>
                             </div>
                             <div className="mt-2">
                               <AttachmentPicker value={newCommentAttachments} onChange={setNewCommentAttachments} />
@@ -955,12 +1007,12 @@ export function PartyDetail() {
                     </div>
                     {isTeacher && (
                       <div className="flex flex-wrap items-center gap-2">
-                        <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
+                        <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
                           <button
                             type="button"
                             onClick={() => void setPartyElectionOpen(true)}
                             disabled={electionConcluded}
-                            className={`px-3 py-2 text-sm font-medium disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                            className={`rounded px-3 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
                           >
                             Open
                           </button>
@@ -968,7 +1020,7 @@ export function PartyDetail() {
                             type="button"
                             onClick={() => void setPartyElectionOpen(false)}
                             disabled={electionConcluded}
-                            className={`border-l border-gray-300 px-3 py-2 text-sm font-medium disabled:opacity-50 ${!electionOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}
+                            className={`rounded px-3 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${!electionOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
                           >
                             Close
                           </button>
@@ -1035,7 +1087,15 @@ export function PartyDetail() {
                     <Users className="h-5 w-5 text-[var(--party-color)]" />
                     <h2 className="text-lg font-semibold text-gray-900">Members</h2>
                   </div>
-                  {isTeacher ? <TeacherAddMembersPopover candidates={memberCandidates} onAdd={addMemberToParty} /> : null}
+                  {(isTeacher || isPartyLeader) ? (
+                    <TeacherAddMembersPopover
+                      candidates={memberCandidates}
+                      onAdd={isTeacher ? addMemberToParty : undefined}
+                      onInvite={inviteMemberToParty}
+                      inviteOnly={!isTeacher}
+                      buttonLabel={isTeacher ? "Add or invite member" : "Invite member"}
+                    />
+                  ) : null}
                 </div>
                 <div className="mb-4 flex gap-2">
                   <input value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search members..." className="min-w-0 flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm" />

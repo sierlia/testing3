@@ -28,7 +28,7 @@ const emptyForm: SignupFormState = {
   email: "",
   password: "",
   confirmPassword: "",
-  school: "",
+  school: "Bellevue High School",
 };
 
 function LegalConsentText() {
@@ -102,8 +102,8 @@ export function SignUpPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <button type="button" className="text-left" onClick={() => setSelectedRole("teacher")}>
-          <Card className="h-full cursor-pointer border-2 border-transparent transition-shadow hover:shadow-md focus-within:border-blue-500">
+          <button type="button" className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" onClick={() => setSelectedRole("teacher")}>
+          <Card className="h-full cursor-pointer border-2 border-blue-200 bg-white">
             <CardHeader>
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
                 <GraduationCap className="h-8 w-8 text-blue-600" />
@@ -122,8 +122,8 @@ export function SignUpPage() {
           </Card>
           </button>
 
-          <button type="button" className="text-left" onClick={() => setSelectedRole("student")}>
-          <Card className="h-full cursor-pointer border-2 border-transparent transition-shadow hover:shadow-md focus-within:border-green-500">
+          <button type="button" className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2" onClick={() => setSelectedRole("student")}>
+          <Card className="h-full cursor-pointer border-2 border-green-200 bg-white">
             <CardHeader>
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
                 <BookOpen className="h-8 w-8 text-green-600" />
@@ -309,7 +309,7 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
                   <Label htmlFor={`${role}-school`}>School/Institution</Label>
                   <Input
                     id={`${role}-school`}
-                    placeholder="Lincoln High School"
+                    placeholder="Bellevue High School"
                     value={formData.school}
                     onChange={(event) => setField("school", event.target.value)}
                     required

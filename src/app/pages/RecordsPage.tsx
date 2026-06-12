@@ -274,6 +274,7 @@ function RecordPreviewPanel({ record }: { record: RecordItem }) {
   const newsletter = record.metadata?.newsletter;
   const panelRef = useRef<HTMLDivElement | null>(null);
   const [panelWidth, setPanelWidth] = useState(480);
+  const textCollapsed = panelWidth < 160;
   const textTooNarrow = panelWidth < 200;
   const bodyPreview = useMemo(() => firstWordsPreview(record.body ?? ""), [record.body]);
 
@@ -286,6 +287,10 @@ function RecordPreviewPanel({ record }: { record: RecordItem }) {
     observer.observe(node);
     return () => observer.disconnect();
   }, []);
+
+  if (textCollapsed) {
+    return <div ref={panelRef} className="min-h-[18rem] min-w-0 rounded-lg border border-gray-200 bg-white" aria-label="Record preview collapsed" />;
+  }
 
   if (textTooNarrow) {
     return (

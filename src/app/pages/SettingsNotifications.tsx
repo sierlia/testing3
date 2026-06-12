@@ -6,6 +6,7 @@ import { supabase } from "../utils/supabase";
 import { SettingsLayout } from "./SettingsLayout";
 
 type ToggleKey =
+  | "organization.invites"
   | "party.new_announcement"
   | "party.replies"
   | "party.reactions"
@@ -22,6 +23,7 @@ type ToggleKey =
 type Prefs = Record<ToggleKey, boolean>;
 
 const defaultPrefs: Prefs = {
+  "organization.invites": true,
   "party.new_announcement": true,
   "party.replies": true,
   "party.reactions": true,
@@ -80,6 +82,12 @@ export function SettingsNotifications() {
 
   const sections = useMemo(
     () => [
+      {
+        title: "Invites",
+        items: [
+          { key: "organization.invites" as const, label: "Organization invites", description: "When a teacher or organization leader invites you to join an organization" },
+        ],
+      },
       {
         title: "Party",
         items: [
@@ -205,4 +213,3 @@ export function SettingsNotifications() {
     </SettingsLayout>
   );
 }
-

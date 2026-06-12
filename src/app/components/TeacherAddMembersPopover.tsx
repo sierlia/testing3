@@ -15,10 +15,14 @@ export type MemberCandidate = {
 export function TeacherAddMembersPopover({
   candidates,
   onAdd,
+  onInvite,
+  inviteOnly = false,
   buttonLabel = "Add member",
 }: {
   candidates: MemberCandidate[];
-  onAdd: (candidate: MemberCandidate) => void | Promise<void>;
+  onAdd?: (candidate: MemberCandidate) => void | Promise<void>;
+  onInvite?: (candidate: MemberCandidate) => void | Promise<void>;
+  inviteOnly?: boolean;
   buttonLabel?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -26,6 +30,7 @@ export function TeacherAddMembersPopover({
   const [busyId, setBusyId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
+  const [action, setAction] = useState<"add" | "invite">(inviteOnly ? "invite" : "add");
   const ref = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -42,6 +47,7 @@ export function TeacherAddMembersPopover({
     setConfirming(false);
     setSelectedIds(new Set());
     setQuery("");
+    setAction(inviteOnly ? "invite" : "add");
   }, [open]);
 
   const visibleCandidates = useMemo(() => {
@@ -66,13 +72,15 @@ export function TeacherAddMembersPopover({
     });
   };
 
-  const inviteSelected = async () => {
+  const saveSelected = async () => {
     const selectable = selectedCandidates.filter((candidate) => !candidate.disabledReason);
     if (!selectable.length) return;
+    const handler = action === "invite" ? onInvite : onAdd;
+    if (!handler) return;
     try {
       for (const candidate of selectable) {
         setBusyId(candidate.user_id);
-        await Promise.resolve(onAdd(candidate));
+        await Promise.resolve(handler(candidate));
       }
       setSelectedIds(new Set());
       setConfirming(false);
@@ -96,6 +104,23 @@ export function TeacherAddMembersPopover({
       </button>
       {open ? (
         <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-md border border-gray-200 bg-white p-2 shadow-lg">
+          {!inviteOnly && onAdd && onInvite ? (
+            <div className="mb-2 grid grid-cols-2 gap-1 rounded-md border border-gray-200 bg-gray-50 p-1">
+              {(["add", "invite"] as const).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => {
+                    setAction(mode);
+                    setConfirming(false);
+                  }}
+                  className={`rounded px-2 py-1.5 text-xs font-semibold capitalize ${action === mode ? "bg-blue-800 text-white shadow-sm" : "text-gray-600 hover:bg-blue-50 hover:text-blue-800"}`}
+                >
+                  {mode}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="relative mb-2">
             <Search className="absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
             <input
@@ -137,15 +162,17 @@ export function TeacherAddMembersPopover({
               disabled={selectedCandidates.length === 0}
               className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Invite
+              {action === "invite" ? "Invite" : "Add"}
             </button>
           </div>
           </>
           ) : (
             <div className="space-y-3">
               <div>
-                <div className="text-sm font-semibold text-gray-900">Confirm invitations</div>
-                <div className="text-xs text-gray-500">These users will be added when you save.</div>
+                <div className="text-sm font-semibold text-gray-900">{action === "invite" ? "Confirm invitations" : "Confirm add"}</div>
+                <div className="text-xs text-gray-500">
+                  {action === "invite" ? "These users will receive an invitation notification." : "These users will be added immediately."}
+                </div>
               </div>
               <div className="max-h-56 overflow-y-auto rounded-md border border-gray-200">
                 {selectedCandidates.map((candidate) => (
@@ -158,8 +185,8 @@ export function TeacherAddMembersPopover({
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setConfirming(false)} className="rounded-md px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100">Back</button>
-                <button type="button" onClick={() => void inviteSelected()} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
-                  Save invites
+                <button type="button" onClick={() => void saveSelected()} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                  {action === "invite" ? "Send invites" : "Add selected"}
                 </button>
               </div>
             </div>

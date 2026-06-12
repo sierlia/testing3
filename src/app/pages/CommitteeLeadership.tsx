@@ -347,11 +347,11 @@ export function CommitteeLeadership() {
               <h1 className="text-3xl font-bold text-gray-900">{committeeDisplayName(committee.name)}</h1>
               {isTeacher && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
-                    <button onClick={() => void setCommitteeElectionOpen(true)} disabled={electionConcluded} className={`px-4 py-2 text-sm font-medium disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                  <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+                    <button onClick={() => void setCommitteeElectionOpen(true)} disabled={electionConcluded} className={`rounded px-4 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${electionOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}>
                       Open
                     </button>
-                    <button onClick={() => void setCommitteeElectionOpen(false)} disabled={electionConcluded} className={`border-l border-gray-300 px-4 py-2 text-sm font-medium disabled:opacity-50 ${!electionOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                    <button onClick={() => void setCommitteeElectionOpen(false)} disabled={electionConcluded} className={`rounded px-4 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${!electionOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}>
                       Close
                     </button>
                   </div>

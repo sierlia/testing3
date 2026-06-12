@@ -365,6 +365,8 @@ export function FloorSession() {
   const routeMode = searchParams.get("mode");
   const displayFloorMode: FloorMode =
     routeMode === "discussion" || routeMode === "bills" || routeMode === "election" ? routeMode : floorMode;
+  const shouldShowFloorSwitcher = role === "teacher" && (displayFloorMode !== "discussion" || floorMode === "discussion");
+  const shouldShowFloorHeader = displayFloorMode !== "discussion" || shouldShowFloorSwitcher;
   const activeItem = useMemo(() => {
     if (items.length === 0) return null;
     const now = Date.now();
@@ -1035,6 +1037,18 @@ export function FloorSession() {
     setSelectedDiscussionId(discussionId);
   };
 
+  const setDiscussionDropTarget = (visibility: NonNullable<DiscussionArea["visibility"]>, index: number) => {
+    if (draggingDiscussionId) {
+      const currentVisibility = (visibleDiscussionAreas.find((area) => area.id === draggingDiscussionId)?.visibility ?? "archive") as NonNullable<DiscussionArea["visibility"]>;
+      const currentIndex = discussionAreasByVisibility[currentVisibility].findIndex((area) => area.id === draggingDiscussionId);
+      if (currentVisibility === visibility && (index === currentIndex || index === currentIndex + 1)) {
+        setDiscussionDragTarget(null);
+        return;
+      }
+    }
+    setDiscussionDragTarget({ visibility, index });
+  };
+
   const discussionBoard = (
     <>
     <div className={`grid min-h-[calc(100vh-12rem)] gap-4 ${discussionListCollapsed ? "lg:grid-cols-[3rem_minmax(0,1fr)]" : "lg:grid-cols-[18rem_minmax(0,1fr)]"}`}>
@@ -1079,7 +1093,7 @@ export function FloorSession() {
                 onDragOver={(event) => {
                   if (role !== "teacher") return;
                   event.preventDefault();
-                  setDiscussionDragTarget({ visibility: section.id, index: areas.length });
+                  setDiscussionDropTarget(section.id, areas.length);
                 }}
                 onDrop={(event) => {
                   if (role !== "teacher") return;
@@ -1111,7 +1125,7 @@ export function FloorSession() {
                             event.stopPropagation();
                             const rect = event.currentTarget.getBoundingClientRect();
                             const nextIndex = event.clientY > rect.top + rect.height / 2 ? index + 1 : index;
-                            setDiscussionDragTarget({ visibility: section.id, index: nextIndex });
+                            setDiscussionDropTarget(section.id, nextIndex);
                           }}
                           onDragEnd={() => {
                             setDraggingDiscussionId(null);
@@ -1328,7 +1342,7 @@ export function FloorSession() {
               value={newDiscussionTitle}
               onChange={(event) => setNewDiscussionTitle(event.target.value)}
               placeholder="Discussion title"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-lg font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm font-semibold text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
             />
             <textarea
               value={newDiscussionPrompt}
@@ -1388,15 +1402,13 @@ export function FloorSession() {
     <div className={`min-h-screen ${displayFloorMode === "discussion" ? "bg-white" : "bg-gray-50"}`}>
       <Navigation />
       <main className={displayFloorMode === "discussion" ? "px-3 py-4 sm:px-4 lg:px-6" : "mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8"}>
-        {displayFloorMode !== "discussion" && <div className="mb-8">
+        {shouldShowFloorHeader && <div className="mb-8">
           <div className="flex flex-wrap items-end justify-between gap-4">
-            {displayFloorMode !== "discussion" ? (
-              <div>
-                <h1 className="mb-2 text-3xl font-bold text-gray-900">Floor</h1>
-                <p className="text-gray-600">Speaker election, active floor text, and floor votes.</p>
-              </div>
-            ) : <div />}
-            {role === "teacher" && (
+            <div>
+              <h1 className="mb-2 text-3xl font-bold text-gray-900">Floor</h1>
+              <p className="text-gray-600">Speaker election, active floor text, discussions, and floor votes.</p>
+            </div>
+            {shouldShowFloorSwitcher && (
               <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
                 {([
                   ["election", "Speaker Election"],
@@ -1408,7 +1420,7 @@ export function FloorSession() {
                     type="button"
                     onClick={() => confirmFloorMode(mode)}
                     disabled={busy || floorMode === mode}
-                    className={`rounded px-3 py-1.5 text-sm font-semibold transition ${floorMode === mode ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"} disabled:opacity-80`}
+                    className={`rounded px-3 py-1.5 text-sm font-semibold transition ${floorMode === mode ? "bg-blue-800 text-white shadow-sm" : "text-gray-700 hover:bg-blue-50 hover:text-blue-800"} disabled:opacity-80`}
                   >
                     {label}
                   </button>
@@ -1433,11 +1445,11 @@ export function FloorSession() {
               </div>
               {role === "teacher" && (
                 <div className="flex flex-wrap items-center gap-2">
-                  <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
-                    <button type="button" onClick={() => void setSpeakerElectionOpen(true)} disabled={busy} className={`px-4 py-2 text-sm font-medium disabled:opacity-50 ${speakerOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                  <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+                    <button type="button" onClick={() => void setSpeakerElectionOpen(true)} disabled={busy} className={`rounded px-4 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${speakerOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}>
                       Open
                     </button>
-                    <button type="button" onClick={() => void setSpeakerElectionOpen(false)} disabled={busy} className={`border-l border-gray-300 px-4 py-2 text-sm font-medium disabled:opacity-50 ${!speakerOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                    <button type="button" onClick={() => void setSpeakerElectionOpen(false)} disabled={busy} className={`rounded px-4 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${!speakerOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}>
                       Close
                     </button>
                   </div>
@@ -1522,11 +1534,11 @@ export function FloorSession() {
                 </div>
                 {role === "teacher" && presidentSelectionMode === "student-vote" && (
                   <div className="flex flex-wrap items-center gap-2">
-                    <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
-                      <button type="button" onClick={() => void setPresidentElectionOpen(true)} disabled={busy || presidentConcluded} className={`px-4 py-2 text-sm font-medium disabled:opacity-50 ${presidentOpen ? "bg-blue-600 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                    <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+                      <button type="button" onClick={() => void setPresidentElectionOpen(true)} disabled={busy || presidentConcluded} className={`rounded px-4 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${presidentOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}>
                         Open
                       </button>
-                      <button type="button" onClick={() => void setPresidentElectionOpen(false)} disabled={busy || presidentConcluded} className={`border-l border-gray-300 px-4 py-2 text-sm font-medium disabled:opacity-50 ${!presidentOpen ? "bg-gray-900 text-white" : "bg-white text-gray-700 hover:bg-gray-50"}`}>
+                      <button type="button" onClick={() => void setPresidentElectionOpen(false)} disabled={busy || presidentConcluded} className={`rounded px-4 py-1.5 text-sm font-semibold transition disabled:opacity-50 ${!presidentOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}>
                         Close
                       </button>
                     </div>
@@ -1669,7 +1681,9 @@ export function FloorSession() {
                   <div>
                     <div className="font-mono text-sm font-bold text-gray-900">{activeItem.bill.hr_label}</div>
                     <Link to={`/bills/${activeItem.bill_id}`} className="text-2xl font-bold text-gray-900 hover:text-blue-600">{activeItem.bill.title}</Link>
-                    <div className="mt-1 text-sm text-gray-600">Scheduled {new Date(activeItem.scheduled_at).toLocaleString()}</div>
+                    <div className="mt-1 text-sm text-gray-600">
+                      Scheduled {activeItem.duration_minutes === 0 ? new Date(activeItem.scheduled_at).toLocaleDateString() : new Date(activeItem.scheduled_at).toLocaleString()}
+                    </div>
                   </div>
                   <span className={`rounded px-3 py-1 text-sm font-medium ${activeSession?.status === "open" ? "bg-green-100 text-green-700" : activeSession?.status === "closed" ? "bg-gray-100 text-gray-700" : "bg-amber-100 text-amber-700"}`}>
                     {sessionLabel(activeSession)}
@@ -1802,7 +1816,7 @@ export function FloorSession() {
                 ) : (
                   nextItems.map((item) => (
                     <Link key={item.id} to={`/bills/${item.bill_id}`} className="block rounded-md p-2 hover:bg-gray-50">
-                      <div className="text-xs text-gray-500">{new Date(item.scheduled_at).toLocaleString()}</div>
+                      <div className="text-xs text-gray-500">{item.duration_minutes === 0 ? new Date(item.scheduled_at).toLocaleDateString() : new Date(item.scheduled_at).toLocaleString()}</div>
                       <div className="font-mono text-sm font-semibold text-gray-900">{item.bill.hr_label}</div>
                       <div className="line-clamp-2 text-sm text-gray-700">{item.bill.title}</div>
                     </Link>

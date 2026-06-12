@@ -41,6 +41,7 @@ interface CalendarEvent {
   sourceId: string;
   title: string;
   date: Date;
+  hasTime?: boolean;
   type: "assignment" | "deadline" | "session" | "election" | "bill";
   href?: string;
 }
@@ -87,6 +88,10 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
   const timelineScrollRef = useRef<HTMLDivElement | null>(null);
   const calendarScrollRef = useRef<HTMLDivElement | null>(null);
   useUnsavedChangesPrompt(editingClassName && classNameDraft.trim() !== className);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [classId]);
 
   useEffect(() => {
     const setActive = async () => {
@@ -153,6 +158,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
             sourceId: item.bill_id,
             title: `${item.bill.hr_label}: ${item.bill.title}`,
             date: new Date(item.scheduled_at),
+            hasTime: item.duration_minutes !== 0,
             type: "bill" as const,
             href: `/bills/${item.bill_id}`,
           })),
@@ -182,12 +188,14 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
   };
 
-  const formatEventDate = (date: Date) =>
-    date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+  const formatEventDate = (event: CalendarEvent) =>
+    event.hasTime === false
+      ? event.date.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      : event.date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
   const eventDisplayTitle = (event: CalendarEvent) => {
-    if (event.type === "assignment") return `Assignment Deadline: ${event.title}`;
-    if (event.type === "bill") return `Floor Debate: ${event.title}`;
+    if (event.type === "assignment") return event.title;
+    if (event.type === "bill") return `Floor: ${event.title}`;
     if (event.type === "deadline") return `Deadline: ${event.title}`;
     return event.title;
   };
@@ -230,19 +238,25 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     return `${year}-${month}-${day}`;
   };
 
-  const dashboardCalendarMonths = useMemo(() => {
+  const dashboardMonth = useMemo(() => {
     const today = new Date();
-    return Array.from({ length: 36 }, (_, monthIndex) => {
-      const month = new Date(today.getFullYear() - 1, monthIndex, 1);
-      const firstGridDay = new Date(month);
-      firstGridDay.setDate(month.getDate() - month.getDay());
-      const days = Array.from({ length: 42 }, (_, index) => {
-        const day = new Date(firstGridDay);
-        day.setDate(firstGridDay.getDate() + index);
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  }, []);
+
+  const dashboardCalendarWeeks = useMemo(() => {
+    const today = new Date();
+    const currentWeekStart = new Date(today);
+    currentWeekStart.setHours(0, 0, 0, 0);
+    currentWeekStart.setDate(today.getDate() - today.getDay());
+    const firstWeekStart = new Date(currentWeekStart);
+    firstWeekStart.setDate(currentWeekStart.getDate() - 7);
+    return Array.from({ length: 3 }, (_, weekIndex) =>
+      Array.from({ length: 7 }, (_, dayIndex) => {
+        const day = new Date(firstWeekStart);
+        day.setDate(firstWeekStart.getDate() + weekIndex * 7 + dayIndex);
         return day;
-      });
-      return { month, days };
-    });
+      }),
+    );
   }, []);
 
   const eventsByDay = useMemo(() => {
@@ -262,9 +276,8 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
   }, [upcomingEvents]);
 
   useEffect(() => {
-    const current = calendarScrollRef.current?.querySelector("[data-current-month='true']");
-    current?.scrollIntoView({ block: "start" });
-  }, [dashboardCalendarMonths.length]);
+    calendarScrollRef.current?.scrollTo({ top: 0 });
+  }, [dashboardCalendarWeeks.length]);
 
   const localDateInput = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -284,7 +297,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
         const { error } = await supabase.from("class_tasks").update({ due_at: nextDate.toISOString() } as any).eq("id", event.sourceId).eq("class_id", classId);
         if (error) throw error;
       } else if (event.type === "bill") {
-        await saveBillCalendarEntry(event.sourceId, nextDate.toISOString());
+        await saveBillCalendarEntry(event.sourceId, nextDate.toISOString(), event.hasTime === false ? 0 : 30);
       }
       setUpcomingEvents((current) => current.map((item) => item.id === event.id ? { ...item, date: nextDate } : item).sort((a, b) => a.date.getTime() - b.date.getTime()));
       setSelectedUpcomingDay(dayKey(nextDate));
@@ -477,23 +490,23 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
           <div className="mb-2 text-sm font-semibold uppercase tracking-wide text-gray-500">
             Elections: {electionsOpen ? "open" : "closed"}
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
             <button
               type="button"
               onClick={() => confirmElectionToggle(true)}
               disabled={workflowBusy}
-              className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${electionsOpen ? "bg-blue-600 text-white shadow-sm" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+              className={`inline-flex items-center justify-center gap-2 rounded px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${electionsOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
             >
-              <Vote className="h-5 w-5" />
+              <Vote className="h-4 w-4" />
               Open
             </button>
             <button
               type="button"
               onClick={() => confirmElectionToggle(false)}
               disabled={workflowBusy}
-              className={`inline-flex items-center justify-center gap-2 rounded-md px-4 py-3 text-base font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-gray-900 text-white shadow-sm" : "border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
+              className={`inline-flex items-center justify-center gap-2 rounded px-4 py-2 text-sm font-semibold transition disabled:opacity-50 ${!electionsOpen ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"}`}
             >
-              <Vote className="h-5 w-5" />
+              <Vote className="h-4 w-4" />
               Close
             </button>
           </div>
@@ -513,11 +526,23 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
         <div className="grid gap-3 sm:grid-cols-3">
           <div className="rounded-md border border-gray-200 bg-white p-3"><div className="text-xs text-gray-500">All bills</div><div className="text-xl font-bold text-gray-900">{billStats.total}</div></div>
           <button type="button" onClick={() => navigate("/teacher/bill-sorting")} className="rounded-md border border-gray-200 bg-white p-3 text-left hover:bg-gray-50">
-            <div className="flex items-center justify-between gap-3 text-xs text-gray-500">Waiting for referral <ChevronRight className="h-4 w-4" /></div>
+            <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
+              <span className="inline-flex items-center gap-1.5">
+                Waiting for referral
+                {billStats.waitingReferral > 0 && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">!</span>}
+              </span>
+              <ChevronRight className="h-4 w-4" />
+            </div>
             <div className="text-xl font-bold text-gray-900">{billStats.waitingReferral}</div>
           </button>
           <button type="button" onClick={() => navigate("/calendar?schedule=1")} className="rounded-md border border-gray-200 bg-white p-3 text-left hover:bg-gray-50">
-            <div className="flex items-center justify-between gap-3 text-xs text-gray-500">Waiting to be calendared <ChevronRight className="h-4 w-4" /></div>
+            <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
+              <span className="inline-flex items-center gap-1.5">
+                Waiting to be calendared
+                {billStats.waitingCalendar > 0 && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">!</span>}
+              </span>
+              <ChevronRight className="h-4 w-4" />
+            </div>
             <div className="text-xl font-bold text-gray-900">{billStats.waitingCalendar}</div>
           </button>
         </div>
@@ -560,7 +585,12 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                       <div ref={currentTimelineCardRef} className="min-h-48 w-[80vw] min-w-[520px] max-w-[1024px] flex-shrink-0 rounded-lg border border-blue-200 bg-blue-50 p-5">
                         <div className="min-w-0">
                           <div className="text-xs font-semibold uppercase tracking-wide text-blue-700">Next action</div>
-                          <h2 className="mt-1 text-2xl font-bold text-gray-900">{step.label}</h2>
+                          <h2 className="mt-1 inline-flex items-center gap-2 text-2xl font-bold text-gray-900">
+                            {step.label}
+                            {step.id === "legislation" && (billStats.waitingReferral > 0 || billStats.waitingCalendar > 0) && (
+                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">!</span>
+                            )}
+                          </h2>
                           <p className="mt-1 text-base text-gray-600">{step.description}</p>
                         </div>
                         {workflowAction(step.id)}
@@ -611,8 +641,8 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     {
       title: "Legislation",
       actions: [
-        { label: "Sort bills into committees", href: "/teacher/bill-sorting", icon: FileText },
-        { label: "Calendar Bills", href: "/calendar?schedule=1", icon: CalendarIcon },
+        { label: "Sort bills into committees", href: "/teacher/bill-sorting", icon: FileText, count: billStats.waitingReferral },
+        { label: "Calendar Bills", href: "/calendar?schedule=1", icon: CalendarIcon, count: billStats.waitingCalendar },
       ],
     },
     {
@@ -676,7 +706,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                     <CardTitle>Calendar</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={() => setAssignmentModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Create</Button>
+                    <Button size="sm" onClick={() => setAssignmentModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Create assignment</Button>
                   </div>
                 </div>
               </CardHeader>
@@ -690,61 +720,68 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                         <ChevronRight className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                    <div ref={calendarScrollRef} className="max-h-[32rem] overflow-y-auto rounded-md border border-gray-200 bg-white">
-                      {dashboardCalendarMonths.map(({ month, days }) => {
-                        const today = new Date();
-                        const currentMonth = month.getFullYear() === today.getFullYear() && month.getMonth() === today.getMonth();
-                        return (
-                          <section key={`${month.getFullYear()}-${month.getMonth()}`} data-current-month={currentMonth ? "true" : undefined} className="border-b border-gray-200 last:border-b-0">
-                            <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-2 py-1.5 text-sm font-semibold text-gray-900 backdrop-blur">
-                              {month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
-                            </div>
-                            <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase text-gray-500">
-                              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
-                                <div key={day} className="px-2 py-1">{day}</div>
-                              ))}
-                            </div>
-                            <div className="grid grid-cols-7">
-                              {days.map((day) => {
-                                const key = dayKey(day);
-                                const events = eventsByDay.get(key) ?? [];
-                                const isToday = key === dayKey(new Date());
-                                const selected = selectedUpcomingDay === key;
-                                const inMonth = day.getMonth() === month.getMonth();
-                                const dayLabel = day.getDate() === 1 ? day.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : String(day.getDate());
-                                return (
-                                  <div
-                                    key={key}
-                                    onClick={() => setSelectedUpcomingDay(key)}
-                                    onDragOver={(event) => event.preventDefault()}
-                                    onDrop={(drop) => {
-                                      drop.preventDefault();
-                                      const eventId = drop.dataTransfer.getData("text/plain");
-                                      if (eventId) void dropEventOnDay(eventId, day);
-                                    }}
-                                    className={`min-h-14 border-b border-r border-gray-100 p-1 text-left transition-colors sm:min-h-16 ${selected ? "bg-blue-50 ring-1 ring-inset ring-blue-400" : isToday ? "bg-blue-50/70" : "bg-white hover:bg-gray-50"} ${inMonth ? "" : "text-gray-300"}`}
-                                  >
-                                    <div className={`text-xs font-semibold ${isToday ? "text-blue-700" : "text-gray-900"}`}>{dayLabel}</div>
-                                    <div className="mt-0.5 space-y-0.5">
-                                      {events.slice(0, 1).map((event) => (
-                                        <div
-                                          key={event.id}
-                                          draggable
-                                          onDragStart={(drag) => drag.dataTransfer.setData("text/plain", event.id)}
-                                          className={`line-clamp-1 cursor-grab rounded px-1 py-0.5 text-[9px] font-medium leading-tight active:cursor-grabbing ${event.type === "bill" ? "bg-indigo-50 text-indigo-700" : event.type === "assignment" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700"}`}
-                                        >
-                                          {eventDisplayTitle(event)}
-                                        </div>
-                                      ))}
-                                      {events.length > 1 && <div className="text-[9px] font-medium leading-none text-gray-500">+{events.length - 1} more</div>}
+                    <div ref={calendarScrollRef} className="max-h-[18rem] overflow-y-auto rounded-md border border-gray-200 bg-white">
+                      <section>
+                        <div className="sticky top-0 z-10 border-b border-gray-200 bg-white/95 px-2 py-1.5 text-sm font-semibold text-gray-900 backdrop-blur">
+                          {dashboardMonth.toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                        </div>
+                        <div className="grid grid-cols-7 border-b border-gray-200 bg-gray-50 text-[10px] font-semibold uppercase text-gray-500">
+                          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+                            <div key={day} className="px-2 py-1">{day}</div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-7">
+                          {dashboardCalendarWeeks.flat().map((day) => {
+                            const key = dayKey(day);
+                            const inMonth = day.getMonth() === dashboardMonth.getMonth() && day.getFullYear() === dashboardMonth.getFullYear();
+                            const events = inMonth ? eventsByDay.get(key) ?? [] : [];
+                            const isToday = key === dayKey(new Date());
+                            const selected = selectedUpcomingDay === key;
+                            const dayLabel = day.getDate() === 1 ? day.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : String(day.getDate());
+                            return (
+                              <div
+                                key={key}
+                                onClick={() => {
+                                  if (inMonth) setSelectedUpcomingDay(key);
+                                }}
+                                onDragOver={(event) => {
+                                  if (inMonth) event.preventDefault();
+                                }}
+                                onDrop={(drop) => {
+                                  if (!inMonth) return;
+                                  drop.preventDefault();
+                                  const eventId = drop.dataTransfer.getData("text/plain");
+                                  if (eventId) void dropEventOnDay(eventId, day);
+                                }}
+                                className={`min-h-14 border-b border-r border-gray-100 p-1 text-left transition-colors sm:min-h-16 ${
+                                  !inMonth
+                                    ? "cursor-not-allowed bg-gray-100 text-gray-300"
+                                    : selected
+                                      ? "cursor-pointer bg-blue-50 ring-1 ring-inset ring-blue-400"
+                                      : isToday
+                                        ? "cursor-pointer bg-blue-50/70 hover:bg-blue-100"
+                                        : "cursor-pointer bg-white hover:bg-gray-50"
+                                }`}
+                              >
+                                <div className={`text-xs font-semibold ${inMonth && isToday ? "text-blue-700" : inMonth ? "text-gray-900" : "text-gray-300"}`}>{dayLabel}</div>
+                                <div className="mt-0.5 space-y-0.5">
+                                  {events.slice(0, 1).map((event) => (
+                                    <div
+                                      key={event.id}
+                                      draggable
+                                      onDragStart={(drag) => drag.dataTransfer.setData("text/plain", event.id)}
+                                      className={`line-clamp-1 cursor-grab rounded px-1 py-0.5 text-[9px] font-medium leading-tight active:cursor-grabbing ${event.type === "bill" ? "bg-indigo-50 text-indigo-700" : event.type === "assignment" ? "bg-blue-50 text-blue-700" : "bg-gray-100 text-gray-700"}`}
+                                    >
+                                      {eventDisplayTitle(event)}
                                     </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </section>
-                        );
-                      })}
+                                  ))}
+                                  {events.length > 1 && <div className="text-[9px] font-medium leading-none text-gray-500">+{events.length - 1} more</div>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </section>
                     </div>
                   </div>
                   <div className="space-y-2">
@@ -762,17 +799,24 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                         </div>
                       ) : (
                         displayedUpcomingEvents.map((event) => (
-                          <div key={event.id} draggable onDragStart={(drag) => drag.dataTransfer.setData("text/plain", event.id)} className={`group relative flex cursor-grab items-start gap-2 rounded-lg border p-2 transition-all hover:-translate-y-0.5 hover:shadow-sm active:cursor-grabbing ${eventToneClass(event.date)}`}>
+                          <div
+                            key={event.id}
+                            role={event.href ? "link" : undefined}
+                            tabIndex={event.href ? 0 : undefined}
+                            draggable
+                            onClick={() => {
+                              if (event.href) navigate(event.href);
+                            }}
+                            onKeyDown={(keyEvent) => {
+                              if (event.href && (keyEvent.key === "Enter" || keyEvent.key === " ")) navigate(event.href);
+                            }}
+                            onDragStart={(drag) => drag.dataTransfer.setData("text/plain", event.id)}
+                            className={`group relative flex cursor-pointer items-start gap-2 rounded-lg border p-2 transition-all hover:-translate-y-0.5 hover:shadow-sm active:cursor-grabbing ${eventToneClass(event.date)}`}
+                          >
                             <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
                             <div className="min-w-0 flex-1">
-                              {event.href ? (
-                                <Link to={event.href} className="line-clamp-1 text-xs font-semibold text-gray-900">
-                                  {eventDisplayTitle(event)}
-                                </Link>
-                              ) : (
-                                <h4 className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>
-                              )}
-                              <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
+                              <h4 className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>
+                              <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event)}</p>
                             </div>
                             <div className="relative">
                               <button
@@ -798,14 +842,25 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                       )}
                       {overdueEvents.length ? (
                         <div className="pt-2">
-                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Past due</div>
+                          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">Earlier active deadlines</div>
                           <div className="space-y-1.5">
                             {overdueEvents.slice(0, 8).map((event) => (
-                              <div key={`overdue-${event.id}`} className={`flex items-start gap-2 rounded-lg border p-2 transition-all hover:-translate-y-0.5 hover:shadow-sm ${eventToneClass(event.date)}`}>
+                              <div
+                                key={`overdue-${event.id}`}
+                                role={event.href ? "link" : undefined}
+                                tabIndex={event.href ? 0 : undefined}
+                                onClick={() => {
+                                  if (event.href) navigate(event.href);
+                                }}
+                                onKeyDown={(keyEvent) => {
+                                  if (event.href && (keyEvent.key === "Enter" || keyEvent.key === " ")) navigate(event.href);
+                                }}
+                                className={`flex cursor-pointer items-start gap-2 rounded-lg border p-2 transition-all hover:-translate-y-0.5 hover:shadow-sm ${eventToneClass(event.date)}`}
+                              >
                                 <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white">{getEventIcon(event.type)}</div>
                                 <div className="min-w-0 flex-1">
-                                  {event.href ? <Link to={event.href} className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</Link> : <h4 className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>}
-                                  <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event.date)}</p>
+                                  <h4 className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>
+                                  <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event)}</p>
                                 </div>
                               </div>
                             ))}
@@ -910,7 +965,12 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                           <Link key={action.label} to={action.href}>
                             <Button variant="ghost" className="w-full justify-start bg-white text-base text-gray-900 hover:bg-gray-50">
                               <Icon className="mr-2 h-4 w-4" />
-                              {action.label}
+                              <span>{action.label}</span>
+                              {typeof action.count === "number" && (
+                                <span className="ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-100 px-2 text-xs font-bold text-blue-800">
+                                  {action.count}
+                                </span>
+                              )}
                             </Button>
                           </Link>
                         );

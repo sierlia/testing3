@@ -184,8 +184,8 @@ export function AllBills() {
                     <div
                       key={bill.id}
                       onClick={() => setSelectedBill(bill)}
-                      className={`p-4 hover:bg-gray-50 cursor-pointer transition-colors ${
-                        selectedBill?.id === bill.id ? 'bg-blue-50' : ''
+                      className={`p-4 cursor-pointer transition-colors ${
+                        selectedBill?.id === bill.id ? 'bg-blue-50 hover:bg-blue-100' : 'hover:bg-gray-50'
                       }`}
                     >
                       <div className="flex items-start justify-between gap-4">

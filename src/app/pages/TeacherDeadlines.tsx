@@ -652,6 +652,46 @@ export function TeacherDeadlines() {
     }
   };
 
+  const persistAutoScoreValue = async (student: StudentRow, criterion: AutoCriteriaConfig, rawValue: string) => {
+    if (!classId || !selectedAssignment) return;
+    const existing = submissionMap.get(student.user_id);
+    const value = Math.max(0, Number(rawValue) || 0);
+    const target = Math.max(1, Number(criterion.target) || 1);
+    const points = Math.max(0, Number(criterion.points) || 0);
+    const optionLabel = autoCriteriaLabel(criterion.id);
+    const nextScore: AutoCriteriaResult = {
+      id: criterion.id,
+      label: optionLabel,
+      value,
+      target,
+      points,
+      earned: Math.round(Math.min(value, target) * points * 100) / 100,
+      complete: value >= target,
+      extra_credit: Boolean(criterion.extra_credit),
+    };
+    try {
+      const { error } = await supabase.from("assignment_submissions").upsert(
+        {
+          assignment_id: selectedAssignment.id,
+          class_id: classId,
+          student_user_id: student.user_id,
+          body: existing?.body ?? "",
+          attachments: existing?.attachments ?? [],
+          auto_scores: { ...(existing?.auto_scores ?? {}), [criterion.id]: nextScore },
+          manual_score: existing?.manual_score ?? null,
+          manual_feedback: existing?.manual_feedback ?? "",
+          status: existing?.status ?? "draft",
+          submitted_at: existing?.submitted_at ?? null,
+        } as any,
+        { onConflict: "assignment_id,student_user_id" },
+      );
+      if (error) throw error;
+      await loadReview(selectedAssignment.id);
+    } catch (e: any) {
+      toast.error(e.message || "Could not update auto score");
+    }
+  };
+
   const returnGrade = async (student: StudentRow) => {
     if (!classId || !selectedAssignment) return;
     const draft = gradingDrafts[student.user_id] ?? { manual_score: "", manual_feedback: "" };
@@ -832,7 +872,7 @@ export function TeacherDeadlines() {
                       >
                         <div className="mb-1 flex items-start justify-between gap-3">
                           <h3 className="line-clamp-2 text-sm font-semibold text-gray-900">{task.title}</h3>
-                          <span className="mr-8 shrink-0 rounded bg-white px-2 py-0.5 text-xs font-medium text-gray-700">{task.points_possible} pts</span>
+                          <span className={`mr-8 shrink-0 rounded bg-white px-2 py-0.5 text-xs font-medium ${task.points_possible ? "text-gray-700" : "text-gray-400"}`}>{task.points_possible ? `${task.points_possible} pts` : "None"}</span>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
                           <span>{formatDateTime(task.due_at)}</span>
@@ -1008,10 +1048,18 @@ export function TeacherDeadlines() {
                                           return (
                                             <div key={criterion.id} className="group relative flex justify-between gap-3 rounded px-1 py-0.5 hover:bg-gray-50">
                                               <span>{autoCriteriaLabel(criterion.id)}</span>
-                                              <span className={score?.complete ? "font-semibold text-green-700" : "text-gray-500"}>
-                                                {score ? `${score.value}/${score.target} - ${score.earned}/${score.points * score.target}` : `0/${criterion.target} - 0/${criterion.points * criterion.target}`}
+                                              <span className={`inline-flex items-center gap-1 ${score?.complete ? "font-semibold text-green-700" : "text-gray-500"}`}>
+                                                <input
+                                                  key={`${student.user_id}-${criterion.id}-${score?.value ?? 0}`}
+                                                  type="number"
+                                                  min="0"
+                                                  defaultValue={score?.value ?? 0}
+                                                  onBlur={(event) => void persistAutoScoreValue(student, criterion, event.target.value)}
+                                                  className="h-6 w-12 rounded border border-gray-300 bg-white px-1 text-right text-xs text-gray-900 outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                                <span>/{score?.target ?? criterion.target} - {score?.earned ?? 0}/{(score?.points ?? criterion.points) * (score?.target ?? criterion.target)}</span>
                                               </span>
-                                              <div className="pointer-events-none absolute left-0 top-full z-30 hidden w-96 rounded-lg border border-gray-200 bg-white p-3 text-left text-xs shadow-xl group-hover:block">
+                                              <div className="absolute right-full top-0 z-30 mr-2 hidden w-96 rounded-lg border border-gray-200 bg-white p-3 text-left text-xs shadow-xl group-hover:block hover:block">
                                                 {(autoEvidence[student.user_id]?.[criterion.id] ?? []).length ? (
                                                   criterion.id === "write_bills" ? (
                                                     <div className="flex gap-2 overflow-x-auto pb-1">

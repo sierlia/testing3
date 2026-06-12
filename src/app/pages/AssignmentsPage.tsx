@@ -32,6 +32,7 @@ type SubmissionRow = {
   returned_at: string | null;
 };
 type DraftState = { body: string; attachmentIds: string[] };
+type AssignmentTab = "upcoming" | "submitted" | "returned";
 
 const assignmentSelect =
   "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,allow_late_submissions,rubric,auto_criteria,attachments,integration_targets";
@@ -87,6 +88,57 @@ function preferredAttachmentIds(criteria: AutoCriteriaConfig[], options: Attachm
   return [...ids];
 }
 
+function attachmentTypeForCriterion(criterionId: string): AttachmentOption["type"] | null {
+  if (criterionId === "write_bills") return "bill";
+  if (criterionId === "cosponsor_bills") return "cosponsored_bill";
+  if (criterionId === "send_letters") return "letter";
+  if (criterionId === "complete_profile" || criterionId === "select_constituency") return "profile";
+  return null;
+}
+
+function adjustScoresForSelectedAttachments(
+  criteria: AutoCriteriaConfig[],
+  baseScores: Record<string, AutoCriteriaResult>,
+  selectedAttachments: AttachmentOption[],
+) {
+  const selectedCountByType = selectedAttachments.reduce<Record<string, number>>((counts, attachment) => {
+    counts[attachment.type] = (counts[attachment.type] ?? 0) + 1;
+    return counts;
+  }, {});
+  return Object.fromEntries(
+    criteria.map((criterion) => {
+      const base = baseScores[criterion.id];
+      const target = Math.max(1, Number(criterion.target) || 1);
+      const points = Math.max(0, Number(criterion.points) || 0);
+      const attachmentType = attachmentTypeForCriterion(criterion.id);
+      const rawValue = attachmentType ? Math.min(Number(base?.value ?? 0), selectedCountByType[attachmentType] ?? 0) : Number(base?.value ?? 0);
+      const value = Math.max(0, rawValue);
+      const earned = Math.round(Math.min(value, target) * points * 100) / 100;
+      return [
+        criterion.id,
+        {
+          id: criterion.id,
+          label: base?.label ?? criterion.id,
+          value,
+          target,
+          points,
+          earned,
+          complete: value >= target,
+          extra_credit: Boolean(criterion.extra_credit),
+        } satisfies AutoCriteriaResult,
+      ];
+    }),
+  );
+}
+
+function requiredCriteriaMet(scores: Record<string, AutoCriteriaResult>) {
+  return Object.values(scores).every((score) => score.extra_credit || score.complete);
+}
+
+function autoCriteriaPossible(criteria: AutoCriteriaConfig[]) {
+  return criteria.reduce((sum, criterion) => criterion.extra_credit ? sum : sum + Math.max(1, Number(criterion.target) || 1) * Math.max(0, Number(criterion.points) || 0), 0);
+}
+
 function appliesToCurrentStudent(task: AssignmentTask, userId: string) {
   if (task.audience_type !== "selected_students") return true;
   return task.audience_user_ids.includes(userId);
@@ -119,6 +171,8 @@ function StudentAssignmentsPage() {
   const [drafts, setDrafts] = useState<Record<string, DraftState>>({});
   const [autoScores, setAutoScores] = useState<Record<string, Record<string, AutoCriteriaResult>>>({});
   const [submittingId, setSubmittingId] = useState<string | null>(null);
+  const [assignmentTab, setAssignmentTab] = useState<AssignmentTab>("upcoming");
+  const [confirmSubmitId, setConfirmSubmitId] = useState<string | null>(null);
 
   const selectedAssignment = useMemo(
     () => assignments.find((assignment) => assignment.id === selectedAssignmentId) ?? null,
@@ -260,8 +314,23 @@ function StudentAssignmentsPage() {
     setDraft(assignmentIdToPatch, { attachmentIds: nextIds });
   };
 
-  const submitAssignment = async (assignment: AssignmentTask) => {
+  const submitAssignment = async (assignment: AssignmentTask, force = false) => {
     if (!classId || !userId) return;
+    const existingSubmission = submissionMap.get(assignment.id);
+    if (existingSubmission?.status === "submitted" && !force) {
+      setSubmittingId(assignment.id);
+      try {
+        const { error } = await supabase.from("assignment_submissions").update({ status: "draft", submitted_at: null } as any).eq("id", existingSubmission.id);
+        if (error) throw error;
+        await load();
+        toast.success("Assignment unsubmitted");
+      } catch (e: any) {
+        toast.error(e.message || "Could not unsubmit assignment");
+      } finally {
+        setSubmittingId(null);
+      }
+      return;
+    }
     setSubmittingId(assignment.id);
     try {
       const draft = drafts[assignment.id] ?? { body: "", attachmentIds: [] };
@@ -270,7 +339,12 @@ function StudentAssignmentsPage() {
         return;
       }
       const selectedAttachments = draft.attachmentIds.map((id) => attachmentMap.get(id)).filter(Boolean) as AttachmentOption[];
-      const scores = assignment.auto_criteria.length ? await computeAutoCriteriaScores(classId, userId, assignment.auto_criteria) : {};
+      const computedScores = assignment.auto_criteria.length ? await computeAutoCriteriaScores(classId, userId, assignment.auto_criteria) : {};
+      const scores = adjustScoresForSelectedAttachments(assignment.auto_criteria, computedScores, selectedAttachments);
+      if (!force && assignment.auto_criteria.length && !requiredCriteriaMet(scores)) {
+        setConfirmSubmitId(assignment.id);
+        return;
+      }
       const { error } = await supabase.from("assignment_submissions").upsert(
         {
           assignment_id: assignment.id,
@@ -285,9 +359,10 @@ function StudentAssignmentsPage() {
         { onConflict: "assignment_id,student_user_id" },
       );
       if (error) throw error;
+      setConfirmSubmitId(null);
       setAutoScores((current) => ({ ...current, [assignment.id]: scores }));
       await load();
-      toast.success(assignment.manual_submission_required ? "Assignment submitted" : "Assignment work saved");
+      toast.success(submissionMap.get(assignment.id)?.status === "returned" ? "Assignment resubmitted" : assignment.manual_submission_required ? "Assignment submitted" : "Assignment work saved");
     } catch (e: any) {
       toast.error(e.message || "Could not submit assignment");
     } finally {
@@ -316,10 +391,30 @@ function StudentAssignmentsPage() {
           <div className="grid gap-6 lg:grid-cols-[320px_minmax(0,1fr)]">
             <section className="overflow-hidden rounded-lg border border-gray-200 bg-white">
               <div className="border-b border-gray-200 px-4 py-3">
-                <h2 className="text-base font-semibold text-gray-900">Tasks</h2>
+                <div className="grid grid-cols-3 gap-1 rounded-md border border-gray-200 bg-gray-50 p-1">
+                  {([
+                    ["upcoming", "Upcoming"],
+                    ["submitted", "Submitted"],
+                    ["returned", "Returned"],
+                  ] as Array<[AssignmentTab, string]>).map(([tab, label]) => (
+                    <button
+                      key={tab}
+                      type="button"
+                      onClick={() => setAssignmentTab(tab)}
+                      className={`rounded px-2 py-1.5 text-xs font-semibold transition ${assignmentTab === tab ? "bg-blue-800 text-white shadow-sm" : "text-gray-600 hover:bg-blue-50 hover:text-blue-800"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="divide-y divide-gray-100">
-                {assignments.map((assignment) => {
+                {assignments.filter((assignment) => {
+                  const status = submissionMap.get(assignment.id)?.status;
+                  if (assignmentTab === "submitted") return status === "submitted";
+                  if (assignmentTab === "returned") return status === "returned";
+                  return status !== "submitted" && status !== "returned";
+                }).map((assignment) => {
                   const submission = submissionMap.get(assignment.id);
                   const selected = assignment.id === selectedAssignmentId;
                   return (
@@ -348,6 +443,12 @@ function StudentAssignmentsPage() {
                     </button>
                   );
                 })}
+                {assignments.filter((assignment) => {
+                  const status = submissionMap.get(assignment.id)?.status;
+                  if (assignmentTab === "submitted") return status === "submitted";
+                  if (assignmentTab === "returned") return status === "returned";
+                  return status !== "submitted" && status !== "returned";
+                }).length === 0 ? <div className="p-4 text-sm text-gray-500">No assignments in this tab.</div> : null}
               </div>
             </section>
 
@@ -356,17 +457,42 @@ function StudentAssignmentsPage() {
                 assignment={selectedAssignment}
                 submission={submissionMap.get(selectedAssignment.id)}
                 draft={drafts[selectedAssignment.id] ?? { body: "", attachmentIds: [] }}
-                scores={autoScores[selectedAssignment.id] ?? submissionMap.get(selectedAssignment.id)?.auto_scores ?? {}}
+                scores={adjustScoresForSelectedAttachments(
+                  selectedAssignment.auto_criteria,
+                  autoScores[selectedAssignment.id] ?? submissionMap.get(selectedAssignment.id)?.auto_scores ?? {},
+                  (drafts[selectedAssignment.id]?.attachmentIds ?? []).map((id) => attachmentMap.get(id)).filter(Boolean) as AttachmentOption[],
+                )}
                 attachmentOptions={attachmentOptions}
                 submitting={submittingId === selectedAssignment.id}
                 onDraftChange={(patch) => setDraft(selectedAssignment.id, patch)}
                 onToggleAttachment={(optionId) => toggleAttachment(selectedAssignment.id, optionId)}
-                onSubmit={() => void submitAssignment(selectedAssignment)}
+                onSubmit={(force) => void submitAssignment(selectedAssignment, force)}
               />
             ) : null}
           </div>
         )}
       </main>
+      {confirmSubmitId ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
+            <div className="border-b border-gray-200 p-5">
+              <h2 className="text-lg font-semibold text-gray-900">Submit before all requirements are met?</h2>
+              <p className="mt-1 text-sm text-gray-600">Some required auto-graded requirements are incomplete. Extra credit is not required.</p>
+            </div>
+            <div className="flex items-center justify-end gap-3 p-5">
+              <button type="button" onClick={() => setConfirmSubmitId(null)} className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">
+                Keep working
+              </button>
+              <button type="button" onClick={() => {
+                const assignment = assignments.find((item) => item.id === confirmSubmitId);
+                if (assignment) void submitAssignment(assignment, true);
+              }} className="rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+                Submit anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -390,32 +516,25 @@ function AssignmentDetail({
   submitting: boolean;
   onDraftChange: (patch: Partial<DraftState>) => void;
   onToggleAttachment: (optionId: string) => void;
-  onSubmit: () => void;
+  onSubmit: (force?: boolean) => void;
 }) {
   const returned = submission?.status === "returned";
+  const autoPossible = autoCriteriaPossible(assignment.auto_criteria);
+  const autoTotal = autoScoreTotal(scores);
   return (
     <article className="overflow-hidden rounded-lg border border-gray-200 bg-white">
       <div className="border-b border-gray-100 p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="rounded bg-blue-50 px-2 py-1 text-xs font-semibold text-blue-700">Assignment</span>
-              <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{scoreText(assignment, submission)}</span>
-              {assignment.grading_mode === "auto" ? <span className="rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-700">Auto-graded</span> : null}
-              {submission?.status ? (
-                <span className={`rounded px-2 py-1 text-xs font-medium ${returned ? "bg-green-50 text-green-700" : "bg-gray-100 text-gray-700"}`}>
-                  {returned ? "Returned" : submission.status === "submitted" ? "Submitted" : "Draft"}
-                </span>
-              ) : null}
-            </div>
+          <div className="min-w-0 flex-1">
             <h2 className="text-xl font-semibold text-gray-900">{assignment.title}</h2>
+            <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
+              <Calendar className="h-4 w-4" />
+              {formatDateTime(assignment.due_at)}
+            </div>
             {assignment.description ? <p className="mt-2 whitespace-pre-line text-sm text-gray-700">{assignment.description}</p> : null}
             <AttachmentList attachments={assignment.attachments} />
           </div>
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <Calendar className="h-4 w-4" />
-            {formatDateTime(assignment.due_at)}
-          </div>
+          <span className="rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">{scoreText(assignment, submission)}</span>
         </div>
       </div>
 
@@ -431,7 +550,10 @@ function AssignmentDetail({
                     <div key={criterion.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className={`h-4 w-4 ${score?.complete ? "text-green-600" : "text-gray-300"}`} />
-                        <span className="font-medium text-gray-900">{score?.label ?? criterion.id}</span>
+                        <span className="font-medium text-gray-900">
+                          {score?.label ?? criterion.id}
+                          {criterion.extra_credit ? <span className="ml-1 text-xs font-semibold text-blue-700">(extra credit)</span> : null}
+                        </span>
                       </div>
                       <span className={score?.complete ? "font-semibold text-green-700" : "text-gray-500"}>
                         {score ? `${score.value}/${score.target}` : `0/${criterion.target}`} - {score ? `${score.earned}/${score.points * score.target}` : `0/${criterion.points * criterion.target}`} pts
@@ -439,6 +561,9 @@ function AssignmentDetail({
                     </div>
                   );
                 })}
+              </div>
+              <div className="mt-3 rounded-md bg-gray-50 px-3 py-2 text-sm font-semibold text-gray-800">
+                Auto grading total: {autoTotal}/{autoPossible} pts
               </div>
             </section>
           ) : null}
@@ -480,18 +605,6 @@ function AssignmentDetail({
               Manual submission is optional for this assignment. Your attached simulation work can still be updated.
             </div>
           ) : null}
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-gray-700">Submission note</span>
-            <textarea
-              value={draft.body}
-              onChange={(event) => onDraftChange({ body: limitWords(event.target.value, 100) })}
-              rows={5}
-              placeholder="Optional note to your teacher"
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-            />
-            <span className="mt-1 block text-xs text-gray-500">{wordCount(draft.body)}/100 words</span>
-          </label>
-
           <section>
             <div className="mb-2 flex items-center gap-2 text-sm font-medium text-gray-700">
               <Paperclip className="h-4 w-4" />
@@ -516,6 +629,18 @@ function AssignmentDetail({
             </div>
           </section>
 
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-gray-700">Optional submission note</span>
+            <textarea
+              value={draft.body}
+              onChange={(event) => onDraftChange({ body: limitWords(event.target.value, 100) })}
+              rows={5}
+              placeholder="Optional note to your teacher"
+              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+            />
+            <span className="mt-1 block text-xs text-gray-500">{wordCount(draft.body)}/100 words</span>
+          </label>
+
           {submission?.attachments?.length ? (
             <div>
               <div className="mb-2 text-sm font-medium text-gray-700">Submitted attachments</div>
@@ -531,7 +656,7 @@ function AssignmentDetail({
 
           <button
             type="button"
-            onClick={onSubmit}
+            onClick={() => onSubmit()}
             disabled={submitting}
             className="inline-flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
           >
@@ -540,9 +665,16 @@ function AssignmentDetail({
               ? "Saving..."
               : assignment.manual_submission_required
                 ? submission?.status === "submitted"
-                  ? "Resubmit assignment"
+                  ? "Unsubmit assignment"
+                  : submission?.status === "returned"
+                    ? "Resubmit assignment"
+                    : "Submit assignment"
+                : submission?.status === "submitted"
+                  ? "Unsubmit assignment"
+                  : submission?.status === "returned"
+                    ? "Resubmit work"
                   : "Submit assignment"
-                : "Save submission work"}
+                }
           </button>
         </aside>
       </div>

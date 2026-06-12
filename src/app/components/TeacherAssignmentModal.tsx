@@ -495,7 +495,8 @@ export function TeacherAssignmentModal({
                   readOnly={normalizedRubric.length > 0}
                   value={normalizedRubric.length ? reflectedPoints : newPointsPossible}
                   onChange={(event) => setNewPointsPossible(event.target.value)}
-                  className={`w-32 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-500 ${normalizedRubric.length ? "bg-gray-100 text-gray-600" : ""}`}
+                  placeholder="None"
+                  className={`w-32 rounded-md border border-gray-300 px-3 py-2 text-sm outline-none placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500 ${normalizedRubric.length ? "bg-gray-100 text-gray-600" : ""}`}
                 />
               </label>
             </div>

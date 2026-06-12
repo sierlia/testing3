@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import { Mail } from "lucide-react";
 import { supabase } from "../utils/supabase";
@@ -24,12 +24,17 @@ export function OrganizationLettersInbox({
 }) {
   const [loading, setLoading] = useState(true);
   const [letters, setLetters] = useState<LetterRow[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [seenIds, setSeenIds] = useState<Set<string>>(new Set());
+  const storageKey = `gavel:org-letters-seen:${organizationType}:${organizationId}`;
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
       try {
+        const storedSeen = new Set<string>(JSON.parse(window.localStorage.getItem(storageKey) || "[]"));
+        setSeenIds(storedSeen);
         const { data: letterRows } = await supabase
           .from("dear_colleague_org_recipients")
           .select("dear_colleague_letters(id,sender_user_id,subject,body,created_at)")
@@ -44,7 +49,9 @@ export function OrganizationLettersInbox({
           : ({ data: [] } as any);
         const profileMap = new Map((profiles ?? []).map((profile: any) => [profile.user_id, profile.display_name ?? "Member"]));
         if (!cancelled) {
-          setLetters(lettersForOrg.map((letter: any) => ({ ...letter, senderName: profileMap.get(letter.sender_user_id) ?? "Member" })));
+          const mapped = lettersForOrg.map((letter: any) => ({ ...letter, senderName: profileMap.get(letter.sender_user_id) ?? "Member" }));
+          setLetters(mapped);
+          setSelectedId((current) => current ?? mapped[0]?.id ?? null);
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -54,7 +61,19 @@ export function OrganizationLettersInbox({
     return () => {
       cancelled = true;
     };
-  }, [organizationId, organizationType, memberIds.join("|")]);
+  }, [organizationId, organizationType, memberIds.join("|"), storageKey]);
+
+  const selected = useMemo(() => letters.find((letter) => letter.id === selectedId) ?? letters[0] ?? null, [letters, selectedId]);
+  const newCount = letters.filter((letter) => !seenIds.has(letter.id)).length;
+
+  const openLetter = (letterId: string) => {
+    setSelectedId(letterId);
+    setSeenIds((current) => {
+      const next = new Set(current).add(letterId);
+      window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+      return next;
+    });
+  };
 
   return (
     <section className="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -62,6 +81,7 @@ export function OrganizationLettersInbox({
         <div className="flex items-center gap-2">
           <Mail className="h-5 w-5 text-blue-600" />
           <h2 className="text-lg font-semibold text-gray-900">Letters inbox</h2>
+          {newCount > 0 ? <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1.5 text-xs font-bold text-white">{newCount}</span> : null}
         </div>
       </div>
       {loading ? (
@@ -69,18 +89,37 @@ export function OrganizationLettersInbox({
       ) : letters.length === 0 ? (
         <div className="rounded-md border border-dashed border-gray-300 p-5 text-sm text-gray-500">No letters addressed to this organization yet.</div>
       ) : (
-        <div className="divide-y divide-gray-100">
-          {letters.map((letter) => (
-            <Link key={letter.id} to={`/letters/${letter.id}`} className="block py-3 hover:bg-gray-50">
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="divide-y divide-gray-100 rounded-md border border-gray-200">
+          {letters.map((letter) => {
+            const isNew = !seenIds.has(letter.id);
+            return (
+            <button key={letter.id} type="button" onClick={() => openLetter(letter.id)} className={`block w-full px-3 py-3 text-left hover:bg-gray-50 ${selected?.id === letter.id ? "bg-blue-50" : ""}`}>
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-gray-900">{letter.subject || "Dear Colleague Letter"}</div>
+                  <div className="flex items-center gap-2">
+                    <div className="truncate text-sm font-semibold text-gray-900">{letter.subject || "Dear Colleague Letter"}</div>
+                    {isNew ? <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold uppercase text-blue-700">New</span> : null}
+                  </div>
                   <div className="mt-1 text-xs text-gray-500">From {letter.senderName}</div>
                 </div>
                 <div className="shrink-0 text-xs text-gray-500">{new Date(letter.created_at).toLocaleDateString()}</div>
               </div>
-            </Link>
-          ))}
+            </button>
+          );})}
+          </div>
+          {selected ? (
+            <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
+              <div className="mb-2 flex items-start justify-between gap-3">
+                <div>
+                  <div className="font-semibold text-gray-900">{selected.subject || "Dear Colleague Letter"}</div>
+                  <div className="mt-1 text-xs text-gray-500">From {selected.senderName} on {new Date(selected.created_at).toLocaleDateString()}</div>
+                </div>
+                <Link to={`/letters/${selected.id}`} className="text-xs font-semibold text-blue-700 hover:text-blue-800">Open</Link>
+              </div>
+              <p className="max-h-52 overflow-y-auto whitespace-pre-wrap text-sm leading-6 text-gray-700">{selected.body}</p>
+            </div>
+          ) : null}
         </div>
       )}
     </section>

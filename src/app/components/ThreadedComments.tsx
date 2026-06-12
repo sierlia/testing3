@@ -5,6 +5,7 @@ import { ReactionEmoji, ReactionsBar, ReactionsSummary } from "./ReactionsBar";
 import { SecureAvatar } from "./SecureAvatar";
 import { profilePath } from "../utils/profileRoute";
 import { AttachmentList, AttachmentPicker, DiscussionAttachment } from "./DiscussionAttachments";
+import { COMMENT_WORD_LIMIT, wordCount, wordLimitClass, withinWordLimit } from "../utils/wordLimits";
 
 export type ProfileLite = {
   user_id: string;
@@ -76,6 +77,7 @@ export function ThreadedComments({
     const children = childrenByParent[comment.id] ?? [];
     const isCollapsed = collapsed[comment.id] ?? false;
     const draft = replyDrafts[comment.id] ?? "";
+    const draftWordCount = wordCount(draft);
     const canReply = !!meId;
     const wasEdited = Boolean(comment.updated_at && new Date(comment.updated_at).getTime() - new Date(comment.created_at).getTime() > 1000);
 
@@ -177,13 +179,18 @@ export function ThreadedComments({
 
             {replyingTo === comment.id && (
               <div className="mt-3 space-y-2">
-                <textarea
+                <div className="relative">
+                  <textarea
                   value={draft}
                   onChange={(e) => setReplyDrafts((p) => ({ ...p, [comment.id]: e.target.value }))}
                   rows={3}
                   placeholder="Write a reply…"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
-                />
+                  className="w-full px-3 py-2 pr-20 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                  />
+                  <span className={`pointer-events-none absolute bottom-2 right-3 text-[11px] ${wordLimitClass(draftWordCount, COMMENT_WORD_LIMIT)}`}>
+                    {draftWordCount}/{COMMENT_WORD_LIMIT}
+                  </span>
+                </div>
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <AttachmentPicker value={replyAttachments[comment.id] ?? []} onChange={(next) => setReplyAttachments((prev) => ({ ...prev, [comment.id]: next }))} />
                   <div className="flex items-center gap-2">
@@ -191,13 +198,14 @@ export function ThreadedComments({
                     type="button"
                     onClick={async () => {
                       const body = draft.trim();
-                      if (!body) return;
+                      if (!body || !withinWordLimit(body, COMMENT_WORD_LIMIT)) return;
                       await onSubmitComment(body, comment.id, replyAttachments[comment.id] ?? []);
                       setReplyDrafts((p) => ({ ...p, [comment.id]: "" }));
                       setReplyAttachments((p) => ({ ...p, [comment.id]: [] }));
                       setReplyingTo(null);
                     }}
-                    className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium"
+                    disabled={!draft.trim() || !withinWordLimit(draft, COMMENT_WORD_LIMIT)}
+                    className="px-3 py-1.5 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50"
                   >
                     Reply
                   </button>

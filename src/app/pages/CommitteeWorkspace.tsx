@@ -355,9 +355,10 @@ export function CommitteeWorkspace() {
     setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
   }, [committeeId, selectedBillId, selectedInVote]);
 
+  const isCommitteeMember = Boolean(myCommitteeRole);
   const selectBill = (billId: string) => {
     const bill = bills.find((item) => item.id === billId);
-    if (bill?.subcommitteeId && !mySubcommitteeIds.has(bill.subcommitteeId) && !isTeacher) return;
+    if (!bill || !canOpenBill(bill)) return;
     setSelectedBillId(billId);
     const cached = workspaceCache.get(committeeId);
     if (cached) workspaceCache.set(committeeId, { ...cached, selectedBillId: billId });
@@ -366,10 +367,11 @@ export function CommitteeWorkspace() {
     setSeenBillIds(new Set(readCommitteeSeenIds(committeeId, "review")));
   };
 
-  const canOpenBill = (bill: typeof bills[number]) => paidReviewAccess || !bill.subcommitteeId || mySubcommitteeIds.has(bill.subcommitteeId) || isTeacher;
+  const canOpenBill = (bill: typeof bills[number]) => paidReviewAccess || isCommitteeMember || !bill.subcommitteeId || mySubcommitteeIds.has(bill.subcommitteeId) || isTeacher;
   const canReferSubcommittee = subcommitteeReferralsAvailable && (isTeacher || ["chair", "co_chair", "ranking_member"].includes(String(myCommitteeRole ?? "")));
   const canManageMeeting = isTeacher || ["chair", "co_chair", "ranking_member"].includes(String(myCommitteeRole ?? ""));
-  const billsEditable = Boolean(activeMeeting) && selected?.status === "in_committee" && !paidReviewAccess;
+  const selectedSubcommitteeEditable = !selected?.subcommitteeId || mySubcommitteeIds.has(selected.subcommitteeId) || isTeacher;
+  const billsEditable = Boolean(activeMeeting) && selected?.status === "in_committee" && selectedSubcommitteeEditable && !paidReviewAccess;
 
   const startCommitteeMeeting = async () => {
     if (!classId || !canManageMeeting) return;
@@ -949,12 +951,15 @@ export function CommitteeWorkspace() {
               <div className="max-h-[70vh] overflow-y-auto">
                 <div className="border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600">General Committee</div>
                 {mainCommitteeBills.length ? mainCommitteeBills.map(renderBillListButton) : <div className="border-b border-gray-100 px-4 py-3 text-sm text-gray-400">No bills in the main committee list.</div>}
-                {subcommitteeBillGroups.map(({ subcommittee, bills: groupBills }) => (
+                {subcommitteeBillGroups.map(({ subcommittee, bills: groupBills }) => {
+                  const isMine = mySubcommitteeIds.has(subcommittee.id);
+                  return (
                   <div key={subcommittee.id}>
-                    <div className="border-b border-gray-200 bg-gray-50 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-600">{subcommittee.name}</div>
+                    <div className={`border-b border-gray-200 px-4 py-2 text-xs font-semibold uppercase tracking-wide ${isMine ? "bg-blue-50 text-blue-700" : "bg-gray-50 text-gray-600"}`}>{subcommittee.name}</div>
                     {groupBills.length ? groupBills.map(renderBillListButton) : <div className="border-b border-gray-100 px-4 py-3 text-sm text-gray-400">No referred bills.</div>}
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
             ) : (
