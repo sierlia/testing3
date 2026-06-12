@@ -42,7 +42,7 @@ export function OpenDemoButton({ className = "" }: { className?: string }) {
     <button
       type="button"
       onClick={startDemo}
-      className={`inline-flex items-center justify-center rounded-md bg-blue-600 px-5 py-3 text-sm font-black text-white hover:bg-blue-700 ${className}`}
+      className={`inline-flex items-center justify-center rounded-md bg-[#4163f2] px-5 py-3 text-sm font-black text-white hover:bg-[#3151d7] ${className}`}
     >
       Open Demo
     </button>

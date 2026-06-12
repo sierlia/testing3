@@ -9,7 +9,7 @@ type PermissionLink = { label: string; href: string; icon: JSX.Element; count: n
 function CountBadge({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="ml-auto inline-flex min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-red-600 px-1.5 text-[11px] font-bold leading-none text-white">
+    <span className="ml-auto inline-flex min-h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[10px] font-bold leading-none text-white">
       {count}
     </span>
   );

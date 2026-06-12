@@ -550,7 +550,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
             <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
               <span className="inline-flex items-center gap-1.5">
                 Waiting for referral
-                {billStats.waitingReferral > 0 && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">!</span>}
+                {billStats.waitingReferral > 0 && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">!</span>}
               </span>
               <ChevronRight className="h-4 w-4" />
             </div>
@@ -560,7 +560,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
             <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
               <span className="inline-flex items-center gap-1.5">
                 Waiting to be calendared
-                {billStats.waitingCalendar > 0 && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">!</span>}
+                {billStats.waitingCalendar > 0 && <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-blue-600 text-[10px] font-bold text-white">!</span>}
               </span>
               <ChevronRight className="h-4 w-4" />
             </div>
@@ -609,7 +609,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                           <h2 className="mt-1 inline-flex items-center gap-2 text-2xl font-bold text-gray-900">
                             {step.label}
                             {step.id === "legislation" && (billStats.waitingReferral > 0 || billStats.waitingCalendar > 0) && (
-                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-sm font-bold text-white">!</span>
+                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">!</span>
                             )}
                           </h2>
                           <p className="mt-1 text-base text-gray-600">{step.description}</p>
@@ -735,7 +735,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                 <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_14rem]">
                   <div className="min-w-0">
                     <div className="mb-1.5 flex items-center justify-between gap-3">
-                      <div />
+                      <p className="text-xs text-gray-500">Last week, this week, and next week. Scroll inside the calendar for the visible range.</p>
                       <button type="button" onClick={() => navigate("/calendar")} className="inline-flex items-center gap-1 text-xs font-medium text-blue-600 hover:text-blue-700">
                         View full calendar
                         <ChevronRight className="h-3.5 w-3.5" />
@@ -980,7 +980,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                               <Icon className="mr-2 h-4 w-4 shrink-0" />
                               <span className="min-w-0 flex-1 leading-tight">{action.label}</span>
                               {typeof action.count === "number" && (
-                                <span className="ml-2 inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-red-600 px-2 text-xs font-bold leading-none text-white">
+                                <span className="ml-2 inline-flex min-h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 px-1.5 text-[11px] font-bold leading-none text-white">
                                   {action.count}
                                 </span>
                               )}

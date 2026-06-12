@@ -8,6 +8,9 @@ export function AboutPage() {
         <section className="border-b border-slate-200 bg-blue-50">
           <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
             <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">About Gavel</h1>
+            <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-700">
+              Gavel helps teachers run legislative simulations where student roles, organizations, bills, discussion, records, and grading stay connected.
+            </p>
           </div>
         </section>
 

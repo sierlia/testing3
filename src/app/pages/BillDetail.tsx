@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
-import { AlertCircle, ArrowLeft, BookOpen, Check, Circle, Clock, FileText, Search, Trash2, UserPlus, Users } from "lucide-react";
+import { AlertCircle, ArrowLeft, BookOpen, Check, Circle, Clock, ExternalLink, FileText, Search, Trash2, UserPlus, Users } from "lucide-react";
 import { generateHTML } from "@tiptap/core";
 import StarterKit from "@tiptap/starter-kit";
 import * as Y from "yjs";
@@ -15,7 +15,7 @@ import { displayPersonName } from "../utils/displayName";
 import { profilePath } from "../utils/profileRoute";
 import { sanitizeHtml } from "../utils/sanitizeHtml";
 import { committeeDisplayName } from "../utils/committeeNames";
-import { storageFileHashUrl } from "../utils/privateStorage";
+import { signedStorageUrl, storageFileHashUrl, storagePathFromUrl } from "../utils/privateStorage";
 
 type TextTab = string;
 type TrackerStatus = "completed" | "current" | "upcoming";
@@ -114,6 +114,22 @@ function revisedHtmlFromSnapshot(snapshot?: string | null) {
   }
 }
 
+function simulationPdfPathFromHtml(html?: string | null) {
+  if (!html || typeof DOMParser === "undefined") return null;
+  const doc = new DOMParser().parseFromString(html, "text/html");
+  const anchors = Array.from(doc.querySelectorAll("a[href]"));
+  for (const anchor of anchors) {
+    const href = anchor.getAttribute("href") ?? "";
+    if (href.startsWith("#/storage-file")) {
+      const params = new URLSearchParams(href.split("?")[1] ?? "");
+      if (params.get("bucket") === "simulation-pdfs" && params.get("path")) return params.get("path");
+    }
+    const path = storagePathFromUrl(href, "simulation-pdfs");
+    if (path) return path;
+  }
+  return null;
+}
+
 function trackerRank(label: string) {
   const ranks: Record<string, number> = {
     Introduced: 0,
@@ -197,6 +213,51 @@ function HorizontalTracker({ steps, onSelectStep }: { steps: TrackerItem[]; onSe
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+function PdfDocumentPanel({ path, title }: { path: string; title: string }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setUrl(null);
+    setError("");
+    signedStorageUrl("simulation-pdfs", path, 3600).then((nextUrl) => {
+      if (cancelled) return;
+      if (!nextUrl) {
+        setError("Could not open the uploaded PDF.");
+        return;
+      }
+      setUrl(nextUrl);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [path]);
+
+  return (
+    <div className="space-y-4">
+      <a href={storageFileHashUrl("simulation-pdfs", path)} target="_blank" rel="noopener noreferrer" className="flex max-w-md items-center gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-left text-sm text-blue-800 hover:border-blue-300 hover:bg-blue-100">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-white text-blue-700">
+          <FileText className="h-5 w-5" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block font-semibold">{title}</span>
+          <span className="block truncate text-xs text-blue-700">{path.split("/").pop() ?? "Uploaded PDF"}</span>
+        </span>
+        <ExternalLink className="h-4 w-4 shrink-0" />
+      </a>
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
+        <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">PDF editor</div>
+        {url ? (
+          <iframe title={title} src={url} className="h-[70vh] w-full bg-white" />
+        ) : (
+          <div className="flex h-96 items-center justify-center text-sm text-gray-500">{error || "Opening PDF..."}</div>
+        )}
       </div>
     </div>
   );
@@ -348,6 +409,7 @@ export function BillDetail() {
   }, [committeeDocs]);
   const activeRevision = activeTab.startsWith("revision:") ? revisionTabs.find((doc) => `revision:${doc.id}` === activeTab) : null;
   const revisedHtml = useMemo(() => revisedHtmlFromSnapshot(activeRevision?.ydoc_base64 ?? committeeDoc?.ydoc_base64) ?? bill?.legislative_text ?? "", [activeRevision?.ydoc_base64, bill?.legislative_text, committeeDoc?.ydoc_base64]);
+  const originalPdfPath = useMemo(() => simulationPdfPathFromHtml(bill?.legislative_text), [bill?.legislative_text]);
 
   useEffect(() => {
     if (!bill) return;
@@ -877,17 +939,18 @@ export function BillDetail() {
               <div className="p-6">
                 {activeRevision && (
                   activeRevision?.revised_pdf_path ? (
-                    <div className="rounded-md border border-gray-200 bg-gray-50 p-4">
-                      <div className="text-sm font-semibold text-gray-900">Committee revised text PDF</div>
-                      <a href={storageFileHashUrl("simulation-pdfs", activeRevision.revised_pdf_path)} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex text-sm font-medium text-blue-600 hover:underline">
-                        Open uploaded PDF
-                      </a>
-                    </div>
+                    <PdfDocumentPanel path={activeRevision.revised_pdf_path} title="Committee revised text PDF" />
                   ) : (
                     <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(revisedHtml) }} />
                   )
                 )}
-                {activeTab === "original" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislative_text) }} />}
+                {activeTab === "original" && (
+                  originalPdfPath ? (
+                    <PdfDocumentPanel path={originalPdfPath} title="Legislative text PDF" />
+                  ) : (
+                    <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.legislative_text) }} />
+                  )
+                )}
                 {activeTab === "supporting" && <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: sanitizeHtml(bill.supporting_text || "<p><em>No supporting text</em></p>") }} />}
               </div>
             </div>

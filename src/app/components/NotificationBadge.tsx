@@ -56,16 +56,14 @@ export function NotificationBadge() {
       read_at: row.read_at,
     }));
     setItems(next);
-    const unreadIds = next.filter((item) => !item.read_at).map((item) => item.id);
-    if (unreadIds.length) {
-      const readAt = new Date().toISOString();
-      setItems((current) => current.map((item) => (unreadIds.includes(item.id) ? { ...item, read_at: readAt } : item)));
-      setUnreadCount((count) => {
-        cachedUnreadCount = Math.max(0, count - unreadIds.length);
-        announceUnreadCount(cachedUnreadCount);
-        return cachedUnreadCount;
-      });
-      void supabase.from("notifications").update({ read_at: readAt }).eq("recipient_user_id", user.id).in("id", unreadIds).is("read_at", null);
+    const readAt = new Date().toISOString();
+    const hadUnread = next.some((item) => !item.read_at) || cachedUnreadCount > 0;
+    if (hadUnread) {
+      setItems((current) => current.map((item) => (item.read_at ? item : { ...item, read_at: readAt })));
+      cachedUnreadCount = 0;
+      setUnreadCount(0);
+      announceUnreadCount(0);
+      void supabase.from("notifications").update({ read_at: readAt }).eq("recipient_user_id", user.id).is("read_at", null);
     }
     setLoading(false);
   };

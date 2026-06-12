@@ -102,8 +102,8 @@ export function SignUpPage() {
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
-          <button type="button" className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" onClick={() => setSelectedRole("teacher")}>
-          <Card className="h-full cursor-pointer border-2 border-blue-200 bg-white">
+          <button type="button" className="text-left transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.01] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2" onClick={() => setSelectedRole("teacher")}>
+          <Card className="h-full cursor-pointer border-2 border-blue-200 bg-white transition-shadow duration-200 hover:shadow-xl">
             <CardHeader>
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-blue-100">
                 <GraduationCap className="h-8 w-8 text-blue-600" />
@@ -122,8 +122,8 @@ export function SignUpPage() {
           </Card>
           </button>
 
-          <button type="button" className="text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2" onClick={() => setSelectedRole("student")}>
-          <Card className="h-full cursor-pointer border-2 border-green-200 bg-white">
+          <button type="button" className="text-left transition-transform duration-200 hover:-translate-y-1 hover:scale-[1.01] focus:outline-none focus-visible:ring-2 focus-visible:ring-green-500 focus-visible:ring-offset-2" onClick={() => setSelectedRole("student")}>
+          <Card className="h-full cursor-pointer border-2 border-green-200 bg-white transition-shadow duration-200 hover:shadow-xl">
             <CardHeader>
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
                 <BookOpen className="h-8 w-8 text-green-600" />

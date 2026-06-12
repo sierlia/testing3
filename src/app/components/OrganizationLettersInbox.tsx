@@ -71,6 +71,7 @@ export function OrganizationLettersInbox({
     setSeenIds((current) => {
       const next = new Set(current).add(letterId);
       window.localStorage.setItem(storageKey, JSON.stringify([...next]));
+      window.dispatchEvent(new CustomEvent("gavel:org-letters-seen", { detail: { organizationType, organizationId } }));
       return next;
     });
   };

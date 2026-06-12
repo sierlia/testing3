@@ -978,7 +978,7 @@ export function TeacherDeadlines() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <h3 className="font-semibold text-gray-900">Student Progress</h3>
-                        <span className="text-sm font-semibold text-green-700">
+                        <span className="text-sm font-normal text-gray-900">
                           {submissions.filter((submission) => submission.status === "submitted" || submission.status === "returned").length} of {assignedStudents.length} submitted
                         </span>
                       </div>
@@ -997,7 +997,7 @@ export function TeacherDeadlines() {
                     ) : assignedStudents.length === 0 ? (
                       <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-500">No students are assigned to this assignment.</div>
                     ) : (
-                      <div className="overflow-visible rounded-md border border-gray-200">
+                      <div className="overflow-x-auto rounded-md border border-gray-200">
                         <table className="min-w-[1120px] w-full text-sm">
                           <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                             <tr>

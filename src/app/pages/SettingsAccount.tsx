@@ -154,6 +154,7 @@ export function SettingsAccount() {
   const [exporting, setExporting] = useState(false);
   const [deletionRequest, setDeletionRequest] = useState<DeletionRequest | null>(null);
   const [deletionBusy, setDeletionBusy] = useState(false);
+  const [purgingDemo, setPurgingDemo] = useState(false);
   const [deleteStep, setDeleteStep] = useState<0 | 1 | 2>(0);
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
 
@@ -535,6 +536,33 @@ export function SettingsAccount() {
     }
   };
 
+  const purgeDemo = async () => {
+    setPurgingDemo(true);
+    try {
+      const { data: auth } = await supabase.auth.getUser();
+      const user = auth.user;
+      const demoSession =
+        window.localStorage.getItem("gavel:demoActive") === "1" ||
+        Boolean(user?.user_metadata?.demo) ||
+        Boolean(user?.email?.endsWith("@gavel.demo"));
+      Object.keys(window.localStorage)
+        .filter((key) => key.startsWith("gavel:demo"))
+        .forEach((key) => window.localStorage.removeItem(key));
+      window.dispatchEvent(new CustomEvent("gavel:demo-ended"));
+      if (demoSession) {
+        await supabase.auth.signOut();
+        window.location.hash = "/";
+        window.location.reload();
+        return;
+      }
+      toast.success("Demo browser state cleared.");
+    } catch (error: any) {
+      toast.error(error.message || "Could not purge demo state");
+    } finally {
+      setPurgingDemo(false);
+    }
+  };
+
   return (
     <SettingsLayout>
       {loading ? (
@@ -685,6 +713,12 @@ export function SettingsAccount() {
                     Delete Account
                   </Button>
                 )}
+              </div>
+              <div className="flex justify-end">
+                <Button type="button" variant="outline" onClick={() => void purgeDemo()} disabled={purgingDemo}>
+                  <RotateCcw className="h-4 w-4" />
+                  {purgingDemo ? "Purging..." : "Purge Demo"}
+                </Button>
               </div>
             </div>
           </RowShell>

@@ -103,14 +103,16 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
   const [seenVersion, setSeenVersion] = useState(0);
   const [access, setAccess] = useState(() => membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, dashboardAccess: false, reviewAccess: false, loaded: false });
   const [electionOpen, setElectionOpen] = useState<boolean | null>(null);
+  const [letterIds, setLetterIds] = useState<string[]>([]);
 
   useEffect(() => {
     let cancelled = false;
     setCountData(readCachedCountData(committeeId));
+    setLetterIds([]);
     setAccess(membershipCache.get(committeeId) ?? { isMember: false, isTeacher: false, dashboardAccess: false, reviewAccess: false, loaded: false });
     const load = async () => {
       const uid = (await getCurrentUser())?.id;
-      const [{ data: announcements }, { data: refs }, { data: membership }, { data: profile }, { data: paidAccess }, { data: committeeRow }] = await Promise.all([
+      const [{ data: announcements }, { data: refs }, { data: membership }, { data: profile }, { data: paidAccess }, { data: committeeRow }, { data: letterRows }] = await Promise.all([
         supabase
           .from("committee_announcements")
           .select("id")
@@ -122,6 +124,11 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
         uid ? supabase.from("profiles").select("role").eq("user_id", uid).maybeSingle() : ({ data: null } as any),
         uid ? supabase.from("committee_paid_access").select("access_type").eq("committee_id", committeeId).eq("user_id", uid) : ({ data: [] } as any),
         supabase.from("committees").select("class_id").eq("id", committeeId).maybeSingle(),
+        supabase
+          .from("dear_colleague_org_recipients")
+          .select("letter_id")
+          .eq("organization_type", "committee")
+          .eq("organization_id", committeeId),
       ]);
       const committeeClassId = (committeeRow as any)?.class_id as string | undefined;
       if (committeeClassId) {
@@ -148,6 +155,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
       const dashboardIds = (announcements ?? []).map((row: any) => row.id);
       const reviewIds = (statusRows ?? []).filter((row: any) => row.status === "in_committee").map((row: any) => row.id);
       const voteIds = (statusRows ?? []).filter((row: any) => row.status === "committee_vote").map((row: any) => row.id);
+      const nextLetterIds = Array.from(new Set(((letterRows ?? []) as any[]).map((row) => row.letter_id).filter(Boolean)));
       if (!cancelled) {
         const next = {
           counts: {
@@ -163,6 +171,7 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
         };
         writeCachedCountData(committeeId, next);
         setCountData(next);
+        setLetterIds(nextLetterIds);
       }
     };
     void load();
@@ -182,11 +191,13 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
     };
     window.addEventListener("committee-seen-updated", onSeen);
     window.addEventListener("committee-counts-updated", onCounts);
+    window.addEventListener("gavel:org-letters-seen", onSeen);
     window.addEventListener("storage", onSeen);
     window.addEventListener("storage", onCounts);
     return () => {
       window.removeEventListener("committee-seen-updated", onSeen);
       window.removeEventListener("committee-counts-updated", onCounts);
+      window.removeEventListener("gavel:org-letters-seen", onSeen);
       window.removeEventListener("storage", onSeen);
       window.removeEventListener("storage", onCounts);
     };
@@ -204,6 +215,14 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
       vote: unseenCount("vote"),
     };
   }, [committeeId, countData, seenVersion]);
+  const letterNewCount = useMemo(() => {
+    try {
+      const seen = new Set(JSON.parse(window.localStorage.getItem(`gavel:org-letters-seen:committee:${committeeId}`) || "[]"));
+      return letterIds.filter((id) => !seen.has(id)).length;
+    } catch {
+      return letterIds.length;
+    }
+  }, [committeeId, letterIds, seenVersion]);
 
   const tabs = [
     { id: "dashboard" as const, label: "Dashboard", to: `/committees/${committeeId}` },
@@ -244,6 +263,18 @@ export function CommitteeTabs({ committeeId, active }: { committeeId: string; ac
               {(tab.id === "review" ? newCounts.review + newCounts.vote : newCounts[tab.id]) > 0 && (
                 <span className={`rounded-full px-1.5 py-0.5 text-xs ${active === tab.id ? "bg-white text-blue-700" : "bg-blue-100 text-blue-700"}`}>
                   {tab.id === "review" ? newCounts.review + newCounts.vote : newCounts[tab.id]} new
+                </span>
+              )}
+            </>
+          )}
+          {tab.id === "letters" && (
+            <>
+              <span className="rounded-full bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
+                {letterIds.length}
+              </span>
+              {letterNewCount > 0 && (
+                <span className={`rounded-full px-1.5 py-0.5 text-xs ${active === tab.id ? "bg-white text-blue-700" : "bg-blue-100 text-blue-700"}`}>
+                  {letterNewCount} new
                 </span>
               )}
             </>

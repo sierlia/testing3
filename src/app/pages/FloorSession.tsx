@@ -1420,7 +1420,7 @@ export function FloorSession() {
                     type="button"
                     onClick={() => confirmFloorMode(mode)}
                     disabled={busy || floorMode === mode}
-                    className={`rounded px-3 py-1.5 text-sm font-semibold transition ${floorMode === mode ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-blue-50 hover:text-blue-800"} disabled:opacity-80`}
+                    className={`rounded px-3 py-1.5 text-sm font-semibold transition ${floorMode === mode ? "bg-[#4163f2] text-white shadow-sm" : "text-gray-700 hover:bg-blue-50 hover:text-blue-800"} disabled:opacity-80`}
                   >
                     {label}
                   </button>

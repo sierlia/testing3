@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   Bold,
   Eye,
+  ExternalLink,
   FileText,
   Heading1,
   Heading2,
@@ -392,6 +393,7 @@ export function CreateBill() {
   const [savingDraft, setSavingDraft] = useState(false);
   const [billComposerFormat, setBillComposerFormat] = useState<"editor" | "pdf">("editor");
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
 
   const billTypes = [
     "H.R. Bill",
@@ -434,6 +436,16 @@ export function CreateBill() {
       }
     })();
   }, [draftId, navigate]);
+
+  useEffect(() => {
+    if (!pdfFile) {
+      setPdfPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(pdfFile);
+    setPdfPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [pdfFile]);
 
   const uploadBillPdf = async () => {
     if (!pdfFile) return formData.legislativeText;
@@ -582,6 +594,18 @@ export function CreateBill() {
                 <span className="mt-1 text-xs text-gray-500">PDF files only</span>
                 <input type="file" accept="application/pdf,.pdf" className="hidden" onChange={(event) => setPdfFile(event.target.files?.[0] ?? null)} />
               </label>
+              {pdfFile && pdfPreviewUrl ? (
+                <a href={pdfPreviewUrl} target="_blank" rel="noopener noreferrer" className="mt-3 flex max-w-sm items-center gap-3 rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 hover:border-blue-300 hover:bg-blue-100">
+                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-blue-700">
+                    <FileText className="h-5 w-5" />
+                  </span>
+                  <span className="min-w-0 flex-1 text-left">
+                    <span className="block font-semibold">Legislative text attachment</span>
+                    <span className="block truncate text-xs text-blue-700">{pdfFile.name}</span>
+                  </span>
+                  <ExternalLink className="h-4 w-4 shrink-0" />
+                </a>
+              ) : null}
               {errors.legislativeText && <p className="mt-1 text-sm text-red-600">{errors.legislativeText}</p>}
             </div>
           ) : (

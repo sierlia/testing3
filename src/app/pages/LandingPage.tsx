@@ -226,14 +226,6 @@ function FeatureSection({
 }
 
 function Hero() {
-  const anchors = [
-    ["Representation", "student-work"],
-    ["Organizations", "organizations"],
-    ["Communication", "communication"],
-    ["Customization", "customization"],
-    ["Grading", "grading"],
-  ];
-
   return (
     <section className="border-b border-slate-200 bg-blue-50">
       <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 sm:py-24 lg:px-8">
@@ -243,9 +235,7 @@ function Hero() {
           </h1>
           <p className="mx-auto mt-6 max-w-3xl text-xl leading-9 text-slate-700">
             Gavel is a teacher-run workspace for mock congress with constituency selection, student profiles, bill drafting,
-            organizations, discussion, floor procedure, records, assignments, grading, and more. The page below walks through 
-            the feature areas in order, from representation and legislation through organizations, communication, 
-            customization, grading, and common questions.
+            organizations, discussion, floor procedure, records, assignments, grading, and more.
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <OpenDemoButton className="px-6 py-3 text-base" />
@@ -258,73 +248,68 @@ function Hero() {
           </div>
         </div>
 
-        <div className="mt-14 grid gap-0 border-y border-slate-200 md:grid-cols-5">
-          {anchors.map(([label, id]) => (
-            <a
-              key={id}
-              href={`#${id}`}
-              onClick={(event) => {
-                event.preventDefault();
-                document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-              className="border-b border-slate-200 bg-white/50 px-4 py-4 text-center text-sm font-black text-slate-700 hover:bg-white hover:text-blue-700 md:border-b-0 md:border-r md:last:border-r-0"
-            >
-              {label}
-            </a>
-          ))}
-        </div>
       </div>
     </section>
   );
 }
 
 function GradingSection() {
-  const steps = [
+  const groups: FeatureGroup[] = [
     {
-      title: "Create assignments from the simulation work students are already doing.",
+      heading: "Create assignments",
       body: "Assignments can target the whole class, selected students, parties, committees, caucuses, or lobbyist groups. Teachers can attach bills, records, or Dear Colleague letters so the prompt points directly to the relevant work.",
+      items: [
+        "Prompts can point students to the materials they should use.",
+        "Assignments can be due at a specific date and time or have no due date.",
+        "Teacher-created materials and existing simulation work can be attached.",
+      ],
     },
     {
-      title: "Use rubrics when the work needs judgment.",
+      heading: "Use rubrics",
       body: "Manual rubrics can include named criteria, descriptions, points, extra credit, late-submission settings, and feedback. Students can see the criteria before submitting, and teachers can return scores with written notes.",
+      items: [
+        "Criteria can be built directly in Gavel.",
+        "Rubrics can be uploaded from common document formats.",
+        "Teachers can still grade with only points when no rubric is needed.",
+      ],
     },
     {
-      title: "Use auto-graded requirements when the work is countable.",
+      heading: "Auto-grade what is countable",
       body: "Gavel can count submitted bills, cosponsored bills, completed profiles, selected constituencies, joined organizations, sent letters, committee votes, floor votes, committee preferences, discussion posts, and discussion replies.",
+      items: [
+        "Auto-score totals are shown next to teacher score fields.",
+        "Hover evidence shows the work counted for each criterion.",
+        "Teachers can edit counted totals before returning work.",
+      ],
     },
     {
-      title: "Review and return work from one place.",
+      heading: "Return work",
       body: "The teacher view shows assigned students, submissions, attached work, auto-score results, manual scores, returned status, and feedback fields without forcing the teacher to reconstruct participation from separate pages.",
+      items: [
+        "Student names link back to their profiles.",
+        "Returned scores can be queued for gradebook sync when configured.",
+        "Return all handles the class at once after review.",
+      ],
     },
     {
-      title: "Queue grade passback when a district integration is configured.",
+      heading: "Queue grade passback",
       body: "Gavel includes gradebook setup fields for Synergy, Schoology, PowerSchool, and Google Classroom. Secrets are referenced by name so sensitive credentials can stay server-side.",
+      items: [
+        "Integrations stay disabled unless the teacher configures them.",
+        "Returned work can be reviewed before sync.",
+        "Connection fields live with the class settings.",
+      ],
     },
   ];
 
   return (
-    <section id="grading" className="scroll-mt-24 border-b border-slate-200 bg-white py-20">
-      <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.36fr_0.64fr] lg:px-8">
-        <div>
-          <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Grade work faster.</h2>
-          <p className="mt-5 text-base leading-8 text-slate-700">
-            Grading in Gavel is organized around the actual artifacts of the simulation rather than around disconnected
-            screenshots or manual participation tallies.
-          </p>
-        </div>
-        <ol className="border-y border-slate-200">
-          {steps.map((step, index) => (
-            <li key={step.title} className="grid gap-4 border-b border-slate-200 py-6 last:border-b-0 md:grid-cols-[4rem_1fr]">
-              <span className="font-mono text-sm font-black text-blue-700">{String(index + 1).padStart(2, "0")}</span>
-              <div>
-                <h3 className="text-lg font-black text-slate-950">{step.title}</h3>
-                <p className="mt-2 text-base leading-7 text-slate-700">{step.body}</p>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </div>
-    </section>
+    <FeatureSection
+      id="grading"
+      title="Grade work faster."
+      body="Grading in Gavel is organized around the actual artifacts of the simulation rather than around disconnected screenshots or manual participation tallies."
+      groups={groups}
+      tone="bg-white"
+    />
   );
 }
 
@@ -364,7 +349,7 @@ function CtaBanner() {
       <div className="mx-auto flex max-w-7xl flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
         <h2 className="max-w-2xl text-3xl font-black tracking-tight">Open the demo or create a class workspace.</h2>
         <div className="flex flex-wrap gap-3">
-          <OpenDemoButton className="bg-white text-slate-950 hover:bg-slate-100" />
+          <OpenDemoButton className="bg-[#4163f2] text-white hover:bg-[#3151d7]" />
           <Link to="/signup" className="inline-flex items-center justify-center rounded-md border border-white/30 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
             Sign up
           </Link>

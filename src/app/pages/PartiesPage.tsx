@@ -459,7 +459,7 @@ export function PartiesPage() {
                     style={{ "--party-color": party.color } as CSSProperties}
                     className={`group overflow-visible rounded-lg border border-gray-200 bg-white shadow-sm transition hover:border-gray-300 hover:shadow-md ${sectionDisabled ? "pointer-events-none opacity-50 grayscale" : ""}`}
                   >
-                    <div className="h-2" style={{ backgroundColor: party.color }} />
+                    <div className="h-2 rounded-t-lg" style={{ backgroundColor: party.color }} />
                     <div className="p-5">
                       <div className="mb-4 flex items-start justify-between gap-2">
                         <div className="flex items-center gap-3">
