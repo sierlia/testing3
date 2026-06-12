@@ -87,6 +87,9 @@ export function HelpPage() {
             <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-700">
               A practical guide to the class workspace, student tools, organization workflows, floor activity, records, assignments, and settings.
             </p>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+              Use it as a reference while configuring a class, running floor activity, reviewing student work, or answering student questions.
+            </p>
           </div>
         </header>
 

@@ -9,7 +9,10 @@ export function AboutPage() {
           <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
             <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">About Gavel</h1>
             <p className="mt-4 max-w-3xl text-lg leading-8 text-slate-700">
-              Gavel helps teachers run legislative simulations where student roles, organizations, bills, discussion, records, and grading stay connected.
+              Gavel helps teachers run legislative simulations where student roles, bills, floor activity, records, and assignments stay connected.
+            </p>
+            <p className="mt-3 max-w-3xl text-base leading-7 text-slate-600">
+              Built for classroom mock congress, it keeps the work visible from the first role assignment through the final record.
             </p>
           </div>
         </section>

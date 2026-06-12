@@ -235,7 +235,7 @@ function Hero() {
           </h1>
           <p className="mx-auto mt-6 max-w-3xl text-xl leading-9 text-slate-700">
             Gavel is a teacher-run workspace for mock congress with constituency selection, student profiles, bill drafting,
-            organizations, discussion, floor procedure, records, assignments, grading, and more.
+            floor procedure, records, and assignments.
           </p>
           <div className="mt-9 flex flex-col justify-center gap-3 sm:flex-row">
             <OpenDemoButton className="px-6 py-3 text-base" />

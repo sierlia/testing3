@@ -15,6 +15,7 @@ type ToggleKey =
   | "committee.replies"
   | "committee.reactions"
   | "committee.bill_referred"
+  | "floor.reactions"
   | "caucus.new_member_joined"
   | "caucus.new_announcement"
   | "caucus.replies"
@@ -32,6 +33,7 @@ const defaultPrefs: Prefs = {
   "committee.replies": true,
   "committee.reactions": true,
   "committee.bill_referred": true,
+  "floor.reactions": true,
   "caucus.new_member_joined": false,
   "caucus.new_announcement": true,
   "caucus.replies": true,
@@ -104,6 +106,12 @@ export function SettingsNotifications() {
           { key: "committee.replies" as const, label: "Replies", description: "When someone comments or replies in your committee" },
           { key: "committee.reactions" as const, label: "Reactions", description: "When someone reacts to a committee announcement or comment" },
           { key: "committee.bill_referred" as const, label: "Bill referred", description: "When a bill is referred to your committee" },
+        ],
+      },
+      {
+        title: "Floor",
+        items: [
+          { key: "floor.reactions" as const, label: "Discussion reactions", description: "When someone reacts to your floor discussion post" },
         ],
       },
       {

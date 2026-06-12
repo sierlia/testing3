@@ -27,8 +27,18 @@ export function NotificationBadge() {
   const [loading, setLoading] = useState(false);
   const ref = useRef<HTMLDivElement | null>(null);
 
+  const clearUnreadCount = () => {
+    cachedUnreadCount = 0;
+    setUnreadCount(0);
+    announceUnreadCount(0);
+  };
+
   const refreshCount = async () => {
     if (!user?.id) return;
+    if (open) {
+      clearUnreadCount();
+      return;
+    }
     const { count } = await supabase
       .from("notifications")
       .select("id", { count: "exact", head: true })
@@ -60,9 +70,7 @@ export function NotificationBadge() {
     const hadUnread = next.some((item) => !item.read_at) || cachedUnreadCount > 0;
     if (hadUnread) {
       setItems((current) => current.map((item) => (item.read_at ? item : { ...item, read_at: readAt })));
-      cachedUnreadCount = 0;
-      setUnreadCount(0);
-      announceUnreadCount(0);
+      clearUnreadCount();
       void supabase.from("notifications").update({ read_at: readAt }).eq("recipient_user_id", user.id).is("read_at", null);
     }
     setLoading(false);
@@ -76,7 +84,7 @@ export function NotificationBadge() {
     const sync = (event: Event) => {
       const unreadCount = (event as CustomEvent<{ unreadCount?: number }>).detail?.unreadCount;
       if (typeof unreadCount === "number") {
-        cachedUnreadCount = Math.max(0, unreadCount);
+        cachedUnreadCount = open ? 0 : Math.max(0, unreadCount);
         setUnreadCount(cachedUnreadCount);
         return;
       }
@@ -84,15 +92,19 @@ export function NotificationBadge() {
     };
     window.addEventListener("gavel:notifications-read", sync);
     return () => window.removeEventListener("gavel:notifications-read", sync);
-  }, [user?.id]);
+  }, [open, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
     const channel = supabase
       .channel(`notifications:${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_user_id=eq.${user.id}` }, () => {
+        if (open) {
+          clearUnreadCount();
+          void loadPreview();
+          return;
+        }
         void refreshCount();
-        if (open) void loadPreview();
       })
       .subscribe();
     return () => {
@@ -102,6 +114,7 @@ export function NotificationBadge() {
 
   useEffect(() => {
     if (!open) return;
+    clearUnreadCount();
     void loadPreview();
     const close = (event: PointerEvent) => {
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
@@ -112,10 +125,18 @@ export function NotificationBadge() {
 
   return (
     <div ref={ref} className="relative">
-      <button type="button" onClick={() => setOpen((current) => !current)} className="relative p-2 text-gray-600 transition-colors hover:text-gray-900" title="Notifications">
+      <button
+        type="button"
+        onClick={() => {
+          if (!open) clearUnreadCount();
+          setOpen((current) => !current);
+        }}
+        className="relative p-2 text-gray-600 transition-colors hover:text-gray-900"
+        title="Notifications"
+      >
         <Bell className="h-6 w-6" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-600 text-xs font-bold text-white">
+          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold leading-none text-white">
             {unreadCount}
           </span>
         )}

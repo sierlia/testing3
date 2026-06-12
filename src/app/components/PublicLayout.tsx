@@ -107,7 +107,7 @@ export function PublicFooter() {
             <span className="text-lg font-black">Gavel</span>
           </div>
           <p className="mt-4 max-w-sm text-sm leading-6 text-slate-300">
-            A classroom workspace for legislative simulations, student organizations, communication, records, and grading.
+            A classroom workspace for legislative simulations, records, and assignments.
           </p>
         </div>
 

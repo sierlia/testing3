@@ -1108,6 +1108,7 @@ export function FloorSession() {
                 <div className="min-h-8 space-y-1">
                   {areas.length ? areas.map((area, index) => {
                     const targetedBefore = draggingDiscussionId && discussionDragTarget?.visibility === section.id && discussionDragTarget.index === index;
+                    const selected = selectedDiscussion?.id === area.id && !creatingDiscussion;
                     return (
                       <div key={area.id}>
                         {targetedBefore ? <div className="my-1 h-0.5 bg-blue-500" /> : null}
@@ -1141,10 +1142,10 @@ export function FloorSession() {
                             setDiscussionDragTarget(null);
                           }}
                           onClick={() => selectDiscussion(area.id)}
-                          className={`w-full px-2 py-1.5 text-left text-sm transition-colors ${selectedDiscussion?.id === area.id && !creatingDiscussion ? "border-l-2 border-blue-600 bg-blue-50 pl-2 text-blue-900" : "text-gray-700 hover:bg-gray-50"} ${draggingDiscussionId === area.id ? "opacity-50" : ""}`}
+                          className={`w-full rounded-md px-2 py-1.5 text-left text-sm transition-colors ${selected ? "bg-[#4163f2] text-white shadow-sm" : "text-gray-700 hover:bg-gray-50"} ${draggingDiscussionId === area.id ? "opacity-50" : ""}`}
                         >
                           <span className="block font-semibold">{area.title}</span>
-                          <span className="mt-0.5 block text-xs text-gray-500">{new Date(area.created_at).toLocaleDateString()}</span>
+                          <span className={`mt-0.5 block text-xs ${selected ? "text-white/80" : "text-gray-500"}`}>{new Date(area.created_at).toLocaleDateString()}</span>
                         </button>
                       </div>
                     );
@@ -1259,7 +1260,7 @@ export function FloorSession() {
                                 type="button"
                                 onClick={() => void toggleDiscussionReaction(post.id, reaction.id)}
                                 disabled={!selectedDiscussionCanPost}
-                                className={`rounded-full border px-2.5 py-1 text-xs font-medium disabled:opacity-60 ${selected ? "border-blue-300 bg-blue-50 text-blue-700" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
+                                className={`rounded-full border px-2.5 py-1 text-xs font-medium disabled:opacity-60 ${selected ? "border-[#4163f2] bg-[#4163f2] text-white" : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"}`}
                               >
                                 {reaction.label} {count}
                               </button>
@@ -1492,29 +1493,33 @@ export function FloorSession() {
                   </select>
                 </div>
                 <div className="overflow-hidden rounded-lg border border-gray-200">
-                {visibleSpeakerCandidates.map((candidate) => (
-                  <button
-                    key={candidate.id}
-                    type="button"
-                    onClick={() => void castSpeakerVote(candidate.id)}
-                    disabled={busy || role === "teacher" || !speakerOpen || speakerOptedOut(candidate.id)}
-                    className={`flex w-full items-center justify-between gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 disabled:cursor-default ${
-                      speakerVote === candidate.id ? "bg-blue-50" : speakerOptedOut(candidate.id) ? "bg-gray-50" : "bg-white hover:bg-gray-50"
-                    }`}
-                  >
-                    <div className="min-w-0">
-                      <div className="font-semibold text-gray-900">{candidate.name}</div>
-                      <div className="text-sm text-gray-500">
-                        {partyAbbr(candidate.party)}-{formatConstituency(candidate.constituency) || "N/A"}
-                        {speakerOptedOut(candidate.id) ? " - Opted out" : ""}
+                {visibleSpeakerCandidates.map((candidate) => {
+                  const selected = speakerVote === candidate.id;
+                  const optedOut = speakerOptedOut(candidate.id);
+                  return (
+                    <button
+                      key={candidate.id}
+                      type="button"
+                      onClick={() => void castSpeakerVote(candidate.id)}
+                      disabled={busy || role === "teacher" || !speakerOpen || optedOut}
+                      className={`flex w-full items-center justify-between gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 disabled:cursor-default ${
+                        selected ? "bg-[#4163f2] text-white" : optedOut ? "bg-gray-50" : "bg-white hover:bg-gray-50"
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className={`font-semibold ${selected ? "text-white" : "text-gray-900"}`}>{candidate.name}</div>
+                        <div className={`text-sm ${selected ? "text-white/80" : "text-gray-500"}`}>
+                          {partyAbbr(candidate.party)}-{formatConstituency(candidate.constituency) || "N/A"}
+                          {optedOut ? " - Opted out" : ""}
+                        </div>
                       </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-bold text-blue-700">{speakerVoteCount(candidate.id)}</div>
-                      <div className="text-xs text-gray-500">{speakerVote === candidate.id ? "Selected" : speakerOptedOut(candidate.id) ? "opted out" : "votes"}</div>
-                    </div>
-                  </button>
-                ))}
+                      <div className="text-right">
+                        <div className={`text-lg font-bold ${selected ? "text-white" : "text-[#4163f2]"}`}>{speakerVoteCount(candidate.id)}</div>
+                        <div className={`text-xs ${selected ? "text-white/80" : "text-gray-500"}`}>{selected ? "Selected" : optedOut ? "opted out" : "votes"}</div>
+                      </div>
+                    </button>
+                  );
+                })}
                 {visibleSpeakerCandidates.length === 0 && <div className="p-4 text-center text-sm text-gray-500">No candidates match the filters.</div>}
                 </div>
               </div>
@@ -1575,24 +1580,27 @@ export function FloorSession() {
                     </select>
                   </div>
                   <div className="overflow-hidden rounded-lg border border-gray-200">
-                    {visiblePresidentCandidates.map((candidate) => (
-                      <button
-                        key={candidate.id}
-                        type="button"
-                        onClick={() => void castPresidentVote(candidate.id)}
-                        disabled={busy || role === "teacher" || !presidentOpen || presidentConcluded}
-                        className={`flex w-full items-center justify-between gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 disabled:cursor-default ${presidentVote === candidate.id ? "bg-blue-50" : "bg-white hover:bg-gray-50"}`}
-                      >
-                        <div className="min-w-0">
-                          <div className="font-semibold text-gray-900">{candidate.name}</div>
-                          <div className="text-sm text-gray-500">{partyAbbr(candidate.party)}-{formatConstituency(candidate.constituency) || "N/A"}</div>
-                        </div>
-                        <div className="text-right">
-                          <div className="text-lg font-bold text-blue-700">{presidentVoteCount(candidate.id)}</div>
-                          <div className="text-xs text-gray-500">{presidentVote === candidate.id ? "Selected" : "votes"}</div>
-                        </div>
-                      </button>
-                    ))}
+                    {visiblePresidentCandidates.map((candidate) => {
+                      const selected = presidentVote === candidate.id;
+                      return (
+                        <button
+                          key={candidate.id}
+                          type="button"
+                          onClick={() => void castPresidentVote(candidate.id)}
+                          disabled={busy || role === "teacher" || !presidentOpen || presidentConcluded}
+                          className={`flex w-full items-center justify-between gap-4 border-b border-gray-200 p-4 text-left transition-colors last:border-b-0 disabled:cursor-default ${selected ? "bg-[#4163f2] text-white" : "bg-white hover:bg-gray-50"}`}
+                        >
+                          <div className="min-w-0">
+                            <div className={`font-semibold ${selected ? "text-white" : "text-gray-900"}`}>{candidate.name}</div>
+                            <div className={`text-sm ${selected ? "text-white/80" : "text-gray-500"}`}>{partyAbbr(candidate.party)}-{formatConstituency(candidate.constituency) || "N/A"}</div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-lg font-bold ${selected ? "text-white" : "text-[#4163f2]"}`}>{presidentVoteCount(candidate.id)}</div>
+                            <div className={`text-xs ${selected ? "text-white/80" : "text-gray-500"}`}>{selected ? "Selected" : "votes"}</div>
+                          </div>
+                        </button>
+                      );
+                    })}
                     {visiblePresidentCandidates.length === 0 && <div className="p-4 text-center text-sm text-gray-500">No candidates match the filters.</div>}
                   </div>
                 </div>

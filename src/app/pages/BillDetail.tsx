@@ -247,14 +247,14 @@ function PdfDocumentPanel({ path, title }: { path: string; title: string }) {
         </span>
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">{title}</span>
-          <span className="block truncate text-xs text-blue-700">{path.split("/").pop() ?? "Uploaded PDF"}</span>
+          <span className="block truncate text-xs text-blue-700">Open attached document: {path.split("/").pop() ?? "Uploaded PDF"}</span>
         </span>
         <ExternalLink className="h-4 w-4 shrink-0" />
       </a>
       <div className="overflow-hidden rounded-lg border border-gray-200 bg-gray-100">
         <div className="border-b border-gray-200 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">PDF editor</div>
         {url ? (
-          <iframe title={title} src={url} className="h-[70vh] w-full bg-white" />
+          <iframe title={title} src={`${url}#toolbar=1&navpanes=0`} className="h-[70vh] w-full bg-white" />
         ) : (
           <div className="flex h-96 items-center justify-center text-sm text-gray-500">{error || "Opening PDF..."}</div>
         )}
