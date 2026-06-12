@@ -1,37 +1,14 @@
 import { useEffect, useState } from "react";
-import type { Session } from "@supabase/supabase-js";
 import { Gavel } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "../utils/supabase";
 import {
   clearOAuthErrorFromLocation,
   clearOAuthReturnPath,
   clearPendingOAuthSignup,
   oauthHashRouteUrl,
+  processOAuthRedirectFromLocation,
   readOAuthErrorFromLocation,
 } from "../utils/oauthSignup";
-
-const SESSION_WAIT_ATTEMPTS = 12;
-const SESSION_WAIT_MS = 250;
-
-function delay(ms: number) {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
-}
-
-async function readCallbackSession(): Promise<Session | null> {
-  for (let attempt = 0; attempt < SESSION_WAIT_ATTEMPTS; attempt += 1) {
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw error;
-    if (data.session) return data.session;
-    await delay(SESSION_WAIT_MS);
-  }
-  return null;
-}
-
-function clearCallbackUrl() {
-  const url = new URL(window.location.href);
-  window.history.replaceState({}, document.title, url.pathname);
-}
 
 function redirectIntoApp(path = "/") {
   window.location.replace(oauthHashRouteUrl(path));
@@ -54,14 +31,7 @@ export function AuthCallback() {
         return;
       }
 
-      const code = new URL(window.location.href).searchParams.get("code");
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
-        if (error) throw error;
-      }
-
-      const session = await readCallbackSession();
-      clearCallbackUrl();
+      const session = await processOAuthRedirectFromLocation();
 
       if (!session) {
         clearOAuthReturnPath();
@@ -79,7 +49,6 @@ export function AuthCallback() {
     // This callback exists to let Supabase process OAuth tokens, then remove them
     // from the address bar before the hash-routed app resumes.
     finishOAuth().catch((error) => {
-      clearCallbackUrl();
       clearOAuthReturnPath();
       clearPendingOAuthSignup();
       toast.error(error?.message || "Could not finish Google sign in.");

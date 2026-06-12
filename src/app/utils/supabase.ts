@@ -68,6 +68,7 @@ function createDisabledSupabaseClient(): SupabaseClient {
     getUser: async () => ({ data: { user: null }, error: null }),
     onAuthStateChange: () => authSubscription,
     exchangeCodeForSession: async () => ({ data: { user: null, session: null }, error: missingSupabaseError() }),
+    setSession: async () => ({ data: { user: null, session: null }, error: missingSupabaseError() }),
     signOut: async () => ({ error: null }),
     signInWithPassword: async () => ({ data: { user: null, session: null }, error: missingSupabaseError() }),
     signInWithOAuth: async () => ({ data: { provider: null, url: null }, error: missingSupabaseError() }),
@@ -93,6 +94,8 @@ function createDisabledSupabaseClient(): SupabaseClient {
 
 export const supabase = isSupabaseConfigured ? createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
+    detectSessionInUrl: false,
+    flowType: "pkce",
     lock: serializedAuthLock,
   },
 }) : createDisabledSupabaseClient();

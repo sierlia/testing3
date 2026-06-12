@@ -35,7 +35,7 @@ supabase db push
 
 ### Google OAuth redirects
 
-The app sends Google OAuth back to `/auth/callback`, where Supabase processes the response and the app removes tokens from the URL before returning to the hash-routed app. In Supabase Auth settings, keep the Site URL pointed at the deployed app and add the callback URLs to the redirect allow-list.
+The app uses Supabase OAuth PKCE and sends Google OAuth back to `/auth/callback`, where the app exchanges the code and removes OAuth data from the URL before returning to the hash-routed app. In Supabase Auth settings, keep the Site URL pointed at the deployed app and add the callback URLs to the redirect allow-list.
 
 - Production Site URL: `https://sierlia.github.io/testing3/`
 - Production redirect URL: `https://sierlia.github.io/testing3/auth/callback`

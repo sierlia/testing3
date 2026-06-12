@@ -1,10 +1,12 @@
-import type { User } from "@supabase/supabase-js";
+import type { Session, User } from "@supabase/supabase-js";
 import { SchoolOption } from "../services/schools";
 import { supabase } from "./supabase";
 
 const PENDING_OAUTH_SIGNUP_KEY = "gavel:pendingOAuthSignup";
 const OAUTH_RETURN_PATH_KEY = "gavel:oauthReturnPath";
 const OAUTH_CALLBACK_PATH = "/auth/callback";
+const SESSION_WAIT_ATTEMPTS = 12;
+const SESSION_WAIT_MS = 250;
 
 export type PendingOAuthSignup = {
   role: "teacher" | "student";
@@ -79,6 +81,36 @@ function oauthHashParams() {
   return new URLSearchParams(params);
 }
 
+function oauthResponseParams() {
+  const params = new URLSearchParams(window.location.search);
+  oauthHashParams().forEach((value, key) => {
+    if (!params.has(key)) params.set(key, value);
+  });
+  return params;
+}
+
+function hasStoredOAuthState() {
+  try {
+    return Boolean(window.localStorage.getItem(OAUTH_RETURN_PATH_KEY) || window.localStorage.getItem(PENDING_OAUTH_SIGNUP_KEY));
+  } catch {
+    return false;
+  }
+}
+
+function delay(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function waitForOAuthSession(): Promise<Session | null> {
+  for (let attempt = 0; attempt < SESSION_WAIT_ATTEMPTS; attempt += 1) {
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw error;
+    if (data.session) return data.session;
+    await delay(SESSION_WAIT_MS);
+  }
+  return null;
+}
+
 function safeDecode(value: string) {
   try {
     return decodeURIComponent(value);
@@ -116,8 +148,10 @@ export function isOAuthCallbackLocation() {
   const hashPath = url.hash.replace(/^#/, "").split("?")[0];
   const hashParams = oauthHashParams();
   const onCallbackPath = currentPath === callbackPath || hashPath === OAUTH_CALLBACK_PATH;
+  const hasStoredState = hasStoredOAuthState();
   return (
     onCallbackPath ||
+    ((url.searchParams.has("code") || url.searchParams.has("error")) && hasStoredState) ||
     hashParams.has("access_token") ||
     hashParams.has("refresh_token") ||
     hashParams.has("error")
@@ -140,9 +174,9 @@ export function clearOAuthReturnPath() {
 
 export function readOAuthErrorFromLocation() {
   const url = new URL(window.location.href);
-  const hashParams = oauthHashParams();
-  const description = url.searchParams.get("error_description") ?? hashParams.get("error_description");
-  const code = url.searchParams.get("error_code") ?? hashParams.get("error_code") ?? hashParams.get("error");
+  const params = oauthResponseParams();
+  const description = url.searchParams.get("error_description") ?? params.get("error_description");
+  const code = url.searchParams.get("error_code") ?? params.get("error_code") ?? params.get("error");
   if (!description && !code) return null;
   return description ? safeDecode(description) : code;
 }
@@ -154,6 +188,29 @@ export function clearOAuthErrorFromLocation() {
   url.searchParams.delete("error_description");
   if (url.hash.startsWith("#error=")) url.hash = "";
   window.history.replaceState({}, document.title, `${url.pathname}${url.search}${url.hash}`);
+}
+
+export async function processOAuthRedirectFromLocation() {
+  const oauthError = readOAuthErrorFromLocation();
+  if (oauthError) throw new Error(oauthError);
+
+  const params = oauthResponseParams();
+  const code = params.get("code");
+  if (code) {
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (error) throw error;
+    return data.session ?? waitForOAuthSession();
+  }
+
+  const accessToken = params.get("access_token");
+  const refreshToken = params.get("refresh_token");
+  if (accessToken && refreshToken) {
+    const { data, error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    if (error) throw error;
+    return data.session ?? waitForOAuthSession();
+  }
+
+  return waitForOAuthSession();
 }
 
 export async function completePendingOAuthSignup(user: User) {
