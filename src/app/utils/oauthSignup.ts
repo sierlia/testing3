@@ -89,14 +89,6 @@ function oauthResponseParams() {
   return params;
 }
 
-function hasStoredOAuthState() {
-  try {
-    return Boolean(window.localStorage.getItem(OAUTH_RETURN_PATH_KEY) || window.localStorage.getItem(PENDING_OAUTH_SIGNUP_KEY));
-  } catch {
-    return false;
-  }
-}
-
 function delay(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
 }
@@ -148,10 +140,10 @@ export function isOAuthCallbackLocation() {
   const hashPath = url.hash.replace(/^#/, "").split("?")[0];
   const hashParams = oauthHashParams();
   const onCallbackPath = currentPath === callbackPath || hashPath === OAUTH_CALLBACK_PATH;
-  const hasStoredState = hasStoredOAuthState();
   return (
     onCallbackPath ||
-    ((url.searchParams.has("code") || url.searchParams.has("error")) && hasStoredState) ||
+    url.searchParams.has("code") ||
+    url.searchParams.has("error") ||
     hashParams.has("access_token") ||
     hashParams.has("refresh_token") ||
     hashParams.has("error")
