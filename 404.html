@@ -7,9 +7,8 @@
       <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https://*.supabase.co https://commons.wikimedia.org https://upload.wikimedia.org; connect-src 'self' https://*.supabase.co wss://*.supabase.co http://localhost:* ws://localhost:*; object-src 'none'; base-uri 'self'; form-action 'self';" />
       <title>Gavel</title>
       <style>html, body { height: 100%; margin: 0; } #root { height: 100%; }</style>
-      <!-- GitHub Pages is currently serving branch root, so this loader can
-        attach a committed production bundle. Vite dev/build still use /src/main.tsx. -->
-      <script type="module" src="/testing3/assets/gh-pages-loader.js"></script>
+      <!-- Processes the GitHub Pages branch-root fallback only when the built Vite bundle is missing. -->
+      <script type="module" src="https://sierlia.github.io/testing3/assets/gh-pages-loader.js"></script>
     </head>
 
     <body>

@@ -2,7 +2,11 @@ const isBranchRootPages =
   window.location.hostname === "sierlia.github.io" &&
   window.location.pathname.startsWith("/testing3/");
 
-if (isBranchRootPages) {
+const hasViteBundle = Array.from(document.scripts).some((script) =>
+  /\/testing3\/assets\/index-[^/]+\.js(?:$|\?)/.test(script.src),
+);
+
+if (isBranchRootPages && !hasViteBundle) {
   const stylesheet = document.createElement("link");
   stylesheet.rel = "stylesheet";
   stylesheet.href = "/testing3/assets/app.css";
