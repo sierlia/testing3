@@ -38,6 +38,8 @@ export class YjsSupabaseProvider {
   private persistTimer: number | null = null;
   private pollTimer: number | null = null;
   private syncRequestTimers: number[] = [];
+  private consistencyTimer: number | null = null;
+  private stateBroadcastTimer: number | null = null;
   private lastPersistedB64: string | null = null;
   private lastSeenUpdatedAt: string | null = null;
   private onSynced?: () => void;
@@ -84,6 +86,16 @@ export class YjsSupabaseProvider {
         // even if the originating user disconnects quickly.
         this.schedulePersist();
       })
+      .on("broadcast", { event: "yjs-state" }, (payload) => {
+        const b64 = (payload as any)?.payload?.b64 as string | undefined;
+        const senderId = (payload as any)?.payload?.senderId as string | undefined;
+        if (senderId === this.providerId || !b64) return;
+        const update = fromBase64(b64);
+        if (update.length) {
+          Y.applyUpdate(this.doc, update, this);
+          this.schedulePersist();
+        }
+      })
       .on("broadcast", { event: "yjs-sync-request" }, (payload) => {
         const senderId = (payload as any)?.payload?.senderId as string | undefined;
         const stateVectorB64 = (payload as any)?.payload?.stateVectorB64 as string | undefined;
@@ -124,11 +136,13 @@ export class YjsSupabaseProvider {
         this.isSubscribed = true;
         this.hadSnapshot = await this.hydrateFromDb();
         this.startDbPolling();
+        this.startConsistencyLoop();
         // Flush any queued broadcasts that happened before subscription.
         for (const msg of this.pendingSends.splice(0, this.pendingSends.length)) {
           void this.sendBroadcast(msg.event, msg.b64, msg.extra);
         }
         this.requestPeerSync();
+        this.scheduleStateBroadcast(1000);
         this.onSynced?.();
         this.broadcastAwareness();
       });
@@ -138,6 +152,7 @@ export class YjsSupabaseProvider {
       // Ignore updates applied by this provider (i.e. remote updates).
       if (origin !== this) {
         void this.sendBroadcast("yjs-update", toBase64(update));
+        this.scheduleStateBroadcast();
       }
       // Persist on both local and remote updates for robustness
       this.schedulePersist();
@@ -179,6 +194,22 @@ export class YjsSupabaseProvider {
     sendRequest();
     this.syncRequestTimers.push(window.setTimeout(sendRequest, 500));
     this.syncRequestTimers.push(window.setTimeout(sendRequest, 1500));
+  }
+
+  private startConsistencyLoop() {
+    if (this.consistencyTimer) window.clearInterval(this.consistencyTimer);
+    this.consistencyTimer = window.setInterval(() => {
+      this.requestPeerSync();
+      this.scheduleStateBroadcast(500);
+    }, 5000);
+  }
+
+  private scheduleStateBroadcast(delay = 1200) {
+    if (this.stateBroadcastTimer) window.clearTimeout(this.stateBroadcastTimer);
+    this.stateBroadcastTimer = window.setTimeout(() => {
+      if (this.destroyed || !this.isSubscribed) return;
+      void this.sendBroadcast("yjs-state", toBase64(Y.encodeStateAsUpdate(this.doc)));
+    }, delay);
   }
 
   private schedulePersist() {
@@ -311,6 +342,8 @@ export class YjsSupabaseProvider {
     }
     if (this.persistTimer) window.clearTimeout(this.persistTimer);
     if (this.pollTimer) window.clearInterval(this.pollTimer);
+    if (this.consistencyTimer) window.clearInterval(this.consistencyTimer);
+    if (this.stateBroadcastTimer) window.clearTimeout(this.stateBroadcastTimer);
     for (const timer of this.syncRequestTimers) window.clearTimeout(timer);
     this.syncRequestTimers = [];
     void supabase.removeChannel(this.channel);

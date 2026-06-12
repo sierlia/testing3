@@ -775,8 +775,6 @@ export function CollaborativeBillEditor({
             return false;
           },
         },
-        // Ensure schema is created with a doc node even before any remote steps arrive.
-        content: "<p></p>",
       });
 
       setEditor(ed);
