@@ -6,7 +6,15 @@ import { Toaster } from "./components/ui/sonner";
 import { DemoAccountSwitcher } from "./components/DemoAccountSwitcher";
 import { Gavel } from "lucide-react";
 import { toast } from "sonner";
-import { clearPendingOAuthSignup, completePendingOAuthSignup, getPendingOAuthSignup } from "./utils/oauthSignup";
+import {
+  clearOAuthErrorFromLocation,
+  clearOAuthReturnPath,
+  clearPendingOAuthSignup,
+  completePendingOAuthSignup,
+  consumeOAuthReturnPath,
+  getPendingOAuthSignup,
+  readOAuthErrorFromLocation,
+} from "./utils/oauthSignup";
 
 const publicRoutes = ["/", "/signin", "/signup", "/about", "/help", "/privacy", "/terms", "/cookies", "/ferpa-coppa"];
 
@@ -58,16 +66,27 @@ function AppRouterGate() {
   const isPublic = isPublicPath(path);
 
   useEffect(() => {
+    const oauthError = readOAuthErrorFromLocation();
+    if (!oauthError) return;
+    clearOAuthReturnPath();
+    clearPendingOAuthSignup();
+    clearOAuthErrorFromLocation();
+    toast.error(oauthError);
+  }, []);
+
+  useEffect(() => {
     if (loading || !user || oauthCompleting || !getPendingOAuthSignup()) return;
     let cancelled = false;
     setOauthCompleting(true);
     completePendingOAuthSignup(user)
       .then((completed) => {
         if (cancelled || !completed) return;
+        clearOAuthReturnPath();
         toast.success("Google sign up completed.");
         window.location.hash = completed.redirectPath;
       })
       .catch((error) => {
+        clearOAuthReturnPath();
         clearPendingOAuthSignup();
         toast.error(error?.message || "Could not finish Google sign up");
       })
@@ -77,6 +96,12 @@ function AppRouterGate() {
     return () => {
       cancelled = true;
     };
+  }, [loading, oauthCompleting, user]);
+
+  useEffect(() => {
+    if (loading || !user || oauthCompleting || getPendingOAuthSignup()) return;
+    const returnPath = consumeOAuthReturnPath();
+    if (returnPath && currentHashPath() !== returnPath) window.location.hash = returnPath;
   }, [loading, oauthCompleting, user]);
 
   useEffect(() => {

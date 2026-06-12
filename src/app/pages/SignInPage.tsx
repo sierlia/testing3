@@ -8,6 +8,7 @@ import { Gavel } from 'lucide-react';
 import { supabase } from '../utils/supabase';
 import { toast } from 'sonner';
 import { GoogleAuthButton } from '../components/GoogleAuthButton';
+import { clearOAuthReturnPath, oauthRedirectUrl, saveOAuthReturnPath } from '../utils/oauthSignup';
 
 function LegalConsentText() {
   return (
@@ -65,13 +66,14 @@ export function SignInPage() {
     setGoogleLoading(true);
     try {
       const redirectPath = safeRedirectPath() ?? '/dashboard';
-      const redirectTo = `${window.location.origin}${window.location.pathname}#${redirectPath}`;
+      saveOAuthReturnPath(redirectPath);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: 'google',
-        options: { redirectTo },
+        options: { redirectTo: oauthRedirectUrl() },
       });
       if (error) throw error;
     } catch (error: any) {
+      clearOAuthReturnPath();
       toast.error(error.message || 'Failed to start Google sign in');
       setGoogleLoading(false);
     }

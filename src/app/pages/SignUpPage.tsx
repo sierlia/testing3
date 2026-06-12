@@ -8,7 +8,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { GoogleAuthButton } from "../components/GoogleAuthButton";
 import { SchoolOption } from "../services/schools";
-import { fullNameFromParts, savePendingOAuthSignup } from "../utils/oauthSignup";
+import { clearOAuthReturnPath, clearPendingOAuthSignup, fullNameFromParts, oauthRedirectUrl, saveOAuthReturnPath, savePendingOAuthSignup } from "../utils/oauthSignup";
 import { supabase } from "../utils/supabase";
 
 type Role = "teacher" | "student";
@@ -237,13 +237,15 @@ function RoleSignUp({ role, onBack }: { role: Role; onBack: () => void }) {
         schools: schoolOptionsFromText(formData.school),
         redirectPath,
       });
-      const redirectTo = `${window.location.origin}${window.location.pathname}#${redirectPath}`;
+      saveOAuthReturnPath(redirectPath);
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
-        options: { redirectTo },
+        options: { redirectTo: oauthRedirectUrl() },
       });
       if (error) throw error;
     } catch (error: any) {
+      clearPendingOAuthSignup();
+      clearOAuthReturnPath();
       toast.error(error.message || "Failed to start Google sign up");
       setGoogleLoading(false);
     }

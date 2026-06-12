@@ -33,6 +33,14 @@ supabase db push
 
 - All schema changes must be committed as SQL files in `supabase/migrations/`.
 
+### Google OAuth redirects
+
+The app sends Google OAuth back to the app shell URL and stores the in-app hash route locally. In Supabase Auth settings, keep the Site URL and redirect allow-list pointed at the deployed app, not `localhost:3000`.
+
+- Production Site URL / redirect URL: `https://sierlia.github.io/testing3/`
+- Local dev redirect URL, when testing locally: `http://localhost:5173/`
+- Google Cloud OAuth authorized redirect URI: `https://qrtccdwxolfuuucadosa.supabase.co/auth/v1/callback`
+
 ### Deployment workflows
 
 - `supabase-migrations.yml` (on `main` migration changes): links project and runs `supabase db push` with GitHub Secrets.
