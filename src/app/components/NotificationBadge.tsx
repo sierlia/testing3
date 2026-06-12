@@ -33,6 +33,19 @@ export function NotificationBadge() {
     announceUnreadCount(0);
   };
 
+  const markNotificationsRead = async () => {
+    if (!user?.id) return;
+    const readAt = new Date().toISOString();
+    clearUnreadCount();
+    setItems((current) => current.map((item) => (item.read_at ? item : { ...item, read_at: readAt })));
+    const { error } = await supabase
+      .from("notifications")
+      .update({ read_at: readAt })
+      .eq("recipient_user_id", user.id)
+      .is("read_at", null);
+    if (error) void refreshCount();
+  };
+
   const refreshCount = async () => {
     if (!user?.id) return;
     if (open) {
@@ -71,7 +84,7 @@ export function NotificationBadge() {
     if (hadUnread) {
       setItems((current) => current.map((item) => (item.read_at ? item : { ...item, read_at: readAt })));
       clearUnreadCount();
-      void supabase.from("notifications").update({ read_at: readAt }).eq("recipient_user_id", user.id).is("read_at", null);
+      void markNotificationsRead();
     }
     setLoading(false);
   };
@@ -100,7 +113,7 @@ export function NotificationBadge() {
       .channel(`notifications:${user.id}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "notifications", filter: `recipient_user_id=eq.${user.id}` }, () => {
         if (open) {
-          clearUnreadCount();
+          void markNotificationsRead();
           void loadPreview();
           return;
         }
@@ -114,7 +127,7 @@ export function NotificationBadge() {
 
   useEffect(() => {
     if (!open) return;
-    clearUnreadCount();
+    void markNotificationsRead();
     void loadPreview();
     const close = (event: PointerEvent) => {
       if (!ref.current?.contains(event.target as Node)) setOpen(false);
@@ -128,7 +141,7 @@ export function NotificationBadge() {
       <button
         type="button"
         onClick={() => {
-          if (!open) clearUnreadCount();
+          if (!open) void markNotificationsRead();
           setOpen((current) => !current);
         }}
         className="relative p-2 text-gray-600 transition-colors hover:text-gray-900"
@@ -136,7 +149,7 @@ export function NotificationBadge() {
       >
         <Bell className="h-6 w-6" />
         {unreadCount > 0 && (
-          <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-600 px-1 text-[10px] font-semibold leading-none text-white">
+          <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-bold leading-none text-white">
             {unreadCount}
           </span>
         )}

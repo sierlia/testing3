@@ -114,7 +114,7 @@ export function TeacherAddMembersPopover({
                     setAction(mode);
                     setConfirming(false);
                   }}
-                  className={`rounded px-2 py-1.5 text-xs font-semibold capitalize ${action === mode ? "bg-blue-800 text-white shadow-sm" : "text-gray-600 hover:bg-blue-50 hover:text-blue-800"}`}
+                  className={`rounded px-2 py-1.5 text-xs font-semibold capitalize ${action === mode ? "bg-[#4163f2] text-white shadow-sm" : "text-gray-600 hover:bg-blue-50 hover:text-[#4163f2]"}`}
                 >
                   {mode}
                 </button>
@@ -140,11 +140,11 @@ export function TeacherAddMembersPopover({
                   type="button"
                   onClick={() => toggleCandidate(candidate)}
                   disabled={Boolean(candidate.disabledReason) || busyId === candidate.user_id}
-                  className={`block w-full rounded px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-blue-700 disabled:cursor-default disabled:bg-gray-50 disabled:text-gray-400 ${selectedIds.has(candidate.user_id) ? "bg-blue-50 text-blue-700" : "text-gray-700"}`}
+                  className={`block w-full rounded px-3 py-2 text-left text-sm hover:bg-blue-50 hover:text-[#4163f2] disabled:cursor-default disabled:bg-gray-50 disabled:text-gray-400 ${selectedIds.has(candidate.user_id) ? "bg-blue-50 text-[#4163f2]" : "text-gray-700"}`}
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="font-medium">{candidate.display_name ?? "Member"}</div>
-                    {selectedIds.has(candidate.user_id) && <div className="text-xs font-semibold text-blue-700">Selected</div>}
+                    {selectedIds.has(candidate.user_id) && <div className="text-xs font-semibold text-[#4163f2]">Selected</div>}
                   </div>
                   {candidate.membershipNote ? <div className="text-xs text-gray-500">{candidate.membershipNote}</div> : null}
                   {candidate.disabledReason ? <div className="text-xs text-gray-500">{candidate.disabledReason}</div> : null}
@@ -160,7 +160,7 @@ export function TeacherAddMembersPopover({
               type="button"
               onClick={() => setConfirming(true)}
               disabled={selectedCandidates.length === 0}
-              className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-md bg-[#4163f2] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#3151d7] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {action === "invite" ? "Invite" : "Add"}
             </button>
@@ -185,7 +185,7 @@ export function TeacherAddMembersPopover({
               </div>
               <div className="flex justify-end gap-2">
                 <button type="button" onClick={() => setConfirming(false)} className="rounded-md px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-100">Back</button>
-                <button type="button" onClick={() => void saveSelected()} className="rounded-md bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700">
+                <button type="button" onClick={() => void saveSelected()} className="rounded-md bg-[#4163f2] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#3151d7]">
                   {action === "invite" ? "Send invites" : "Add selected"}
                 </button>
               </div>
