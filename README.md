@@ -46,3 +46,4 @@ The app uses Supabase OAuth PKCE and sends Google OAuth back to `/auth/callback`
 
 - `supabase-migrations.yml` (on `main` migration changes): links project and runs `supabase db push` with GitHub Secrets.
 - `deploy-pages.yml` (on every `main` push): builds and deploys `dist/` to GitHub Pages with `VITE_BASE_PATH=/<repo-name>/`. The build also emits `404.html` so static hosts can fall back to the app shell.
+- The repository root also contains committed `/testing3/assets/app.*` fallback files because this Pages site is currently serving from branch root. If Pages is switched to GitHub Actions as the source, those fallback files can be removed.
