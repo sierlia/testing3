@@ -294,10 +294,12 @@ export function CommitteeWorkspace() {
       .channel(`committee-meetings:${committeeId}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "committee_meetings", filter: `committee_id=eq.${committeeId}` }, () => void refreshActiveMeeting())
       .subscribe();
+    const pollTimer = window.setInterval(() => void refreshActiveMeeting(), 5000);
 
     void refreshActiveMeeting();
     return () => {
       cancelled = true;
+      window.clearInterval(pollTimer);
       void supabase.removeChannel(channel);
     };
   }, [committeeId]);

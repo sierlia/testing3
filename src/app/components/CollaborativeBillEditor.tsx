@@ -403,31 +403,6 @@ function createEditAttributionExtension({
       return [
         new Plugin({
           key: editAttributionPluginKey,
-          filterTransaction: (transaction, state) => {
-            if (!editor.isEditable || shouldSuppress() || !trackDeletes) return true;
-            if (
-              !transaction.docChanged ||
-              isChangeOrigin(transaction) ||
-              transaction.getMeta(editAttributionPluginKey) ||
-              transaction.getMeta("restoreDeleteHighlight")
-            ) return true;
-
-            let touchesDeletedText = false;
-            transaction.mapping.maps.forEach((stepMap) => {
-              stepMap.forEach((oldStart, oldEnd) => {
-                if (touchesDeletedText || oldEnd <= oldStart) return;
-                state.doc.nodesBetween(oldStart, oldEnd, (node) => {
-                  if (node.marks?.some((mark) => mark.type.name === "deleteHighlight")) {
-                    touchesDeletedText = true;
-                    return false;
-                  }
-                  return true;
-                });
-              });
-            });
-
-            return !touchesDeletedText;
-          },
           appendTransaction: (transactions, _oldState, newState) => {
             if (!editor.isEditable || shouldSuppress()) return null;
 
