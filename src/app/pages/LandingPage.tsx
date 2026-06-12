@@ -1,4 +1,5 @@
 import { Link } from "react-router";
+import { useState } from "react";
 
 import { OpenDemoButton, PublicPage } from "../components/PublicLayout";
 
@@ -181,14 +182,13 @@ const faqs = [
 
 function FeatureSection({
   id,
-  label,
   title,
   body,
   groups,
   tone = "bg-white",
 }: {
   id: string;
-  label: string;
+  label?: string;
   title: string;
   body: string;
   groups: FeatureGroup[];
@@ -198,14 +198,13 @@ function FeatureSection({
     <section id={id} className={`scroll-mt-24 border-b border-slate-200 py-20 ${tone}`}>
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.36fr_0.64fr] lg:px-8">
         <div>
-          <p className="text-sm font-black uppercase tracking-wide text-blue-700">{label}</p>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{title}</h2>
+          <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">{title}</h2>
           <p className="mt-5 text-base leading-8 text-slate-700">{body}</p>
         </div>
 
-        <div className="divide-y divide-slate-200 border-y border-slate-200">
+        <div className="flex snap-x gap-4 overflow-x-auto border-y border-slate-200 py-5">
           {groups.map((group) => (
-            <div key={group.heading} className="grid gap-4 py-6 md:grid-cols-[12rem_1fr]">
+            <div key={group.heading} className="min-w-[18rem] max-w-sm snap-start border-r border-slate-200 pr-4 last:border-r-0">
               <h3 className="text-lg font-black text-slate-950">{group.heading}</h3>
               <div>
                 <p className="text-base leading-7 text-slate-700">{group.body}</p>
@@ -307,8 +306,7 @@ function GradingSection() {
     <section id="grading" className="scroll-mt-24 border-b border-slate-200 bg-white py-20">
       <div className="mx-auto grid max-w-7xl gap-12 px-4 sm:px-6 lg:grid-cols-[0.36fr_0.64fr] lg:px-8">
         <div>
-          <p className="text-sm font-black uppercase tracking-wide text-blue-700">Grading</p>
-          <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Grade the work faster.</h2>
+          <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Grade work faster.</h2>
           <p className="mt-5 text-base leading-8 text-slate-700">
             Grading in Gavel is organized around the actual artifacts of the simulation rather than around disconnected
             screenshots or manual participation tallies.
@@ -331,19 +329,46 @@ function GradingSection() {
 }
 
 function FaqSection() {
+  const [openQuestion, setOpenQuestion] = useState<string | null>(faqs[0]?.question ?? null);
+
   return (
     <section id="faq" className="scroll-mt-24 bg-blue-50 py-20">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-        <p className="text-sm font-black uppercase tracking-wide text-blue-700">FAQ</p>
-        <h2 className="mt-3 text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Common questions</h2>
-        <dl className="mt-8 divide-y divide-slate-200 border-y border-slate-200">
-          {faqs.map((faq) => (
-            <div key={faq.question} className="py-6">
-              <dt className="text-lg font-black text-slate-950">{faq.question}</dt>
-              <dd className="mt-2 text-base leading-7 text-slate-700">{faq.answer}</dd>
-            </div>
-          ))}
-        </dl>
+        <h2 className="text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">Common questions</h2>
+        <div className="mt-8 divide-y divide-slate-200 overflow-hidden border-y border-slate-200">
+          {faqs.map((faq) => {
+            const open = openQuestion === faq.question;
+            return (
+              <div key={faq.question}>
+                <button type="button" onClick={() => setOpenQuestion(open ? null : faq.question)} className="flex w-full items-center justify-between gap-4 py-6 text-left text-lg font-black text-slate-950">
+                  {faq.question}
+                  <span className={`text-blue-700 transition-transform ${open ? "rotate-45" : ""}`}>+</span>
+                </button>
+                <div className={`grid transition-all duration-200 ease-out ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                  <div className="overflow-hidden">
+                    <p className="pb-6 text-base leading-7 text-slate-700">{faq.answer}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CtaBanner() {
+  return (
+    <section className="bg-slate-950 px-4 py-12 text-white sm:px-6 lg:px-8">
+      <div className="mx-auto flex max-w-7xl flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="max-w-2xl text-3xl font-black tracking-tight">Open the demo or create a class workspace.</h2>
+        <div className="flex flex-wrap gap-3">
+          <OpenDemoButton className="bg-white text-slate-950 hover:bg-slate-100" />
+          <Link to="/signup" className="inline-flex items-center justify-center rounded-md border border-white/30 px-5 py-3 text-sm font-black text-white hover:bg-white/10">
+            Sign up
+          </Link>
+        </div>
       </div>
     </section>
   );
@@ -356,7 +381,6 @@ export function LandingPage() {
         <Hero />
         <FeatureSection
           id="student-work"
-          label="Student work"
           title="Constituencies, profiles, and bills"
           body="The first layer of the simulation is student identity and legislative work: who each student represents, what they say about that role, and what legislation they introduce."
           groups={studentWork}
@@ -364,30 +388,28 @@ export function LandingPage() {
         />
         <FeatureSection
           id="organizations"
-          label="Organizations"
-          title="Student organizations give the simulation structure."
+          title="Student organizations"
           body="Gavel supports the organizations that make a legislature feel like a political system rather than a folder of separate assignments."
           groups={organizations}
           tone="bg-blue-50"
         />
         <FeatureSection
           id="communication"
-          label="Discussion"
-          title="Communication stays connected to the people and organizations involved."
+          title="Discussion boards and Dear Colleague letters"
           body="Students can communicate through organization message boards, class discussion boards, and Dear Colleague letters without moving the simulation into unrelated tools."
           groups={communication}
           tone="bg-white"
         />
         <FeatureSection
           id="customization"
-          label="Customization"
-          title="Teachers decide how much of the system to use."
+          title="As simple or as complex as you need."
           body="The settings area is detailed because different classes need different rules. A teacher can keep the simulation streamlined or make it procedurally rich."
           groups={customization}
           tone="bg-slate-50"
         />
         <GradingSection />
         <FaqSection />
+        <CtaBanner />
       </main>
     </PublicPage>
   );

@@ -1,7 +1,10 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { ChevronDown } from "lucide-react";
+import { useSearchParams } from "react-router";
 
 import { HelpContactForm } from "../components/HelpContactForm";
 import { PublicPage } from "../components/PublicLayout";
+import { Navigation } from "../components/Navigation";
 
 const sections = [
   ["overview", "Overview"],
@@ -50,16 +53,37 @@ function ParagraphList({ items }: { items: Array<{ title: string; body: string }
 }
 
 export function HelpPage() {
-  return (
-    <PublicPage active="features" className="bg-white">
+  const [searchParams] = useSearchParams();
+  const [activeSection, setActiveSection] = useState("overview");
+  const [openFaq, setOpenFaq] = useState<string | null>(null);
+  const simulationNav = searchParams.get("nav") === "simulation";
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [simulationNav]);
+
+  useEffect(() => {
+    const observers = sections
+      .map(([id]) => document.getElementById(id))
+      .filter(Boolean)
+      .map((element) => {
+        const observer = new IntersectionObserver(
+          ([entry]) => {
+            if (entry.isIntersecting) setActiveSection(element!.id);
+          },
+          { rootMargin: "-35% 0px -55% 0px", threshold: 0 },
+        );
+        observer.observe(element!);
+        return observer;
+      });
+    return () => observers.forEach((observer) => observer.disconnect());
+  }, []);
+
+  const guide = (
       <main className="bg-white">
         <header className="border-b border-slate-200 bg-blue-50">
           <div className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
             <h1 className="text-4xl font-black tracking-tight text-slate-950 sm:text-5xl">Gavel Feature Guide</h1>
-            <p className="mt-5 max-w-3xl text-lg leading-8 text-slate-700">
-              This guide explains the main classroom workflows in Gavel: class setup, student profiles, legislation,
-              organizations, communication, floor procedure, records, assignments, grading, and customization.
-            </p>
           </div>
         </header>
 
@@ -74,7 +98,9 @@ export function HelpPage() {
                     event.preventDefault();
                     document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
                   }}
-                  className="block rounded-md px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 hover:text-blue-700"
+                  className={`block rounded-md px-3 py-2 text-sm font-semibold transition ${
+                    activeSection === id ? "bg-blue-50 text-blue-700" : "text-slate-700 hover:bg-slate-50 hover:text-blue-700"
+                  }`}
                 >
                   {label}
                 </a>
@@ -360,28 +386,38 @@ export function HelpPage() {
             </ArticleSection>
 
             <ArticleSection id="faq" title="FAQ">
-              <details className="rounded-lg border border-slate-200 bg-white p-4">
-                <summary className="cursor-pointer font-black text-slate-950">Can separate classes share the same simulation?</summary>
-                <p className="mt-3">
-                  Separate classes do not share work automatically. If students need to work from the same bills,
-                  organizations, records, and timeline, enroll them in one class. If periods need different rules or
-                  calendars, keep them separate.
-                </p>
-              </details>
-              <details className="rounded-lg border border-slate-200 bg-white p-4">
-                <summary className="cursor-pointer font-black text-slate-950">Can Gavel be used without online discussion?</summary>
-                <p className="mt-3">
-                  Yes. Teachers can disable organization boards or use them lightly, then rely on Gavel for bills, records,
-                  membership, voting, and grading while discussion happens in person.
-                </p>
-              </details>
-              <details className="rounded-lg border border-slate-200 bg-white p-4">
-                <summary className="cursor-pointer font-black text-slate-950">Can students submit work from outside Gavel?</summary>
-                <p className="mt-3">
-                  Assignments can include manual submission notes and attachments from Gavel work. If a class needs outside
-                  documents, teachers can describe that requirement in the prompt and use the rubric fields for grading.
-                </p>
-              </details>
+              {[
+                {
+                  question: "Can separate classes share the same simulation?",
+                  answer:
+                    "Separate classes do not share work automatically. If students need to work from the same bills, organizations, records, and timeline, enroll them in one class. If periods need different rules or calendars, keep them separate.",
+                },
+                {
+                  question: "Can Gavel be used without online discussion?",
+                  answer:
+                    "Yes. Teachers can disable organization boards or use them lightly, then rely on Gavel for bills, records, membership, voting, and grading while discussion happens in person.",
+                },
+                {
+                  question: "Can students submit work from outside Gavel?",
+                  answer:
+                    "Assignments can include manual submission notes and attachments from Gavel work. If a class needs outside documents, teachers can describe that requirement in the prompt and use the rubric fields for grading.",
+                },
+              ].map((faq) => {
+                const open = openFaq === faq.question;
+                return (
+                  <div key={faq.question} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+                    <button type="button" onClick={() => setOpenFaq(open ? null : faq.question)} className="flex w-full items-center justify-between gap-4 px-4 py-4 text-left font-black text-slate-950">
+                      {faq.question}
+                      <ChevronDown className={`h-4 w-4 shrink-0 transition-transform ${open ? "rotate-180 text-blue-700" : "text-slate-500"}`} />
+                    </button>
+                    <div className={`grid transition-all duration-200 ease-out ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+                      <div className="overflow-hidden">
+                        <p className="px-4 pb-4 text-base leading-7 text-slate-700">{faq.answer}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
             </ArticleSection>
 
             <div className="border-t border-slate-200 py-10">
@@ -390,6 +426,20 @@ export function HelpPage() {
           </article>
         </div>
       </main>
+  );
+
+  if (simulationNav) {
+    return (
+      <div className="min-h-screen bg-white text-slate-950">
+        <Navigation />
+        {guide}
+      </div>
+    );
+  }
+
+  return (
+    <PublicPage active="features" className="bg-white">
+      {guide}
     </PublicPage>
   );
 }

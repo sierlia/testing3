@@ -92,6 +92,10 @@ function formatDateTime(iso: string | null) {
   return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function assignedToLabel(label: string) {
+  return label === "All students" ? "all students" : label;
+}
+
 function localDateInput(iso: string | null) {
   if (!iso) return "";
   const date = new Date(iso);
@@ -961,10 +965,10 @@ export function TeacherDeadlines() {
                   <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600">
                     <span className="inline-flex items-center gap-1 font-medium text-gray-800">
                       <Calendar className="h-3.5 w-3.5 text-gray-500" />
-                      Due {formatDateTime(selectedAssignment.due_at)}
+                      {selectedAssignment.due_at ? `Due ${formatDateTime(selectedAssignment.due_at)}` : "No due date"}
                     </span>
                     <span className="text-gray-300">|</span>
-                    <span>Assigned to {targetLabel(selectedAssignment)}</span>
+                    <span>Assigned to {assignedToLabel(targetLabel(selectedAssignment))}</span>
                     <span className="text-gray-300">|</span>
                     <span>{selectedAssignment.points_possible} points</span>
                   </div>
@@ -974,8 +978,8 @@ export function TeacherDeadlines() {
                     <div className="flex items-center justify-between gap-3">
                       <div>
                         <h3 className="font-semibold text-gray-900">Student Progress</h3>
-                        <span className="text-sm text-gray-500">
-                          {submissions.filter((submission) => submission.status === "submitted" || submission.status === "returned").length} of {assignedStudents.length}
+                        <span className="text-sm font-semibold text-green-700">
+                          {submissions.filter((submission) => submission.status === "submitted" || submission.status === "returned").length} of {assignedStudents.length} submitted
                         </span>
                       </div>
                       <button
@@ -993,7 +997,7 @@ export function TeacherDeadlines() {
                     ) : assignedStudents.length === 0 ? (
                       <div className="rounded-md border border-dashed border-gray-300 p-6 text-sm text-gray-500">No students are assigned to this assignment.</div>
                     ) : (
-                      <div className="max-h-[780px] overflow-auto rounded-md border border-gray-200">
+                      <div className="overflow-visible rounded-md border border-gray-200">
                         <table className="min-w-[1120px] w-full text-sm">
                           <thead className="sticky top-0 z-10 bg-gray-50 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
                             <tr>
@@ -1021,7 +1025,11 @@ export function TeacherDeadlines() {
                                   <td className="px-3 py-3 font-semibold text-gray-900">
                                     <Link to={profilePath(student.user_id)} className="hover:text-blue-600 hover:underline">{student.display_name}</Link>
                                   </td>
-                                  <td className="px-3 py-3 text-xs text-gray-600">{statusText}</td>
+                                  <td className="px-3 py-3 text-xs">
+                                    <span className={`inline-flex rounded-full px-2 py-1 font-semibold ${statusText === "Submitted" ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>
+                                      {statusText}
+                                    </span>
+                                  </td>
                                   <td className="max-w-xs px-3 py-3">
                                     {submission?.body ? <p className="line-clamp-4 whitespace-pre-line text-sm text-gray-700">{submission.body}</p> : <span className="text-xs text-gray-400">No note</span>}
                                     {submission?.attachments?.length ? (
@@ -1059,7 +1067,7 @@ export function TeacherDeadlines() {
                                                 />
                                                 <span>/{score?.target ?? criterion.target} - {score?.earned ?? 0}/{(score?.points ?? criterion.points) * (score?.target ?? criterion.target)}</span>
                                               </span>
-                                              <div className="absolute right-full top-0 z-30 mr-2 hidden w-96 rounded-lg border border-gray-200 bg-white p-3 text-left text-xs shadow-xl group-hover:block hover:block">
+                                              <div className="absolute right-full top-1/2 z-50 mr-1 hidden w-96 -translate-y-1/2 rounded-lg border border-gray-200 bg-white p-3 text-left text-xs shadow-xl group-hover:block hover:block">
                                                 {(autoEvidence[student.user_id]?.[criterion.id] ?? []).length ? (
                                                   criterion.id === "write_bills" ? (
                                                     <div className="flex gap-2 overflow-x-auto pb-1">

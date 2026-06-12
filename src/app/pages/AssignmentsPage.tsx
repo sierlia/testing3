@@ -538,7 +538,7 @@ function AssignmentDetail({
         </div>
       </div>
 
-      <div className="grid gap-5 p-5 lg:grid-cols-[1fr_340px]">
+      <div className="grid gap-7 p-6 lg:grid-cols-[1fr_340px]">
         <div className="space-y-5">
           {assignment.auto_criteria.length ? (
             <section>
@@ -586,7 +586,11 @@ function AssignmentDetail({
                 ))}
               </div>
             </section>
-          ) : null}
+          ) : (
+            <section className="rounded-md border border-dashed border-gray-300 bg-gray-50 p-4 text-sm text-gray-600">
+              No rubric was included with this assignment.
+            </section>
+          )}
 
           {returned ? (
             <section className="rounded-md border border-green-200 bg-green-50 p-4">
@@ -599,7 +603,7 @@ function AssignmentDetail({
           ) : null}
         </div>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 lg:pt-2">
           {!assignment.manual_submission_required ? (
             <div className="rounded-md border border-blue-100 bg-blue-50 p-3 text-sm text-blue-800">
               Manual submission is optional for this assignment. Your attached simulation work can still be updated.

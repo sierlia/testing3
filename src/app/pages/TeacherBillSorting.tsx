@@ -207,8 +207,20 @@ export function TeacherBillSorting() {
         const cid = (prof as any)?.class_id ?? null;
         setClassId(cid);
         if (!cid) return;
-        if ((prof as any)?.role !== "teacher") {
-          toast.error("Only teachers can sort bills into committees");
+        const [{ data: cls }, { data: speakerVotes }] = await Promise.all([
+          supabase.from("classes").select("settings").eq("id", cid).maybeSingle(),
+          supabase.from("class_speaker_votes").select("candidate_user_id").eq("class_id", cid),
+        ]);
+        const settings = (cls as any)?.settings ?? {};
+        const voteCounts = new Map<string, number>();
+        for (const vote of speakerVotes ?? []) {
+          const candidateId = (vote as any).candidate_user_id;
+          if (candidateId) voteCounts.set(candidateId, (voteCounts.get(candidateId) ?? 0) + 1);
+        }
+        const speakerId = [...voteCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+        const canSortBills = (prof as any)?.role === "teacher" || Boolean(settings?.elections?.speakerConcluded && settings?.permissions?.speaker?.referBills && speakerId === uid);
+        if (!canSortBills) {
+          toast.error("You do not have permission to sort bills into committees");
           return;
         }
 

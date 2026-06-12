@@ -101,6 +101,7 @@ export function CalendarScheduling() {
   const [meName, setMeName] = useState("Member");
   const [speakerSignups, setSpeakerSignups] = useState<SpeakerSignup[]>([]);
   const [classSettings, setClassSettings] = useState<any>({});
+  const [canManageCalendar, setCanManageCalendar] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -110,13 +111,23 @@ export function CalendarScheduling() {
       setClassId(classId);
       setMeId(userId);
       setMeName(profile.display_name ?? "Member");
-      const [{ data: tasks }, { data: cls }] = await Promise.all([
+      const [{ data: tasks }, { data: cls }, { data: speakerVotes }] = await Promise.all([
         supabase.from("class_tasks").select("id,title,task_type,due_at").eq("class_id", classId).not("due_at", "is", null).order("due_at", { ascending: true }),
         supabase.from("classes").select("settings").eq("id", classId).maybeSingle(),
+        supabase.from("class_speaker_votes").select("candidate_user_id").eq("class_id", classId),
       ]);
-      setClassSettings((cls as any)?.settings ?? {});
+      const settings = (cls as any)?.settings ?? {};
+      setClassSettings(settings);
+      const voteCounts = new Map<string, number>();
+      for (const vote of speakerVotes ?? []) {
+        const candidateId = (vote as any).candidate_user_id;
+        if (candidateId) voteCounts.set(candidateId, (voteCounts.get(candidateId) ?? 0) + 1);
+      }
+      const speakerId = [...voteCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+      const nextCanManageCalendar = profile.role === "teacher" || Boolean(settings?.elections?.speakerConcluded && settings?.permissions?.speaker?.calendarBills && speakerId === userId);
+      setCanManageCalendar(nextCanManageCalendar);
       setTaskItems(((tasks ?? []) as any[]).filter((task) => task.due_at));
-      if (profile.role === "teacher") {
+      if (nextCanManageCalendar) {
         const rows = await fetchReportedBillsForTeacherCalendar();
         setTeacherBills(rows as any);
         setDraftDates(
@@ -170,7 +181,7 @@ export function CalendarScheduling() {
   }, [searchParams]);
 
   const publishedItems = useMemo<CalendarEntry[]>(() => {
-    if (role === "teacher") {
+    if (canManageCalendar) {
       return teacherBills
         .filter((bill) => bill.calendar?.scheduled_at)
         .map((bill) => ({
@@ -183,7 +194,7 @@ export function CalendarScheduling() {
         }));
     }
     return studentItems;
-  }, [role, studentItems, teacherBills]);
+  }, [canManageCalendar, studentItems, teacherBills]);
 
   const dateKey = (date: Date) => {
     const year = date.getFullYear();
@@ -554,7 +565,7 @@ export function CalendarScheduling() {
         {publishedCalendar}
         {selectedDayList}
       </div>
-    ) : role === "teacher" ? teacherAllList : allScheduledList
+    ) : canManageCalendar ? teacherAllList : allScheduledList
   );
 
   return (
@@ -565,7 +576,7 @@ export function CalendarScheduling() {
         <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="mb-2 text-3xl font-bold text-gray-900">Calendar</h1>
-            <p className="text-gray-600">{role === "teacher" ? "Calendar reported bills for floor debate" : "View bills scheduled for floor debate"}</p>
+            <p className="text-gray-600">{canManageCalendar ? "Calendar reported bills for floor debate" : "View bills scheduled for floor debate"}</p>
           </div>
           <div className="inline-flex rounded-md border border-gray-200 bg-white p-1 shadow-sm">
             {(["calendar", "all"] as const).map((mode) => (
@@ -583,7 +594,7 @@ export function CalendarScheduling() {
 
         {loading ? (
           <div className="rounded-lg border border-gray-200 bg-white p-8 text-center text-gray-500">Loading calendar...</div>
-        ) : role === "teacher" ? (
+        ) : canManageCalendar ? (
           <div className="space-y-6">
             {calendarLayout}
           </div>

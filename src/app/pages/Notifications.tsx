@@ -22,6 +22,10 @@ type NotificationItem = {
   kind: "comment" | "reaction" | "invite";
 };
 
+function announceUnreadCount(count: number) {
+  window.dispatchEvent(new CustomEvent("gavel:notifications-read", { detail: { unreadCount: Math.max(0, count) } }));
+}
+
 export function Notifications() {
   const { user } = useAuth();
   const [items, setItems] = useState<NotificationItem[]>([]);
@@ -73,6 +77,7 @@ export function Notifications() {
     if (!unreadIds.length) return;
     const readAt = new Date().toISOString();
     setItems((prev) => prev.map((item) => (unreadIds.includes(item.id) ? { ...item, read_at: readAt } : item)));
+    announceUnreadCount(items.filter((item) => !item.read_at).length - unreadIds.length);
     void supabase
       .from("notifications")
       .update({ read_at: readAt })
@@ -85,6 +90,7 @@ export function Notifications() {
     const readAt = new Date().toISOString();
     await supabase.from("notifications").update({ read_at: readAt }).eq("id", id);
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, read_at: item.read_at ?? readAt } : item)));
+    announceUnreadCount(items.filter((item) => !item.read_at && item.id !== id).length);
   };
 
   const markAllRead = async () => {
@@ -92,6 +98,7 @@ export function Notifications() {
     const readAt = new Date().toISOString();
     await supabase.from("notifications").update({ read_at: readAt }).eq("recipient_user_id", user.id).is("read_at", null);
     setItems((prev) => prev.map((item) => ({ ...item, read_at: item.read_at ?? readAt })));
+    announceUnreadCount(0);
   };
 
   const remove = async (id: string) => {

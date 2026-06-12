@@ -1,5 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { useBlocker, useParams } from "react-router";
+import { useBlocker, useNavigate, useParams } from "react-router";
 import { Check, CheckSquare, Clock3, Copy, FileText, Mail, Save, Search, Settings, ShieldCheck, UserCog, Users, Vote } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
@@ -349,6 +349,7 @@ function WordLimitInput({ label, value, max, onChange }: { label: string; value:
 
 function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
   const params = useParams();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<TabId>("general");
   const [activeClassId, setActiveClassId] = useState<string | null>(params.classId ?? null);
@@ -1288,6 +1289,22 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     });
   };
 
+  const requestDeleteClass = () => {
+    if (!activeClassId) return;
+    setConfirmDialog({
+      title: "Delete class?",
+      message: "This permanently removes the class workspace and its simulation settings. Student work may also become inaccessible depending on database cleanup rules.",
+      confirmLabel: "Delete class",
+      danger: true,
+      onConfirm: async () => {
+        const { error } = await supabase.from("classes").delete().eq("id", activeClassId);
+        if (error) throw error;
+        toast.success("Class deleted");
+        navigate("/teacher/dashboard");
+      },
+    });
+  };
+
   const setRoleAction = (roleKey: keyof typeof settings, action: RoleActionKey, checked: boolean) => {
     const current = settings[roleKey] as RoleActions;
     setSettings({ [roleKey]: { ...current, [action]: checked } } as Partial<typeof settings>);
@@ -1579,6 +1596,19 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
               <SettingRow indent title="Committee markup area access price" description="Amount lobbyists pay to view committee markup without editing." control={<WordLimitInput label="" value={settings.committeeReviewAccessPrice} max={100000} onChange={(value) => setSettings({ committeeReviewAccessPrice: value })} />} />
             </DisabledBlock>
           </SettingsGroup>
+          {mode === "settings" && (
+            <SettingsGroup title="Delete class">
+              <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-red-200 bg-red-50 p-4">
+                <div>
+                  <div className="font-semibold text-red-900">Delete this class workspace</div>
+                  <p className="mt-1 text-sm text-red-800">Use this only when the class should be removed from Gavel.</p>
+                </div>
+                <button type="button" onClick={requestDeleteClass} disabled={!activeClassId} className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50">
+                  Delete class
+                </button>
+              </div>
+            </SettingsGroup>
+          )}
         </div>
       );
     }

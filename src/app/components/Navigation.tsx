@@ -841,7 +841,7 @@ export function Navigation() {
                     </Link>
                   )}
                   <Link
-                    to="/help"
+                    to="/help?nav=simulation"
                     className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                     onClick={() => setUserMenuOpen(false)}
                   >

@@ -678,7 +678,7 @@ export function CommitteeWorkspace() {
     try {
       const { data: existingDoc } = await supabase
         .from("committee_bill_docs")
-        .select("subcommittee_reports")
+        .select("subcommittee_reports,ydoc_base64,revised_pdf_path")
         .eq("bill_id", selected.id)
         .eq("committee_id", committeeId)
         .maybeSingle();
@@ -690,6 +690,8 @@ export function CommitteeWorkspace() {
           subcommitteeName: selected.subcommitteeName,
           submittedAt: reportSubmittedAt,
           voteClosedAt,
+          ydoc_base64: (existingDoc as any)?.ydoc_base64 ?? null,
+          revised_pdf_path: (existingDoc as any)?.revised_pdf_path ?? null,
           votes: { yea: voteCounts.yea, nay: voteCounts.nay, present: voteCounts.present },
         },
       ];

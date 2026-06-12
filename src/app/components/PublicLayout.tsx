@@ -1,5 +1,5 @@
-import { type ReactNode, useState } from "react";
-import { Link } from "react-router";
+import { type ReactNode, useEffect, useState } from "react";
+import { Link, useLocation } from "react-router";
 import { Gavel } from "lucide-react";
 import { toast } from "sonner";
 
@@ -187,6 +187,12 @@ export function PublicPage({
   children: ReactNode;
   className?: string;
 }) {
+  const location = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0 });
+  }, [location.pathname]);
+
   return (
     <div className={`min-h-screen text-slate-950 ${className}`}>
       <PublicNav active={active} />

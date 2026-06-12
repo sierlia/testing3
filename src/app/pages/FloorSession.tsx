@@ -361,7 +361,7 @@ export function FloorSession() {
 
   const speakerConcluded = Boolean(classSettings?.elections?.speakerConcluded);
   const speakerOpen = classSettings?.elections?.speakerOpen ?? Boolean(classSettings?.elections?.open);
-  const floorMode = (classSettings?.floor?.mode as FloorMode | undefined) ?? (speakerConcluded ? "bills" : "election");
+  const floorMode = (classSettings?.floor?.mode as FloorMode | undefined) ?? (loading ? "bills" : speakerConcluded ? "bills" : "election");
   const routeMode = searchParams.get("mode");
   const displayFloorMode: FloorMode =
     routeMode === "discussion" || routeMode === "bills" || routeMode === "election" ? routeMode : floorMode;
@@ -1420,7 +1420,7 @@ export function FloorSession() {
                     type="button"
                     onClick={() => confirmFloorMode(mode)}
                     disabled={busy || floorMode === mode}
-                    className={`rounded px-3 py-1.5 text-sm font-semibold transition ${floorMode === mode ? "bg-blue-800 text-white shadow-sm" : "text-gray-700 hover:bg-blue-50 hover:text-blue-800"} disabled:opacity-80`}
+                    className={`rounded px-3 py-1.5 text-sm font-semibold transition ${floorMode === mode ? "bg-blue-600 text-white shadow-sm" : "text-gray-700 hover:bg-blue-50 hover:text-blue-800"} disabled:opacity-80`}
                   >
                     {label}
                   </button>

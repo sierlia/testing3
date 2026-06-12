@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { AlertCircle, ArrowDown, ArrowUp, BookOpen, FileText, MessageSquare, Search } from "lucide-react";
+import { AlertCircle, BookOpen, FileText, MessageSquare, Search } from "lucide-react";
 import { Navigation } from "../components/Navigation";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectSeparator, SelectTrigger, SelectValue } from "../components/ui/select";
+import { SortDirectionButton } from "../components/SortDirectionButton";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
 import { profilePath } from "../utils/profileRoute";
 
@@ -132,14 +133,11 @@ export function ClassActivityPage() {
                 {renderContextGroup("Caucuses", "caucus", contextGroups.caucus)}
               </SelectContent>
             </Select>
-            <button
-              type="button"
+            <SortDirectionButton
+              direction={sortDirection}
               onClick={() => setSortDirection((current) => (current === "desc" ? "asc" : "desc"))}
-              aria-label={sortDirection === "desc" ? "Sort ascending" : "Sort descending"}
-              className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-gray-300 bg-white px-3 text-sm font-semibold text-gray-800 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              {sortDirection === "desc" ? <ArrowDown className="h-4 w-4" /> : <ArrowUp className="h-4 w-4" />}
-            </button>
+              className="h-9 w-9"
+            />
           </div>
         </div>
 

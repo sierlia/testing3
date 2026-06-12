@@ -138,6 +138,22 @@ export function AttachmentPicker({
         <Paperclip className="h-3.5 w-3.5" />
         {!compact && (value.length ? `${value.length} attached` : "Attach")}
       </button>
+      {!compact && value.length ? (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {value.map((item) => (
+            <button
+              key={`${item.type}:${item.id}`}
+              type="button"
+              onClick={() => toggle(item)}
+              className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+              title={`Remove ${item.label}`}
+            >
+              <span className="truncate">{item.label}</span>
+              <X className="h-3.5 w-3.5 shrink-0" />
+            </button>
+          ))}
+        </div>
+      ) : null}
       {open && (
         <div className={`absolute bottom-full z-[150] mb-2 w-[28rem] max-w-[min(28rem,calc(100vw-2rem))] overflow-hidden rounded-lg border border-gray-200 bg-white shadow-xl ${compact ? "right-0" : "left-0"}`}>
           <div className="border-b border-gray-200 p-3">

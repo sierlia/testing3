@@ -14,7 +14,7 @@ import {
   normalizeRubric,
   rubricTotal,
 } from "../services/assignments";
-import { AttachmentList, AttachmentPicker, DiscussionAttachment } from "./DiscussionAttachments";
+import { AttachmentPicker, DiscussionAttachment } from "./DiscussionAttachments";
 
 type AudienceType = AssignmentTask["audience_type"];
 type OrgOption = { id: string; name: string; userIds?: string[] };
@@ -86,6 +86,11 @@ function parseRubricImport(text: string): RubricItem[] {
         return { ...newRubricItem(), title, description, points };
       }),
   );
+}
+
+function rubricFileCanBeReadAsText(file: File) {
+  const name = file.name.toLowerCase();
+  return file.type.startsWith("text/") || name.endsWith(".txt") || name.endsWith(".csv") || name.endsWith(".json");
 }
 
 export function TeacherAssignmentModal({
@@ -304,6 +309,11 @@ export function TeacherAssignmentModal({
   const importRubric = async (file: File | null | undefined) => {
     if (!file) return;
     try {
+      if (!rubricFileCanBeReadAsText(file)) {
+        setRubricRows([{ ...newRubricItem(), title: file.name.replace(/\.[^.]+$/, "") || "Uploaded rubric", description: `Rubric file uploaded: ${file.name}. Add or edit criteria after reviewing the document.`, points: 0 }]);
+        toast.success("Rubric file selected");
+        return;
+      }
       const rows = parseRubricImport(await file.text());
       if (!rows.length) return toast.error("No rubric rows found in that file");
       setRubricRows(rows);
@@ -472,11 +482,6 @@ export function TeacherAssignmentModal({
                   <span className="text-xs text-gray-500">Attach bills, records, or letters students should reference.</span>
                   <AttachmentPicker value={assignmentAttachments} onChange={setAssignmentAttachments} />
                 </div>
-                {assignmentAttachments.length ? (
-                  <div className="border-t border-gray-100 px-3 py-2">
-                    <AttachmentList attachments={assignmentAttachments} />
-                  </div>
-                ) : null}
               </div>
             </div>
           </section>
@@ -503,7 +508,7 @@ export function TeacherAssignmentModal({
 
             <div className="mb-3 flex flex-wrap items-center justify-end gap-3">
               <div className="flex flex-wrap items-center gap-2">
-                <input ref={fileInputRef} type="file" accept=".json,.csv,.txt" className="hidden" onChange={(event) => void importRubric(event.target.files?.[0])} />
+                <input ref={fileInputRef} type="file" accept=".txt,.doc,.docx,.pdf,.csv,.xls,.xlsx,.json" className="hidden" onChange={(event) => void importRubric(event.target.files?.[0])} />
                 <button type="button" onClick={() => setRubricRows((rows) => [...rows, newRubricItem()])} className="inline-flex items-center gap-1.5 rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700">
                   <Plus className="h-4 w-4" />
                   Add criterion
@@ -570,7 +575,7 @@ export function TeacherAssignmentModal({
                               <span className="mb-1 block text-xs font-medium text-gray-600">Points per #</span>
                               <input type="number" min="0" value={item.autoPoints ?? item.points} onChange={(event) => updateRubricItem(item.id, { autoPoints: Math.max(0, Number(event.target.value) || 0) })} className="w-full rounded-md border border-gray-300 px-2 py-1.5 text-sm outline-none focus:ring-2 focus:ring-blue-500" />
                             </label>
-                            <label className="flex cursor-pointer items-center gap-2 text-xs font-medium text-gray-700">
+                            <label className="flex h-9 cursor-pointer items-center gap-2 self-end text-xs font-medium text-gray-700">
                               <input type="checkbox" checked={Boolean(item.extraCredit)} onChange={(event) => updateRubricItem(item.id, { extraCredit: event.target.checked })} className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
                               Extra credit
                             </label>

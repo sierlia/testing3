@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { Activity, ArrowDown, ArrowLeft, ArrowUp, Check, Copy, Download, Eye, EyeOff, FileUp, GripVertical, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
+import { Activity, ArrowLeft, Check, Copy, Download, Eye, EyeOff, FileUp, GripVertical, MailPlus, MoreHorizontal, Plus, Search, Settings, Trash2, UserX, Users } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
-import { ArrowDownAZ, ArrowUpAZ, DollarSign, Download, ExternalLink, Eye, FileText, Mail, MoreHorizontal, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
+import { DollarSign, Download, ExternalLink, Eye, FileText, Mail, MoreHorizontal, Newspaper, Pin, Plus, Search, Trash2, Vote, X } from "lucide-react";
 import { toast } from "sonner";
 import { Navigation } from "../components/Navigation";
 import { InfoTooltip } from "../components/InfoTooltip";
 import { CompactPager } from "../components/CompactPager";
+import { SortDirectionButton } from "../components/SortDirectionButton";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { supabase } from "../utils/supabase";
 import { getCurrentUser } from "../utils/currentUser";
@@ -992,19 +993,14 @@ export function RecordsPage() {
                   <SelectItem value="title">Sort: Title</SelectItem>
                   <SelectItem value="type">Sort: Type</SelectItem>
                 </FilterSelect>
-                <button
-                  type="button"
+                <SortDirectionButton
+                  direction={sortDirection}
                   onClick={() => {
                     const next = sortDirection === "asc" ? "desc" : "asc";
                     setSortDirection(next);
                     updateParam("dir", next, "desc");
                   }}
-                  className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-                  aria-label={sortDirection === "asc" ? "Sort ascending" : "Sort descending"}
-                  title={sortDirection === "asc" ? "Ascending" : "Descending"}
-                >
-                  {sortDirection === "asc" ? <ArrowUpAZ className="h-4 w-4" /> : <ArrowDownAZ className="h-4 w-4" />}
-                </button>
+                />
                 <button onClick={resetFilters} className="rounded-md px-2.5 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 hover:text-blue-700">Reset</button>
               </div>
               <div className="flex rounded-md border border-gray-300 bg-white p-1 shadow-sm">

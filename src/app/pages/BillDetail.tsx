@@ -24,6 +24,13 @@ type TrackerItem = TrackerStep | { kind: "split"; steps: [TrackerStep, TrackerSt
 type BillAction = { label: string; detail?: string; date: string; tone?: "teacher" };
 type CommitteeOption = { id: string; name: string };
 type TeacherOverrideAction = { id: string; step: string; note: string | null; created_at: string };
+type RevisionTab = {
+  id: string;
+  label: string;
+  ydoc_base64?: string | null;
+  revised_pdf_path?: string | null;
+  date?: string | null;
+};
 type TrackerOverrideDraft = {
   step: TrackerStep;
   committeeId: string;
@@ -310,18 +317,42 @@ export function BillDetail() {
         return cosponsorSort === "oldest" ? aTime - bTime : bTime - aTime;
       });
   }, [cosponsorPartyFilter, cosponsorSearch, cosponsorSort, cosponsors]);
-  const revisionTabs = useMemo(() => {
-    return (committeeDocs ?? [])
-      .filter((doc) => doc?.ydoc_base64 || doc?.revised_pdf_path || doc?.committee_markup_posted_at)
-      .sort((a, b) => new Date(b.updated_at || b.committee_markup_posted_at || b.referred_at || 0).getTime() - new Date(a.updated_at || a.committee_markup_posted_at || a.referred_at || 0).getTime());
+  const revisionTabs = useMemo<RevisionTab[]>(() => {
+    const tabs: RevisionTab[] = [];
+    for (const doc of committeeDocs ?? []) {
+      const committeeName = committeeDisplayName(doc.committee_name) || "Committee";
+      const reports = Array.isArray(doc.subcommittee_reports) ? doc.subcommittee_reports : [];
+      for (const report of reports) {
+        const snapshot = report.ydoc_base64 ?? report.revisionYdocBase64 ?? doc.ydoc_base64 ?? null;
+        const pdfPath = report.revised_pdf_path ?? report.revisedPdfPath ?? doc.revised_pdf_path ?? null;
+        if (!snapshot && !pdfPath) continue;
+        tabs.push({
+          id: `subcommittee:${doc.committee_id}:${report.subcommitteeId ?? report.subcommitteeName ?? tabs.length}`,
+          label: `${report.subcommitteeName ?? "Subcommittee"} version`,
+          ydoc_base64: snapshot,
+          revised_pdf_path: pdfPath,
+          date: report.submittedAt ?? report.voteClosedAt ?? doc.updated_at ?? doc.committee_markup_posted_at ?? doc.referred_at,
+        });
+      }
+      if (doc?.ydoc_base64 || doc?.revised_pdf_path || doc?.committee_markup_posted_at) {
+        tabs.push({
+          id: `committee:${doc.committee_id}`,
+          label: `${committeeName} version`,
+          ydoc_base64: doc.ydoc_base64,
+          revised_pdf_path: doc.revised_pdf_path,
+          date: doc.updated_at || doc.committee_markup_posted_at || doc.referred_at,
+        });
+      }
+    }
+    return tabs.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
   }, [committeeDocs]);
-  const activeRevision = activeTab.startsWith("revision:") ? revisionTabs.find((doc) => `revision:${doc.committee_id}` === activeTab) : null;
+  const activeRevision = activeTab.startsWith("revision:") ? revisionTabs.find((doc) => `revision:${doc.id}` === activeTab) : null;
   const revisedHtml = useMemo(() => revisedHtmlFromSnapshot(activeRevision?.ydoc_base64 ?? committeeDoc?.ydoc_base64) ?? bill?.legislative_text ?? "", [activeRevision?.ydoc_base64, bill?.legislative_text, committeeDoc?.ydoc_base64]);
 
   useEffect(() => {
     if (!bill) return;
     setActiveTab((prev) => {
-      if (revisionTabs.length) return prev.startsWith("revision:") || prev === "supporting" ? prev : `revision:${revisionTabs[0].committee_id}`;
+      if (revisionTabs.length) return prev.startsWith("revision:") || prev === "supporting" ? prev : `revision:${revisionTabs[0].id}`;
       return prev.startsWith("revision:") ? "original" : prev;
     });
   }, [bill, revisionTabs]);
@@ -381,15 +412,13 @@ export function BillDetail() {
     if (!bill) return [];
     const status = bill.status;
     const overrideRank = Math.max(-1, ...teacherOverrideActions.map((override) => trackerRank(override.step)));
-    const latestOverrideTime = teacherOverrideActions.length ? new Date(teacherOverrideActions[0].created_at).getTime() : 0;
-    const markOverrideFilled = (step: TrackerStep) => ({
-      ...step,
-      overrideFilled:
-        overrideRank > trackerRank(step.label) &&
-        trackerRank(step.label) > 0 &&
-        step.status === "completed" &&
-        (!step.date || (latestOverrideTime > 0 && Math.abs(new Date(step.date).getTime() - latestOverrideTime) < 120000)),
-    });
+    const markOverrideFilled = (step: TrackerStep): TrackerStep => {
+      const rank = trackerRank(step.label);
+      if (overrideRank > rank && rank > 0 && step.status !== "completed") {
+        return { ...step, status: "completed", overrideFilled: true, note: step.note ?? "Skipped by override" };
+      }
+      return step;
+    };
     const markedUp = Boolean(committeeDoc?.committee_markup_posted_at || ["committee_vote", "reported", "calendared", "floor", "passed", "failed", "senate", "senate_passed", "signed", "vetoed"].includes(status));
     const reported = ["reported", "calendared", "floor", "passed", "failed", "senate", "senate_passed", "signed", "vetoed"].includes(status);
     const calendared = Boolean(calendar);
@@ -817,27 +846,27 @@ export function BillDetail() {
           <div className="space-y-6">
             <div id="bill-text" className="scroll-mt-24 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
               <div className="border-b border-gray-200">
-                <div className="flex flex-wrap">
+                <div className="flex overflow-x-auto whitespace-nowrap">
                   {revisionTabs.map((doc) => (
                     <button
-                      key={doc.committee_id}
-                      onClick={() => setActiveTab(`revision:${doc.committee_id}`)}
-                      className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === `revision:${doc.committee_id}` ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
+                      key={doc.id}
+                      onClick={() => setActiveTab(`revision:${doc.id}`)}
+                      className={`flex shrink-0 items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === `revision:${doc.id}` ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
                     >
                       <FileText className="h-4 w-4" />
-                      {committeeDisplayName(doc.committee_name) || "Revised Text"}
+                      {doc.label}
                     </button>
                   ))}
                   <button
                     onClick={() => setActiveTab("original")}
-                    className={`flex items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === "original" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
+                    className={`flex shrink-0 items-center gap-2 px-6 py-3 font-medium transition-colors ${activeTab === "original" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
                   >
                     <FileText className="h-4 w-4" />
                     Original Text
                   </button>
                   <button
                     onClick={() => setActiveTab("supporting")}
-                    className={`ml-auto flex items-center gap-2 border-l border-gray-200 px-6 py-3 font-medium transition-colors ${activeTab === "supporting" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
+                    className={`flex shrink-0 items-center gap-2 border-l border-gray-200 px-6 py-3 font-medium transition-colors ${activeTab === "supporting" ? "border-b-2 border-blue-600 text-blue-600" : "text-gray-600 hover:text-gray-900"}`}
                   >
                     <BookOpen className="h-4 w-4" />
                     Supporting Text

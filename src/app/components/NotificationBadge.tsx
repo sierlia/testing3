@@ -15,6 +15,10 @@ type NotificationPreview = {
 
 let cachedUnreadCount = 0;
 
+function announceUnreadCount(count: number) {
+  window.dispatchEvent(new CustomEvent("gavel:notifications-read", { detail: { unreadCount: count } }));
+}
+
 export function NotificationBadge() {
   const { user } = useAuth();
   const [unreadCount, setUnreadCount] = useState(cachedUnreadCount);
@@ -58,6 +62,7 @@ export function NotificationBadge() {
       setItems((current) => current.map((item) => (unreadIds.includes(item.id) ? { ...item, read_at: readAt } : item)));
       setUnreadCount((count) => {
         cachedUnreadCount = Math.max(0, count - unreadIds.length);
+        announceUnreadCount(cachedUnreadCount);
         return cachedUnreadCount;
       });
       void supabase.from("notifications").update({ read_at: readAt }).eq("recipient_user_id", user.id).in("id", unreadIds).is("read_at", null);
@@ -67,6 +72,20 @@ export function NotificationBadge() {
 
   useEffect(() => {
     void refreshCount();
+  }, [user?.id]);
+
+  useEffect(() => {
+    const sync = (event: Event) => {
+      const unreadCount = (event as CustomEvent<{ unreadCount?: number }>).detail?.unreadCount;
+      if (typeof unreadCount === "number") {
+        cachedUnreadCount = Math.max(0, unreadCount);
+        setUnreadCount(cachedUnreadCount);
+        return;
+      }
+      void refreshCount();
+    };
+    window.addEventListener("gavel:notifications-read", sync);
+    return () => window.removeEventListener("gavel:notifications-read", sync);
   }, [user?.id]);
 
   useEffect(() => {

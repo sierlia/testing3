@@ -11,7 +11,6 @@ import {
   FileText,
   Lock,
   MessageSquare,
-  MoreVertical,
   Pencil,
   Pin,
   Plus,
@@ -30,6 +29,7 @@ import { Navigation } from "../components/Navigation";
 import { TeacherClassTabs } from "../components/TeacherClassTabs";
 import { TeacherAssignmentModal } from "../components/TeacherAssignmentModal";
 import { fetchClassActivity, ClassActivity } from "../services/classActivity";
+import { AssignmentTask, normalizeAssignment } from "../services/assignments";
 import { fetchCalendaredBillsForCurrentClass, saveBillCalendarEntry } from "../services/bills";
 import { supabase } from "../utils/supabase";
 import { toast } from "sonner";
@@ -45,6 +45,9 @@ interface CalendarEvent {
   type: "assignment" | "deadline" | "session" | "election" | "bill";
   href?: string;
 }
+
+const dashboardAssignmentSelect =
+  "id,task_type,title,description,due_at,audience_type,audience_id,audience_user_ids,created_at,points_possible,grading_mode,manual_submission_required,allow_late_submissions,rubric,auto_criteria,attachments,integration_targets";
 
 const workflowSteps = [
   { id: "setup", label: "Set up class", description: "Choose default parties and committees before students begin." },
@@ -71,7 +74,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
   });
   const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
-  const [activeCalendarMenuId, setActiveCalendarMenuId] = useState<string | null>(null);
+  const [assignmentModalTask, setAssignmentModalTask] = useState<AssignmentTask | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<CalendarEvent | null>(null);
   const [rescheduleDate, setRescheduleDate] = useState("");
   const [rescheduleTime, setRescheduleTime] = useState("");
@@ -287,7 +290,25 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
     setRescheduleTarget(event);
     setRescheduleDate(localDateInput(event.date));
     setRescheduleTime(localTimeInput(event.date));
-    setActiveCalendarMenuId(null);
+  };
+
+  const openCalendarEdit = async (event: CalendarEvent) => {
+    if (event.type !== "assignment") {
+      openRescheduler(event);
+      return;
+    }
+    const { data, error } = await supabase
+      .from("class_tasks")
+      .select(dashboardAssignmentSelect)
+      .eq("id", event.sourceId)
+      .eq("class_id", classId)
+      .maybeSingle();
+    if (error || !data) {
+      toast.error(error?.message || "Could not load assignment");
+      return;
+    }
+    setAssignmentModalTask(normalizeAssignment(data));
+    setAssignmentModalOpen(true);
   };
 
   const saveEventDate = async (event: CalendarEvent, nextDate: Date) => {
@@ -706,7 +727,7 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                     <CardTitle>Calendar</CardTitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button size="sm" onClick={() => setAssignmentModalOpen(true)}><Plus className="mr-2 h-4 w-4" />Create assignment</Button>
+                    <Button size="sm" onClick={() => { setAssignmentModalTask(null); setAssignmentModalOpen(true); }}><Plus className="mr-2 h-4 w-4" />Create assignment</Button>
                   </div>
                 </div>
               </CardHeader>
@@ -818,25 +839,17 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                               <h4 className="line-clamp-1 text-xs font-semibold text-gray-900">{eventDisplayTitle(event)}</h4>
                               <p className="mt-0.5 text-xs text-gray-600">{formatEventDate(event)}</p>
                             </div>
-                            <div className="relative">
-                              <button
-                                type="button"
-                                onClick={(click) => {
-                                  click.preventDefault();
-                                  click.stopPropagation();
-                                  setActiveCalendarMenuId((current) => current === event.id ? null : event.id);
-                                }}
-                                className="rounded-md p-1 text-gray-500 hover:bg-white hover:text-gray-900"
-                                aria-label="Event actions"
-                              >
-                                <MoreVertical className="h-4 w-4" />
-                              </button>
-                              {activeCalendarMenuId === event.id ? (
-                                <div className="absolute right-0 top-full z-20 mt-1 w-36 rounded-md border border-gray-200 bg-white py-1 shadow-lg">
-                                  <button type="button" onClick={() => openRescheduler(event)} className="block w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">Reschedule</button>
-                                </div>
-                              ) : null}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={(click) => {
+                                click.preventDefault();
+                                click.stopPropagation();
+                                void openCalendarEdit(event);
+                              }}
+                              className="rounded-md px-2 py-1 text-xs font-semibold text-blue-700 hover:bg-blue-50"
+                            >
+                              Edit
+                            </button>
                           </div>
                         ))
                       )}
@@ -963,11 +976,11 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
                         const Icon = action.icon;
                         return (
                           <Link key={action.label} to={action.href}>
-                            <Button variant="ghost" className="w-full justify-start bg-white text-base text-gray-900 hover:bg-gray-50">
-                              <Icon className="mr-2 h-4 w-4" />
-                              <span>{action.label}</span>
+                            <Button variant="ghost" className="h-auto min-h-10 w-full justify-start whitespace-normal bg-white text-left text-base text-gray-900 hover:bg-gray-50">
+                              <Icon className="mr-2 h-4 w-4 shrink-0" />
+                              <span className="min-w-0 flex-1 leading-tight">{action.label}</span>
                               {typeof action.count === "number" && (
-                                <span className="ml-auto inline-flex h-6 min-w-6 items-center justify-center rounded-full bg-blue-100 px-2 text-xs font-bold text-blue-800">
+                                <span className="ml-2 inline-flex min-h-6 min-w-6 shrink-0 items-center justify-center rounded-full bg-red-600 px-2 text-xs font-bold leading-none text-white">
                                   {action.count}
                                 </span>
                               )}
@@ -1025,9 +1038,14 @@ export function ClassDashboard({ classIdOverride }: { classIdOverride?: string |
       <TeacherAssignmentModal
         classId={classId}
         open={assignmentModalOpen}
-        onClose={() => setAssignmentModalOpen(false)}
+        assignment={assignmentModalTask}
+        onClose={() => {
+          setAssignmentModalOpen(false);
+          setAssignmentModalTask(null);
+        }}
         onSaved={async () => {
           setAssignmentModalOpen(false);
+          setAssignmentModalTask(null);
           await loadDashboard();
         }}
       />
