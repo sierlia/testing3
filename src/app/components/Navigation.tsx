@@ -78,6 +78,10 @@ function cacheActiveTeacherClass(userId: string, active: TeacherClass) {
   window.localStorage.setItem(`gavel:activeTeacherClass:${userId}`, JSON.stringify(active));
 }
 
+function clearActiveTeacherClass(userId: string) {
+  window.localStorage.removeItem(`gavel:activeTeacherClass:${userId}`);
+}
+
 function readCachedAvatar(userId: string) {
   try {
     return window.localStorage.getItem(`gavel:avatar:${userId}`);
@@ -519,6 +523,37 @@ export function Navigation() {
     };
     window.addEventListener("gavel:class-renamed", onClassRenamed);
     return () => window.removeEventListener("gavel:class-renamed", onClassRenamed);
+  }, [activeClassId, user?.id]);
+
+  useEffect(() => {
+    const onClassDeleted = (event: Event) => {
+      const detail = (event as CustomEvent<{ classId: string; nextClass?: TeacherClass | null }>).detail;
+      if (!detail?.classId || !user?.id) return;
+      setTeacherClasses((current) => {
+        const next = current.filter((classItem) => classItem.id !== detail.classId);
+        cacheTeacherClasses(user.id, next);
+        return next;
+      });
+      try {
+        window.localStorage.removeItem(`gavel:orgVisibility:${detail.classId}`);
+        window.localStorage.removeItem("gavel:orgVisibility:last");
+      } catch {
+        // ignore cache failures
+      }
+      if (activeClassId === detail.classId) {
+        if (detail.nextClass) {
+          setActiveClassId(detail.nextClass.id);
+          setActiveClassName(detail.nextClass.name);
+          cacheActiveTeacherClass(user.id, detail.nextClass);
+        } else {
+          setActiveClassId(null);
+          setActiveClassName("");
+          clearActiveTeacherClass(user.id);
+        }
+      }
+    };
+    window.addEventListener("gavel:class-deleted", onClassDeleted);
+    return () => window.removeEventListener("gavel:class-deleted", onClassDeleted);
   }, [activeClassId, user?.id]);
 
   useEffect(() => {

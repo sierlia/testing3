@@ -10,6 +10,7 @@ import { defaultPartyColor } from "../components/PartyCreateForm";
 import { ProfileLayoutEditor } from "./TeacherProfileLayoutEditor";
 import { ConfirmDialog, ConfirmDialogState } from "../components/ConfirmDialog";
 import { houseCommittees, houseCommitteeSubcommittees } from "../constants/houseCommittees";
+import { clearActiveClassPreference, readActiveClassPreference, saveActiveClassPreference } from "../utils/activeClass";
 
 type TabId = "quick" | "general" | "parties" | "committees" | "bills" | "organizations" | "elections" | "profiles" | "permissions" | "joining";
 
@@ -17,6 +18,7 @@ const allParties = ["Democratic Party", "Republican Party", "Green Party", "Libe
 const defaultPartyOptions = allParties.filter((party) => party !== "Independent Party");
 const allCommittees = houseCommittees;
 const subcommitteeOptions = allCommittees.flatMap((committee) => (houseCommitteeSubcommittees[committee] ?? []).map((subcommittee) => `${committee}::${subcommittee}`));
+const TEACHER_CLASS_ORDER_KEY = "gavel:teacher-classes:manual-order";
 const subcommitteeLabels = Object.fromEntries(subcommitteeOptions.map((key) => {
   const [committee, subcommittee] = key.split("::");
   return [key, `${committee}: ${subcommittee}`];
@@ -29,6 +31,63 @@ function parentCommitteeFromSubcommitteeKey(key: string) {
 
 function committeesWithSubcommitteeParents(committees: string[], subcommittees: string[]) {
   return Array.from(new Set([...committees, ...subcommittees.map(parentCommitteeFromSubcommitteeKey).filter(Boolean)]));
+}
+
+function readStorageJson<T>(key: string, fallback: T): T {
+  try {
+    return JSON.parse(window.localStorage.getItem(key) || "null") ?? fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function removeDeletedClassFromBrowserCache(classId: string, userId: string | null | undefined, nextClass?: { id: string; name: string } | null) {
+  try {
+    window.localStorage.removeItem(`gavel:orgVisibility:${classId}`);
+    window.localStorage.removeItem("gavel:orgVisibility:last");
+    Object.keys(window.localStorage)
+      .filter((key) => key.includes(classId))
+      .forEach((key) => window.localStorage.removeItem(key));
+  } catch {
+    // ignore cache failures
+  }
+
+  const orderedIds = readStorageJson<string[]>(TEACHER_CLASS_ORDER_KEY, []);
+  if (Array.isArray(orderedIds)) {
+    try {
+      window.localStorage.setItem(TEACHER_CLASS_ORDER_KEY, JSON.stringify(orderedIds.filter((id) => id !== classId)));
+    } catch {
+      // ignore cache failures
+    }
+  }
+
+  if (userId) {
+    const classesKey = `gavel:teacherClasses:${userId}`;
+    const classes = readStorageJson<Array<{ id?: string }>>(classesKey, []);
+    if (Array.isArray(classes)) {
+      try {
+        window.localStorage.setItem(classesKey, JSON.stringify(classes.filter((item) => item?.id !== classId)));
+      } catch {
+        // ignore cache failures
+      }
+    }
+
+    const activeTeacherKey = `gavel:activeTeacherClass:${userId}`;
+    const activeTeacher = readStorageJson<{ id?: string } | null>(activeTeacherKey, null);
+    if (activeTeacher?.id === classId) {
+      try {
+        if (nextClass) window.localStorage.setItem(activeTeacherKey, JSON.stringify(nextClass));
+        else window.localStorage.removeItem(activeTeacherKey);
+      } catch {
+        // ignore cache failures
+      }
+    }
+
+    if (readActiveClassPreference(userId) === classId) {
+      if (nextClass) saveActiveClassPreference(userId, nextClass.id, nextClass.name);
+      else clearActiveClassPreference(userId);
+    }
+  }
 }
 
 const tabs: Array<{ id: TabId; label: string; icon: any }> = [
@@ -1293,14 +1352,23 @@ function TeacherSettingsPage({ mode }: { mode: "setup" | "settings" }) {
     if (!activeClassId) return;
     setConfirmDialog({
       title: "Delete class?",
-      message: "This permanently removes the class workspace and its simulation settings. Student work may also become inaccessible depending on database cleanup rules.",
+      message: "This permanently removes the class workspace, settings, student work, bills, records, timelines, organization data, assignments, and class uploads.",
       confirmLabel: "Delete class",
       danger: true,
       onConfirm: async () => {
-        const { error } = await supabase.from("classes").delete().eq("id", activeClassId);
+        const deletedClassId = activeClassId;
+        const { data: auth } = await supabase.auth.getUser();
+        const { data, error } = await supabase.rpc("delete_class_workspace", { target_class: deletedClassId });
         if (error) throw error;
+        const nextClass =
+          (data as any)?.nextClassId && (data as any)?.nextClassName
+            ? { id: (data as any).nextClassId as string, name: (data as any).nextClassName as string }
+            : null;
+        removeDeletedClassFromBrowserCache(deletedClassId, auth.user?.id, nextClass);
+        window.dispatchEvent(new CustomEvent("gavel:class-deleted", { detail: { classId: deletedClassId, nextClass } }));
+        setHasChanges(false);
         toast.success("Class deleted");
-        navigate("/teacher/dashboard");
+        navigate("/classes");
       },
     });
   };
