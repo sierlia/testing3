@@ -6,6 +6,7 @@ import { Toaster } from "./components/ui/sonner";
 import { DemoAccountSwitcher } from "./components/DemoAccountSwitcher";
 import { Gavel } from "lucide-react";
 import { toast } from "sonner";
+import { AuthCallback } from "./pages/AuthCallback";
 import {
   clearOAuthErrorFromLocation,
   clearOAuthReturnPath,
@@ -13,10 +14,11 @@ import {
   completePendingOAuthSignup,
   consumeOAuthReturnPath,
   getPendingOAuthSignup,
+  isOAuthCallbackLocation,
   readOAuthErrorFromLocation,
 } from "./utils/oauthSignup";
 
-const publicRoutes = ["/", "/signin", "/signup", "/about", "/help", "/privacy", "/terms", "/cookies", "/ferpa-coppa"];
+const publicRoutes = ["/", "/signin", "/signup", "/auth/callback", "/about", "/help", "/privacy", "/terms", "/cookies", "/ferpa-coppa"];
 
 function currentHashPath() {
   const hash = window.location.hash.replace(/^#/, "") || "/";
@@ -63,9 +65,11 @@ function AppRouterGate() {
   }, []);
 
   const path = currentHashPath();
+  const isOAuthCallback = isOAuthCallbackLocation();
   const isPublic = isPublicPath(path);
 
   useEffect(() => {
+    if (isOAuthCallbackLocation()) return;
     const oauthError = readOAuthErrorFromLocation();
     if (!oauthError) return;
     clearOAuthReturnPath();
@@ -75,7 +79,7 @@ function AppRouterGate() {
   }, []);
 
   useEffect(() => {
-    if (loading || !user || oauthCompleting || !getPendingOAuthSignup()) return;
+    if (isOAuthCallback || loading || !user || oauthCompleting || !getPendingOAuthSignup()) return;
     let cancelled = false;
     setOauthCompleting(true);
     completePendingOAuthSignup(user)
@@ -96,19 +100,23 @@ function AppRouterGate() {
     return () => {
       cancelled = true;
     };
-  }, [loading, oauthCompleting, user]);
+  }, [isOAuthCallback, loading, oauthCompleting, user]);
 
   useEffect(() => {
-    if (loading || !user || oauthCompleting || getPendingOAuthSignup()) return;
+    if (isOAuthCallback || loading || !user || oauthCompleting || getPendingOAuthSignup()) return;
     const returnPath = consumeOAuthReturnPath();
     if (returnPath && currentHashPath() !== returnPath) window.location.hash = returnPath;
-  }, [loading, oauthCompleting, user]);
+  }, [isOAuthCallback, loading, oauthCompleting, user]);
 
   useEffect(() => {
-    if (loading || user || isPublic || demoAuthSwitching) return;
+    if (isOAuthCallback || loading || user || isPublic || demoAuthSwitching) return;
     const target = hash.startsWith("/") ? hash : `/${hash}`;
     window.location.hash = `/signin?redirect=${encodeURIComponent(target)}`;
-  }, [demoAuthSwitching, hash, isPublic, loading, user]);
+  }, [demoAuthSwitching, hash, isOAuthCallback, isPublic, loading, user]);
+
+  if (isOAuthCallback) {
+    return <AuthCallback />;
+  }
 
   if (loading || oauthCompleting) {
     return (

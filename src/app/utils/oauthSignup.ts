@@ -4,6 +4,7 @@ import { supabase } from "./supabase";
 
 const PENDING_OAUTH_SIGNUP_KEY = "gavel:pendingOAuthSignup";
 const OAUTH_RETURN_PATH_KEY = "gavel:oauthReturnPath";
+const OAUTH_CALLBACK_PATH = "/auth/callback";
 
 export type PendingOAuthSignup = {
   role: "teacher" | "student";
@@ -52,10 +53,30 @@ function normalizedBaseUrl(value: string) {
     const url = new URL(value);
     url.hash = "";
     url.search = "";
+    if (url.pathname.endsWith(OAUTH_CALLBACK_PATH)) {
+      url.pathname = url.pathname.slice(0, -OAUTH_CALLBACK_PATH.length) || "/";
+    }
+    if (!url.pathname.endsWith("/")) url.pathname = `${url.pathname}/`;
     return url.toString();
   } catch {
     return "";
   }
+}
+
+function appendPath(baseUrl: string, path: string) {
+  const url = new URL(baseUrl);
+  const basePath = url.pathname.replace(/\/+$/, "");
+  url.pathname = `${basePath}${path}`;
+  url.search = "";
+  url.hash = "";
+  return url.toString();
+}
+
+function oauthHashParams() {
+  const hash = window.location.hash.replace(/^#/, "");
+  if (!hash) return new URLSearchParams();
+  const params = hash.startsWith("/") ? hash.split("?").slice(1).join("?") : hash;
+  return new URLSearchParams(params);
 }
 
 function safeDecode(value: string) {
@@ -66,7 +87,7 @@ function safeDecode(value: string) {
   }
 }
 
-export function oauthRedirectUrl() {
+export function oauthAppShellUrl() {
   const configured = String(import.meta.env.VITE_PUBLIC_APP_URL ?? import.meta.env.VITE_SITE_URL ?? "").trim();
   const configuredUrl = configured ? normalizedBaseUrl(configured) : "";
   if (configuredUrl) return configuredUrl;
@@ -74,7 +95,33 @@ export function oauthRedirectUrl() {
   const current = new URL(window.location.href);
   current.hash = "";
   current.search = "";
-  return current.toString();
+  return normalizedBaseUrl(current.toString());
+}
+
+export function oauthRedirectUrl() {
+  return appendPath(oauthAppShellUrl(), OAUTH_CALLBACK_PATH);
+}
+
+export function oauthHashRouteUrl(path = "/") {
+  const url = new URL(oauthAppShellUrl());
+  url.hash = path.startsWith("/") ? path : `/${path}`;
+  url.search = "";
+  return url.toString();
+}
+
+export function isOAuthCallbackLocation() {
+  const url = new URL(window.location.href);
+  const callbackPath = new URL(oauthRedirectUrl()).pathname.replace(/\/+$/, "");
+  const currentPath = url.pathname.replace(/\/+$/, "") || "/";
+  const hashPath = url.hash.replace(/^#/, "").split("?")[0];
+  const hashParams = oauthHashParams();
+  const onCallbackPath = currentPath === callbackPath || hashPath === OAUTH_CALLBACK_PATH;
+  return (
+    onCallbackPath ||
+    hashParams.has("access_token") ||
+    hashParams.has("refresh_token") ||
+    hashParams.has("error")
+  );
 }
 
 export function saveOAuthReturnPath(path: string) {
@@ -93,10 +140,9 @@ export function clearOAuthReturnPath() {
 
 export function readOAuthErrorFromLocation() {
   const url = new URL(window.location.href);
-  const hash = url.hash.replace(/^#/, "");
-  const hashParams = hash.startsWith("error=") || hash.includes("&error=") ? new URLSearchParams(hash) : null;
-  const description = url.searchParams.get("error_description") ?? hashParams?.get("error_description");
-  const code = url.searchParams.get("error_code") ?? hashParams?.get("error_code");
+  const hashParams = oauthHashParams();
+  const description = url.searchParams.get("error_description") ?? hashParams.get("error_description");
+  const code = url.searchParams.get("error_code") ?? hashParams.get("error_code") ?? hashParams.get("error");
   if (!description && !code) return null;
   return description ? safeDecode(description) : code;
 }

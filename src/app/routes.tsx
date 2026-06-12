@@ -64,6 +64,7 @@ import { NewsletterDetailPage, RecordsPage } from "./pages/RecordsPage";
 import { AboutPage } from "./pages/AboutPage";
 import { CookiePolicyPage, FerpaCoppaCompliancePage, PrivacyPolicyPage, TermsOfUsePage } from "./pages/LegalPages";
 import { StorageFileRedirect } from "./pages/StorageFileRedirect";
+import { AuthCallback } from "./pages/AuthCallback";
 
 export const router = createHashRouter([
   {
@@ -77,6 +78,10 @@ export const router = createHashRouter([
   {
     path: "/signup",
     Component: SignUpPage,
+  },
+  {
+    path: "/auth/callback",
+    Component: AuthCallback,
   },
   {
     path: "/about",

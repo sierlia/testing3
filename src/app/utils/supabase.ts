@@ -67,6 +67,7 @@ function createDisabledSupabaseClient(): SupabaseClient {
     getSession: async () => ({ data: { session: null }, error: null }),
     getUser: async () => ({ data: { user: null }, error: null }),
     onAuthStateChange: () => authSubscription,
+    exchangeCodeForSession: async () => ({ data: { user: null, session: null }, error: missingSupabaseError() }),
     signOut: async () => ({ error: null }),
     signInWithPassword: async () => ({ data: { user: null, session: null }, error: missingSupabaseError() }),
     signInWithOAuth: async () => ({ data: { provider: null, url: null }, error: missingSupabaseError() }),

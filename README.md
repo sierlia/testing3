@@ -35,10 +35,11 @@ supabase db push
 
 ### Google OAuth redirects
 
-The app sends Google OAuth back to the app shell URL and stores the in-app hash route locally. In Supabase Auth settings, keep the Site URL and redirect allow-list pointed at the deployed app, not `localhost:3000`.
+The app sends Google OAuth back to `/auth/callback`, where Supabase processes the response and the app removes tokens from the URL before returning to the hash-routed app. In Supabase Auth settings, keep the Site URL pointed at the deployed app and add the callback URLs to the redirect allow-list.
 
-- Production Site URL / redirect URL: `https://sierlia.github.io/testing3/`
-- Local dev redirect URL, when testing locally: `http://localhost:5173/`
+- Production Site URL: `https://sierlia.github.io/testing3/`
+- Production redirect URL: `https://sierlia.github.io/testing3/auth/callback`
+- Local dev redirect URL, when testing locally: `http://localhost:5173/auth/callback` or `http://localhost:3000/auth/callback`
 - Google Cloud OAuth authorized redirect URI: `https://qrtccdwxolfuuucadosa.supabase.co/auth/v1/callback`
 
 ### Deployment workflows
