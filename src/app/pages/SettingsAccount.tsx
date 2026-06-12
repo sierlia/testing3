@@ -8,6 +8,7 @@ import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { formatSchool, SchoolOption } from "../services/schools";
 import { fullNameFromParts } from "../utils/oauthSignup";
+import { saveActiveClassPreference } from "../utils/activeClass";
 import { supabase } from "../utils/supabase";
 
 type DeletionRequest = {
@@ -31,6 +32,37 @@ type AccountProfile = {
   written_responses?: unknown;
   class_id?: string | null;
 };
+
+const DEMO_CLASS_ID = "00000000-0000-4000-8000-000000000100";
+const DEMO_USER_IDS = new Set([
+  "00000000-0000-4000-8000-000000000201",
+  "00000000-0000-4000-8000-000000000202",
+  "00000000-0000-4000-8000-000000000301",
+  "00000000-0000-4000-8000-000000000302",
+]);
+
+function isDemoAccount(user: { id?: string; email?: string | null; user_metadata?: any } | null | undefined) {
+  return Boolean(user?.id && DEMO_USER_IDS.has(user.id)) || Boolean(user?.user_metadata?.demo) || Boolean(user?.email?.endsWith("@gavel.demo"));
+}
+
+function clearDemoBrowserCache(currentUserId?: string | null, keepDemoActive = false) {
+  const currentIsDemoUser = Boolean(currentUserId && DEMO_USER_IDS.has(currentUserId));
+  const clearBroadDemoCache = currentIsDemoUser || keepDemoActive;
+  Object.keys(window.localStorage)
+    .filter((key) => {
+      if (key.startsWith("gavel:demo")) return true;
+      if (key.includes(DEMO_CLASS_ID)) return true;
+      if (clearBroadDemoCache && key.startsWith("committee:")) return true;
+      if (clearBroadDemoCache && key.startsWith("gavel:org-letters-seen:")) return true;
+      if (clearBroadDemoCache && key.startsWith("gavel:party-announcements-seen:")) return true;
+      if (clearBroadDemoCache && key.startsWith("gavel:caucus-announcements-seen:")) return true;
+      if (DEMO_USER_IDS.has(key.split(":").pop() ?? "")) return true;
+      if (clearBroadDemoCache && (key === "gavel:orgVisibility:last" || key.startsWith("gavel:orgVisibility:"))) return true;
+      return false;
+    })
+    .forEach((key) => window.localStorage.removeItem(key));
+  if (keepDemoActive) window.localStorage.setItem("gavel:demoActive", "1");
+}
 
 function escapeHtml(value: unknown) {
   return String(value ?? "")
@@ -537,27 +569,31 @@ export function SettingsAccount() {
   };
 
   const purgeDemo = async () => {
+    if (!window.confirm("Reset the shared demo to its default state? This clears demo bills, records, assignments, extra demo classes, uploads, settings, timelines, and profile work.")) {
+      return;
+    }
     setPurgingDemo(true);
     try {
       const { data: auth } = await supabase.auth.getUser();
       const user = auth.user;
       const demoSession =
         window.localStorage.getItem("gavel:demoActive") === "1" ||
-        Boolean(user?.user_metadata?.demo) ||
-        Boolean(user?.email?.endsWith("@gavel.demo"));
-      Object.keys(window.localStorage)
-        .filter((key) => key.startsWith("gavel:demo"))
-        .forEach((key) => window.localStorage.removeItem(key));
-      window.dispatchEvent(new CustomEvent("gavel:demo-ended"));
+        isDemoAccount(user);
+      const { data, error } = await supabase.rpc("purge_demo_data");
+      if (error) throw error;
+
+      clearDemoBrowserCache(user?.id, demoSession);
       if (demoSession) {
-        await supabase.auth.signOut();
-        window.location.hash = "/";
+        if (user?.id) saveActiveClassPreference(user.id, DEMO_CLASS_ID, "Gavel Demo");
+        window.dispatchEvent(new CustomEvent("gavel:demo-opened"));
+        toast.success("Demo reset to defaults.");
         window.location.reload();
         return;
       }
-      toast.success("Demo browser state cleared.");
+      const deletedExtraClasses = Number((data as any)?.deletedExtraClasses ?? 0);
+      toast.success(deletedExtraClasses ? `Demo reset. Deleted ${deletedExtraClasses} extra demo ${deletedExtraClasses === 1 ? "class" : "classes"}.` : "Demo reset to defaults.");
     } catch (error: any) {
-      toast.error(error.message || "Could not purge demo state");
+      toast.error(error.message || "Could not reset demo");
     } finally {
       setPurgingDemo(false);
     }
